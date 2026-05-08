@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.112.2 (2026-05-08)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Pin redis Docker tag to 9de7101
+  ([`dd8fdc0`](https://github.com/thiesgerken/carapace/commit/dd8fdc01349cec0dc0148a57563db108382073e7))
+
+- ⬆️ chore: upgrade debian Docker tag to trixie-20260505
+  ([`39589bc`](https://github.com/thiesgerken/carapace/commit/39589bc27ca688160777d86276d15ea970817f9f))
+
 ## v0.112.1 (2026-05-08)
 
 
@@ -68,6 +80,9 @@
 - ⬆️ chore: Lock file maintenance
   ([`d39c370`](https://github.com/thiesgerken/carapace/commit/d39c370d7048e7ddc43ff9fc84edda3f37f8b127))
 
+- ⬆️ chore: upgrade pnpm to 10.33.3
+  ([`df394ff`](https://github.com/thiesgerken/carapace/commit/df394ffc006221e7e1b91ab4e111a0a9d083494a))
+
 ### ✨ Features
 
 
@@ -76,6 +91,9 @@
 
 - ✨ feat: add NewSessionButton component for creating sessions
   ([`f2d6d9d`](https://github.com/thiesgerken/carapace/commit/f2d6d9d63b84ec09fd15e1c0f2d29ff621e2f10d))
+
+- ✨ feat: add unattended session mode
+  ([`4e62129`](https://github.com/thiesgerken/carapace/commit/4e62129329ff62438790c0b864cb0fbb9a2cff79))
 
 - ✨ feat: add logging for disk read operations in SessionManager
   ([`f53f9ef`](https://github.com/thiesgerken/carapace/commit/f53f9ef136b12d899f323c37a99d31a090d6a052))
@@ -86,9 +104,6 @@
   ([`9776618`](https://github.com/thiesgerken/carapace/commit/97766185da31e3c085a89da40f6d7e015d2e6891))
 
   Co-authored-by: Copilot <copilot@github.com>
-
-- ✨ feat: add unattended session mode
-  ([`4e62129`](https://github.com/thiesgerken/carapace/commit/4e62129329ff62438790c0b864cb0fbb9a2cff79))
 
 ### ♻️ Refactoring
 
