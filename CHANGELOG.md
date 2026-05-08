@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.112.3 (2026-05-08)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade redis Docker tag to v8
+  ([`21ca6b8`](https://github.com/thiesgerken/carapace/commit/21ca6b80b35eb4fb4329a23cf543ca228b74cc16))
+
+- ⬆️ chore: upgrade pnpm to 11.0.6
+  ([`3f1c6f6`](https://github.com/thiesgerken/carapace/commit/3f1c6f631f98e3107417f71dcf08ee9490d9e5d7))
+
+- ⬆️ chore: upgrade redis to 7.4.0
+  ([`0c609a9`](https://github.com/thiesgerken/carapace/commit/0c609a96d68b1679065931c2e1d285f992b5408a))
+
+### Other
+
+
+- fix: cast ping method to Awaitable for proper type handling
+  ([`706a28f`](https://github.com/thiesgerken/carapace/commit/706a28fb0b4820c583ebfa82173ab5964467f2bd))
+
 ## v0.112.2 (2026-05-08)
 
 
