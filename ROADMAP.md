@@ -1,4 +1,4 @@
-# Roadmap
+# Roadmap / Ideas
 
 > This roadmap outlines planned features and improvements. Items are grouped by area and roughly ordered by priority within each section.
 
@@ -10,6 +10,8 @@
 - [ ] "daily" session that is recreated every day and that should persist some of its memories during the night
 - [ ] forbid session to use some skills (include/exclude) — useful for cronjobs
 - [ ] harden sandbox so trusted exec allowlists are meaningful (run as non-root, read-only root fs where possible, avoid command alias / path tampering) — important prerequisite for auto-approving read-only commands like `rg`, `ls`, `cat`
+- [ ] an actual database backend instead of files
+- [ ] after adding cronjobs a backend refactor/review might be in order
 
 ## Knowledge Repo Handling
 
@@ -23,13 +25,6 @@
 - [ ] **Multi-user support** — per-user sessions, memory, and security context; map OIDC subject to a carapace user identity
 - [ ] **Session token lifecycle** — short-lived access tokens with refresh, proper logout / revocation
 - [ ] **Per-user data isolation** — each user gets their own memory, session history, and workspace files
-
-## Memory
-
-- [ ] **Structured memory layout** — organized directories (`CORE.md`, `daily/`, `topics/`) with predictable conventions
-- [ ] **Vector search** — local sentence-transformers embeddings with a SQLite index in `memory/.index/`
-- [ ] **Incremental index updates** — rebuild index automatically on memory file changes
-- [ ] **Smarter context loading** — load only `CORE.md` + recent daily logs at startup; older content available via search
 
 ## Channels & Scheduling
 
