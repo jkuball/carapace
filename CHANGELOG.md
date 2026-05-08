@@ -1,6 +1,113 @@
 # CHANGELOG
 
 
+## v0.112.1 (2026-05-08)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv:python3.14-trixie-slim Docker digest to 3e70f58
+  ([`b761294`](https://github.com/thiesgerken/carapace/commit/b761294bca7794e390d0bbc9fe30b781c7893c8e))
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv Docker digest to 798712e
+  ([`4adb946`](https://github.com/thiesgerken/carapace/commit/4adb94659e650a0c652a4e0e906dd00200b1c252))
+
+- ⬆️ chore: upgrade pnpm/action-setup digest to 8912a91
+  ([`22695d2`](https://github.com/thiesgerken/carapace/commit/22695d2d98a4b6f75d972a10deb3ff34290fd457))
+
+- ⬆️ chore: upgrade docker.io/library/redis Docker tag to v8
+  ([`3185041`](https://github.com/thiesgerken/carapace/commit/3185041f43722aa62d112406e207e125339c37dc))
+
+## v0.112.0 (2026-05-08)
+
+
+### Other
+
+
+- fix(ci): include pnpm-workspace.yaml in Dockerfile for build context
+  ([`71ff82f`](https://github.com/thiesgerken/carapace/commit/71ff82f46b5e9daddd8f61c2a5538d022f70b8e1))
+
+- fix: normalize unattended history with thinking parts and update final status handling
+  ([`fb2c12a`](https://github.com/thiesgerken/carapace/commit/fb2c12a56f5ec84b4a19853c96e50df222f65a73))
+
+- wire final messages to UI and show them
+  ([`004302d`](https://github.com/thiesgerken/carapace/commit/004302d91a5a3ea12eeb5d4f7d2436a69e5c954e))
+
+- cache more stuff about sessions
+  ([`5395ee4`](https://github.com/thiesgerken/carapace/commit/5395ee4e440e93b9ee2860fdaf6fc4a5e77ae82b))
+
+  Co-authored-by: Copilot <copilot@github.com>
+
+- fix lint issues
+  ([`cdfb6b0`](https://github.com/thiesgerken/carapace/commit/cdfb6b03fb4e8f95a6fcdb4ca51da4a26250ce2f))
+
+  Co-authored-by: Copilot <copilot@github.com>
+
+- 💚 run tests in ci
+  ([`9160bc2`](https://github.com/thiesgerken/carapace/commit/9160bc2615ec686be71804b422b3424c8bc5b180))
+
+- setup pyright correctly
+  ([`b11fc20`](https://github.com/thiesgerken/carapace/commit/b11fc2012cb3ac5d911d9573141b49a29e762ac7))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(ci): add pnpm workspace configuration for sharp and unrs-resolver builds
+  ([`5cdb400`](https://github.com/thiesgerken/carapace/commit/5cdb400128328f008d5331e5f2fbbd4cf0cdc4c2))
+
+- 🐛 fix: paginate CLI session listing
+  ([`a11ffae`](https://github.com/thiesgerken/carapace/commit/a11ffae40f4028834843cdb843f21b26218bd00b))
+
+- 🐛 fix: address session list review comments
+  ([`0d8eb92`](https://github.com/thiesgerken/carapace/commit/0d8eb92f307539295533c91757c1a03aca587e52))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Lock file maintenance
+  ([`d39c370`](https://github.com/thiesgerken/carapace/commit/d39c370d7048e7ddc43ff9fc84edda3f37f8b127))
+
+### ✨ Features
+
+
+- ✨ feat: enhance ChatView and Sidebar with unattended session indicators and update NewSessionButton integration
+  ([`601a236`](https://github.com/thiesgerken/carapace/commit/601a236811ac25f846262a5721ff76c76024a0f7))
+
+- ✨ feat: add NewSessionButton component for creating sessions
+  ([`f2d6d9d`](https://github.com/thiesgerken/carapace/commit/f2d6d9d63b84ec09fd15e1c0f2d29ff621e2f10d))
+
+- ✨ feat: add logging for disk read operations in SessionManager
+  ([`f53f9ef`](https://github.com/thiesgerken/carapace/commit/f53f9ef136b12d899f323c37a99d31a090d6a052))
+
+  Co-authored-by: Copilot <copilot@github.com>
+
+- ✨ feat: cache session list in redis
+  ([`9776618`](https://github.com/thiesgerken/carapace/commit/97766185da31e3c085a89da40f6d7e015d2e6891))
+
+  Co-authored-by: Copilot <copilot@github.com>
+
+- ✨ feat: add unattended session mode
+  ([`4e62129`](https://github.com/thiesgerken/carapace/commit/4e62129329ff62438790c0b864cb0fbb9a2cff79))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: avoid duplicate session state loads
+  ([`60a0ad7`](https://github.com/thiesgerken/carapace/commit/60a0ad75809c1361a0c37d802aa4224f196baa14))
+
+- ♻️ refactor: remove dead budget alias remap
+  ([`4c03e88`](https://github.com/thiesgerken/carapace/commit/4c03e889f7a44c6f062933f347e2dda2694936fc))
+
+- ♻️ refactor: collapse sessions page endpoint
+  ([`f2b368c`](https://github.com/thiesgerken/carapace/commit/f2b368c1347dd62b19ddcb38422d09500209c8e2))
+
+### ⚡ Performance
+
+
+- ⚡ perf: paginate session list loading
+  ([`b5f9043`](https://github.com/thiesgerken/carapace/commit/b5f9043b66ba455c599e5f10df3ac60e74e65a6b))
+
 ## v0.111.2 (2026-05-03)
 
 
