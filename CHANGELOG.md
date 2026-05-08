@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.112.1 (2026-05-08)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv:python3.14-trixie-slim Docker digest to 3e70f58
+  ([`b761294`](https://github.com/thiesgerken/carapace/commit/b761294bca7794e390d0bbc9fe30b781c7893c8e))
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv Docker digest to 798712e
+  ([`4adb946`](https://github.com/thiesgerken/carapace/commit/4adb94659e650a0c652a4e0e906dd00200b1c252))
+
+- ⬆️ chore: upgrade pnpm/action-setup digest to 8912a91
+  ([`22695d2`](https://github.com/thiesgerken/carapace/commit/22695d2d98a4b6f75d972a10deb3ff34290fd457))
+
+- ⬆️ chore: upgrade docker.io/library/redis Docker tag to v8
+  ([`3185041`](https://github.com/thiesgerken/carapace/commit/3185041f43722aa62d112406e207e125339c37dc))
+
 ## v0.112.0 (2026-05-08)
 
 
