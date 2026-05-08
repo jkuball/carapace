@@ -9,7 +9,15 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 import carapace.usage as usage_mod
 from carapace.models import ContextGrant, CredentialRegistryProtocol, SkillCredentialDecl
@@ -300,6 +308,56 @@ def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_p
     forked = engine.fork_session(sid, event_index=1, channel_type="web", unattended=False)
 
     assert forked.attributes.unattended is False
+    forked_history = engine.session_mgr.load_history(forked.session_id)
+    assert len(forked_history) == 2
+    assert isinstance(forked_history[1], ModelResponse)
+    response_part = forked_history[1].parts[0]
+    assert isinstance(response_part, TextPart)
+    assert response_part.content == "completed"
+
+
+def test_fork_session_normalizes_unattended_history_with_thinking_parts(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    source = engine.session_mgr.create_session(unattended=True)
+    sid = source.session_id
+    engine.get_or_activate(sid)
+    engine.session_mgr.append_events(
+        sid,
+        [
+            {"role": "user", "content": "run on your own"},
+            {"role": "assistant", "content": "completed"},
+        ],
+    )
+    engine.session_mgr.save_history(
+        sid,
+        [
+            ModelRequest(parts=[UserPromptPart(content="run on your own")]),
+            ModelResponse(
+                parts=[
+                    ThinkingPart(content="working through result"),
+                    ToolCallPart(
+                        tool_name="task_done",
+                        args={"result": "completed"},
+                        tool_call_id="done-1",
+                    ),
+                ]
+            ),
+            ModelRequest(
+                parts=[
+                    ToolReturnPart(
+                        tool_name="task_done",
+                        content="Final result processed.",
+                        tool_call_id="done-1",
+                    )
+                ]
+            ),
+        ],
+    )
+
+    forked = engine.fork_session(sid, event_index=1, channel_type="web", unattended=False)
+
     forked_history = engine.session_mgr.load_history(forked.session_id)
     assert len(forked_history) == 2
     assert isinstance(forked_history[1], ModelResponse)
