@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 import yaml
+from croniter import croniter
 
-from carapace.models import JobDefinition, JobsFile
+from carapace.models import JobCronTrigger, JobDefinition, JobsFile
 
 JobTriggerKind = Literal["api", "cron", "manual"]
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledJobRun:
+    job: JobDefinition
+    trigger: JobCronTrigger
+    scheduled_at: datetime
 
 
 def build_job_run_message(
@@ -92,3 +102,68 @@ class JobsStore:
         jobs_file.jobs = filtered
         self.save(jobs_file)
         return True
+
+
+class JobsScheduler:
+    def __init__(self, store: JobsStore, *, max_trigger_backfill: int = 100):
+        self._store = store
+        self._max_trigger_backfill = max_trigger_backfill
+        self._last_checked_at: datetime | None = None
+
+    @property
+    def last_checked_at(self) -> datetime | None:
+        return self._last_checked_at
+
+    def collect_due_runs(self, *, now: datetime | None = None) -> list[ScheduledJobRun]:
+        now = now or datetime.now(tz=UTC)
+        if self._last_checked_at is None or now <= self._last_checked_at:
+            self._last_checked_at = now
+            return []
+
+        due_runs: list[ScheduledJobRun] = []
+        for job in self._store.list_jobs():
+            if not job.enabled:
+                continue
+            for trigger in job.triggers:
+                due_runs.extend(
+                    self._collect_due_runs_for_trigger(
+                        job,
+                        trigger,
+                        since=self._last_checked_at,
+                        now=now,
+                    )
+                )
+
+        self._last_checked_at = now
+        return sorted(due_runs, key=lambda run: run.scheduled_at)
+
+    def _collect_due_runs_for_trigger(
+        self,
+        job: JobDefinition,
+        trigger: JobCronTrigger,
+        *,
+        since: datetime,
+        now: datetime,
+    ) -> list[ScheduledJobRun]:
+        timezone = ZoneInfo(trigger.timezone or "UTC")
+        since_local = since.astimezone(timezone)
+        now_local = now.astimezone(timezone)
+        if now_local <= since_local:
+            return []
+
+        iterator = croniter(trigger.expression, now_local)
+        due_runs: list[ScheduledJobRun] = []
+        for _ in range(self._max_trigger_backfill):
+            scheduled_local = iterator.get_prev(datetime)
+            if scheduled_local <= since_local:
+                break
+            due_runs.append(
+                ScheduledJobRun(
+                    job=job,
+                    trigger=trigger,
+                    scheduled_at=scheduled_local.astimezone(UTC),
+                )
+            )
+
+        due_runs.reverse()
+        return due_runs

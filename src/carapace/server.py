@@ -5,6 +5,7 @@ import contextlib
 import logging  # stdlib logging used only for _InterceptHandler → loguru bridge
 import os
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -41,7 +42,7 @@ from carapace.config import _resolve_data_dir, _resolve_knowledge_dir, get_confi
 from carapace.credentials import CredentialRegistry, build_credential_registry
 from carapace.git.http import GitHttpHandler
 from carapace.git.store import GitStore
-from carapace.jobs import JobsStore, build_job_run_message
+from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.llm import make_model_factory
 from carapace.models import Config, JobDefinition, JobsFile, SessionAttributes, SessionState, ToolResult
 from carapace.sandbox.manager import SandboxManager
@@ -96,8 +97,10 @@ _credential_registry: CredentialRegistry
 _session_archive: SessionArchiveService
 _session_list_cache: SessionListCache
 _jobs_store: JobsStore
+_jobs_scheduler: JobsScheduler
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
+_JOB_SCHEDULER_SWEEP_SECONDS = 60
 
 
 def _create_sandbox_runtime(config: Config, data_dir: Path) -> ContainerRuntime:
@@ -153,6 +156,33 @@ async def _session_archive_loop() -> None:
             logger.warning(f"Session archive autosave loop error: {exc}")
 
 
+async def _jobs_scheduler_loop() -> None:
+    """Periodically enqueue due cron-triggered jobs."""
+    while True:
+        await asyncio.sleep(_JOB_SCHEDULER_SWEEP_SECONDS)
+        try:
+            await _run_due_jobs_once()
+        except Exception as exc:
+            logger.warning(f"Jobs scheduler loop error: {exc}")
+
+
+async def _run_due_jobs_once(*, now: datetime | None = None) -> int:
+    due_runs = _jobs_scheduler.collect_due_runs(now=now)
+    for due_run in due_runs:
+        try:
+            await _run_job_definition(
+                due_run.job,
+                trigger_kind="cron",
+                triggered_at=due_run.scheduled_at,
+                cron_expression=due_run.trigger.expression,
+            )
+        except HTTPException as exc:
+            logger.warning(f"Scheduled job {due_run.job.id} skipped: {exc.detail}")
+        except Exception as exc:
+            logger.warning(f"Scheduled job {due_run.job.id} failed: {exc}")
+    return len(due_runs)
+
+
 async def _autosave_inactive_sessions() -> None:
     if not _session_archive.enabled or not _config.sessions.commit.autosave_enabled:
         return
@@ -184,7 +214,7 @@ async def _autosave_inactive_sessions() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     global \
         _data_dir, \
         _config, \
@@ -193,7 +223,8 @@ async def lifespan(app: FastAPI):
         _credential_registry, \
         _session_archive, \
         _session_list_cache, \
-        _jobs_store
+        _jobs_store, \
+        _jobs_scheduler
 
     # 1. Load config
     config_path = get_config_path()
@@ -321,6 +352,7 @@ async def lifespan(app: FastAPI):
         config=_config.sessions.commit,
     )
     _jobs_store = JobsStore(_data_dir)
+    _jobs_scheduler = JobsScheduler(_jobs_store)
 
     # Git HTTP handler — serves the knowledge repo on the sandbox API
     _git_handler = GitHttpHandler(
@@ -375,6 +407,7 @@ async def lifespan(app: FastAPI):
 
     cleanup_task = asyncio.create_task(_idle_cleanup_loop(_sandbox_mgr))
     archive_task = asyncio.create_task(_session_archive_loop())
+    jobs_task = asyncio.create_task(_jobs_scheduler_loop())
 
     matrix_channel = None
     if _config.channels.matrix.enabled:
@@ -400,6 +433,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server shutting down…")
     cleanup_task.cancel()
     archive_task.cancel()
+    jobs_task.cancel()
     if matrix_channel:
         await matrix_channel.stop()
     sandbox_server.should_exit = True
@@ -418,7 +452,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete")
 
 
-app = FastAPI(title="carapace", lifespan=lifespan)
+app = FastAPI(title="carapace", lifespan=_lifespan)
 
 router = APIRouter(prefix="/api")
 
@@ -552,6 +586,58 @@ class JobRunResult(BaseModel):
     session_id: str
     created_new_session: bool
     session: SessionInfo
+
+
+async def _run_job_definition(
+    job: JobDefinition,
+    *,
+    trigger_kind: Literal["api", "cron", "manual"],
+    triggered_at: datetime | None = None,
+    payload: dict[str, Any] | None = None,
+    cron_expression: str | None = None,
+) -> JobRunResult:
+    created_new_session = False
+
+    if job.persistent_session_id is None:
+        state = _engine.session_mgr.create_session(
+            channel_type="job",
+            channel_ref=f"job:{job.id}",
+            budget=_engine.config.agent.default_session_budget,
+            private=_engine.config.sessions.default_private,
+            unattended=job.unattended,
+        )
+        created_new_session = True
+    else:
+        state = _engine.session_mgr.load_state(job.persistent_session_id)
+        if state is None:
+            raise HTTPException(status_code=409, detail="Configured persistent session was not found")
+        if state.attributes.unattended:
+            raise HTTPException(status_code=409, detail="Configured persistent session must be attended")
+        if state.attributes.archived:
+            raise HTTPException(status_code=409, detail="Configured persistent session must not be archived")
+
+    if _engine.is_agent_running(state.session_id):
+        raise HTTPException(status_code=409, detail="Target session is busy")
+
+    message = build_job_run_message(
+        job,
+        trigger_kind=trigger_kind,
+        triggered_at=triggered_at or datetime.now(tz=UTC),
+        payload=payload,
+        cron_expression=cron_expression,
+    )
+    await _engine.submit_message(state.session_id, message)
+
+    refreshed = _engine.session_mgr.load_state(state.session_id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = _session_info_from_state(refreshed, include_message_count=True)
+    return JobRunResult(
+        job_id=job.id,
+        session_id=refreshed.session_id,
+        created_new_session=created_new_session,
+        session=session,
+    )
 
 
 def _session_message_count(session_id: str) -> int:
@@ -854,46 +940,10 @@ async def run_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     body = body or JobRunRequest()
-    created_new_session = False
-
-    if job.persistent_session_id is None:
-        state = _engine.session_mgr.create_session(
-            channel_type="job",
-            channel_ref=f"job:{job.id}",
-            budget=_engine.config.agent.default_session_budget,
-            private=_engine.config.sessions.default_private,
-            unattended=job.unattended,
-        )
-        created_new_session = True
-    else:
-        state = _engine.session_mgr.load_state(job.persistent_session_id)
-        if state is None:
-            raise HTTPException(status_code=409, detail="Configured persistent session was not found")
-        if state.attributes.unattended:
-            raise HTTPException(status_code=409, detail="Configured persistent session must be attended")
-        if state.attributes.archived:
-            raise HTTPException(status_code=409, detail="Configured persistent session must not be archived")
-
-    if _engine.is_agent_running(state.session_id):
-        raise HTTPException(status_code=409, detail="Target session is busy")
-
-    message = build_job_run_message(
+    return await _run_job_definition(
         job,
         trigger_kind="api",
-        triggered_at=datetime.now(tz=UTC),
         payload=body.data,
-    )
-    await _engine.submit_message(state.session_id, message)
-
-    refreshed = _engine.session_mgr.load_state(state.session_id)
-    if refreshed is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    session = _session_info_from_state(refreshed, include_message_count=True)
-    return JobRunResult(
-        job_id=job.id,
-        session_id=refreshed.session_id,
-        created_new_session=created_new_session,
-        session=session,
     )
 
 

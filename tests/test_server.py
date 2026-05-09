@@ -18,7 +18,7 @@ from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
-from carapace.jobs import JobsStore
+from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
@@ -97,6 +97,7 @@ def _setup_server(tmp_path, monkeypatch):
         config=config.sessions.commit,
     )
     srv._jobs_store = JobsStore(tmp_path)
+    srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
 
 
 @pytest.fixture()
@@ -351,6 +352,35 @@ def test_run_job_rejects_missing_persistent_session(client, auth_headers, monkey
     run_resp = client.post("/api/jobs/team-planning/run", headers=auth_headers)
     assert run_resp.status_code == 409
     assert "persistent session" in run_resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        srv.JobDefinition.model_validate(
+            {
+                "id": "daily-briefing",
+                "name": "Daily Briefing",
+                "prompt": "Summarize the day.",
+                "triggers": [{"expression": "* * * * *"}],
+            }
+        )
+    )
+
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await srv._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
+
+    assert dispatched == 1
+    (session_id, message), kwargs = submit_message.await_args
+    assert kwargs == {}
+    assert session_id
+    assert "reason: cron" in message
+    assert "- cron: * * * * *" in message
 
 
 def test_update_session_privacy(client, auth_headers):
