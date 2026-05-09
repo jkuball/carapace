@@ -28,6 +28,8 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
 }
 
 const SESSION_PAGE_SIZE = 50;
+const APP_TITLE = "carapace";
+const MAX_DOCUMENT_TITLE_LENGTH = 30;
 
 function mergeSessions(
   current: SessionInfo[],
@@ -434,6 +436,21 @@ function HomeContent() {
   }, [activeSessionId, handleDeleteSession]);
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
+
+  useEffect(() => {
+    const sessionTitle = activeSession?.title?.trim();
+    const useDefaultTitle = activeView !== "chat"
+      || !activeSession
+      || activeSession.attributes.private
+      || !sessionTitle;
+    const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
+      ? `${sessionTitle.slice(0, MAX_DOCUMENT_TITLE_LENGTH - 3)}...`
+      : sessionTitle;
+
+    document.title = useDefaultTitle
+      ? APP_TITLE
+      : `${truncatedTitle} • ${APP_TITLE}`;
+  }, [activeSession, activeView]);
 
   if (!connected) {
     return <ConnectForm onConnect={handleConnect} />;
