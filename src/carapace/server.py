@@ -1167,6 +1167,11 @@ async def list_commands(_token: str = Depends(_verify_token)) -> list[dict[str, 
     return SLASH_COMMANDS
 
 
+@router.get("/meta", response_model=ServerMeta)
+async def get_meta(_token: str = Depends(_verify_token)) -> ServerMeta:
+    return ServerMeta(version=_APP_VERSION)
+
+
 @router.get("/models")
 async def list_models(_token: str = Depends(_verify_token)) -> list[dict[str, Any]]:
     return [e.model_dump(mode="json", by_alias=True) for e in _engine.available_model_entries]
