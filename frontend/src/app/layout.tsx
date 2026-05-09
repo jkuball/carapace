@@ -12,6 +12,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "carapace",
   description: "Security-first personal AI agent",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
