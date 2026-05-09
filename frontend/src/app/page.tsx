@@ -418,13 +418,6 @@ function HomeContent() {
     setSidebarOpen(false);
   }, []);
 
-  const handleJobSessionActivated = useCallback((session: SessionInfo) => {
-    handleSessionUpdate(session);
-    setActiveSessionId(session.session_id);
-    setActiveView("chat");
-    setSidebarOpen(false);
-  }, []);
-
   const handleActiveSessionDelete = useCallback(async () => {
     if (!activeSessionId) return;
     await handleDeleteSession(activeSessionId);
@@ -493,7 +486,7 @@ function HomeContent() {
             server={server}
             token={token}
             sessions={sessions}
-            onSessionActivated={handleJobSessionActivated}
+            onSessionActivated={handleForkSession}
           />
         ) : activeSessionId ? (
           <ChatView

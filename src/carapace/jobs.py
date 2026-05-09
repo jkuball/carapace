@@ -116,8 +116,10 @@ class JobsScheduler:
 
     def collect_due_runs(self, *, now: datetime | None = None) -> list[ScheduledJobRun]:
         now = now or datetime.now(tz=UTC)
-        if self._last_checked_at is None or now <= self._last_checked_at:
+        if self._last_checked_at is None:
             self._last_checked_at = now
+            return []
+        if now <= self._last_checked_at:
             return []
 
         due_runs: list[ScheduledJobRun] = []
@@ -151,8 +153,17 @@ class JobsScheduler:
         if now_local <= since_local:
             return []
 
-        iterator = croniter(trigger.expression, now_local)
         due_runs: list[ScheduledJobRun] = []
+        if croniter.match(trigger.expression, now_local, precision_in_seconds=1) and now_local > since_local:
+            due_runs.append(
+                ScheduledJobRun(
+                    job=job,
+                    trigger=trigger,
+                    scheduled_at=now_local.astimezone(UTC),
+                )
+            )
+
+        iterator = croniter(trigger.expression, now_local)
         for _ in range(self._max_trigger_backfill):
             scheduled_local = iterator.get_prev(datetime)
             if scheduled_local <= since_local:

@@ -47,13 +47,11 @@ function normalizeJobDraft(draft: JobDefinition): JobDefinition {
     name: draft.name.trim(),
     prompt: draft.prompt.trim(),
     persistent_session_id: draft.persistent_session_id?.trim() || null,
-    triggers: draft.triggers
-      .map((trigger) => ({
-        type: "cron" as const,
-        expression: trigger.expression.trim(),
-        timezone: trigger.timezone?.trim() || null,
-      }))
-      .filter((trigger) => trigger.expression.length > 0),
+    triggers: draft.triggers.map((trigger) => ({
+      type: "cron" as const,
+      expression: trigger.expression.trim(),
+      timezone: trigger.timezone?.trim() || null,
+    })),
   };
 }
 
