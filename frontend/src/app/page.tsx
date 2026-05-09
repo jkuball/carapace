@@ -8,7 +8,8 @@ import { JobsView } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
-import { createSession, deleteSession, getSession, listSessions, updateSession } from "@/lib/api";
+import { VersionBadge } from "@/components/version-badge";
+import { createSession, deleteSession, getServerMeta, getSession, listSessions, updateSession } from "@/lib/api";
 import {
   clearConnection,
   getServer,
@@ -28,6 +29,7 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
 }
 
 const SESSION_PAGE_SIZE = 50;
+const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
 
 function mergeSessions(
   current: SessionInfo[],
@@ -116,6 +118,7 @@ function HomeContent() {
     server: "",
     token: "",
   });
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
     searchParams.get("session"),
@@ -230,6 +233,35 @@ function HomeContent() {
     };
   }, [connected, loadInitialSessions, server, token]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!connected || !server || !token) {
+        if (!cancelled) {
+          setServerVersion(null);
+        }
+        return;
+      }
+
+      void getServerMeta(server, token)
+        .then((meta) => {
+          if (!cancelled) {
+            setServerVersion(meta.version);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setServerVersion(null);
+          }
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [connected, server, token]);
+
   const loadMoreSessions = useCallback(async () => {
     if (
       !server
@@ -318,6 +350,7 @@ function HomeContent() {
     setLoadingMoreSessions(false);
     setSessionListInitialized(false);
     setConnection({ connected: false, server: "", token: "" });
+    setServerVersion(null);
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
@@ -458,6 +491,8 @@ function HomeContent() {
           sessions={sessions}
           activeSessionId={activeSessionId}
           activeView={activeView}
+          frontendVersion={BUILD_APP_VERSION}
+          backendVersion={serverVersion}
           onSelect={handleSelectSession}
           onNew={handleNewSession}
           onGoHome={handleGoHome}
@@ -487,7 +522,12 @@ function HomeContent() {
               <Menu className="h-5 w-5" />
             )}
           </button>
-          <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
+            {activeView !== "jobs" ? (
+              <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={serverVersion} />
+            ) : null}
+          </div>
         </div>
 
         {/* Chat or empty state */}

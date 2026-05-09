@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
 import { NewSessionButton } from "@/components/new-session-button";
+import { VersionBadge } from "@/components/version-badge";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
 import {
   canArchiveSession,
@@ -18,6 +19,8 @@ interface SidebarProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
   activeView?: "chat" | "jobs";
+  frontendVersion?: string | null;
+  backendVersion?: string | null;
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
   onGoHome: () => void;
@@ -98,6 +101,8 @@ export function Sidebar({
   sessions,
   activeSessionId,
   activeView = "chat",
+  frontendVersion = null,
+  backendVersion = null,
   onSelect,
   onNew,
   onGoHome,
@@ -373,7 +378,10 @@ export function Sidebar({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="text-sm font-semibold tracking-tight">carapace</span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-semibold tracking-tight">carapace</span>
+          <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"

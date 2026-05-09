@@ -18,6 +18,22 @@ function headers(token: string): HeadersInit {
   };
 }
 
+export interface ServerMeta {
+  version: string;
+}
+
+export async function getServerMeta(
+  server: string,
+  token: string,
+): Promise<ServerMeta> {
+  const res = await fetch(`${server}/api/meta`, {
+    headers: headers(token),
+  });
+  if (!res.ok)
+    throw new Error(`Failed to fetch server metadata: ${res.status}`);
+  return res.json();
+}
+
 export async function listSessions(
   server: string,
   token: string,
