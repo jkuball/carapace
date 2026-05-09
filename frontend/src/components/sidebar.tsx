@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef } from "react";
 import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
@@ -378,17 +379,20 @@ export function Sidebar({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold tracking-tight">carapace</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 leading-none">
+            <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
+            <span className="text-sm font-semibold tracking-tight">carapace</span>
+          </div>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={onGoHome}
             title="Home"
             className={cn(
-              "rounded-md p-2 transition-colors",
+              "rounded-md p-1.5 transition-colors",
               activeView === "chat" && activeSessionId === null
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -401,7 +405,7 @@ export function Sidebar({
             onClick={onOpenJobs}
             title="Jobs settings"
             className={cn(
-              "rounded-md p-2 transition-colors",
+              "rounded-md p-1.5 transition-colors",
               activeView === "jobs"
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -412,17 +416,17 @@ export function Sidebar({
           <button
             onClick={onDisconnect}
             title="Disconnect"
-            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LogOut className="h-4 w-4" />
           </button>
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+          <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
           <a
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
             title="GitHub"
-            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <GitHubIcon className="h-4 w-4" />
           </a>
