@@ -102,6 +102,29 @@ def test_jobs_scheduler_collects_due_run_on_exact_now_boundary(tmp_path):
     assert due_runs[0].scheduled_at == datetime(2026, 5, 9, 10, 1, tzinfo=UTC)
 
 
+def test_jobs_scheduler_does_not_duplicate_run_near_exact_boundary(tmp_path):
+    store = JobsStore(tmp_path)
+    store.create_job(
+        JobDefinition.model_validate(
+            {
+                "id": "daily",
+                "name": "Daily",
+                "prompt": "Summarize.",
+                "triggers": [{"expression": "* * * * *"}],
+            }
+        )
+    )
+    scheduler = JobsScheduler(store)
+
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert scheduler.collect_due_runs(now=start) == []
+
+    due_runs = scheduler.collect_due_runs(now=datetime(2026, 5, 9, 10, 1, 0, 300000, tzinfo=UTC))
+
+    assert len(due_runs) == 1
+    assert due_runs[0].scheduled_at == datetime(2026, 5, 9, 10, 1, tzinfo=UTC)
+
+
 def test_jobs_scheduler_does_not_regress_checkpoint_when_clock_moves_backwards(tmp_path):
     store = JobsStore(tmp_path)
     store.create_job(

@@ -154,7 +154,11 @@ class JobsScheduler:
             return []
 
         due_runs: list[ScheduledJobRun] = []
-        if croniter.match(trigger.expression, now_local, precision_in_seconds=1) and now_local > since_local:
+        if (
+            now_local.microsecond == 0
+            and croniter.match(trigger.expression, now_local, precision_in_seconds=1)
+            and now_local > since_local
+        ):
             due_runs.append(
                 ScheduledJobRun(
                     job=job,
