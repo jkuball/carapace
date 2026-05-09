@@ -71,6 +71,35 @@ export interface SessionArchiveCommitResponse {
   reason?: string | null;
 }
 
+// Jobs
+
+export interface JobCronTrigger {
+  type: "cron";
+  expression: string;
+  timezone?: string | null;
+}
+
+export interface JobDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  triggers: JobCronTrigger[];
+  prompt: string;
+  unattended: boolean;
+  persistent_session_id?: string | null;
+}
+
+export interface JobsFile {
+  jobs: JobDefinition[];
+}
+
+export interface JobRunResult {
+  job_id: string;
+  session_id: string;
+  created_new_session: boolean;
+  session: SessionInfo;
+}
+
 export interface HistoryMessage {
   role: string;
   content: string;

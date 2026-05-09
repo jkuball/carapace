@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { ConnectForm } from "@/components/connect-form";
+import { JobsView } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
@@ -79,6 +80,8 @@ type ConnectionState = {
   token: string;
 };
 
+type AppView = "chat" | "jobs";
+
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
     return {
@@ -115,6 +118,9 @@ function HomeContent() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
     searchParams.get("session"),
   );
+  const [activeView, setActiveView] = useState<AppView>(
+    searchParams.get("view") === "jobs" ? "jobs" : "chat",
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
   const [refreshingSessions, setRefreshingSessions] = useState(false);
@@ -136,14 +142,22 @@ function HomeContent() {
 
   // Sync activeSessionId → URL query param
   useEffect(() => {
-    if (activeSessionId) {
-      router.replace(`?session=${encodeURIComponent(activeSessionId)}`, {
+    const params = new URLSearchParams();
+    if (activeView === "jobs") {
+      params.set("view", "jobs");
+    } else if (activeSessionId) {
+      params.set("session", activeSessionId);
+    }
+
+    const query = params.toString();
+    if (query) {
+      router.replace(`?${query}`, {
         scroll: false,
       });
     } else {
       router.replace("/", { scroll: false });
     }
-  }, [activeSessionId, router]);
+  }, [activeSessionId, activeView, router]);
 
   useEffect(() => {
     // Defer to avoid synchronous setState in effect body.
@@ -306,6 +320,7 @@ function HomeContent() {
     setSessionListCursor(null);
     setSessionListHasMore(false);
     setActiveSessionId(null);
+    setActiveView("chat");
   }
 
   async function handleNewSession(unattended = false) {
@@ -314,6 +329,7 @@ function HomeContent() {
       const session = await createSession(server, token, { unattended });
       setSessions((prev) => sortSessions([session, ...prev]));
       setActiveSessionId(session.session_id);
+      setActiveView("chat");
       setSidebarOpen(false);
     } catch {
       // handled in UI
@@ -346,6 +362,12 @@ function HomeContent() {
 
   function handleSelectSession(id: string) {
     setActiveSessionId(id);
+    setActiveView("chat");
+    setSidebarOpen(false);
+  }
+
+  function handleOpenJobs(): void {
+    setActiveView("jobs");
     setSidebarOpen(false);
   }
 
@@ -392,6 +414,14 @@ function HomeContent() {
   const handleForkSession = useCallback((session: SessionInfo) => {
     handleSessionUpdate(session);
     setActiveSessionId(session.session_id);
+    setActiveView("chat");
+    setSidebarOpen(false);
+  }, []);
+
+  const handleJobSessionActivated = useCallback((session: SessionInfo) => {
+    handleSessionUpdate(session);
+    setActiveSessionId(session.session_id);
+    setActiveView("chat");
     setSidebarOpen(false);
   }, []);
 
@@ -426,8 +456,10 @@ function HomeContent() {
         <Sidebar
           sessions={sessions}
           activeSessionId={activeSessionId}
+          activeView={activeView}
           onSelect={handleSelectSession}
           onNew={handleNewSession}
+          onOpenJobs={handleOpenJobs}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
@@ -452,11 +484,18 @@ function HomeContent() {
               <Menu className="h-5 w-5" />
             )}
           </button>
-          <span className="text-sm font-semibold">carapace</span>
+          <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
         </div>
 
         {/* Chat or empty state */}
-        {activeSessionId ? (
+        {activeView === "jobs" ? (
+          <JobsView
+            server={server}
+            token={token}
+            sessions={sessions}
+            onSessionActivated={handleJobSessionActivated}
+          />
+        ) : activeSessionId ? (
           <ChatView
             key={activeSessionId}
             server={server}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
 import { NewSessionButton } from "@/components/new-session-button";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -17,8 +17,10 @@ import {
 interface SidebarProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
+  activeView?: "chat" | "jobs";
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
+  onOpenJobs: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDelete: (sessionId: string) => void;
   onDisconnect: () => void;
@@ -80,8 +82,10 @@ function shouldConfirmSessionDeletion(
 export function Sidebar({
   sessions,
   activeSessionId,
+  activeView = "chat",
   onSelect,
   onNew,
+  onOpenJobs,
   onUpdateAttributes,
   onDelete,
   onDisconnect,
@@ -365,6 +369,22 @@ export function Sidebar({
       {/* New session button */}
       <div className="px-3 pt-3 pb-1">
         <NewSessionButton onCreate={onNew} disabled={loading} fullWidth />
+        <button
+          type="button"
+          onClick={onOpenJobs}
+          className={cn(
+            "mt-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+            activeView === "jobs"
+              ? "border-foreground/10 bg-accent text-accent-foreground"
+              : "border-border bg-background text-foreground/80 hover:bg-muted",
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Settings2 className="h-4 w-4" />
+            Jobs
+          </span>
+          <span className="text-xs text-muted-foreground">Settings</span>
+        </button>
       </div>
 
       {/* Session list */}
