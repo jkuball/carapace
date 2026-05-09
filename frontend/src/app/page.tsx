@@ -74,6 +74,8 @@ function sortSessions(sessions: SessionInfo[]): SessionInfo[] {
   return [...sessions].sort(compareSessions);
 }
 
+const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
+
 type ConnectionState = {
   connected: boolean;
   server: string;
@@ -371,6 +373,12 @@ function HomeContent() {
     setSidebarOpen(false);
   }
 
+  function handleGoHome(): void {
+    setActiveSessionId(null);
+    setActiveView("chat");
+    setSidebarOpen(false);
+  }
+
   function handleTitleUpdate(sessionId: string, title: string) {
     setSessions((prev) =>
       prev.map((s) => (s.session_id === sessionId ? { ...s, title } : s)),
@@ -452,10 +460,12 @@ function HomeContent() {
           activeView={activeView}
           onSelect={handleSelectSession}
           onNew={handleNewSession}
+          onGoHome={handleGoHome}
           onOpenJobs={handleOpenJobs}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
+          githubUrl={GITHUB_REPO_URL}
           loading={loading}
           hasMore={sessionListHasMore}
           loadingMore={loadingMoreSessions}

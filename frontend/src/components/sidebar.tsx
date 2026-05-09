@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
 import { NewSessionButton } from "@/components/new-session-button";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -20,10 +20,12 @@ interface SidebarProps {
   activeView?: "chat" | "jobs";
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
+  onGoHome: () => void;
   onOpenJobs: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDelete: (sessionId: string) => void;
   onDisconnect: () => void;
+  githubUrl: string;
   loading?: boolean;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -79,16 +81,31 @@ function shouldConfirmSessionDeletion(
     );
 }
 
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M12 1.5C6.201 1.5 1.5 6.201 1.5 12c0 4.64 3.01 8.577 7.184 9.966.525.097.716-.228.716-.507 0-.25-.009-.913-.015-1.792-2.922.635-3.538-1.409-3.538-1.409-.478-1.213-1.168-1.536-1.168-1.536-.955-.652.072-.639.072-.639 1.056.074 1.611 1.084 1.611 1.084.939 1.608 2.463 1.144 3.063.875.095-.68.368-1.144.668-1.407-2.333-.265-4.785-1.166-4.785-5.192 0-1.147.41-2.085 1.082-2.82-.108-.266-.469-1.336.102-2.786 0 0 .882-.282 2.89 1.077A10.048 10.048 0 0 1 12 6.59c.892.004 1.79.121 2.629.355 2.006-1.359 2.887-1.077 2.887-1.077.573 1.45.212 2.52.104 2.786.674.735 1.08 1.673 1.08 2.82 0 4.036-2.456 4.924-4.797 5.184.378.325.714.965.714 1.946 0 1.406-.013 2.54-.013 2.886 0 .282.189.609.723.506A10.503 10.503 0 0 0 22.5 12c0-5.799-4.701-10.5-10.5-10.5Z" />
+    </svg>
+  );
+}
+
 export function Sidebar({
   sessions,
   activeSessionId,
   activeView = "chat",
   onSelect,
   onNew,
+  onGoHome,
   onOpenJobs,
   onUpdateAttributes,
   onDelete,
   onDisconnect,
+  githubUrl,
   loading,
   hasMore = false,
   loadingMore = false,
@@ -357,34 +374,56 @@ export function Sidebar({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <span className="text-sm font-semibold tracking-tight">carapace</span>
-        <button
-          onClick={onDisconnect}
-          title="Disconnect"
-          className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onGoHome}
+            title="Home"
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              activeView === "chat" && activeSessionId === null
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Home className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenJobs}
+            title="Jobs settings"
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              activeView === "jobs"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onDisconnect}
+            title="Disconnect"
+            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+          <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="GitHub"
+            className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <GitHubIcon className="h-4 w-4" />
+          </a>
+        </div>
       </div>
 
       {/* New session button */}
       <div className="px-3 pt-3 pb-1">
         <NewSessionButton onCreate={onNew} disabled={loading} fullWidth />
-        <button
-          type="button"
-          onClick={onOpenJobs}
-          className={cn(
-            "mt-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-            activeView === "jobs"
-              ? "border-foreground/10 bg-accent text-accent-foreground"
-              : "border-border bg-background text-foreground/80 hover:bg-muted",
-          )}
-        >
-          <span className="inline-flex items-center gap-2">
-            <Settings2 className="h-4 w-4" />
-            Jobs
-          </span>
-          <span className="text-xs text-muted-foreground">Settings</span>
-        </button>
       </div>
 
       {/* Session list */}
