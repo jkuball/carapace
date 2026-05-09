@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Loader2, Lock, Pin, Play, RotateCcw, Save, Square, Star, Trash2, Unlock } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
   type AvailableModelInfo,
@@ -118,39 +118,107 @@ function formatArchiveTimestamp(iso?: string | null): string {
   })}`;
 }
 
+function formatSessionTimestamp(iso?: string | null): string {
+  if (!iso) return "Unknown";
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) return "Unknown";
+  return value.toLocaleString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: value < 0.01 ? 4 : 2,
+    maximumFractionDigits: value < 0.01 ? 4 : 2,
+  }).format(value);
+}
+
+function formatJobTriggerKind(triggerKind: "api" | "cron" | "manual"): string {
+  if (triggerKind === "api") return "API";
+  if (triggerKind === "cron") return "Cron";
+  return "Manual";
+}
+
+function formatSessionJobData(data?: string | null): { value: string; isJson: boolean } | null {
+  if (typeof data !== "string") return null;
+  if (data.trim().length === 0) return null;
+  try {
+    return { value: JSON.stringify(JSON.parse(data), null, 2), isJson: true };
+  } catch {
+    return { value: data, isJson: false };
+  }
+}
+
 function knowledgeStatusBadge(
   session: SessionInfo | null,
   hasKnowledgeChanges: boolean,
-): { label: string; className: string } {
+): { label: string; className: string; icon: typeof Archive } {
   const isInKnowledgeRepo = Boolean(
     session?.knowledge_last_committed_at || session?.knowledge_last_archive_path,
   );
 
   if (session?.attributes.private && !isInKnowledgeRepo) {
     return {
-      label: "excluded",
+      label: "Excluded",
       className: "border-zinc-300 bg-zinc-100 text-zinc-700",
+      icon: Lock,
     };
   }
 
   if (!isInKnowledgeRepo) {
     return {
-      label: "missing",
+      label: "Missing",
       className: "border-slate-300 bg-slate-100 text-slate-700",
+      icon: Archive,
     };
   }
 
   if (hasKnowledgeChanges) {
     return {
-      label: "outdated",
+      label: "Outdated",
       className: "border-amber-300 bg-amber-50 text-amber-700",
+      icon: RotateCcw,
     };
   }
 
   return {
-    label: "up-to-date",
+    label: "Up to Date",
     className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    icon: Save,
   };
+}
+
+function sessionSourceInfo(session: SessionInfo | null): {
+  label: string;
+  icon: typeof Globe;
+} {
+  if (!session) {
+    return { label: "Unknown", icon: MessageSquare };
+  }
+  if (session.channel_type === "job") {
+    return { label: "Job", icon: Bot };
+  }
+  if (session.channel_type === "web") {
+    return { label: "Web", icon: Globe };
+  }
+  if (session.channel_type === "cli") {
+    return { label: "CLI", icon: Terminal };
+  }
+  return { label: session.channel_type, icon: MessageSquare };
+}
+
+function sessionSourceJobId(session: SessionInfo | null): string | null {
+  if (session?.channel_type !== "job") return null;
+  if (!session.channel_ref?.startsWith("job:")) return null;
+  const jobId = session.channel_ref.slice("job:".length).trim();
+  return jobId.length > 0 ? jobId : null;
 }
 
 function optimisticPendingSandbox(
@@ -732,6 +800,8 @@ export function ChatView({
   const [wipingSandbox, setWipingSandbox] = useState(false);
   const [deletingSession, setDeletingSession] = useState(false);
   const [savingKnowledge, setSavingKnowledge] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const [sessionIdCopied, setSessionIdCopied] = useState(false);
   const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | null>(null);
   const [turnActionBusyIndex, setTurnActionBusyIndex] = useState<number | null>(null);
   const [knowledgeNotice, setKnowledgeNotice] = useState<{
@@ -773,6 +843,10 @@ export function ChatView({
     sandboxRefreshParamsRef.current = { server, token, sessionId };
     sandboxRefreshEpochRef.current += 1;
   }, [server, sessionId, token]);
+
+  useEffect(() => {
+    setMobileInspectorOpen(false);
+  }, [sessionId]);
 
   // Fetch available slash commands and models on mount
   useEffect(() => {
@@ -1618,6 +1692,16 @@ export function ChatView({
     send({ type: "cancel" });
   }
 
+  async function handleCopySessionId(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setSessionIdCopied(true);
+      window.setTimeout(() => setSessionIdCopied(false), 1200);
+    } catch {
+      /* clipboard may be denied; avoid throwing in UI */
+    }
+  }
+
   const connected = status === "connected";
   const hasKnowledgeContent = messages.length > 0;
   const hasKnowledgeChanges = sessionHasKnowledgeChanges(session);
@@ -1673,6 +1757,340 @@ export function ChatView({
           ? archiveStatusLabel
           : `${archiveStatusLabel}. No new changes to commit.`
         : undefined;
+  const sessionDisplayTitle = session?.title?.trim() || sessionId;
+  const source = sessionSourceInfo(session);
+  const sourceJobId = sessionSourceJobId(session);
+  const latestJobRun = session?.latest_job_run ?? null;
+  const latestJobData = formatSessionJobData(latestJobRun?.data);
+  const fallbackSourceJobId = latestJobRun ? null : sourceJobId;
+  const totalCostUsd = session?.total_cost_usd ?? 0;
+  const sessionDetailBadges = [
+    sessionArchived
+      ? { label: "Archived", icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
+      : null,
+    sessionPrivate
+      ? { label: "Private", icon: Lock, className: "border-zinc-300 bg-zinc-100 text-zinc-700" }
+      : null,
+    sessionPinned
+      ? { label: "Pinned", icon: Pin, className: "border-sky-200 bg-sky-50 text-sky-800" }
+      : null,
+    sessionFavorite
+      ? { label: "Favorite", icon: Star, className: "border-amber-200 bg-amber-50 text-amber-800" }
+      : null,
+  ].filter((value): value is { label: string; icon: typeof Archive; className: string } => value !== null);
+  const inspectorBadgeClass = "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium";
+  const inspectorContent = (
+    <div className="space-y-3">
+      <section className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Actions
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+          <button
+            onClick={() => void handleTogglePinned()}
+            disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
+            title={sessionPinned ? "Unpin session" : "Pin session"}
+            className="rounded-md p-1.5 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {updatingSessionAttribute === "pinned" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Pin className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            onClick={() => void handleToggleFavorite()}
+            disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
+            title={sessionFavorite ? "Remove favorite" : "Favorite session"}
+            className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {updatingSessionAttribute === "favorite" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Star className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {sessionArchived || sessionCanArchive ? (
+            <button
+              onClick={() => void handleToggleArchived()}
+              disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
+              title={sessionArchived ? "Unarchive session" : "Archive session"}
+              className="rounded-md p-1.5 text-violet-900 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {updatingSessionAttribute === "archived" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : sessionArchived ? (
+                <ArchiveRestore className="h-3.5 w-3.5" />
+              ) : (
+                <Archive className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : null}
+          <button
+            onClick={() => void handleTogglePrivacy()}
+            disabled={!session || !!updatingSessionAttribute || deletingSession}
+            title={sessionPrivate ? "Include in repo" : "Keep private"}
+            className="rounded-md p-1.5 text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {updatingSessionAttribute === "private" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : sessionPrivate ? (
+              <Unlock className="h-3.5 w-3.5" />
+            ) : (
+              <Lock className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            onClick={() => void handleDeleteSession()}
+            disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession}
+            title="Delete session"
+            className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deletingSession ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          Session
+        </div>
+
+        <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Title</dt>
+          <dd className="break-words font-semibold text-foreground">{sessionDisplayTitle}</dd>
+
+          <dt className="text-muted-foreground">ID</dt>
+          <dd className="flex items-center gap-2">
+            <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">{sessionId}</span>
+            <button
+              type="button"
+              onClick={() => void handleCopySessionId()}
+              className="shrink-0 rounded-md border border-border/70 p-1 text-muted-foreground transition-colors hover:bg-muted"
+              aria-label={sessionIdCopied ? "Copied session id" : "Copy session id"}
+              title={sessionIdCopied ? "Copied" : "Copy session id"}
+            >
+              {sessionIdCopied ? (
+                <Check className="h-3 w-3" strokeWidth={2} />
+              ) : (
+                <Copy className="h-3 w-3" strokeWidth={2} />
+              )}
+            </button>
+          </dd>
+
+          <dt className="text-muted-foreground">Source</dt>
+          <dd className="inline-flex items-center gap-2 font-medium text-foreground">
+            <source.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span>{source.label}</span>
+          </dd>
+
+          <dt className="text-muted-foreground">Created</dt>
+          <dd className="text-foreground">{formatSessionTimestamp(session?.created_at)}</dd>
+
+          <dt className="text-muted-foreground">Last active</dt>
+          <dd className="text-foreground">{formatSessionTimestamp(session?.last_active)}</dd>
+
+          <dt className="text-muted-foreground">Messages</dt>
+          <dd className="text-foreground">{session?.message_count ?? 0}</dd>
+
+          {totalCostUsd > 0 ? (
+            <>
+              <dt className="text-muted-foreground">Total cost</dt>
+              <dd className="text-foreground">{formatUsd(totalCostUsd)}</dd>
+            </>
+          ) : null}
+
+          {fallbackSourceJobId ? (
+            <>
+              <dt className="text-muted-foreground">Job</dt>
+              <dd className="break-all font-mono text-xs text-foreground">{fallbackSourceJobId}</dd>
+            </>
+          ) : null}
+
+          {session?.channel_ref && !fallbackSourceJobId ? (
+            <>
+              <dt className="text-muted-foreground">Reference</dt>
+              <dd className="break-all font-mono text-xs text-foreground">{session.channel_ref}</dd>
+            </>
+          ) : null}
+        </dl>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sessionUnattended ? (
+            <span className={cn(inspectorBadgeClass, "gap-1 border-emerald-200 bg-emerald-50 text-emerald-800")}>
+              <Bot className="h-3 w-3 shrink-0" />
+              <span>Unattended</span>
+            </span>
+          ) : (
+            <span className={cn(inspectorBadgeClass, "gap-1 border-border bg-muted text-muted-foreground")}>
+              <MessageSquare className="h-3 w-3 shrink-0" />
+              Interactive
+            </span>
+          )}
+          {sessionDetailBadges.map((badge) => (
+            <span
+              key={badge.label}
+              className={cn(inspectorBadgeClass, "gap-1", badge.className)}
+            >
+              <badge.icon className="h-3 w-3 shrink-0" />
+              {badge.label}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {latestJobRun ? (
+        <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Latest Job Run
+          </div>
+
+          <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">Job</dt>
+            <dd className="break-all font-mono text-xs text-foreground">{latestJobRun.job_id}</dd>
+
+            <dt className="text-muted-foreground">Trigger</dt>
+            <dd className="text-foreground">{formatJobTriggerKind(latestJobRun.trigger_kind)}</dd>
+
+            <dt className="text-muted-foreground">Ran at</dt>
+            <dd className="text-foreground">{formatSessionTimestamp(latestJobRun.triggered_at)}</dd>
+
+            {latestJobRun.cron_expression ? (
+              <>
+                <dt className="text-muted-foreground">Schedule</dt>
+                <dd className="break-all font-mono text-xs text-foreground">{latestJobRun.cron_expression}</dd>
+              </>
+            ) : null}
+          </dl>
+
+          {latestJobData ? (
+            <div className="mt-3 space-y-1.5">
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Data
+              </div>
+              <pre className="overflow-x-auto rounded-xl border border-border/70 bg-muted/35 px-3 py-2 font-mono text-xs leading-5 text-foreground whitespace-pre-wrap break-words">
+                {latestJobData.value}
+              </pre>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Sandbox
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => void handleSandboxPowerAction()}
+              disabled={sandboxActionDisabled || sessionArchived}
+              title={sandboxPowerButtonLabel}
+              className="rounded-md p-1.5 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sandboxPowerAction ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : showsStartSandbox ? (
+                <Play className="h-3.5 w-3.5" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
+            </button>
+            <button
+              onClick={() => void handleWipeSandbox()}
+              disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || sessionArchived}
+              title="Reset sandbox"
+              className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {wipingSandbox ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+        </div>
+        <div className="mt-2 space-y-1">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+            <span
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                sandboxLoading
+                  ? "animate-pulse bg-amber-500"
+                  : sandbox
+                    ? sandboxStatusIndicatorClass(sandbox.status)
+                    : "bg-slate-300",
+              )}
+            />
+            <span className="truncate">{sandboxLoading ? "Refreshing…" : sandbox ? sandboxStatusLabel(sandbox.status) : "Checking sandbox…"}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">{sandboxStorageLabel(sandbox)}</div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Knowledge
+          </div>
+          <button
+            onClick={() => void handleCommitKnowledge()}
+            disabled={archiveButtonDisabled}
+            title={commitButtonTitle ?? "Commit to repo"}
+            className="rounded-md p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {savingKnowledge ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              inspectorBadgeClass,
+              "gap-1",
+              knowledgeBadge.className,
+            )}
+          >
+            <knowledgeBadge.icon className="h-3 w-3 shrink-0" />
+            {knowledgeBadge.label}
+          </span>
+          <span className="truncate">{archiveStatusLabel}</span>
+        </div>
+        {session?.knowledge_last_archive_path ? (
+          <div
+            className="mt-2 break-all font-mono text-xs text-muted-foreground"
+            title={session.knowledge_last_archive_path}
+          >
+            {session.knowledge_last_archive_path}
+          </div>
+        ) : null}
+      </section>
+
+      {knowledgeNotice ? (
+        <div
+          className={cn(
+            "rounded-2xl border border-border/70 bg-background/90 px-3 py-2 text-xs shadow-sm",
+            knowledgeNotice.tone === "error"
+              ? "text-destructive"
+              : knowledgeNotice.tone === "success"
+                ? "text-emerald-700"
+                : "text-muted-foreground",
+          )}
+        >
+          {knowledgeNotice.message}
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -1686,274 +2104,124 @@ export function ChatView({
         </div>
       )}
 
-      <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
-        <div className="w-full">
-          <div className="min-w-0 w-full space-y-2">
-            {sessionUnattended ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800">
-                  <Bot className="h-3 w-3 shrink-0" />
-                  <span>Unattended</span>
-                </span>
-              </div>
-            ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="min-w-0 rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2 sm:px-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    Sandbox
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => void handleSandboxPowerAction()}
-                      disabled={sandboxActionDisabled || sessionArchived}
-                      title={sandboxPowerButtonLabel}
-                      className="rounded-md p-1.5 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {sandboxPowerAction ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : showsStartSandbox ? (
-                        <Play className="h-3.5 w-3.5" />
-                      ) : (
-                        <Square className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => void handleWipeSandbox()}
-                      disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || sessionArchived}
-                      title="Reset sandbox"
-                      className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {wipingSandbox ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1 min-w-0 space-y-0.5">
-                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-                    <span
-                      className={cn(
-                        "h-2 w-2 shrink-0 rounded-full",
-                        sandboxLoading
-                          ? "bg-amber-500 animate-pulse"
-                          : sandbox
-                            ? sandboxStatusIndicatorClass(sandbox.status)
-                            : "bg-slate-300",
-                      )}
-                    />
-                    <span className="truncate">{sandboxLoading ? "Refreshing…" : sandbox ? sandboxStatusLabel(sandbox.status) : "Checking sandbox…"}</span>
-                  </div>
-                  <div className="truncate text-xs font-normal text-muted-foreground">
-                    {sandboxStorageLabel(sandbox)}
-                  </div>
+      <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-h-0 flex flex-1 flex-col">
+          <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-foreground">{sessionDisplayTitle}</div>
+                <div className="mt-1 hidden truncate font-mono text-xs text-muted-foreground sm:block">
+                  {sessionId}
                 </div>
               </div>
-
-              <div className="min-w-0 rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2 sm:px-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    Knowledge
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => void handleCommitKnowledge()}
-                      disabled={archiveButtonDisabled}
-                      title={commitButtonTitle ?? "Commit to repo"}
-                      className="rounded-md p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {savingKnowledge ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Save className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => void handleTogglePinned()}
-                      disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-                      title={sessionPinned ? "Unpin session" : "Pin session"}
-                      className="rounded-md p-1.5 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {updatingSessionAttribute === "pinned" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Pin className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => void handleToggleFavorite()}
-                      disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-                      title={sessionFavorite ? "Remove favorite" : "Favorite session"}
-                      className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {updatingSessionAttribute === "favorite" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Star className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    {sessionArchived || sessionCanArchive ? (
-                      <button
-                        onClick={() => void handleToggleArchived()}
-                        disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-                        title={sessionArchived ? "Unarchive session" : "Archive session"}
-                        className="rounded-md p-1.5 text-violet-900 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {updatingSessionAttribute === "archived" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : sessionArchived ? (
-                          <ArchiveRestore className="h-3.5 w-3.5" />
-                        ) : (
-                          <Archive className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                    ) : null}
-                    <button
-                      onClick={() => void handleTogglePrivacy()}
-                      disabled={!session || !!updatingSessionAttribute || deletingSession}
-                      title={sessionPrivate ? "Include in repo" : "Keep private"}
-                      className="rounded-md p-1.5 text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {updatingSessionAttribute === "private" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : sessionPrivate ? (
-                        <Unlock className="h-3.5 w-3.5" />
-                      ) : (
-                        <Lock className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => void handleDeleteSession()}
-                      disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession}
-                      title="Delete session"
-                      className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {deletingSession ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1 min-w-0 space-y-0.5">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 font-medium uppercase tracking-[0.08em]",
-                        knowledgeBadge.className,
-                      )}
-                    >
-                      {knowledgeBadge.label}
-                    </span>
-                    {sessionPinned ? (
-                      <span className="inline-flex items-center gap-1 text-sky-700">
-                        <Pin className="h-3 w-3 shrink-0" />
-                        <span>Pinned</span>
-                      </span>
-                    ) : null}
-                    {sessionFavorite ? (
-                      <span className="inline-flex items-center gap-1 text-amber-700">
-                        <Star className="h-3 w-3 shrink-0" />
-                        <span>Favorite</span>
-                      </span>
-                    ) : null}
-                    <span className="truncate">{archiveStatusLabel}</span>
-                  </div>
-                </div>
-                {session?.knowledge_last_archive_path ? (
-                  <div
-                    className="hidden max-w-full truncate text-xs font-mono text-muted-foreground md:block"
-                    title={session.knowledge_last_archive_path}
-                  >
-                    {session.knowledge_last_archive_path}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            {knowledgeNotice ? (
-              <div
-                className={cn(
-                  "text-xs",
-                  knowledgeNotice.tone === "error"
-                    ? "text-destructive"
-                    : knowledgeNotice.tone === "success"
-                      ? "text-emerald-700"
-                      : "text-muted-foreground",
-                )}
+              <button
+                type="button"
+                onClick={() => setMobileInspectorOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted lg:hidden"
               >
-                {knowledgeNotice.message}
+                <Settings2 className="h-4 w-4" />
+                Details
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+          >
+            <div className="mx-auto max-w-3xl space-y-3">
+              {loadingHistory && (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!loadingHistory && messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <p className="text-lg font-medium text-foreground/80">carapace</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {connected
+                      ? "Send a message to get started"
+                      : "Connecting to session…"}
+                  </p>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <Message
+                  key={i}
+                  message={msg}
+                  activeLlmActivity={llmActivity}
+                  canFork={msg.kind === "assistant"}
+                  canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
+                  canReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg)}
+                  actionDisabled={turnActionsDisabled}
+                  onApproval={handleApproval}
+                  onEscalation={handleEscalation}
+                  onCredentialApproval={handleCredentialEscalation}
+                  onFork={msg.kind === "assistant" ? () => void handleFork(i) : undefined}
+                  onRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg) ? handleRetry : undefined}
+                  onReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg) ? () => void handleReset(i) : undefined}
+                />
+              ))}
+              {waitingLabel && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>{waitingLabel}</span>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          <ChatInput
+            onSend={handleSend}
+            onCancel={handleCancel}
+            onInterrupt={handleInterrupt}
+            connected={connected}
+            disabled={inputDisabled}
+            disabledPlaceholder={inputDisabledPlaceholder}
+            waiting={waiting}
+            queuedMessage={queuedMessage}
+            commands={commands}
+            availableModelEntries={availableModelEntries}
+            usage={usage}
+          />
+        </div>
+
+        <aside className="hidden min-h-0 border-l border-border bg-muted/20 lg:block">
+          <div className="h-full overflow-y-auto p-3">{inspectorContent}</div>
+        </aside>
+      </div>
+
+      {mobileInspectorOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+            onClick={() => setMobileInspectorOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-hidden rounded-t-3xl border border-border bg-background shadow-2xl">
+            <div className="flex justify-center border-b border-border px-4 pt-2 pb-1.5">
+              <span className="h-1.5 w-12 rounded-full bg-border/80" />
+            </div>
+            <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-2.5">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-foreground">Details</div>
+                <div className="truncate text-xs text-muted-foreground">{sessionDisplayTitle}</div>
               </div>
-            ) : null}
+              <button
+                type="button"
+                onClick={() => setMobileInspectorOpen(false)}
+                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-medium hover:bg-muted"
+              >
+                Done
+              </button>
+            </div>
+            <div className="overflow-y-auto p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {inspectorContent}
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
-      >
-        <div className="mx-auto max-w-3xl space-y-3">
-          {loadingHistory && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
-          {!loadingHistory && messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-lg font-medium text-foreground/80">carapace</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {connected
-                  ? "Send a message to get started"
-                  : "Connecting to session…"}
-              </p>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <Message
-              key={i}
-              message={msg}
-              activeLlmActivity={llmActivity}
-              canFork={msg.kind === "assistant"}
-              canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
-              canReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg)}
-              actionDisabled={turnActionsDisabled}
-              onApproval={handleApproval}
-              onEscalation={handleEscalation}
-              onCredentialApproval={handleCredentialEscalation}
-              onFork={msg.kind === "assistant" ? () => void handleFork(i) : undefined}
-              onRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg) ? handleRetry : undefined}
-              onReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg) ? () => void handleReset(i) : undefined}
-            />
-          ))}
-          {waitingLabel && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>{waitingLabel}</span>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <ChatInput
-        onSend={handleSend}
-        onCancel={handleCancel}
-        onInterrupt={handleInterrupt}
-        connected={connected}
-        disabled={inputDisabled}
-        disabledPlaceholder={inputDisabledPlaceholder}
-        waiting={waiting}
-        queuedMessage={queuedMessage}
-        commands={commands}
-        availableModelEntries={availableModelEntries}
-        usage={usage}
-      />
+      ) : null}
     </div>
   );
 }

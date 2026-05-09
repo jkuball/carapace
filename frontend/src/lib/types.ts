@@ -47,13 +47,23 @@ export interface SessionInfo {
   last_active: string;
   title?: string;
   attributes: SessionAttributes;
+  latest_job_run?: SessionLatestJobRun | null;
   knowledge_last_committed_at?: string | null;
   knowledge_last_archive_path?: string | null;
   knowledge_last_commit_trigger?: string | null;
   activated_rules: string[];
   disabled_rules: string[];
   message_count: number;
+  total_cost_usd?: number | null;
   sandbox?: SessionSandboxSnapshot | null;
+}
+
+export interface SessionLatestJobRun {
+  job_id: string;
+  trigger_kind: "api" | "cron" | "manual";
+  triggered_at: string;
+  data?: string | null;
+  cron_expression?: string | null;
 }
 
 export interface SessionListPage {
