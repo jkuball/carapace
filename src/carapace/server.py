@@ -41,8 +41,9 @@ from carapace.config import _resolve_data_dir, _resolve_knowledge_dir, get_confi
 from carapace.credentials import CredentialRegistry, build_credential_registry
 from carapace.git.http import GitHttpHandler
 from carapace.git.store import GitStore
+from carapace.jobs import JobsStore, build_job_run_message
 from carapace.llm import make_model_factory
-from carapace.models import Config, SessionAttributes, SessionState, ToolResult
+from carapace.models import Config, JobDefinition, JobsFile, SessionAttributes, SessionState, ToolResult
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
 from carapace.sandbox.runtime import ContainerRuntime
@@ -94,6 +95,7 @@ _git_handler: GitHttpHandler
 _credential_registry: CredentialRegistry
 _session_archive: SessionArchiveService
 _session_list_cache: SessionListCache
+_jobs_store: JobsStore
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
 
@@ -183,7 +185,15 @@ async def _autosave_inactive_sessions() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _data_dir, _config, _engine, _git_handler, _credential_registry, _session_archive, _session_list_cache
+    global \
+        _data_dir, \
+        _config, \
+        _engine, \
+        _git_handler, \
+        _credential_registry, \
+        _session_archive, \
+        _session_list_cache, \
+        _jobs_store
 
     # 1. Load config
     config_path = get_config_path()
@@ -310,6 +320,7 @@ async def lifespan(app: FastAPI):
         session_mgr=session_mgr,
         config=_config.sessions.commit,
     )
+    _jobs_store = JobsStore(_data_dir)
 
     # Git HTTP handler — serves the knowledge repo on the sandbox API
     _git_handler = GitHttpHandler(
@@ -530,6 +541,17 @@ class SessionArchiveCommitResponse(BaseModel):
     committed_at: str | None = None
     trigger: str
     reason: str | None = None
+
+
+class JobRunRequest(BaseModel):
+    data: dict[str, Any] = {}
+
+
+class JobRunResult(BaseModel):
+    job_id: str
+    session_id: str
+    created_new_session: bool
+    session: SessionInfo
 
 
 def _session_message_count(session_id: str) -> int:
@@ -769,6 +791,109 @@ async def commit_session_knowledge(
         committed_at=result.committed_at.isoformat() if result.committed_at else None,
         trigger=result.trigger,
         reason=result.reason,
+    )
+
+
+# --- REST: Jobs ---
+
+
+@router.get("/jobs", response_model=JobsFile)
+async def list_jobs(_token: str = Depends(_verify_token)) -> JobsFile:
+    return _jobs_store.load()
+
+
+@router.post("/jobs", response_model=JobDefinition, status_code=201)
+async def create_job(
+    body: JobDefinition,
+    _token: str = Depends(_verify_token),
+) -> JobDefinition:
+    try:
+        return _jobs_store.create_job(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/jobs/{job_id}", response_model=JobDefinition)
+async def get_job(job_id: str, _token: str = Depends(_verify_token)) -> JobDefinition:
+    job = _jobs_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.put("/jobs/{job_id}", response_model=JobDefinition)
+async def update_job(
+    job_id: str,
+    body: JobDefinition,
+    _token: str = Depends(_verify_token),
+) -> JobDefinition:
+    if body.id != job_id:
+        raise HTTPException(status_code=400, detail="Job id in path and body must match")
+    try:
+        return _jobs_store.update_job(job_id, body)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_job(job_id: str, _token: str = Depends(_verify_token)) -> Response:
+    deleted = _jobs_store.delete_job(job_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return Response(status_code=204)
+
+
+@router.post("/jobs/{job_id}/run", response_model=JobRunResult)
+async def run_job(
+    job_id: str,
+    body: JobRunRequest | None = None,
+    _token: str = Depends(_verify_token),
+) -> JobRunResult:
+    job = _jobs_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    body = body or JobRunRequest()
+    created_new_session = False
+
+    if job.persistent_session_id is None:
+        state = _engine.session_mgr.create_session(
+            channel_type="job",
+            channel_ref=f"job:{job.id}",
+            budget=_engine.config.agent.default_session_budget,
+            private=_engine.config.sessions.default_private,
+            unattended=job.unattended,
+        )
+        created_new_session = True
+    else:
+        state = _engine.session_mgr.load_state(job.persistent_session_id)
+        if state is None:
+            raise HTTPException(status_code=409, detail="Configured persistent session was not found")
+        if state.attributes.unattended:
+            raise HTTPException(status_code=409, detail="Configured persistent session must be attended")
+        if state.attributes.archived:
+            raise HTTPException(status_code=409, detail="Configured persistent session must not be archived")
+
+    if _engine.is_agent_running(state.session_id):
+        raise HTTPException(status_code=409, detail="Target session is busy")
+
+    message = build_job_run_message(
+        job,
+        trigger_kind="api",
+        triggered_at=datetime.now(tz=UTC),
+        payload=body.data,
+    )
+    await _engine.submit_message(state.session_id, message)
+
+    refreshed = _engine.session_mgr.load_state(state.session_id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session = _session_info_from_state(refreshed, include_message_count=True)
+    return JobRunResult(
+        job_id=job.id,
+        session_id=refreshed.session_id,
+        created_new_session=created_new_session,
+        session=session,
     )
 
 

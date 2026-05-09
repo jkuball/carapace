@@ -18,6 +18,7 @@ from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
+from carapace.jobs import JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
@@ -95,6 +96,7 @@ def _setup_server(tmp_path, monkeypatch):
         session_mgr=session_mgr,
         config=config.sessions.commit,
     )
+    srv._jobs_store = JobsStore(tmp_path)
 
 
 @pytest.fixture()
@@ -214,6 +216,141 @@ def test_get_session(client, auth_headers):
     resp = client.get(f"/api/sessions/{sid}", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["session_id"] == sid
+
+
+def test_jobs_crud_roundtrip(client, auth_headers):
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Daily Briefing",
+            "prompt": "Summarize the day.",
+            "unattended": True,
+            "triggers": [{"expression": "0 9 * * *", "timezone": "UTC"}],
+        },
+    )
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["id"] == "daily-briefing"
+
+    list_resp = client.get("/api/jobs", headers=auth_headers)
+    assert list_resp.status_code == 200
+    assert [job["id"] for job in list_resp.json()["jobs"]] == ["daily-briefing"]
+
+    get_resp = client.get("/api/jobs/daily-briefing", headers=auth_headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["name"] == "Daily Briefing"
+
+    update_resp = client.put(
+        "/api/jobs/daily-briefing",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Updated Briefing",
+            "prompt": "Summarize the updates.",
+            "unattended": True,
+            "triggers": [],
+        },
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["name"] == "Updated Briefing"
+
+    delete_resp = client.delete("/api/jobs/daily-briefing", headers=auth_headers)
+    assert delete_resp.status_code == 204
+
+    missing_resp = client.get("/api/jobs/daily-briefing", headers=auth_headers)
+    assert missing_resp.status_code == 404
+
+
+def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers, monkeypatch):
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Daily Briefing",
+            "prompt": "Summarize the day.",
+            "unattended": True,
+            "triggers": [],
+        },
+    )
+
+    run_resp = client.post(
+        "/api/jobs/daily-briefing/run",
+        headers=auth_headers,
+        json={"data": {"source": "calendar", "items": 3}},
+    )
+
+    assert run_resp.status_code == 200
+    payload = run_resp.json()
+    assert payload["job_id"] == "daily-briefing"
+    assert payload["created_new_session"] is True
+    assert payload["session"]["channel_type"] == "job"
+
+    (session_id, message), kwargs = submit_message.await_args
+    assert session_id == payload["session_id"]
+    assert kwargs == {}
+    assert "Summarize the day." in message
+    assert "reason: api" in message
+    assert '"source": "calendar"' in message
+
+
+def test_run_job_uses_existing_persistent_session(client, auth_headers, monkeypatch):
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    state = srv._engine.session_mgr.create_session(unattended=False)
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "team-planning",
+            "name": "Team Planning",
+            "prompt": "Continue planning.",
+            "unattended": False,
+            "persistent_session_id": state.session_id,
+            "triggers": [],
+        },
+    )
+    assert create_resp.status_code == 201
+
+    run_resp = client.post("/api/jobs/team-planning/run", headers=auth_headers)
+
+    assert run_resp.status_code == 200
+    payload = run_resp.json()
+    assert payload["created_new_session"] is False
+    assert payload["session_id"] == state.session_id
+
+    (session_id, message), kwargs = submit_message.await_args
+    assert session_id == state.session_id
+    assert kwargs == {}
+    assert "Continue planning." in message
+
+
+def test_run_job_rejects_missing_persistent_session(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(srv._engine, "submit_message", AsyncMock())
+
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "team-planning",
+            "name": "Team Planning",
+            "prompt": "Continue planning.",
+            "unattended": False,
+            "persistent_session_id": "missing-session",
+            "triggers": [],
+        },
+    )
+    assert create_resp.status_code == 201
+
+    run_resp = client.post("/api/jobs/team-planning/run", headers=auth_headers)
+    assert run_resp.status_code == 409
+    assert "persistent session" in run_resp.json()["detail"].lower()
 
 
 def test_update_session_privacy(client, auth_headers):

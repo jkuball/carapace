@@ -8,7 +8,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol, runtime_checkable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from croniter import CroniterBadCronError, croniter
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_serializer, model_validator
 from pydantic_ai.models import Model
 from pydantic_ai.usage import UsageLimits
@@ -211,6 +213,88 @@ class CronJobConfig(BaseModel):
 class CronChannelConfig(BaseModel):
     enabled: bool = False
     jobs: list[CronJobConfig] = []
+
+
+class JobCronTrigger(BaseModel):
+    type: Literal["cron"] = "cron"
+    expression: str
+    timezone: str | None = Field(
+        default=None,
+        description="IANA time zone name such as 'UTC' or 'Europe/Berlin'.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_trigger(self) -> JobCronTrigger:
+        expression = self.expression.strip()
+        if not expression:
+            raise ValueError("job cron trigger expression must not be empty")
+        try:
+            croniter(expression, datetime.now(tz=UTC))
+        except CroniterBadCronError as exc:
+            raise ValueError(f"invalid cron expression: {expression!r}") from exc
+        self.expression = expression
+
+        if self.timezone is None:
+            return self
+        timezone = self.timezone.strip()
+        if not timezone:
+            raise ValueError("job cron trigger timezone must not be empty")
+        try:
+            ZoneInfo(timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                "job cron trigger timezone must be an IANA time zone name such as 'UTC' or 'Europe/Berlin'"
+            ) from exc
+        self.timezone = timezone
+        return self
+
+
+class JobDefinition(BaseModel):
+    id: str
+    name: str
+    enabled: bool = True
+    triggers: Annotated[list[JobCronTrigger], Field(default_factory=list)]
+    prompt: str
+    unattended: bool = True
+    persistent_session_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_job(self) -> JobDefinition:
+        self.id = self.id.strip()
+        if not self.id:
+            raise ValueError("job id must not be empty")
+
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValueError("job name must not be empty")
+
+        self.prompt = self.prompt.strip()
+        if not self.prompt:
+            raise ValueError("job prompt must not be empty")
+
+        if self.persistent_session_id is None:
+            return self
+
+        persistent_session_id = self.persistent_session_id.strip()
+        if not persistent_session_id:
+            raise ValueError("job persistent_session_id must not be empty when set")
+        if self.unattended:
+            raise ValueError("job unattended must be false when persistent_session_id is set")
+        self.persistent_session_id = persistent_session_id
+        return self
+
+
+class JobsFile(BaseModel):
+    jobs: Annotated[list[JobDefinition], Field(default_factory=list)]
+
+    @model_validator(mode="after")
+    def _validate_unique_ids(self) -> JobsFile:
+        seen: set[str] = set()
+        for job in self.jobs:
+            if job.id in seen:
+                raise ValueError(f"duplicate job id: {job.id}")
+            seen.add(job.id)
+        return self
 
 
 class ChannelsConfig(BaseModel):
