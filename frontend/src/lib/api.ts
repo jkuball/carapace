@@ -351,14 +351,14 @@ export async function runJob(
   server: string,
   token: string,
   jobId: string,
-  data?: Record<string, unknown>,
+  data?: string,
 ): Promise<JobRunResult> {
   const res = await fetch(
     `${server}/api/jobs/${encodeURIComponent(jobId)}/run`,
     {
       method: "POST",
       headers: headers(token),
-      body: JSON.stringify({ data: data ?? {} }),
+      body: JSON.stringify({ data: data ?? null }),
     },
   );
   if (!res.ok) throw new Error(`Failed to run job: ${res.status}`);

@@ -8,6 +8,7 @@ import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
@@ -44,7 +45,15 @@ from carapace.git.http import GitHttpHandler
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.llm import make_model_factory
-from carapace.models import Config, JobDefinition, JobsFile, SessionAttributes, SessionState, ToolResult
+from carapace.models import (
+    Config,
+    JobDefinition,
+    JobsFile,
+    SessionAttributes,
+    SessionJobRunContext,
+    SessionState,
+    ToolResult,
+)
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
 from carapace.sandbox.runtime import ContainerRuntime
@@ -530,10 +539,12 @@ class SessionInfo(BaseModel):
     last_active: str
     title: str | None = None
     attributes: SessionAttributes
+    latest_job_run: SessionJobRunContext | None = None
     knowledge_last_committed_at: str | None = None
     knowledge_last_archive_path: str | None = None
     knowledge_last_commit_trigger: str | None = None
     message_count: int = 0
+    total_cost_usd: float | None = None
     sandbox: SessionSandboxSnapshot | None = None
 
     @classmethod
@@ -542,6 +553,7 @@ class SessionInfo(BaseModel):
         state: SessionState,
         *,
         message_count: int = 0,
+        total_cost_usd: Decimal | None = None,
         sandbox: SessionSandboxSnapshot | None = None,
     ) -> SessionInfo:
         return cls(
@@ -552,12 +564,14 @@ class SessionInfo(BaseModel):
             last_active=state.last_active.isoformat(),
             title=state.title,
             attributes=state.attributes,
+            latest_job_run=state.latest_job_run.model_copy(deep=True) if state.latest_job_run is not None else None,
             knowledge_last_committed_at=(
                 state.knowledge_last_committed_at.isoformat() if state.knowledge_last_committed_at else None
             ),
             knowledge_last_archive_path=state.knowledge_last_archive_path,
             knowledge_last_commit_trigger=state.knowledge_last_commit_trigger,
             message_count=message_count,
+            total_cost_usd=float(total_cost_usd) if total_cost_usd is not None else None,
             sandbox=sandbox,
         )
 
@@ -578,7 +592,7 @@ class SessionArchiveCommitResponse(BaseModel):
 
 
 class JobRunRequest(BaseModel):
-    data: dict[str, Any] = {}
+    data: str | None = None
 
 
 class JobRunResult(BaseModel):
@@ -593,10 +607,11 @@ async def _run_job_definition(
     *,
     trigger_kind: Literal["api", "cron", "manual"],
     triggered_at: datetime | None = None,
-    payload: dict[str, Any] | None = None,
+    payload: str | None = None,
     cron_expression: str | None = None,
 ) -> JobRunResult:
     created_new_session = False
+    effective_triggered_at = triggered_at or datetime.now(tz=UTC)
 
     if job.persistent_session_id is None:
         state = _engine.session_mgr.create_session(
@@ -619,10 +634,21 @@ async def _run_job_definition(
     if _engine.is_agent_running(state.session_id):
         raise HTTPException(status_code=409, detail="Target session is busy")
 
+    job_run_context = SessionJobRunContext(
+        job_id=job.id,
+        trigger_kind=trigger_kind,
+        triggered_at=effective_triggered_at,
+        data=payload,
+        cron_expression=cron_expression,
+    )
+    state.latest_job_run = job_run_context
+    _engine.session_mgr.save_state(state)
+    _engine.update_active_state(state.session_id, latest_job_run=job_run_context)
+
     message = build_job_run_message(
         job,
         trigger_kind=trigger_kind,
-        triggered_at=triggered_at or datetime.now(tz=UTC),
+        triggered_at=effective_triggered_at,
         payload=payload,
         cron_expression=cron_expression,
     )
@@ -692,7 +718,19 @@ def _parse_session_cursor(cursor: str | None) -> int:
 def _session_info_from_state(state: SessionState, *, include_message_count: bool) -> SessionInfo:
     message_count = _session_message_count(state.session_id) if include_message_count else 0
     sandbox = _engine.session_mgr.load_sandbox_snapshot(state.session_id)
-    return SessionInfo.from_state(state, message_count=message_count, sandbox=sandbox)
+    usage = _engine.session_mgr.load_usage(state.session_id)
+    total_cost_usd = usage.estimated_cost().get("total")
+    return SessionInfo.from_state(
+        state,
+        message_count=message_count,
+        total_cost_usd=total_cost_usd,
+        sandbox=sandbox,
+    )
+
+
+def _session_total_cost_usd(session_id: str) -> Decimal | None:
+    usage = _engine.session_mgr.load_usage(session_id)
+    return usage.estimated_cost().get("total")
 
 
 async def _list_session_page(
@@ -759,7 +797,12 @@ async def get_session(session_id: str, _token: str = Depends(_verify_token)) -> 
     if state is None:
         raise HTTPException(status_code=404, detail="Session not found")
     sandbox = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return SessionInfo.from_state(state, message_count=_session_message_count(session_id), sandbox=sandbox)
+    return SessionInfo.from_state(
+        state,
+        message_count=_session_message_count(session_id),
+        total_cost_usd=_session_total_cost_usd(session_id),
+        sandbox=sandbox,
+    )
 
 
 @router.patch("/sessions/{session_id}", response_model=SessionInfo)
@@ -817,7 +860,12 @@ async def update_session(
             await _engine.sandbox_mgr.destroy_session(session_id)
 
     sandbox = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return SessionInfo.from_state(state, message_count=_session_message_count(session_id), sandbox=sandbox)
+    return SessionInfo.from_state(
+        state,
+        message_count=_session_message_count(session_id),
+        total_cost_usd=_session_total_cost_usd(session_id),
+        sandbox=sandbox,
+    )
 
 
 @router.post("/sessions/{session_id}/fork", response_model=SessionInfo)
@@ -843,7 +891,11 @@ async def fork_session(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    return SessionInfo.from_state(forked, message_count=_session_message_count(forked.session_id))
+    return SessionInfo.from_state(
+        forked,
+        message_count=_session_message_count(forked.session_id),
+        total_cost_usd=_session_total_cost_usd(forked.session_id),
+    )
 
 
 @router.post("/sessions/{session_id}/knowledge/commit", response_model=SessionArchiveCommitResponse)
@@ -871,7 +923,12 @@ async def commit_session_knowledge(
         raise HTTPException(status_code=404, detail="Session not found")
     sandbox = _engine.session_mgr.load_sandbox_snapshot(session_id)
     return SessionArchiveCommitResponse(
-        session=SessionInfo.from_state(fresh, message_count=_session_message_count(session_id), sandbox=sandbox),
+        session=SessionInfo.from_state(
+            fresh,
+            message_count=_session_message_count(session_id),
+            total_cost_usd=_session_total_cost_usd(session_id),
+            sandbox=sandbox,
+        ),
         committed=result.committed,
         archive_path=result.archive_path,
         committed_at=result.committed_at.isoformat() if result.committed_at else None,

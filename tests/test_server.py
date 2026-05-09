@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -219,6 +220,22 @@ def test_get_session(client, auth_headers):
     assert resp.json()["session_id"] == sid
 
 
+def test_get_session_includes_total_cost_usd(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    class _FakeUsage:
+        def estimated_cost(self) -> dict[str, Decimal]:
+            return {"total": Decimal("0.0123")}
+
+    monkeypatch.setattr(srv._engine.session_mgr, "load_usage", lambda session_id: _FakeUsage())
+
+    resp = client.get(f"/api/sessions/{sid}", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["total_cost_usd"] == pytest.approx(0.0123)
+
+
 def test_jobs_crud_roundtrip(client, auth_headers):
     create_resp = client.post(
         "/api/jobs",
@@ -283,7 +300,7 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
     run_resp = client.post(
         "/api/jobs/daily-briefing/run",
         headers=auth_headers,
-        json={"data": {"source": "calendar", "items": 3}},
+        json={"data": '{"source":"calendar","items":3}'},
     )
 
     assert run_resp.status_code == 200
@@ -291,13 +308,20 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
     assert payload["job_id"] == "daily-briefing"
     assert payload["created_new_session"] is True
     assert payload["session"]["channel_type"] == "job"
+    assert payload["session"]["latest_job_run"]["job_id"] == "daily-briefing"
+    assert payload["session"]["latest_job_run"]["data"] == '{"source":"calendar","items":3}'
+
+    session_resp = client.get(f"/api/sessions/{payload['session_id']}", headers=auth_headers)
+    assert session_resp.status_code == 200
+    assert session_resp.json()["latest_job_run"]["job_id"] == "daily-briefing"
+    assert session_resp.json()["latest_job_run"]["data"] == '{"source":"calendar","items":3}'
 
     (session_id, message), kwargs = submit_message.await_args
     assert session_id == payload["session_id"]
     assert kwargs == {}
     assert "Summarize the day." in message
     assert "reason: api" in message
-    assert '"source": "calendar"' in message
+    assert '{"source":"calendar","items":3}' in message
 
 
 def test_run_job_uses_existing_persistent_session(client, auth_headers, monkeypatch):

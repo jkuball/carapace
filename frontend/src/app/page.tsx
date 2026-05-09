@@ -111,6 +111,7 @@ export default function Home() {
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") === "jobs" ? "jobs" : "chat";
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
     server: "",
@@ -118,10 +119,10 @@ function HomeContent() {
   });
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    searchParams.get("session"),
+    initialView === "jobs" ? null : searchParams.get("session"),
   );
   const [activeView, setActiveView] = useState<AppView>(
-    searchParams.get("view") === "jobs" ? "jobs" : "chat",
+    initialView,
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -369,6 +370,7 @@ function HomeContent() {
   }
 
   function handleOpenJobs(): void {
+    setActiveSessionId(null);
     setActiveView("jobs");
     setSidebarOpen(false);
   }

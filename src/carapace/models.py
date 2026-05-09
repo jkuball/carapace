@@ -91,6 +91,14 @@ class SessionAttributes(BaseModel):
     unattended: bool = False
 
 
+class SessionJobRunContext(BaseModel):
+    job_id: str
+    trigger_kind: Literal["api", "cron", "manual"]
+    triggered_at: datetime
+    data: str | None = None
+    cron_expression: str | None = None
+
+
 class SessionState(BaseModel):
     session_id: str
     channel_type: str = "cli"
@@ -106,6 +114,7 @@ class SessionState(BaseModel):
     budget: Annotated[SessionBudget, Field(default_factory=SessionBudget)]
     created_at: datetime
     last_active: datetime
+    latest_job_run: SessionJobRunContext | None = None
     knowledge_last_committed_at: datetime | None = None
     knowledge_last_archive_path: str | None = None
     knowledge_last_export_hash: str | None = None

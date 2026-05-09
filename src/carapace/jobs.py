@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import yaml
@@ -27,7 +26,7 @@ def build_job_run_message(
     *,
     trigger_kind: JobTriggerKind,
     triggered_at: datetime,
-    payload: dict[str, Any] | None = None,
+    payload: str | None = None,
     cron_expression: str | None = None,
 ) -> str:
     sections = [
@@ -43,8 +42,8 @@ def build_job_run_message(
         sections.extend(
             [
                 "",
-                "Payload JSON",
-                json.dumps(payload, indent=2, sort_keys=True),
+                "Data",
+                payload,
             ]
         )
     return "\n".join(sections).strip()
