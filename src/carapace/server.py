@@ -36,6 +36,7 @@ from loguru import logger
 from pydantic import BaseModel, model_validator
 from pydantic_ai.exceptions import UsageLimitExceeded
 
+from carapace import get_version
 from carapace.auth import get_token
 from carapace.bootstrap import ensure_data_dir, ensure_knowledge_dir
 from carapace.cache import SessionListCache
@@ -110,6 +111,7 @@ _jobs_scheduler: JobsScheduler
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
 _JOB_SCHEDULER_SWEEP_SECONDS = 60
+_APP_VERSION = get_version()
 
 
 def _create_sandbox_runtime(config: Config, data_dir: Path) -> ContainerRuntime:
@@ -462,7 +464,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Shutdown complete")
 
 
-app = FastAPI(title="carapace", lifespan=_lifespan)
+app = FastAPI(title="carapace", version=_APP_VERSION, lifespan=_lifespan)
 
 router = APIRouter(prefix="/api")
 
@@ -601,6 +603,10 @@ class JobRunResult(BaseModel):
     session_id: str
     created_new_session: bool
     session: SessionInfo
+
+
+class ServerMeta(BaseModel):
+    version: str
 
 
 async def _run_job_definition(
@@ -1227,6 +1233,11 @@ def _llm_activity_payload(activity: LlmRequestState | None) -> LlmActivity | Non
 @router.get("/commands")
 async def list_commands(_token: str = Depends(_verify_token)) -> list[dict[str, str]]:
     return SLASH_COMMANDS
+
+
+@router.get("/meta", response_model=ServerMeta)
+async def get_meta(_token: str = Depends(_verify_token)) -> ServerMeta:
+    return ServerMeta(version=_APP_VERSION)
 
 
 @router.get("/models")
