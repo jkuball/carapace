@@ -325,6 +325,7 @@ function HomeContent() {
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
+    setRequestedJobId(null);
     setActiveSessionId(null);
     setActiveView("chat");
   }
@@ -334,6 +335,7 @@ function HomeContent() {
     try {
       const session = await createSession(server, token, { unattended });
       setSessions((prev) => sortSessions([session, ...prev]));
+      setRequestedJobId(null);
       setActiveSessionId(session.session_id);
       setActiveView("chat");
       setSidebarOpen(false);
@@ -367,6 +369,7 @@ function HomeContent() {
   }, [server, token]);
 
   function handleSelectSession(id: string) {
+    setRequestedJobId(null);
     setActiveSessionId(id);
     setActiveView("chat");
     setSidebarOpen(false);
@@ -387,6 +390,7 @@ function HomeContent() {
   }
 
   function handleGoHome(): void {
+    setRequestedJobId(null);
     setActiveSessionId(null);
     setActiveView("chat");
     setSidebarOpen(false);

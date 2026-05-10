@@ -252,6 +252,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
     const baseline = selectedJob ? normalizeJobDraft(selectedJob) : createEmptyJob();
     return JSON.stringify(normalizedDraft) !== JSON.stringify(baseline);
   }, [normalizedDraft, selectedJob]);
+  const visibleError = error ?? (isDraftDirty ? draftValidationError : null);
 
   function selectJob(nextJobs: JobDefinition[], nextSelectedJobId: string | "new"): void {
     if (nextSelectedJobId === "new") {
@@ -972,9 +973,9 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
               )}
             </div>
 
-            {error ? (
+            {visibleError ? (
               <div className="rounded-2xl border border-border bg-background/88 px-4 py-3 text-sm shadow-sm">
-                {error ? <p className="text-destructive">{error}</p> : null}
+                <p className="text-destructive">{visibleError}</p>
               </div>
             ) : null}
 
