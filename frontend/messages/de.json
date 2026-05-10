@@ -4,6 +4,7 @@
     },
     "navigation": {
         "home": "Start",
+        "settings": "Einstellungen",
         "jobs": "Jobs",
         "preferences": "Einstellungen",
         "disconnect": "Trennen",

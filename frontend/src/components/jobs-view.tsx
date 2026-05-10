@@ -4,6 +4,7 @@ import cronstrue from "cronstrue";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Settings2, Trash2 } from "lucide-react";
 import { createJob, deleteJob, listJobs, runJob, updateJob } from "@/lib/api";
+import { PreferencesView } from "@/components/preferences-view";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +14,11 @@ interface JobsViewProps {
   sessions: SessionInfo[];
   onSessionActivated: (session: SessionInfo) => void;
   requestedJobId?: string | null;
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
 }
+
+export type SettingsTab = "jobs" | "preferences";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -189,7 +194,15 @@ function formatTriggerKindLabel(triggerKind: SessionLatestJobRun["trigger_kind"]
   }
 }
 
-export function JobsView({ server, token, sessions, onSessionActivated, requestedJobId }: JobsViewProps) {
+export function JobsView({
+  server,
+  token,
+  sessions,
+  onSessionActivated,
+  requestedJobId,
+  activeTab,
+  onTabChange,
+}: JobsViewProps) {
   const [detectedTimeZone] = useState(() => browserTimeZone());
   const [jobs, setJobs] = useState<JobDefinition[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | "new">("new");
@@ -491,6 +504,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
   }
 
   const selectedSessionValue = draft.persistent_session_id ?? "";
+  const isJobsTab = activeTab === "jobs";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
@@ -501,17 +515,43 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
               <Settings2 className="h-3.5 w-3.5" />
               Settings
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Jobs</h1>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Settings</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Manage prompts, cron triggers, and reusable attended sessions for automated agent runs.
+              Manage automated jobs and frontend preferences in one place.
             </p>
+            <div className="mt-4 inline-flex rounded-xl border border-border bg-background/80 p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => onTabChange("jobs")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  isJobsTab
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                Jobs
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange("preferences")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  !isJobsTab
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                Preferences
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => void refreshJobs("Jobs refreshed.")}
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-              disabled={loading}
+              disabled={loading || !isJobsTab}
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
               Refresh
@@ -520,6 +560,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
               type="button"
               onClick={handleCreateNew}
               className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
+              disabled={!isJobsTab}
             >
               <Plus className="h-4 w-4" />
               New job
@@ -528,7 +569,8 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]">
+      {isJobsTab ? (
+        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]">
         <aside className="border-b border-border/80 bg-background/65 lg:border-r lg:border-b-0">
           <div className="flex h-full min-h-0 flex-col">
             <div className="border-b border-border/70 px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -981,7 +1023,10 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
 
           </div>
         </section>
-      </div>
+        </div>
+      ) : (
+        <PreferencesView embedded />
+      )}
     </div>
   );
 }

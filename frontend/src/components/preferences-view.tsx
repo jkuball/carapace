@@ -4,8 +4,9 @@ import { Globe2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppLocale } from "@/components/locale-provider";
 import type { LocaleOverride } from "@/lib/storage";
+import { cn } from "@/lib/utils";
 
-export function PreferencesView() {
+export function PreferencesView({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("preferences");
   const { locale, localeOverride, setLocaleOverride } = useAppLocale();
 
@@ -16,7 +17,10 @@ export function PreferencesView() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+    <div className={cn(
+      "overflow-y-auto px-4 py-5 sm:px-6",
+      embedded ? "min-h-0 flex-1" : "flex min-h-0 flex-1",
+    )}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
         <section className="rounded-3xl border border-border bg-background/90 p-5 shadow-sm sm:p-6">
           <div className="flex items-start gap-3">

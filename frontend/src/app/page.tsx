@@ -5,9 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ConnectForm } from "@/components/connect-form";
-import { JobsView } from "@/components/jobs-view";
+import { JobsView, type SettingsTab } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
-import { PreferencesView } from "@/components/preferences-view";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
@@ -88,7 +87,7 @@ type ConnectionState = {
   token: string;
 };
 
-type AppView = "chat" | "jobs" | "preferences";
+type AppView = "chat" | "settings";
 
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
@@ -118,12 +117,19 @@ function HomeContent() {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialView = (() => {
+  const initialView: AppView = (() => {
     const view = searchParams.get("view");
-    if (view === "jobs" || view === "preferences") {
-      return view;
+    if (view === "settings" || view === "jobs" || view === "preferences") {
+      return "settings";
     }
     return "chat";
+  })();
+  const initialSettingsTab: SettingsTab = (() => {
+    const tab = searchParams.get("tab");
+    if (tab === "preferences" || searchParams.get("view") === "preferences") {
+      return "preferences";
+    }
+    return "jobs";
   })();
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
@@ -138,6 +144,7 @@ function HomeContent() {
   const [activeView, setActiveView] = useState<AppView>(
     initialView,
   );
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab);
   const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -161,8 +168,11 @@ function HomeContent() {
   // Sync activeSessionId → URL query param
   useEffect(() => {
     const params = new URLSearchParams();
-    if (activeView !== "chat") {
-      params.set("view", activeView);
+    if (activeView === "settings") {
+      params.set("view", "settings");
+      if (settingsTab === "preferences") {
+        params.set("tab", settingsTab);
+      }
     } else if (activeSessionId) {
       params.set("session", activeSessionId);
     }
@@ -175,7 +185,7 @@ function HomeContent() {
     } else {
       router.replace("/", { scroll: false });
     }
-  }, [activeSessionId, activeView, router]);
+  }, [activeSessionId, activeView, router, settingsTab]);
 
   useEffect(() => {
     // Defer to avoid synchronous setState in effect body.
@@ -417,24 +427,19 @@ function HomeContent() {
     setSidebarOpen(false);
   }
 
-  function handleOpenJobs(): void {
+  function handleOpenSettings(tab: SettingsTab = "jobs"): void {
     setRequestedJobId(null);
     setActiveSessionId(null);
-    setActiveView("jobs");
-    setSidebarOpen(false);
-  }
-
-  function handleOpenPreferences(): void {
-    setRequestedJobId(null);
-    setActiveSessionId(null);
-    setActiveView("preferences");
+    setSettingsTab(tab);
+    setActiveView("settings");
     setSidebarOpen(false);
   }
 
   function handleOpenJobSettings(jobId: string): void {
     setRequestedJobId(jobId);
     setActiveSessionId(null);
-    setActiveView("jobs");
+    setSettingsTab("jobs");
+    setActiveView("settings");
     setSidebarOpen(false);
   }
 
@@ -544,8 +549,7 @@ function HomeContent() {
           onSelect={handleSelectSession}
           onNew={handleNewSession}
           onGoHome={handleGoHome}
-          onOpenJobs={handleOpenJobs}
-          onOpenPreferences={handleOpenPreferences}
+          onOpenSettings={() => handleOpenSettings("jobs")}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
@@ -573,11 +577,7 @@ function HomeContent() {
           </button>
           <div className="flex items-baseline gap-2">
             <span className="text-sm font-semibold">
-              {activeView === "jobs"
-                ? t("navigation.jobs")
-                : activeView === "preferences"
-                  ? t("navigation.preferences")
-                  : t("app.name")}
+              {activeView === "settings" ? t("navigation.settings") : t("app.name")}
             </span>
             {activeView === "chat" ? (
               <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={serverVersion} />
@@ -586,16 +586,16 @@ function HomeContent() {
         </div>
 
         {/* Chat or empty state */}
-        {activeView === "jobs" ? (
+        {activeView === "settings" ? (
           <JobsView
             server={server}
             token={token}
             sessions={sessions}
             onSessionActivated={handleForkSession}
             requestedJobId={requestedJobId}
+            activeTab={settingsTab}
+            onTabChange={setSettingsTab}
           />
-        ) : activeView === "preferences" ? (
-          <PreferencesView />
         ) : activeSessionId ? (
           <ChatView
             key={activeSessionId}

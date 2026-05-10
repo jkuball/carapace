@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef } from "react";
-import { Archive, ArchiveRestore, Bot, Home, Languages, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { NewSessionButton } from "@/components/new-session-button";
@@ -20,14 +20,13 @@ import {
 interface SidebarProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
-  activeView?: "chat" | "jobs" | "preferences";
+  activeView?: "chat" | "settings";
   frontendVersion?: string | null;
   backendVersion?: string | null;
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
   onGoHome: () => void;
-  onOpenJobs: () => void;
-  onOpenPreferences: () => void;
+  onOpenSettings: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDelete: (sessionId: string) => void;
   onDisconnect: () => void;
@@ -109,8 +108,7 @@ export function Sidebar({
   onSelect,
   onNew,
   onGoHome,
-  onOpenJobs,
-  onOpenPreferences,
+  onOpenSettings,
   onUpdateAttributes,
   onDelete,
   onDisconnect,
@@ -407,31 +405,17 @@ export function Sidebar({
           </button>
           <button
             type="button"
-            onClick={onOpenJobs}
-            title={t("navigation.jobs")}
-            aria-label={t("navigation.jobs")}
+            onClick={onOpenSettings}
+            title={t("navigation.settings")}
+            aria-label={t("navigation.settings")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
-              activeView === "jobs"
+              activeView === "settings"
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <Settings2 className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onOpenPreferences}
-            title={t("navigation.preferences")}
-            aria-label={t("navigation.preferences")}
-            className={cn(
-              "rounded-md p-1.5 transition-colors",
-              activeView === "preferences"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Languages className="h-4 w-4" />
           </button>
           <button
             onClick={onDisconnect}

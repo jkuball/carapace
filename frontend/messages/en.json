@@ -4,6 +4,7 @@
     },
     "navigation": {
         "home": "Home",
+        "settings": "Settings",
         "jobs": "Jobs",
         "preferences": "Preferences",
         "disconnect": "Disconnect",
