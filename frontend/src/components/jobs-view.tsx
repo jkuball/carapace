@@ -590,16 +590,14 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                         )}>
                           <span>{summarizeJob(job)}</span>
                           {job.unattended && (
-                            <button
-                              type="button"
+                            <span
                               title="Unattended sessions cannot escalate tool calls"
                               className={cn(
-                                "rounded-full p-1",
-                                selected ? "hover:bg-accent-foreground/10" : "hover:bg-muted",
+                                "rounded-full p-1 inline-flex items-center",
                               )}
                             >
                               <Bot className={cn("h-4 w-4", selected ? "text-accent-foreground" : "text-emerald-700")} />
-                            </button>
+                            </span>
                           )}
                         </div>
                       </button>
