@@ -24,7 +24,7 @@ export function PreferencesView({ embedded = false }: { embedded?: boolean }) {
     )}>
       <div className={cn(
         "mx-auto flex w-full flex-col gap-4",
-        embedded ? "max-w-3xl" : "max-w-3xl",
+        "max-w-3xl",
       )}>
         <section className={cn(
           "p-5 sm:p-6",

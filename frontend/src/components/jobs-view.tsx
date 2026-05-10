@@ -144,10 +144,14 @@ export function JobsView({
         locale,
       });
     } catch {
-      return cronstrue.toString(expression, {
-        throwExceptionOnParseError: true,
-        use24HourTimeFormat: true,
-      });
+      try {
+        return cronstrue.toString(expression, {
+          throwExceptionOnParseError: true,
+          use24HourTimeFormat: true,
+        });
+      } catch {
+        return expression;
+      }
     }
   }, [locale]);
 
