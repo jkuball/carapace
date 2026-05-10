@@ -129,6 +129,20 @@ def test_bad_token_returns_401(client):
     assert resp.status_code == 401
 
 
+def test_meta_requires_auth(client):
+    resp = client.get("/api/meta")
+    assert resp.status_code in (401, 403)
+
+
+def test_meta_returns_version(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(srv, "_APP_VERSION", "test-version")
+
+    resp = client.get("/api/meta", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"version": "test-version"}
+
+
 # --- Sessions REST ---
 
 
