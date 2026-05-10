@@ -2,7 +2,7 @@
 
 import cronstrue from "cronstrue";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Settings2, Trash2 } from "lucide-react";
+import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { createJob, deleteJob, listJobs, runJob, updateJob } from "@/lib/api";
 import { PreferencesView } from "@/components/preferences-view";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
@@ -508,73 +508,93 @@ export function JobsView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
-      <div className="border-b border-border/80 px-5 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
-              <Settings2 className="h-3.5 w-3.5" />
-              Settings
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Settings</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Manage automated jobs and frontend preferences in one place.
-            </p>
-            <div className="mt-4 inline-flex rounded-xl border border-border bg-background/80 p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => onTabChange("jobs")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                  isJobsTab
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                Jobs
-              </button>
-              <button
-                type="button"
-                onClick={() => onTabChange("preferences")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                  !isJobsTab
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                Preferences
-              </button>
-            </div>
+      <div className="px-5 pt-4 sm:px-6">
+        <div className="flex flex-col">
+          <div className="pb-4">
+            <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div
+            role="tablist"
+            aria-label="Settings sections"
+            className="flex items-end gap-1 border-b border-border/80"
+          >
             <button
+              id="settings-tab-preferences"
               type="button"
-              onClick={() => void refreshJobs("Jobs refreshed.")}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-              disabled={loading || !isJobsTab}
+              role="tab"
+              aria-selected={!isJobsTab}
+              aria-controls="settings-panel-preferences"
+              tabIndex={!isJobsTab ? 0 : -1}
+              onClick={() => onTabChange("preferences")}
+              className={cn(
+                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                !isJobsTab
+                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
+              )}
             >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              Refresh
+              Preferences
             </button>
             <button
+              id="settings-tab-jobs"
               type="button"
-              onClick={handleCreateNew}
-              className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
-              disabled={!isJobsTab}
+              role="tab"
+              aria-selected={isJobsTab}
+              aria-controls="settings-panel-jobs"
+              tabIndex={isJobsTab ? 0 : -1}
+              onClick={() => onTabChange("jobs")}
+              className={cn(
+                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isJobsTab
+                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
+              )}
             >
-              <Plus className="h-4 w-4" />
-              New job
+              Jobs
             </button>
           </div>
+
         </div>
       </div>
 
       {isJobsTab ? (
-        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <div
+          id="settings-panel-jobs"
+          role="tabpanel"
+          aria-labelledby="settings-tab-jobs"
+          className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]"
+        >
         <aside className="border-b border-border/80 bg-background/65 lg:border-r lg:border-b-0">
           <div className="flex h-full min-h-0 flex-col">
-            <div className="border-b border-border/70 px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Saved Jobs
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-3">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Saved Jobs
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void refreshJobs("Jobs refreshed.")}
+                  title="Refresh jobs"
+                  aria-label="Refresh jobs"
+                  className={cn(
+                    "rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                    loading && "pointer-events-none",
+                  )}
+                  disabled={loading}
+                >
+                  <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNew}
+                  title="New job"
+                  aria-label="New job"
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {loading ? (
@@ -619,7 +639,7 @@ export function JobsView({
                           {!job.enabled && (
                             <span className={cn(
                               "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium flex items-center gap-1",
-                              selected ? "bg-amber-900/20 text-amber-700" : "bg-amber-100 text-amber-700",
+                              "bg-amber-100 text-amber-700",
                             )}>
                               <Pause className="h-3 w-3" />
                               Paused
@@ -1023,7 +1043,14 @@ export function JobsView({
         </section>
         </div>
       ) : (
-        <PreferencesView embedded />
+        <div
+          id="settings-panel-preferences"
+          role="tabpanel"
+          aria-labelledby="settings-tab-preferences"
+          className="min-h-0 flex-1 bg-background/65"
+        >
+          <PreferencesView embedded />
+        </div>
       )}
     </div>
   );

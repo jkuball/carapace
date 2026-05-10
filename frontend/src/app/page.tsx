@@ -126,10 +126,10 @@ function HomeContent() {
   })();
   const initialSettingsTab: SettingsTab = (() => {
     const tab = searchParams.get("tab");
-    if (tab === "preferences" || searchParams.get("view") === "preferences") {
-      return "preferences";
+    if (tab === "jobs") {
+      return "jobs";
     }
-    return "jobs";
+    return "preferences";
   })();
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
@@ -170,7 +170,7 @@ function HomeContent() {
     const params = new URLSearchParams();
     if (activeView === "settings") {
       params.set("view", "settings");
-      if (settingsTab === "preferences") {
+      if (settingsTab === "jobs") {
         params.set("tab", settingsTab);
       }
     } else if (activeSessionId) {
@@ -427,7 +427,7 @@ function HomeContent() {
     setSidebarOpen(false);
   }
 
-  function handleOpenSettings(tab: SettingsTab = "jobs"): void {
+  function handleOpenSettings(tab: SettingsTab = "preferences"): void {
     setRequestedJobId(null);
     setActiveSessionId(null);
     setSettingsTab(tab);
@@ -549,7 +549,7 @@ function HomeContent() {
           onSelect={handleSelectSession}
           onNew={handleNewSession}
           onGoHome={handleGoHome}
-          onOpenSettings={() => handleOpenSettings("jobs")}
+          onOpenSettings={() => handleOpenSettings()}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}

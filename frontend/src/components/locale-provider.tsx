@@ -25,6 +25,7 @@ import {
 
 interface LocaleContextValue {
   locale: SupportedLocale;
+  systemLocale: SupportedLocale;
   localeOverride: LocaleOverride;
   locales: readonly SupportedLocale[];
   setLocaleOverride: (nextLocaleOverride: LocaleOverride) => void;
@@ -64,6 +65,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LocaleContextValue>(
     () => ({
       locale,
+      systemLocale: browserLocale,
       localeOverride,
       locales: supportedLocales,
       setLocaleOverride: (nextLocaleOverride) => {
@@ -71,7 +73,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
         setLocaleOverrideState(nextLocaleOverride);
       },
     }),
-    [locale, localeOverride],
+    [browserLocale, locale, localeOverride],
   );
 
   return (
