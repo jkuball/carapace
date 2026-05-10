@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.113.3 (2026-05-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix reuse check for Twemoji preparation
+  ([`c0a91f4`](https://github.com/thiesgerken/carapace/commit/c0a91f4ed22a68c370a044b6f1f6465cef1f2c21))
+
 ## v0.113.2 (2026-05-10)
 
 
