@@ -1,7 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { useAppLocale } from "@/components/locale-provider";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
   type AvailableModelInfo,
@@ -58,20 +60,23 @@ interface ChatViewProps {
 
 const SANDBOX_STARTUP_TOOL_NAMES = new Set(["use_skill", "read", "write", "str_replace", "exec"]);
 
-function sandboxStorageLabel(snapshot: SessionSandboxSnapshot | null): string {
+function sandboxStorageLabel(
+  snapshot: SessionSandboxSnapshot | null,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): string {
   if (!snapshot) return "";
   if (snapshot.status === "missing" && !snapshot.storage_present) return "";
   const details: string[] = [];
   if (typeof snapshot.last_measured_used_bytes === "number") {
-    details.push(`${formatBytes(snapshot.last_measured_used_bytes)} used`);
+    details.push(t("sandbox.storage.used", { size: formatBytes(snapshot.last_measured_used_bytes) }));
   } else if (!snapshot.storage_present) {
-    details.push("no sandbox storage");
+    details.push(t("sandbox.storage.none"));
   }
   if (
     snapshot.runtime === "kubernetes"
     && typeof snapshot.provisioned_bytes === "number"
   ) {
-    details.push(`${formatBytes(snapshot.provisioned_bytes)} allocated`);
+    details.push(t("sandbox.storage.allocated", { size: formatBytes(snapshot.provisioned_bytes) }));
   }
   return details.join(" · ");
 }
@@ -99,31 +104,44 @@ function normalizedDecisionMessage(message?: string | null): string | undefined 
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function errorDetail(error: unknown): string {
+function errorDetail(
+  error: unknown,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
-  return "Unexpected error";
+  return t("errors.unexpected");
 }
 
-function formatArchiveTimestamp(iso?: string | null): string {
-  if (!iso) return "Not committed yet";
+function formatArchiveTimestamp(
+  iso: string | null | undefined,
+  locale: string,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): string {
+  if (!iso) return t("knowledge.notCommittedYet");
   const value = new Date(iso);
-  if (Number.isNaN(value.getTime())) return "Committed";
-  return `Saved ${value.toLocaleString(undefined, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
+  if (Number.isNaN(value.getTime())) return t("knowledge.committed");
+  return t("knowledge.savedAt", {
+    timestamp: value.toLocaleString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  });
 }
 
-function formatSessionTimestamp(iso?: string | null): string {
-  if (!iso) return "Unknown";
+function formatSessionTimestamp(
+  iso: string | null | undefined,
+  locale: string,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): string {
+  if (!iso) return t("unknown");
   const value = new Date(iso);
-  if (Number.isNaN(value.getTime())) return "Unknown";
-  return value.toLocaleString(undefined, {
+  if (Number.isNaN(value.getTime())) return t("unknown");
+  return value.toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -132,8 +150,8 @@ function formatSessionTimestamp(iso?: string | null): string {
   });
 }
 
-function formatUsd(value: number): string {
-  return new Intl.NumberFormat(undefined, {
+function formatUsd(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: value < 0.01 ? 4 : 2,
@@ -141,10 +159,13 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
-function formatJobTriggerKind(triggerKind: "api" | "cron" | "manual"): string {
-  if (triggerKind === "api") return "API";
-  if (triggerKind === "cron") return "Cron";
-  return "Manual";
+function formatJobTriggerKind(
+  triggerKind: "api" | "cron" | "manual",
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): string {
+  if (triggerKind === "api") return t("jobRun.trigger.api");
+  if (triggerKind === "cron") return t("jobRun.trigger.cron");
+  return t("jobRun.trigger.manual");
 }
 
 function formatSessionJobData(data?: string | null): { value: string; isJson: boolean } | null {
@@ -160,6 +181,7 @@ function formatSessionJobData(data?: string | null): { value: string; isJson: bo
 function knowledgeStatusBadge(
   session: SessionInfo | null,
   hasKnowledgeChanges: boolean,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
 ): { label: string; className: string; icon: typeof Archive } {
   const isInKnowledgeRepo = Boolean(
     session?.knowledge_last_committed_at || session?.knowledge_last_archive_path,
@@ -167,7 +189,7 @@ function knowledgeStatusBadge(
 
   if (session?.attributes.private && !isInKnowledgeRepo) {
     return {
-      label: "Excluded",
+      label: t("knowledge.badges.excluded"),
       className: "border-zinc-300 bg-zinc-100 text-zinc-700",
       icon: Lock,
     };
@@ -175,7 +197,7 @@ function knowledgeStatusBadge(
 
   if (!isInKnowledgeRepo) {
     return {
-      label: "Missing",
+      label: t("knowledge.badges.missing"),
       className: "border-slate-300 bg-slate-100 text-slate-700",
       icon: Archive,
     };
@@ -183,34 +205,37 @@ function knowledgeStatusBadge(
 
   if (hasKnowledgeChanges) {
     return {
-      label: "Outdated",
+      label: t("knowledge.badges.outdated"),
       className: "border-amber-300 bg-amber-50 text-amber-700",
       icon: RotateCcw,
     };
   }
 
   return {
-    label: "Up to Date",
+    label: t("knowledge.badges.upToDate"),
     className: "border-emerald-300 bg-emerald-50 text-emerald-700",
     icon: Save,
   };
 }
 
-function sessionSourceInfo(session: SessionInfo | null): {
+function localizedSessionSourceInfo(
+  session: SessionInfo | null,
+  t: (key: string, values?: Record<string, string | number | Date>) => string,
+): {
   label: string;
   icon: typeof Globe;
 } {
   if (!session) {
-    return { label: "Unknown", icon: MessageSquare };
+    return { label: t("source.unknown"), icon: MessageSquare };
   }
   if (session.channel_type === "job") {
-    return { label: "Job", icon: Bot };
+    return { label: t("source.job"), icon: Bot };
   }
   if (session.channel_type === "web") {
-    return { label: "Web", icon: Globe };
+    return { label: t("source.web"), icon: Globe };
   }
   if (session.channel_type === "cli") {
-    return { label: "CLI", icon: Terminal };
+    return { label: t("source.cli"), icon: Terminal };
   }
   return { label: session.channel_type, icon: MessageSquare };
 }
@@ -784,6 +809,8 @@ export function ChatView({
   onUpdateSessionAttributes,
   onDeleteSession,
 }: ChatViewProps) {
+  const t = useTranslations("chatView");
+  const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [waiting, setWaiting] = useState(false);
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
@@ -1404,7 +1431,7 @@ export function ChatView({
       if (targetEventIndex == null) {
         setMessages((prev) => [
           ...prev,
-          { kind: "error", detail: "Could not resolve reset target." },
+          { kind: "error", detail: t("errors.resetTarget") },
         ]);
         return;
       }
@@ -1426,7 +1453,7 @@ export function ChatView({
       if (targetEventIndex == null) {
         setMessages((prev) => [
           ...prev,
-          { kind: "error", detail: "Could not resolve fork target." },
+          { kind: "error", detail: t("errors.forkTarget") },
         ]);
         return;
       }
@@ -1438,7 +1465,7 @@ export function ChatView({
       });
       onForkSession(forked);
     } catch (error) {
-      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error) }]);
+      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error, t) }]);
     } finally {
       setTurnActionBusyIndex(null);
     }
@@ -1446,7 +1473,7 @@ export function ChatView({
 
   async function handleWipeSandbox() {
     if (waiting || sandboxPowerAction || wipingSandbox || deletingSession) return;
-    if (!window.confirm("Wipe the sandbox and its storage for this session? Chat history will stay.")) {
+    if (!window.confirm(t("confirm.wipeSandbox"))) {
       return;
     }
     setWipingSandbox(true);
@@ -1455,7 +1482,7 @@ export function ChatView({
       applySandboxSnapshot(nextSandbox);
     } catch (error) {
       console.error("Failed to wipe sandbox", error);
-      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error) }]);
+      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error, t) }]);
     } finally {
       setWipingSandbox(false);
     }
@@ -1466,7 +1493,7 @@ export function ChatView({
 
     const currentSandbox = sandboxRef.current;
     const shouldStart = shouldShowStartSandbox(currentSandbox);
-    if (!shouldStart && !window.confirm("Scale down the sandbox for this session? Storage will be kept.")) {
+    if (!shouldStart && !window.confirm(t("confirm.scaleDownSandbox"))) {
       return;
     }
 
@@ -1482,7 +1509,7 @@ export function ChatView({
       }
     } catch (error) {
       console.error(`Failed to ${shouldStart ? "start" : "scale down"} sandbox`, error);
-      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error) }]);
+      setMessages((prev) => [...prev, { kind: "error", detail: errorDetail(error, t) }]);
       void refreshSandbox();
     } finally {
       setSandboxPowerAction(null);
@@ -1493,7 +1520,7 @@ export function ChatView({
     if (waiting || sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession) return;
     if (
       (session?.message_count ?? 0) > 0
-      && !window.confirm("Delete this session? Chat history and sandbox state will be removed.")
+      && !window.confirm(t("confirm.deleteSession"))
     ) {
       return;
     }
@@ -1513,8 +1540,8 @@ export function ChatView({
       return;
     }
     const confirmation = nextArchived
-      ? "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
-      : "Unarchive this session? It will return to the active session list.";
+      ? t("confirm.archiveSession")
+      : t("confirm.unarchiveSession");
     if (!window.confirm(confirmation)) {
       return;
     }
@@ -1540,10 +1567,10 @@ export function ChatView({
         tone: result.committed ? "success" : "neutral",
         message:
           result.reason
-          ?? (result.committed_at ? formatArchiveTimestamp(result.committed_at) : "Committed to knowledge"),
+          ?? (result.committed_at ? formatArchiveTimestamp(result.committed_at, locale, t) : t("knowledge.committedToRepo")),
       });
     } catch (error) {
-      setKnowledgeNotice({ tone: "error", message: errorDetail(error) });
+      setKnowledgeNotice({ tone: "error", message: errorDetail(error, t) });
     } finally {
       setSavingKnowledge(false);
     }
@@ -1556,7 +1583,7 @@ export function ChatView({
     if (
       nextPrivate
       && session.knowledge_last_committed_at
-      && !window.confirm("Mark this session private? Existing knowledge commits will remain in git history.")
+      && !window.confirm(t("confirm.makePrivate"))
     ) {
       return;
     }
@@ -1572,12 +1599,12 @@ export function ChatView({
         tone: "neutral",
         message: nextPrivate
           ? updated.knowledge_last_committed_at
-            ? "Session is private. Existing knowledge commits remain unchanged."
-            : "Session is private and will not be committed to knowledge."
-          : "Session is included in knowledge commits to your repo.",
+            ? t("knowledge.privateExistingCommits")
+            : t("knowledge.privateExcluded")
+          : t("knowledge.includedInRepo"),
       });
     } catch (error) {
-      setKnowledgeNotice({ tone: "error", message: errorDetail(error) });
+      setKnowledgeNotice({ tone: "error", message: errorDetail(error, t) });
     } finally {
       setUpdatingSessionAttribute(null);
     }
@@ -1719,20 +1746,20 @@ export function ChatView({
   const sessionCanArchive = canArchiveSession(session);
   const inputDisabled = sessionArchived || unattendedInputLocked;
   const inputDisabledPlaceholder = sessionArchived
-    ? "Unarchive first"
-    : "This session is unattended. Fork it first to continue here.";
+    ? t("inputDisabled.archived")
+    : t("inputDisabled.unattended");
   const canCommitKnowledge = !!session && !sessionPrivate && !sessionArchived && hasKnowledgeContent && hasKnowledgeChanges;
   const waitingLabel = !waiting
     ? null
     : llmActivity?.source === "agent"
       ? llmActivity.phase === "processing_prompt"
-        ? "Processing Prompt..."
+        ? t("waiting.processingPrompt")
         : llmActivity.phase === "thinking"
-          ? "Thinking..."
+          ? t("waiting.thinking")
         : llmActivity.phase === "generating"
-          ? "Generating..."
-          : "Working..."
-      : "Working...";
+          ? t("waiting.generating")
+          : t("waiting.working")
+      : t("waiting.working");
     const showsStartSandbox = shouldShowStartSandbox(sandbox);
     const sandboxActionDisabled = waiting
       || sandboxLoading
@@ -1741,26 +1768,26 @@ export function ChatView({
       || deletingSession
       || sandbox?.status === "pending";
     const sandboxPowerButtonLabel = sandboxPowerAction === "starting"
-      ? "Starting sandbox"
+      ? t("sandbox.actions.starting")
       : sandboxPowerAction === "stopping"
-        ? "Scaling down sandbox"
+        ? t("sandbox.actions.scalingDown")
         : sandbox?.status === "pending"
-          ? "Starting sandbox"
+          ? t("sandbox.actions.starting")
         : showsStartSandbox
-          ? "Start sandbox"
-          : "Scale down sandbox";
-    const archiveStatusLabel = formatArchiveTimestamp(session?.knowledge_last_committed_at);
-    const knowledgeBadge = knowledgeStatusBadge(session, hasKnowledgeChanges);
+          ? t("sandbox.actions.start")
+          : t("sandbox.actions.scaleDown");
+    const archiveStatusLabel = formatArchiveTimestamp(session?.knowledge_last_committed_at, locale, t);
+    const knowledgeBadge = knowledgeStatusBadge(session, hasKnowledgeChanges, t);
     const archiveButtonDisabled = !canCommitKnowledge || waiting || savingKnowledge || deletingSession;
     const commitButtonTitle = !hasKnowledgeContent
-      ? "This session has no conversation history yet."
+      ? t("knowledge.commitDisabledNoHistory")
       : session?.knowledge_last_committed_at
         ? hasKnowledgeChanges
           ? archiveStatusLabel
-          : `${archiveStatusLabel}. No new changes to commit.`
+          : t("knowledge.noNewChanges", { status: archiveStatusLabel })
         : undefined;
   const sessionDisplayTitle = session?.title?.trim() || sessionId;
-  const source = sessionSourceInfo(session);
+  const source = localizedSessionSourceInfo(session, t);
   const sourceJobId = sessionSourceJobId(session);
   const latestJobRun = session?.latest_job_run ?? null;
   const latestJobData = formatSessionJobData(latestJobRun?.data);
@@ -1785,16 +1812,16 @@ export function ChatView({
   };
   const sessionDetailBadges = [
     sessionArchived
-      ? { label: "Archived", icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
+      ? { label: t("badges.archived"), icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
       : null,
     sessionPrivate
-      ? { label: "Private", icon: Lock, className: "border-zinc-300 bg-zinc-100 text-zinc-700" }
+      ? { label: t("badges.private"), icon: Lock, className: "border-zinc-300 bg-zinc-100 text-zinc-700" }
       : null,
     sessionPinned
-      ? { label: "Pinned", icon: Pin, className: "border-sky-200 bg-sky-50 text-sky-800" }
+      ? { label: t("badges.pinned"), icon: Pin, className: "border-sky-200 bg-sky-50 text-sky-800" }
       : null,
     sessionFavorite
-      ? { label: "Favorite", icon: Star, className: "border-amber-200 bg-amber-50 text-amber-800" }
+      ? { label: t("badges.favorite"), icon: Star, className: "border-amber-200 bg-amber-50 text-amber-800" }
       : null,
   ].filter((value): value is { label: string; icon: typeof Archive; className: string } => value !== null);
   const inspectorBadgeClass = "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium";
@@ -1803,13 +1830,13 @@ export function ChatView({
       <section className="rounded-2xl border border-border/70 bg-muted/25 px-3 py-2 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Actions
+            {t("inspector.actions")}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1">
           <button
             onClick={() => void handleTogglePinned()}
             disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-            title={sessionPinned ? "Unpin session" : "Pin session"}
+            title={sessionPinned ? t("actions.unpin") : t("actions.pin")}
             className="rounded-md p-1.5 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {updatingSessionAttribute === "pinned" ? (
@@ -1821,7 +1848,7 @@ export function ChatView({
           <button
             onClick={() => void handleToggleFavorite()}
             disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-            title={sessionFavorite ? "Remove favorite" : "Favorite session"}
+            title={sessionFavorite ? t("actions.unfavorite") : t("actions.favorite")}
             className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {updatingSessionAttribute === "favorite" ? (
@@ -1834,7 +1861,7 @@ export function ChatView({
             <button
               onClick={() => void handleToggleArchived()}
               disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
-              title={sessionArchived ? "Unarchive session" : "Archive session"}
+              title={sessionArchived ? t("actions.unarchive") : t("actions.archive")}
               className="rounded-md p-1.5 text-violet-900 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {updatingSessionAttribute === "archived" ? (
@@ -1849,7 +1876,7 @@ export function ChatView({
           <button
             onClick={() => void handleTogglePrivacy()}
             disabled={!session || !!updatingSessionAttribute || deletingSession}
-            title={sessionPrivate ? "Include in repo" : "Keep private"}
+            title={sessionPrivate ? t("actions.includeInRepo") : t("actions.keepPrivate")}
             className="rounded-md p-1.5 text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {updatingSessionAttribute === "private" ? (
@@ -1863,7 +1890,7 @@ export function ChatView({
           <button
             onClick={() => void handleDeleteSession()}
             disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession}
-            title="Delete session"
+            title={t("actions.delete")}
             className="rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {deletingSession ? (
@@ -1878,22 +1905,22 @@ export function ChatView({
 
       <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
         <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Session
+          {t("inspector.session")}
         </div>
 
         <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Title</dt>
+          <dt className="text-muted-foreground">{t("session.title")}</dt>
           <dd className="break-words font-semibold text-foreground">{sessionDisplayTitle}</dd>
 
-          <dt className="text-muted-foreground">ID</dt>
+          <dt className="text-muted-foreground">{t("session.id")}</dt>
           <dd className="flex items-center gap-2">
             <span className="min-w-0 break-all font-mono text-xs text-muted-foreground">{sessionId}</span>
             <button
               type="button"
               onClick={() => void handleCopySessionId()}
               className="shrink-0 rounded-md border border-border/70 p-1 text-muted-foreground transition-colors hover:bg-muted"
-              aria-label={sessionIdCopied ? "Copied session id" : "Copy session id"}
-              title={sessionIdCopied ? "Copied" : "Copy session id"}
+              aria-label={sessionIdCopied ? t("session.idCopied") : t("session.copyId")}
+              title={sessionIdCopied ? t("session.idCopiedShort") : t("session.copyId")}
             >
               {sessionIdCopied ? (
                 <Check className="h-3 w-3" strokeWidth={2} />
@@ -1903,38 +1930,38 @@ export function ChatView({
             </button>
           </dd>
 
-          <dt className="text-muted-foreground">Source</dt>
+          <dt className="text-muted-foreground">{t("session.source")}</dt>
           <dd className="inline-flex items-center gap-2 font-medium text-foreground">
             <source.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span>{source.label}</span>
           </dd>
 
-          <dt className="text-muted-foreground">Created</dt>
-          <dd className="text-foreground">{formatSessionTimestamp(session?.created_at)}</dd>
+          <dt className="text-muted-foreground">{t("session.created")}</dt>
+          <dd className="text-foreground">{formatSessionTimestamp(session?.created_at, locale, t)}</dd>
 
-          <dt className="text-muted-foreground">Last active</dt>
-          <dd className="text-foreground">{formatSessionTimestamp(session?.last_active)}</dd>
+          <dt className="text-muted-foreground">{t("session.lastActive")}</dt>
+          <dd className="text-foreground">{formatSessionTimestamp(session?.last_active, locale, t)}</dd>
 
-          <dt className="text-muted-foreground">Messages</dt>
+          <dt className="text-muted-foreground">{t("session.messages")}</dt>
           <dd className="text-foreground">{session?.message_count ?? 0}</dd>
 
           {totalCostUsd > 0 ? (
             <>
-              <dt className="text-muted-foreground">Total cost</dt>
-              <dd className="text-foreground">{formatUsd(totalCostUsd)}</dd>
+              <dt className="text-muted-foreground">{t("session.totalCost")}</dt>
+              <dd className="text-foreground">{formatUsd(totalCostUsd, locale)}</dd>
             </>
           ) : null}
 
           {fallbackSourceJobId ? (
             <>
-              <dt className="text-muted-foreground">Job</dt>
+              <dt className="text-muted-foreground">{t("session.job")}</dt>
               <dd className="break-all">{renderJobSettingsLink(fallbackSourceJobId)}</dd>
             </>
           ) : null}
 
           {session?.channel_ref && !fallbackSourceJobId ? (
             <>
-              <dt className="text-muted-foreground">Reference</dt>
+              <dt className="text-muted-foreground">{t("session.reference")}</dt>
               <dd className="break-all">
                 {sourceJobId ? renderJobSettingsLink(sourceJobId) : session.channel_ref}
               </dd>
@@ -1946,12 +1973,12 @@ export function ChatView({
           {sessionUnattended ? (
             <span className={cn(inspectorBadgeClass, "gap-1 border-emerald-200 bg-emerald-50 text-emerald-800")}>
               <Bot className="h-3 w-3 shrink-0" />
-              <span>Unattended</span>
+              <span>{t("badges.unattended")}</span>
             </span>
           ) : (
             <span className={cn(inspectorBadgeClass, "gap-1 border-border bg-muted text-muted-foreground")}>
               <MessageSquare className="h-3 w-3 shrink-0" />
-              Interactive
+              {t("badges.interactive")}
             </span>
           )}
           {sessionDetailBadges.map((badge) => (
@@ -1969,22 +1996,22 @@ export function ChatView({
       {latestJobRun ? (
         <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Latest Job Run
+            {t("jobRun.title")}
           </div>
 
           <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">Job</dt>
+            <dt className="text-muted-foreground">{t("jobRun.job")}</dt>
             <dd className="break-all">{renderJobSettingsLink(latestJobRun.job_id)}</dd>
 
-            <dt className="text-muted-foreground">Trigger</dt>
-            <dd className="text-foreground">{formatJobTriggerKind(latestJobRun.trigger_kind)}</dd>
+            <dt className="text-muted-foreground">{t("jobRun.trigger.label")}</dt>
+            <dd className="text-foreground">{formatJobTriggerKind(latestJobRun.trigger_kind, t)}</dd>
 
-            <dt className="text-muted-foreground">Ran at</dt>
-            <dd className="text-foreground">{formatSessionTimestamp(latestJobRun.triggered_at)}</dd>
+            <dt className="text-muted-foreground">{t("jobRun.ranAt")}</dt>
+            <dd className="text-foreground">{formatSessionTimestamp(latestJobRun.triggered_at, locale, t)}</dd>
 
             {latestJobRun.cron_expression ? (
               <>
-                <dt className="text-muted-foreground">Schedule</dt>
+                <dt className="text-muted-foreground">{t("jobRun.schedule")}</dt>
                 <dd className="break-all font-mono text-xs text-foreground">{latestJobRun.cron_expression}</dd>
               </>
             ) : null}
@@ -1993,7 +2020,7 @@ export function ChatView({
           {latestJobData ? (
             <div className="mt-3 space-y-1.5">
               <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                Data
+                {t("jobRun.data")}
               </div>
               <pre className="overflow-x-auto rounded-xl border border-border/70 bg-muted/35 px-3 py-2 font-mono text-xs leading-5 text-foreground whitespace-pre-wrap break-words">
                 {latestJobData.value}
@@ -2006,7 +2033,7 @@ export function ChatView({
       <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Sandbox
+            {t("sandbox.title")}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -2026,7 +2053,7 @@ export function ChatView({
             <button
               onClick={() => void handleWipeSandbox()}
               disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || sessionArchived}
-              title="Reset sandbox"
+              title={t("sandbox.actions.reset")}
               className="rounded-md p-1.5 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {wipingSandbox ? (
@@ -2049,21 +2076,21 @@ export function ChatView({
                     : "bg-slate-300",
               )}
             />
-            <span className="truncate">{sandboxLoading ? "Refreshing…" : sandbox ? sandboxStatusLabel(sandbox.status) : "Checking sandbox…"}</span>
+            <span className="truncate">{sandboxLoading ? t("sandbox.refreshing") : sandbox ? sandboxStatusLabel(sandbox.status) : t("sandbox.checking")}</span>
           </div>
-          <div className="text-xs text-muted-foreground">{sandboxStorageLabel(sandbox)}</div>
+          <div className="text-xs text-muted-foreground">{sandboxStorageLabel(sandbox, t)}</div>
         </div>
       </section>
 
       <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            Knowledge
+            {t("knowledge.title")}
           </div>
           <button
             onClick={() => void handleCommitKnowledge()}
             disabled={archiveButtonDisabled}
-            title={commitButtonTitle ?? "Commit to repo"}
+            title={commitButtonTitle ?? t("knowledge.commit")}
             className="rounded-md p-1.5 text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savingKnowledge ? (
@@ -2121,7 +2148,7 @@ export function ChatView({
           <span
             className={`h-1.5 w-1.5 rounded-full ${status === "connecting" ? "bg-warning animate-pulse" : "bg-destructive"}`}
           />
-          {status === "connecting" ? "Connecting…" : "Disconnected"}
+          {status === "connecting" ? t("status.connecting") : t("status.disconnected")}
         </div>
       )}
 
@@ -2141,7 +2168,7 @@ export function ChatView({
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted lg:hidden"
               >
                 <Settings2 className="h-4 w-4" />
-                Details
+                {t("mobile.details")}
               </button>
             </div>
           </div>
@@ -2162,8 +2189,8 @@ export function ChatView({
                   <p className="text-lg font-medium text-foreground/80">carapace</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {connected
-                      ? "Send a message to get started"
-                      : "Connecting to session…"}
+                      ? t("empty.start")
+                      : t("empty.connectingSession")}
                   </p>
                 </div>
               )}
@@ -2226,7 +2253,7 @@ export function ChatView({
             </div>
             <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-2.5">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-foreground">Details</div>
+                <div className="text-sm font-semibold text-foreground">{t("mobile.details")}</div>
                 <div className="truncate text-xs text-muted-foreground">{sessionDisplayTitle}</div>
               </div>
               <button
@@ -2234,7 +2261,7 @@ export function ChatView({
                 onClick={() => setMobileInspectorOpen(false)}
                 className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-medium hover:bg-muted"
               >
-                Done
+                {t("mobile.done")}
               </button>
             </div>
             <div className="overflow-y-auto p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">

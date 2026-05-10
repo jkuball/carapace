@@ -30,7 +30,6 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
 }
 
 const SESSION_PAGE_SIZE = 50;
-const APP_TITLE = "carapace";
 const MAX_DOCUMENT_TITLE_LENGTH = 30;
 const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
 
@@ -505,9 +504,17 @@ function HomeContent() {
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
 
   useEffect(() => {
+    const appTitle = t("app.name");
+    if (activeView === "settings") {
+      const viewTitle = settingsTab === "jobs"
+        ? t("navigation.jobs")
+        : t("navigation.settings");
+      document.title = `${viewTitle} • ${appTitle}`;
+      return;
+    }
+
     const sessionTitle = activeSession?.title?.trim();
-    const useDefaultTitle = activeView !== "chat"
-      || !activeSession
+    const useDefaultTitle = !activeSession
       || activeSession.attributes.private
       || !sessionTitle;
     const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
@@ -515,9 +522,9 @@ function HomeContent() {
       : sessionTitle;
 
     document.title = useDefaultTitle
-      ? APP_TITLE
-      : `${truncatedTitle} • ${APP_TITLE}`;
-  }, [activeSession, activeView]);
+      ? appTitle
+      : `${truncatedTitle} • ${appTitle}`;
+  }, [activeSession, activeView, settingsTab, t]);
 
   if (!connected) {
     return <ConnectForm onConnect={handleConnect} />;

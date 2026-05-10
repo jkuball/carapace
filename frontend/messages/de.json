@@ -15,6 +15,19 @@
             "description": "Wähle eine Sitzung aus oder starte eine neue"
         }
     },
+    "connect": {
+        "description": "Mit deinem Server verbinden",
+        "serverLabel": "Server-URL",
+        "tokenLabel": "Bearer-Token",
+        "tokenPlaceholder": "Token einfügen",
+        "connect": "Verbinden",
+        "connecting": "Verbinde…",
+        "errors": {
+            "invalidToken": "Ungültiger Token",
+            "serverError": "Serverfehler: {status}",
+            "connectionFailed": "Verbindung fehlgeschlagen"
+        }
+    },
     "preferences": {
         "title": "Einstellungen",
         "description": "Frontend-Einstellungen für Sprache und anderes app-weites Verhalten.",
@@ -28,5 +41,289 @@
                 "de": "Deutsch"
             }
         }
+    },
+    "chatInput": {
+        "disabled": "Eingabe deaktiviert",
+        "sendMessageTooltip": "Nachricht senden (Enter)",
+        "queueInterruptStopTooltip": "Enter zum Einreihen · ⌥Enter zum Unterbrechen · Klicken zum Stoppen",
+        "stopGenerationTooltip": "Generierung stoppen",
+        "queued": "Warteschlange: {message}",
+        "placeholder": "Nachricht an carapace…"
+    },
+    "chatView": {
+        "inputDisabled": {
+            "archived": "Zuerst aus dem Archiv holen",
+            "unattended": "Diese Sitzung ist unbeaufsichtigt. Forke sie zuerst, um hier weiterzumachen."
+        },
+        "waiting": {
+            "processingPrompt": "Prompt wird verarbeitet...",
+            "thinking": "Denke nach...",
+            "generating": "Generiere...",
+            "working": "Arbeite..."
+        },
+        "unknown": "Unbekannt",
+        "status": {
+            "connecting": "Verbinde…",
+            "disconnected": "Getrennt"
+        },
+        "empty": {
+            "start": "Sende eine Nachricht, um loszulegen",
+            "connectingSession": "Verbinde mit Sitzung…"
+        },
+        "errors": {
+            "unexpected": "Unerwarteter Fehler",
+            "resetTarget": "Ziel zum Zurücksetzen konnte nicht aufgelöst werden.",
+            "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden."
+        },
+        "confirm": {
+            "wipeSandbox": "Sandbox und ihren Speicher für diese Sitzung löschen? Der Chatverlauf bleibt erhalten.",
+            "scaleDownSandbox": "Sandbox für diese Sitzung herunterfahren? Der Speicher bleibt erhalten.",
+            "deleteSession": "Diese Sitzung löschen? Chatverlauf und Sandbox-Status werden entfernt.",
+            "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten.",
+            "unarchiveSession": "Diese Sitzung aus dem Archiv holen? Sie kehrt in die aktive Sitzungsliste zurück.",
+            "makePrivate": "Diese Sitzung als privat markieren? Bereits vorhandene Wissens-Commits bleiben in der Git-Historie bestehen."
+        },
+        "actions": {
+            "pin": "Sitzung anheften",
+            "unpin": "Anheftung lösen",
+            "favorite": "Sitzung favorisieren",
+            "unfavorite": "Favorit entfernen",
+            "archive": "Sitzung archivieren",
+            "unarchive": "Sitzung aus dem Archiv holen",
+            "includeInRepo": "Ins Repository aufnehmen",
+            "keepPrivate": "Privat halten",
+            "delete": "Sitzung löschen"
+        },
+        "badges": {
+            "archived": "Archiviert",
+            "private": "Privat",
+            "pinned": "Angeheftet",
+            "favorite": "Favorit",
+            "unattended": "Unbeaufsichtigt",
+            "interactive": "Interaktiv"
+        },
+        "inspector": {
+            "actions": "Aktionen",
+            "session": "Sitzung"
+        },
+        "session": {
+            "title": "Titel",
+            "id": "ID",
+            "copyId": "Sitzungs-ID kopieren",
+            "idCopied": "Sitzungs-ID kopiert",
+            "idCopiedShort": "Kopiert",
+            "source": "Quelle",
+            "created": "Erstellt",
+            "lastActive": "Zuletzt aktiv",
+            "messages": "Nachrichten",
+            "totalCost": "Gesamtkosten",
+            "job": "Job",
+            "reference": "Referenz"
+        },
+        "source": {
+            "unknown": "Unbekannt",
+            "job": "Job",
+            "web": "Web",
+            "cli": "CLI"
+        },
+        "jobRun": {
+            "title": "Letzter Joblauf",
+            "job": "Job",
+            "ranAt": "Ausgeführt am",
+            "schedule": "Zeitplan",
+            "data": "Daten",
+            "trigger": {
+                "label": "Auslöser",
+                "api": "API",
+                "cron": "Cron",
+                "manual": "Manuell"
+            }
+        },
+        "sandbox": {
+            "title": "Sandbox",
+            "refreshing": "Aktualisiere…",
+            "checking": "Prüfe Sandbox…",
+            "actions": {
+                "start": "Sandbox starten",
+                "starting": "Sandbox wird gestartet",
+                "scaleDown": "Sandbox herunterfahren",
+                "scalingDown": "Sandbox wird heruntergefahren",
+                "reset": "Sandbox zurücksetzen"
+            },
+            "storage": {
+                "used": "{size} verwendet",
+                "none": "kein Sandbox-Speicher",
+                "allocated": "{size} zugewiesen"
+            }
+        },
+        "knowledge": {
+            "title": "Wissen",
+            "commit": "Ins Repository committen",
+            "committed": "Committed",
+            "committedToRepo": "In Wissen übernommen",
+            "notCommittedYet": "Noch nicht committed",
+            "savedAt": "Gespeichert {timestamp}",
+            "commitDisabledNoHistory": "Diese Sitzung hat noch keinen Gesprächsverlauf.",
+            "noNewChanges": "{status}. Keine neuen Änderungen zum Committen.",
+            "privateExistingCommits": "Sitzung ist privat. Bereits vorhandene Wissens-Commits bleiben unverändert.",
+            "privateExcluded": "Sitzung ist privat und wird nicht in das Wissens-Repository committed.",
+            "includedInRepo": "Sitzung wird in Wissens-Commits in dein Repository aufgenommen.",
+            "badges": {
+                "excluded": "Ausgeschlossen",
+                "missing": "Fehlt",
+                "outdated": "Veraltet",
+                "upToDate": "Aktuell"
+            }
+        },
+        "mobile": {
+            "details": "Details",
+            "done": "Fertig"
+        }
+    },
+    "message": {
+        "copy": "Nachricht kopieren",
+        "copied": "Kopiert",
+        "thinking": {
+            "streaming": "denkt",
+            "complete": "nachgedacht"
+        },
+        "thinkingMeta": {
+            "duration": "für {duration}",
+            "reasoning": "{count} Reasoning"
+        },
+        "actions": {
+            "fork": "Sitzung von hier forken",
+            "retry": "Zug erneut ausführen",
+            "reset": "Unterhaltung zu diesem Zug zurücksetzen"
+        },
+        "finalStatus": {
+            "status": {
+                "success": "Erfolg",
+                "warning": "Warnung"
+            },
+            "notice": "Agent hat Aufgabe mit einer Meldung vom Typ {status} beendet. Die Sitzung ist jetzt schreibgeschützt, du kannst sie aber forken um weiter zu chatten."
+        }
+    },
+    "jobs": {
+        "settingsSections": "Einstellungsbereiche",
+        "savedJobs": "Gespeicherte Jobs",
+        "loading": "Jobs werden geladen...",
+        "paused": "Pausiert",
+        "unattendedTooltip": "Unbeaufsichtigte Sitzungen können Tool-Aufrufe nicht eskalieren",
+        "confirmDelete": "Job {name} löschen?",
+        "summary": {
+            "onDemandOnly": "Nur manuell",
+            "cronTriggerCount": "{count, plural, one {# Cron-Trigger} other {# Cron-Trigger}}"
+        },
+        "validation": {
+            "idRequired": "Job-ID ist erforderlich.",
+            "nameRequired": "Job-Name ist erforderlich.",
+            "promptRequired": "Prompt ist erforderlich.",
+            "persistentSessionMustBeAttended": "Jobs mit persistenter Sitzung müssen beaufsichtigt sein.",
+            "cronEmpty": "Cron-Ausdrücke dürfen nicht leer sein.",
+            "cronInvalid": "Cron-Ausdruck ist ungültig: {expression}."
+        },
+        "cron": {
+            "invalidExpression": "Ungültiger Cron-Ausdruck."
+        },
+        "triggerKind": {
+            "scheduled": "Geplant",
+            "manual": "Manuell"
+        },
+        "errors": {
+            "load": "Jobs konnten nicht geladen werden.",
+            "refresh": "Jobs konnten nicht aktualisiert werden.",
+            "save": "Job konnte nicht gespeichert werden.",
+            "delete": "Job konnte nicht gelöscht werden.",
+            "run": "Job konnte nicht gestartet werden.",
+            "saveBeforeRun": "Speichere den Job, bevor du ihn startest.",
+            "saveChangesBeforeRun": "Speichere die Änderungen am Job, bevor du ihn startest."
+        },
+        "notices": {
+            "refreshed": "Jobs aktualisiert.",
+            "created": "Job erstellt.",
+            "saved": "Job gespeichert.",
+            "deleted": "Job gelöscht.",
+            "runStartedNewSession": "Ausführung in neuer Sitzung {sessionId} gestartet.",
+            "runStartedSession": "Ausführung in Sitzung {sessionId} gestartet."
+        },
+        "actions": {
+            "refresh": "Jobs aktualisieren",
+            "new": "Neuer Job",
+            "clear": "Leeren",
+            "delete": "Löschen",
+            "save": "Speichern",
+            "addTrigger": "Trigger hinzufügen",
+            "remove": "Entfernen",
+            "runNow": "Jetzt ausführen"
+        },
+        "empty": {
+            "noJobs": "Noch keine Jobs. Erstelle einen, um Prompts und optionale Cron-Zeitpläne in jobs.yaml zu speichern."
+        },
+        "editor": {
+            "newJob": "Neuer Job",
+            "editing": "Bearbeite {name}",
+            "jobFallback": "Job"
+        },
+        "fields": {
+            "name": "Name",
+            "jobId": "Job-ID",
+            "enabled": "Aktiviert",
+            "enabledHelp": "Pausierte Jobs bleiben in jobs.yaml, werden aber nie per Cron ausgeführt.",
+            "unattended": "Unbeaufsichtigt ausführen",
+            "unattendedHelp": "Tool-Aufrufe werden nicht an dich eskaliert.",
+            "persistentSession": "Persistente Sitzung",
+            "persistentSessionDisabled": "Kann im unbeaufsichtigten Modus nicht verwendet werden",
+            "persistentSessionHelp": "Verwende eine bestehende Sitzung, statt bei jedem Joblauf eine neue zu erstellen.",
+            "prompt": "Prompt",
+            "expression": "Ausdruck",
+            "timeZone": "Zeitzone",
+            "inputOptional": "Eingabe (optional)"
+        },
+        "placeholders": {
+            "name": "Nächtliche Inbox-Prüfung",
+            "jobId": "naechtliche-inbox-pruefung",
+            "prompt": "Fasse neue Aufgaben zusammen, priorisiere Dringendes und schlage dann nächste Schritte vor."
+        },
+        "sections": {
+            "cronTriggers": "Cron-Trigger",
+            "cronTriggersDescription": "Leer lassen für Jobs, die nur manuell gestartet werden.",
+            "noTriggers": "Keine Cron-Trigger konfiguriert.",
+            "runJob": "Job ausführen",
+            "previousInvocations": "Vorherige Ausführungen",
+            "previousInvocationsDescription": "Wähle eine Ausführung, um ihre Sitzung zu öffnen.",
+            "saveToViewHistory": "Speichere diesen Job, um den Ausführungsverlauf zu sehen.",
+            "noInvocations": "Noch keine Ausführungen. Aktualisiere die Sitzungen, um neu abgeschlossene Läufe zu laden.",
+            "ranAt": "Ausgeführt am {timestamp}"
+        }
+    },
+    "sidebar": {
+        "time": {
+            "justNow": "gerade eben"
+        },
+        "messageCount": "{count, plural, one {# Nachricht} other {# Nachrichten}}",
+        "unattendedSession": "Unbeaufsichtigte Sitzung",
+        "privateSession": "Private Sitzung",
+        "knowledgeCommitted": "Alle Änderungen in das Wissens-Repository übernommen",
+        "actions": {
+            "pin": "Sitzung anheften",
+            "unpin": "Sitzung lösen",
+            "favorite": "Sitzung favorisieren",
+            "unfavorite": "Favorit entfernen",
+            "archive": "Sitzung archivieren",
+            "unarchive": "Sitzung aus dem Archiv holen",
+            "delete": "Sitzung löschen",
+            "deleteEmpty": "Leere Sitzung löschen",
+            "shiftSkip": "Shift+Klick überspringt die Bestätigung"
+        },
+        "confirm": {
+            "deleteSession": "Diese Sitzung löschen? Chatverlauf und Sandbox-Status werden entfernt.",
+            "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten."
+        },
+        "sections": {
+            "archived": "Archiviert"
+        },
+        "empty": "Noch keine Sitzungen",
+        "loadingMore": "Weitere Sitzungen werden geladen"
     }
 }

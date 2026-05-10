@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, RotateCcw, Undo2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ChatMessage, EscalationDecision, LlmActivity } from "@/lib/types";
@@ -26,6 +27,7 @@ function MessageCopyButton({
   text: string;
   className?: string;
 }) {
+  const t = useTranslations("message");
   const [copied, setCopied] = useState(false);
   const copy = useCallback(async () => {
     try {
@@ -46,8 +48,8 @@ function MessageCopyButton({
         "rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
       )}
-      aria-label={copied ? "Copied" : "Copy message"}
-      title={copied ? "Copied" : "Copy message"}
+      aria-label={copied ? t("copied") : t("copy")}
+      title={copied ? t("copied") : t("copy")}
       onClick={() => void copy()}
     >
       {copied ? (
@@ -72,6 +74,7 @@ function ThinkingBadge({
   reasoningTokens?: number;
   activeLlmActivity?: LlmActivity | null;
 }) {
+  const t = useTranslations("message");
   const [manualOpen, setManualOpen] = useState(false);
   const [liveReasoningDuration, setLiveReasoningDuration] = useState<{
     startedAt: string;
@@ -116,10 +119,10 @@ function ThinkingBadge({
       : reasoningDurationMs;
   const meta: string[] = [];
   if (typeof shownDurationMs === "number") {
-    meta.push(`for ${formatDuration(shownDurationMs)}`);
+    meta.push(t("thinkingMeta.duration", { duration: formatDuration(shownDurationMs) }));
   }
   if (typeof reasoningTokens === "number" && reasoningTokens > 0) {
-    meta.push(`${reasoningTokens.toLocaleString()} reasoning`);
+    meta.push(t("thinkingMeta.reasoning", { count: reasoningTokens.toLocaleString() }));
   }
 
   return (
@@ -145,7 +148,7 @@ function ThinkingBadge({
           <Brain className="h-3 w-3 shrink-0 text-muted-foreground" />
         )}
         <span className="shrink-0 font-mono font-medium text-foreground/80">
-          {streaming ? "thinking" : "thought"}
+          {streaming ? t("thinking.streaming") : t("thinking.complete")}
         </span>
         {meta.length > 0 && (
           <span className="min-w-0 truncate font-mono text-[11px] text-foreground/65 dark:text-foreground/70">
@@ -212,6 +215,7 @@ function MessageActions({
   onRetry?: () => void;
   onReset?: () => void;
 }) {
+  const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
   if (!hasCopy && !canFork && !canRetry && !canReset) return null;
 
@@ -219,19 +223,19 @@ function MessageActions({
     <div className="mt-2 flex items-center gap-2">
       <MessageCopyButton text={copyText ?? ""} className="border border-border/70 p-1.5" />
       <MessageActionButton
-        label="Fork session from here"
+        label={t("actions.fork")}
         icon={<GitBranch className="size-3.5" />}
         disabled={disabled}
         onClick={canFork ? onFork : undefined}
       />
       <MessageActionButton
-        label="Retry turn"
+        label={t("actions.retry")}
         icon={<RotateCcw className="size-3.5" />}
         disabled={disabled}
         onClick={canRetry ? onRetry : undefined}
       />
       <MessageActionButton
-        label="Reset conversation to after this turn"
+        label={t("actions.reset")}
         icon={<Undo2 className="size-3.5" />}
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
@@ -241,7 +245,11 @@ function MessageActions({
 }
 
 function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
+  const t = useTranslations("message");
   const isWarning = status === "warning";
+  const statusLabel = isWarning
+    ? t("finalStatus.status.warning")
+    : t("finalStatus.status.success");
 
   return (
     <div
@@ -259,8 +267,7 @@ function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
         )}
         <p>
-          The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to
-          continue chatting.
+          {t("finalStatus.notice", { status: statusLabel })}
         </p>
       </div>
     </div>

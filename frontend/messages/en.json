@@ -15,6 +15,19 @@
             "description": "Select a session or start a new one"
         }
     },
+    "connect": {
+        "description": "Connect to your server",
+        "serverLabel": "Server URL",
+        "tokenLabel": "Bearer Token",
+        "tokenPlaceholder": "Paste your token",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "errors": {
+            "invalidToken": "Invalid token",
+            "serverError": "Server error: {status}",
+            "connectionFailed": "Connection failed"
+        }
+    },
     "preferences": {
         "title": "Preferences",
         "description": "Frontend settings for language and other app-level behavior.",
@@ -28,5 +41,289 @@
                 "de": "Deutsch"
             }
         }
+    },
+    "chatInput": {
+        "disabled": "Input disabled",
+        "sendMessageTooltip": "Send message (Enter)",
+        "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
+        "stopGenerationTooltip": "Stop generation",
+        "queued": "Queued: {message}",
+        "placeholder": "Message carapace…"
+    },
+    "chatView": {
+        "inputDisabled": {
+            "archived": "Unarchive first",
+            "unattended": "This session is unattended. Fork it first to continue here."
+        },
+        "waiting": {
+            "processingPrompt": "Processing prompt...",
+            "thinking": "Thinking...",
+            "generating": "Generating...",
+            "working": "Working..."
+        },
+        "unknown": "Unknown",
+        "status": {
+            "connecting": "Connecting…",
+            "disconnected": "Disconnected"
+        },
+        "empty": {
+            "start": "Send a message to get started",
+            "connectingSession": "Connecting to session…"
+        },
+        "errors": {
+            "unexpected": "Unexpected error",
+            "resetTarget": "Could not resolve reset target.",
+            "forkTarget": "Could not resolve fork target."
+        },
+        "confirm": {
+            "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
+            "scaleDownSandbox": "Scale down the sandbox for this session? Storage will be kept.",
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo.",
+            "unarchiveSession": "Unarchive this session? It will return to the active session list.",
+            "makePrivate": "Mark this session private? Existing knowledge commits will remain in git history."
+        },
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "includeInRepo": "Include in repo",
+            "keepPrivate": "Keep private",
+            "delete": "Delete session"
+        },
+        "badges": {
+            "archived": "Archived",
+            "private": "Private",
+            "pinned": "Pinned",
+            "favorite": "Favorite",
+            "unattended": "Unattended",
+            "interactive": "Interactive"
+        },
+        "inspector": {
+            "actions": "Actions",
+            "session": "Session"
+        },
+        "session": {
+            "title": "Title",
+            "id": "ID",
+            "copyId": "Copy session id",
+            "idCopied": "Copied session id",
+            "idCopiedShort": "Copied",
+            "source": "Source",
+            "created": "Created",
+            "lastActive": "Last active",
+            "messages": "Messages",
+            "totalCost": "Total cost",
+            "job": "Job",
+            "reference": "Reference"
+        },
+        "source": {
+            "unknown": "Unknown",
+            "job": "Job",
+            "web": "Web",
+            "cli": "CLI"
+        },
+        "jobRun": {
+            "title": "Latest Job Run",
+            "job": "Job",
+            "ranAt": "Ran at",
+            "schedule": "Schedule",
+            "data": "Data",
+            "trigger": {
+                "label": "Trigger",
+                "api": "API",
+                "cron": "Cron",
+                "manual": "Manual"
+            }
+        },
+        "sandbox": {
+            "title": "Sandbox",
+            "refreshing": "Refreshing…",
+            "checking": "Checking sandbox…",
+            "actions": {
+                "start": "Start sandbox",
+                "starting": "Starting sandbox",
+                "scaleDown": "Scale down sandbox",
+                "scalingDown": "Scaling down sandbox",
+                "reset": "Reset sandbox"
+            },
+            "storage": {
+                "used": "{size} used",
+                "none": "no sandbox storage",
+                "allocated": "{size} allocated"
+            }
+        },
+        "knowledge": {
+            "title": "Knowledge",
+            "commit": "Commit to repo",
+            "committed": "Committed",
+            "committedToRepo": "Committed to knowledge",
+            "notCommittedYet": "Not committed yet",
+            "savedAt": "Saved {timestamp}",
+            "commitDisabledNoHistory": "This session has no conversation history yet.",
+            "noNewChanges": "{status}. No new changes to commit.",
+            "privateExistingCommits": "Session is private. Existing knowledge commits remain unchanged.",
+            "privateExcluded": "Session is private and will not be committed to knowledge.",
+            "includedInRepo": "Session is included in knowledge commits to your repo.",
+            "badges": {
+                "excluded": "Excluded",
+                "missing": "Missing",
+                "outdated": "Outdated",
+                "upToDate": "Up to Date"
+            }
+        },
+        "mobile": {
+            "details": "Details",
+            "done": "Done"
+        }
+    },
+    "message": {
+        "copy": "Copy message",
+        "copied": "Copied",
+        "thinking": {
+            "streaming": "thinking",
+            "complete": "thought"
+        },
+        "thinkingMeta": {
+            "duration": "for {duration}",
+            "reasoning": "{count} reasoning"
+        },
+        "actions": {
+            "fork": "Fork session from here",
+            "retry": "Retry turn",
+            "reset": "Reset conversation to after this turn"
+        },
+        "finalStatus": {
+            "status": {
+                "success": "success",
+                "warning": "warning"
+            },
+            "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
+        }
+    },
+    "jobs": {
+        "settingsSections": "Settings sections",
+        "savedJobs": "Saved Jobs",
+        "loading": "Loading jobs...",
+        "paused": "Paused",
+        "unattendedTooltip": "Unattended sessions cannot escalate tool calls",
+        "confirmDelete": "Delete job {name}?",
+        "summary": {
+            "onDemandOnly": "On-demand only",
+            "cronTriggerCount": "{count, plural, one {# cron trigger} other {# cron triggers}}"
+        },
+        "validation": {
+            "idRequired": "Job ID is required.",
+            "nameRequired": "Job name is required.",
+            "promptRequired": "Prompt is required.",
+            "persistentSessionMustBeAttended": "Persistent-session jobs must be attended.",
+            "cronEmpty": "Cron expressions must not be empty.",
+            "cronInvalid": "Cron expression is invalid: {expression}."
+        },
+        "cron": {
+            "invalidExpression": "Invalid cron expression."
+        },
+        "triggerKind": {
+            "scheduled": "Scheduled",
+            "manual": "Manual"
+        },
+        "errors": {
+            "load": "Failed to load jobs.",
+            "refresh": "Failed to refresh jobs.",
+            "save": "Failed to save job.",
+            "delete": "Failed to delete job.",
+            "run": "Failed to run job.",
+            "saveBeforeRun": "Save the job before running it.",
+            "saveChangesBeforeRun": "Save job changes before running it."
+        },
+        "notices": {
+            "refreshed": "Jobs refreshed.",
+            "created": "Job created.",
+            "saved": "Job saved.",
+            "deleted": "Job deleted.",
+            "runStartedNewSession": "Run started in new session {sessionId}.",
+            "runStartedSession": "Run started in session {sessionId}."
+        },
+        "actions": {
+            "refresh": "Refresh jobs",
+            "new": "New job",
+            "clear": "Clear",
+            "delete": "Delete",
+            "save": "Save",
+            "addTrigger": "Add trigger",
+            "remove": "Remove",
+            "runNow": "Run now"
+        },
+        "empty": {
+            "noJobs": "No jobs yet. Create one to store prompts and optional cron schedules in jobs.yaml."
+        },
+        "editor": {
+            "newJob": "New job",
+            "editing": "Editing {name}",
+            "jobFallback": "job"
+        },
+        "fields": {
+            "name": "Name",
+            "jobId": "Job ID",
+            "enabled": "Enabled",
+            "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
+            "unattended": "Run unattended",
+            "unattendedHelp": "Tool calls will not be escalated to you.",
+            "persistentSession": "Persistent Session",
+            "persistentSessionDisabled": "Can't be used in unattended mode",
+            "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
+            "prompt": "Prompt",
+            "expression": "Expression",
+            "timeZone": "Time Zone",
+            "inputOptional": "Input (Optional)"
+        },
+        "placeholders": {
+            "name": "Nightly inbox review",
+            "jobId": "nightly-inbox-review",
+            "prompt": "Summarize new tasks, triage urgent items, then propose next actions."
+        },
+        "sections": {
+            "cronTriggers": "Cron Triggers",
+            "cronTriggersDescription": "Leave empty for on-demand jobs.",
+            "noTriggers": "No cron triggers configured.",
+            "runJob": "Run Job",
+            "previousInvocations": "Previous Invocations",
+            "previousInvocationsDescription": "Select an invocation to open its session.",
+            "saveToViewHistory": "Save this job to view invocation history.",
+            "noInvocations": "No invocations yet. Refresh sessions to load newly completed runs.",
+            "ranAt": "Ran at {timestamp}"
+        }
+    },
+    "sidebar": {
+        "time": {
+            "justNow": "just now"
+        },
+        "messageCount": "{count, plural, one {# message} other {# messages}}",
+        "unattendedSession": "Unattended session",
+        "privateSession": "Private session",
+        "knowledgeCommitted": "All changes committed to knowledge",
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "delete": "Delete session",
+            "deleteEmpty": "Delete empty session",
+            "shiftSkip": "Shift+click to skip confirmation"
+        },
+        "confirm": {
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
+        },
+        "sections": {
+            "archived": "Archived"
+        },
+        "empty": "No sessions yet",
+        "loadingMore": "Loading more sessions"
     }
 }

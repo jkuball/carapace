@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ function defaultServer(): string {
 }
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {
+  const t = useTranslations("connect");
   const [server, setServer] = useState(defaultServer);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -32,11 +34,13 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
       });
       if (!res.ok)
         throw new Error(
-          res.status === 401 ? "Invalid token" : `Server error: ${res.status}`,
+          res.status === 401
+            ? t("errors.invalidToken")
+            : t("errors.serverError", { status: res.status }),
         );
       onConnect(server.replace(/\/$/, ""), token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connection failed");
+      setError(err instanceof Error ? err.message : t("errors.connectionFailed"));
     } finally {
       setLoading(false);
     }
@@ -48,7 +52,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
         <div className="space-y-1.5 text-center">
           <h1 className="text-xl font-semibold tracking-tight">carapace</h1>
           <p className="text-sm text-muted-foreground">
-            Connect to your server
+            {t("description")}
           </p>
         </div>
 
@@ -58,7 +62,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
               htmlFor="server"
               className="text-xs font-medium text-muted-foreground"
             >
-              Server URL
+              {t("serverLabel")}
             </label>
             <input
               id="server"
@@ -81,14 +85,14 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
               htmlFor="token"
               className="text-xs font-medium text-muted-foreground"
             >
-              Bearer Token
+              {t("tokenLabel")}
             </label>
             <input
               id="token"
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste your token"
+              placeholder={t("tokenPlaceholder")}
               required
               className={cn(
                 "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm font-mono",
@@ -112,7 +116,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
             "disabled:opacity-50 disabled:cursor-not-allowed",
           )}
         >
-          {loading ? "Connecting…" : "Connect"}
+          {loading ? t("connecting") : t("connect")}
         </button>
       </form>
     </div>

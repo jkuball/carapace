@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,13 +75,14 @@ export function ChatInput({
   onInterrupt,
   connected,
   disabled = false,
-  disabledPlaceholder = "Input disabled",
+  disabledPlaceholder,
   waiting,
   queuedMessage,
   commands = [],
   availableModelEntries = [],
   usage,
 }: ChatInputProps) {
+  const t = useTranslations("chatInput");
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -239,16 +241,17 @@ export function ChatInput({
   }
 
   const hasText = value.trim().length > 0;
+  const disabledPlaceholderText = disabledPlaceholder ?? t("disabled");
 
   let tooltip: string;
   if (disabled) {
-    tooltip = disabledPlaceholder;
+    tooltip = disabledPlaceholderText;
   } else if (!waiting) {
-    tooltip = "Send message (Enter)";
+    tooltip = t("sendMessageTooltip");
   } else if (hasText) {
-    tooltip = "Enter to queue · ⌥Enter to interrupt · Click to stop";
+    tooltip = t("queueInterruptStopTooltip");
   } else {
-    tooltip = "Stop generation";
+    tooltip = t("stopGenerationTooltip");
   }
 
   return (
@@ -256,7 +259,7 @@ export function ChatInput({
       {queuedMessage && (
         <div className="mx-auto max-w-3xl mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />
-          <span className="truncate">Queued: {queuedMessage}</span>
+          <span className="truncate">{t("queued", { message: queuedMessage })}</span>
         </div>
       )}
       <div className="relative mx-auto max-w-3xl">
@@ -346,7 +349,7 @@ export function ChatInput({
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={disabled ? disabledPlaceholder : "Message carapace…"}
+            placeholder={disabled ? disabledPlaceholderText : t("placeholder")}
             rows={1}
             disabled={disabled}
             className={cn(
