@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.114.1 (2026-05-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: normalizeOptionalLabel to filter out empty-ish response from agent for title of exec call
+  ([`aa940f2`](https://github.com/thiesgerken/carapace/commit/aa940f203566b09b8d91c810955a68aacedd8020))
+
 ## v0.114.0 (2026-05-10)
 
 
