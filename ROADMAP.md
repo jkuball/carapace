@@ -13,6 +13,7 @@
 - [ ] an actual database backend instead of files
 - [ ] after adding cronjobs a backend refactor/review might be in order
 - [ ] i18n (persisted in local storage? put into settings default to user lang? construe, time formatting, ..)
+- [ ] bundle a skill for carapace itself - firing jobs, creating subsessions, ...
 
 ## Knowledge Repo Handling
 
