@@ -418,6 +418,10 @@
     "message": {
         "copy": "Copy message",
         "copied": "Copied",
+        "codeBlock": {
+            "copy": "Copy code",
+            "copied": "Copied"
+        },
         "thinking": {
             "streaming": "thinking",
             "complete": "thought"
