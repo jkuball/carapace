@@ -1,6 +1,36 @@
 # CHANGELOG
 
 
+## v0.113.1 (2026-05-10)
+
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: drop dead CARAPACE_VERSION fallback and test /api/meta
+  ([`52d2b3a`](https://github.com/thiesgerken/carapace/commit/52d2b3a4add9ad78e3a0c59810fe66500b8fb0f4))
+
+### Other
+
+
+- favicon
+  ([`def5d78`](https://github.com/thiesgerken/carapace/commit/def5d78e2ec8bd0dc366be11cadc0b4018170a1d))
+
+- add route
+  ([`dfc5ba6`](https://github.com/thiesgerken/carapace/commit/dfc5ba63be2edba4eecab8502bec0c59bb5b13da))
+
+- add version display
+  ([`88068af`](https://github.com/thiesgerken/carapace/commit/88068af68dc7da052b603a6994ea34b204c18868))
+
+- 🎨 style: update turtle favicon
+  ([`ec45484`](https://github.com/thiesgerken/carapace/commit/ec45484696b546c322859be2aa230bdef1866443))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.0.8
+  ([`800504e`](https://github.com/thiesgerken/carapace/commit/800504e5774f172a505f3d0bee4ec75401b660c7))
+
 ## v0.113.0 (2026-05-10)
 
 
