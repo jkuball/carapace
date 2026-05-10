@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
   type AvailableModelInfo,
@@ -51,6 +51,7 @@ interface ChatViewProps {
   onSessionUpdate?: (session: SessionInfo) => void;
   onSandboxUpdate?: (sandbox: SessionSandboxSnapshot) => void;
   onForkSession?: (session: SessionInfo) => void;
+  onOpenJobSettings?: (jobId: string) => void;
   onUpdateSessionAttributes?: (sessionId: string, attributes: { private?: boolean; archived?: boolean; pinned?: boolean; favorite?: boolean }) => Promise<SessionInfo>;
   onDeleteSession?: () => Promise<void>;
 }
@@ -779,6 +780,7 @@ export function ChatView({
   onSessionUpdate,
   onSandboxUpdate,
   onForkSession,
+  onOpenJobSettings,
   onUpdateSessionAttributes,
   onDeleteSession,
 }: ChatViewProps) {
@@ -1764,6 +1766,23 @@ export function ChatView({
   const latestJobData = formatSessionJobData(latestJobRun?.data);
   const fallbackSourceJobId = latestJobRun ? null : sourceJobId;
   const totalCostUsd = session?.total_cost_usd ?? 0;
+  const jobLinkClass = "-mx-1 inline-flex items-center gap-1 rounded px-1 font-mono text-xs leading-5 text-foreground transition-colors hover:bg-muted";
+  const renderJobSettingsLink = (jobId: string) => {
+    if (!onOpenJobSettings) {
+      return jobId;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenJobSettings(jobId)}
+        className={jobLinkClass}
+      >
+        <span>{jobId}</span>
+        <ExternalLink className="h-3 w-3 shrink-0 self-center text-muted-foreground" />
+      </button>
+    );
+  };
   const sessionDetailBadges = [
     sessionArchived
       ? { label: "Archived", icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
@@ -1909,14 +1928,16 @@ export function ChatView({
           {fallbackSourceJobId ? (
             <>
               <dt className="text-muted-foreground">Job</dt>
-              <dd className="break-all font-mono text-xs text-foreground">{fallbackSourceJobId}</dd>
+              <dd className="break-all">{renderJobSettingsLink(fallbackSourceJobId)}</dd>
             </>
           ) : null}
 
           {session?.channel_ref && !fallbackSourceJobId ? (
             <>
               <dt className="text-muted-foreground">Reference</dt>
-              <dd className="break-all font-mono text-xs text-foreground">{session.channel_ref}</dd>
+              <dd className="break-all">
+                {sourceJobId ? renderJobSettingsLink(sourceJobId) : session.channel_ref}
+              </dd>
             </>
           ) : null}
         </dl>
@@ -1953,7 +1974,7 @@ export function ChatView({
 
           <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
             <dt className="text-muted-foreground">Job</dt>
-            <dd className="break-all font-mono text-xs text-foreground">{latestJobRun.job_id}</dd>
+            <dd className="break-all">{renderJobSettingsLink(latestJobRun.job_id)}</dd>
 
             <dt className="text-muted-foreground">Trigger</dt>
             <dd className="text-foreground">{formatJobTriggerKind(latestJobRun.trigger_kind)}</dd>

@@ -391,6 +391,7 @@ export function Sidebar({
             type="button"
             onClick={onGoHome}
             title="Home"
+            aria-label="Home"
             className={cn(
               "rounded-md p-1.5 transition-colors",
               activeView === "chat" && activeSessionId === null
@@ -404,6 +405,7 @@ export function Sidebar({
             type="button"
             onClick={onOpenJobs}
             title="Jobs settings"
+            aria-label="Jobs settings"
             className={cn(
               "rounded-md p-1.5 transition-colors",
               activeView === "jobs"
@@ -426,6 +428,7 @@ export function Sidebar({
             target="_blank"
             rel="noreferrer"
             title="GitHub"
+            aria-label="GitHub repository"
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <GitHubIcon className="h-4 w-4" />

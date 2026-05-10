@@ -186,6 +186,7 @@ async def _run_due_jobs_once(*, now: datetime | None = None) -> int:
                 trigger_kind="cron",
                 triggered_at=due_run.scheduled_at,
                 cron_expression=due_run.trigger.expression,
+                trigger_timezone=due_run.trigger.timezone,
             )
         except HTTPException as exc:
             logger.warning(f"Scheduled job {due_run.job.id} skipped: {exc.detail}")
@@ -615,6 +616,7 @@ async def _run_job_definition(
     triggered_at: datetime | None = None,
     payload: str | None = None,
     cron_expression: str | None = None,
+    trigger_timezone: str | None = None,
 ) -> JobRunResult:
     created_new_session = False
     effective_triggered_at = triggered_at or datetime.now(tz=UTC)
@@ -651,12 +653,21 @@ async def _run_job_definition(
     _engine.session_mgr.save_state(state)
     _engine.update_active_state(state.session_id, latest_job_run=job_run_context)
 
+    resolved_trigger_timezone = trigger_timezone or (
+        next(
+            (t.timezone for t in job.triggers if t.expression == cron_expression and t.timezone),
+            None,
+        )
+        if cron_expression
+        else None
+    )
     message = build_job_run_message(
         job,
         trigger_kind=trigger_kind,
         triggered_at=effective_triggered_at,
         payload=payload,
         cron_expression=cron_expression,
+        timezone=resolved_trigger_timezone,
     )
     await _engine.submit_message(state.session_id, message)
 
