@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -504,7 +504,7 @@ function HomeContent() {
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const appTitle = t("app.name");
     if (activeView === "settings") {
       const viewTitle = settingsTab === "jobs"
