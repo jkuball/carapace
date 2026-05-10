@@ -2,9 +2,9 @@
 
 import cronstrue from "cronstrue";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Play, Plus, RefreshCw, Save, Settings2, Trash2 } from "lucide-react";
+import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Settings2, Trash2 } from "lucide-react";
 import { createJob, deleteJob, listJobs, runJob, updateJob } from "@/lib/api";
-import type { JobCronTrigger, JobDefinition, SessionInfo } from "@/lib/types";
+import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface JobsViewProps {
@@ -12,6 +12,7 @@ interface JobsViewProps {
   token: string;
   sessions: SessionInfo[];
   onSessionActivated: (session: SessionInfo) => void;
+  requestedJobId?: string | null;
 }
 
 const CRON_EXAMPLE_EXPRESSIONS = [
@@ -72,6 +73,23 @@ function createEmptyJob(): JobDefinition {
 function summarizeJob(job: JobDefinition): string {
   if (job.triggers.length === 0) {
     return "On-demand only";
+  }
+
+  if (job.triggers.length === 1) {
+    const [trigger] = job.triggers;
+    const expression = trigger.expression.trim();
+    if (!expression) {
+      return "1 cron trigger";
+    }
+
+    try {
+      return cronstrue.toString(expression, {
+        throwExceptionOnParseError: true,
+        use24HourTimeFormat: true,
+      });
+    } catch {
+      return "1 cron trigger";
+    }
   }
 
   const count = job.triggers.length;
@@ -149,7 +167,29 @@ function describeCronExpression(expression: string): { text: string; invalid: bo
   }
 }
 
-export function JobsView({ server, token, sessions, onSessionActivated }: JobsViewProps) {
+function formatInvocationTimestamp(value: string): string {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+
+  return new Date(parsed).toLocaleString();
+}
+
+function formatTriggerKindLabel(triggerKind: SessionLatestJobRun["trigger_kind"]): string {
+  switch (triggerKind) {
+    case "cron":
+      return "Scheduled";
+    case "api":
+      return "Manual";
+    case "manual":
+      return "Manual";
+    default:
+      return triggerKind;
+  }
+}
+
+export function JobsView({ server, token, sessions, onSessionActivated, requestedJobId }: JobsViewProps) {
   const [detectedTimeZone] = useState(() => browserTimeZone());
   const [jobs, setJobs] = useState<JobDefinition[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | "new">("new");
@@ -176,6 +216,24 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
   const selectedJob = useMemo(
     () => (selectedJobId === "new" ? null : jobs.find((job) => job.id === selectedJobId) ?? null),
     [jobs, selectedJobId],
+  );
+  const selectedJobInvocations = useMemo(
+    () => {
+      if (!selectedJob) {
+        return [];
+      }
+
+      return sessions
+        .filter((session) => session.latest_job_run?.job_id === selectedJob.id)
+        .sort((left, right) => {
+          const leftTime = Date.parse(left.latest_job_run?.triggered_at ?? left.last_active);
+          const rightTime = Date.parse(right.latest_job_run?.triggered_at ?? right.last_active);
+          const normalizedLeft = Number.isNaN(leftTime) ? 0 : leftTime;
+          const normalizedRight = Number.isNaN(rightTime) ? 0 : rightTime;
+          return normalizedRight - normalizedLeft;
+        });
+    },
+    [selectedJob, sessions],
   );
   const cronExamples = useMemo(
     () => CRON_EXAMPLE_EXPRESSIONS.map((expression) => ({
@@ -276,6 +334,41 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
       document.removeEventListener("mousedown", handlePointerDown);
     };
   }, [openTriggerExamples]);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setNotice((current) => (current === notice ? null : current));
+    }, 15_000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [notice]);
+
+  useEffect(() => {
+    if (!requestedJobId) {
+      return;
+    }
+
+    selectedJobIdRef.current = requestedJobId;
+    if (jobs.length === 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      selectJob(jobs, requestedJobId);
+      setError(null);
+      setNotice(null);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [jobs, requestedJobId]);
 
   function updateDraft(patch: Partial<JobDefinition>): void {
     setDraft((current) => ({ ...current, ...patch }));
@@ -378,7 +471,6 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
     setNotice(null);
     try {
       const result = await runJob(server, token, draft.id, runData === "" ? undefined : runData);
-      onSessionActivated(result.session);
       setNotice(result.created_new_session
         ? `Run started in new session ${result.session_id}.`
         : `Run started in session ${result.session_id}.`);
@@ -457,37 +549,49 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                           setNotice(null);
                         }}
                         className={cn(
-                          "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
+                          "w-full rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                           selected
-                            ? "border-foreground/15 bg-foreground text-background"
-                            : "border-border bg-background/90 hover:bg-muted",
+                            ? "bg-accent text-accent-foreground"
+                            : "text-foreground/80 hover:bg-muted",
                         )}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3 px-3 pt-2 pb-1 text-left">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold">{job.name}</div>
                             <div className={cn(
-                              "mt-1 truncate font-mono text-xs",
-                              selected ? "text-background/70" : "text-muted-foreground",
+                              "mt-0.5 truncate font-mono text-xs",
+                              selected ? "text-accent-foreground/70" : "text-foreground/70",
                             )}>
                               {job.id}
                             </div>
                           </div>
-                          <span className={cn(
-                            "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                            job.enabled
-                              ? (selected ? "bg-background/12 text-background" : "bg-emerald-100 text-emerald-800")
-                              : (selected ? "bg-background/12 text-background/70" : "bg-muted text-muted-foreground"),
-                          )}>
-                            {job.enabled ? "Enabled" : "Disabled"}
-                          </span>
+                          {!job.enabled && (
+                            <span className={cn(
+                              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium flex items-center gap-1",
+                              selected ? "bg-amber-900/20 text-amber-700" : "bg-amber-100 text-amber-700",
+                            )}>
+                              <Pause className="h-3 w-3" />
+                              Paused
+                            </span>
+                          )}
                         </div>
                         <div className={cn(
-                          "mt-3 flex items-center justify-between gap-3 text-xs",
-                          selected ? "text-background/70" : "text-muted-foreground",
+                          "px-3 pb-2 text-xs flex items-center justify-between gap-3",
+                          selected ? "text-accent-foreground/70" : "text-foreground/70",
                         )}>
                           <span>{summarizeJob(job)}</span>
-                          <span>{job.unattended ? "Unattended" : "Attended"}</span>
+                          {job.unattended && (
+                            <button
+                              type="button"
+                              title="Unattended sessions cannot escalate tool calls"
+                              className={cn(
+                                "rounded-full p-1",
+                                selected ? "hover:bg-accent-foreground/10" : "hover:bg-muted",
+                              )}
+                            >
+                              <Bot className={cn("h-4 w-4", selected ? "text-accent-foreground" : "text-emerald-700")} />
+                            </button>
+                          )}
                         </div>
                       </button>
                     );
@@ -505,6 +609,7 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                 {selectedJobId === "new" ? "New job" : `Editing ${draft.id || draft.name || "job"}`}
               </p>
               <div className="flex flex-wrap items-center gap-2">
+                {notice && !isDraftDirty ? <p className="text-sm text-emerald-700">{notice}</p> : null}
                 <button
                   type="button"
                   onClick={() => void handleDelete()}
@@ -517,8 +622,8 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                 <button
                   type="button"
                   onClick={() => void handleSave()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-60"
-                  disabled={saving || running || loading || draftValidationError !== null}
+                  className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-60 disabled:hover:bg-foreground"
+                  disabled={saving || running || loading || draftValidationError !== null || !isDraftDirty}
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save
@@ -563,8 +668,8 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                 </label>
               </div>
 
-              <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4 lg:col-span-2">
+              <div className="mt-4 space-y-3">
+                <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
                   <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background px-3 py-3">
                     <input
                       type="checkbox"
@@ -575,7 +680,7 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                     />
                     <span>
                       <span className="block text-sm font-medium">Enabled</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">Disabled jobs stay in jobs.yaml but never run from cron.</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">Paused jobs stay in jobs.yaml but never run from cron.</span>
                     </span>
                   </label>
 
@@ -583,18 +688,24 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                     <input
                       type="checkbox"
                       checked={draft.unattended}
-                      onChange={(event) => updateDraft({ unattended: event.target.checked })}
-                      disabled={saving || running || !!draft.persistent_session_id}
+                      onChange={(event) => {
+                        const unattended = event.target.checked;
+                        updateDraft({
+                          unattended,
+                          persistent_session_id: unattended ? null : draft.persistent_session_id,
+                        });
+                      }}
+                      disabled={saving || running}
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
                     <span>
                       <span className="block text-sm font-medium">Run unattended</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">Turn this off when reusing an attended persistent session.</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">Tool calls will not be escalated to you.</span>
                     </span>
                   </label>
                 </div>
 
-                <label className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
+                <div className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
                   <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Persistent Session</span>
                   <input
                     list="jobs-session-options"
@@ -603,8 +714,8 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                       persistent_session_id: event.target.value || null,
                       unattended: event.target.value ? false : draft.unattended,
                     })}
-                    placeholder="Optional attended session id"
-                    disabled={saving || running}
+                    placeholder={draft.unattended ? "Can't be used in unattended mode" : undefined}
+                    disabled={saving || running || draft.unattended}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <datalist id="jobs-session-options">
@@ -612,10 +723,8 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
                       <option key={session.session_id} value={session.session_id} label={formatSessionOption(session)} />
                     ))}
                   </datalist>
-                  <p className="text-xs text-muted-foreground">
-                    Accepts manual input. Suggestions only include existing attended, non-archived sessions.
-                  </p>
-                </label>
+                  <p className="text-xs text-muted-foreground">Reuse an existing session instead of creating a new one on every job invocation.</p>
+                </div>
               </div>
 
               <div className="mt-4">
@@ -804,10 +913,60 @@ export function JobsView({ server, token, sessions, onSessionActivated }: JobsVi
               </label>
             </div>
 
-            {(error || notice) ? (
+            <div className="rounded-3xl border border-border bg-background/88 p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Previous Invocations</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Select an invocation to open its session.</p>
+                </div>
+              </div>
+
+              {selectedJobId === "new" ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+                  Save this job to view invocation history.
+                </div>
+              ) : selectedJobInvocations.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+                  No invocations yet. Refresh sessions to load newly completed runs.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {selectedJobInvocations.map((session) => {
+                    const latestJobRun = session.latest_job_run;
+                    if (!latestJobRun) {
+                      return null;
+                    }
+
+                    return (
+                      <button
+                        key={session.session_id}
+                        type="button"
+                        onClick={() => onSessionActivated(session)}
+                        className="w-full rounded-2xl border border-border bg-background/90 px-4 py-3 text-left transition-colors hover:bg-muted"
+                        disabled={saving || running}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-foreground">{session.title?.trim() || session.session_id}</div>
+                            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{session.session_id}</div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            {formatTriggerKindLabel(latestJobRun.trigger_kind)}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Ran at {formatInvocationTimestamp(latestJobRun.triggered_at)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {error ? (
               <div className="rounded-2xl border border-border bg-background/88 px-4 py-3 text-sm shadow-sm">
                 {error ? <p className="text-destructive">{error}</p> : null}
-                {notice ? <p className="text-emerald-700">{notice}</p> : null}
               </div>
             ) : null}
 

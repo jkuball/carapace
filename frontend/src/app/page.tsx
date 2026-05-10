@@ -126,6 +126,7 @@ function HomeContent() {
   const [activeView, setActiveView] = useState<AppView>(
     initialView,
   );
+  const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
   const [refreshingSessions, setRefreshingSessions] = useState(false);
@@ -372,6 +373,14 @@ function HomeContent() {
   }
 
   function handleOpenJobs(): void {
+    setRequestedJobId(null);
+    setActiveSessionId(null);
+    setActiveView("jobs");
+    setSidebarOpen(false);
+  }
+
+  function handleOpenJobSettings(jobId: string): void {
+    setRequestedJobId(jobId);
     setActiveSessionId(null);
     setActiveView("jobs");
     setSidebarOpen(false);
@@ -516,6 +525,7 @@ function HomeContent() {
             token={token}
             sessions={sessions}
             onSessionActivated={handleForkSession}
+            requestedJobId={requestedJobId}
           />
         ) : activeSessionId ? (
           <ChatView
@@ -529,6 +539,7 @@ function HomeContent() {
             onSessionUpdate={handleActiveSessionUpdate}
             onSandboxUpdate={handleActiveSessionSandboxUpdate}
             onForkSession={handleForkSession}
+            onOpenJobSettings={handleOpenJobSettings}
             onUpdateSessionAttributes={handleUpdateSessionAttributes}
             onDeleteSession={handleActiveSessionDelete}
           />
