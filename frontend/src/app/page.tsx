@@ -133,7 +133,7 @@ function HomeContent() {
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialView === "jobs" ? null : searchParams.get("session"),
+    initialView === "chat" ? searchParams.get("session") : null,
   );
   const [activeView, setActiveView] = useState<AppView>(
     initialView,
