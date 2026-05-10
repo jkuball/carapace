@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -116,6 +116,7 @@ function HomeContent() {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsKey = searchParams.toString();
   const initialView: AppView = (() => {
     const view = searchParams.get("view");
     if (view === "settings" || view === "jobs" || view === "preferences") {
@@ -503,7 +504,7 @@ function HomeContent() {
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const appTitle = t("app.name");
     if (activeView === "settings") {
       const viewTitle = settingsTab === "jobs"
@@ -524,7 +525,7 @@ function HomeContent() {
     document.title = useDefaultTitle
       ? appTitle
       : `${truncatedTitle} • ${appTitle}`;
-  }, [activeSession, activeView, settingsTab, t]);
+  }, [activeSession, activeView, searchParamsKey, settingsTab, t]);
 
   if (!connected) {
     return <ConnectForm onConnect={handleConnect} />;
