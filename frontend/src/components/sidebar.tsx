@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef } from "react";
-import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Home, Languages, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { NewSessionButton } from "@/components/new-session-button";
 import { VersionBadge } from "@/components/version-badge";
@@ -19,13 +20,14 @@ import {
 interface SidebarProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
-  activeView?: "chat" | "jobs";
+  activeView?: "chat" | "jobs" | "preferences";
   frontendVersion?: string | null;
   backendVersion?: string | null;
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
   onGoHome: () => void;
   onOpenJobs: () => void;
+  onOpenPreferences: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDelete: (sessionId: string) => void;
   onDisconnect: () => void;
@@ -108,6 +110,7 @@ export function Sidebar({
   onNew,
   onGoHome,
   onOpenJobs,
+  onOpenPreferences,
   onUpdateAttributes,
   onDelete,
   onDisconnect,
@@ -117,6 +120,7 @@ export function Sidebar({
   loadingMore = false,
   onLoadMore,
 }: SidebarProps) {
+  const t = useTranslations();
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
@@ -382,7 +386,7 @@ export function Sidebar({
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 leading-none">
             <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">carapace</span>
+            <span className="text-sm font-semibold tracking-tight">{t("app.name")}</span>
           </div>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
         </div>
@@ -390,8 +394,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={onGoHome}
-            title="Home"
-            aria-label="Home"
+            title={t("navigation.home")}
+            aria-label={t("navigation.home")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               activeView === "chat" && activeSessionId === null
@@ -404,8 +408,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={onOpenJobs}
-            title="Jobs settings"
-            aria-label="Jobs settings"
+            title={t("navigation.jobs")}
+            aria-label={t("navigation.jobs")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               activeView === "jobs"
@@ -416,8 +420,22 @@ export function Sidebar({
             <Settings2 className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            onClick={onOpenPreferences}
+            title={t("navigation.preferences")}
+            aria-label={t("navigation.preferences")}
+            className={cn(
+              "rounded-md p-1.5 transition-colors",
+              activeView === "preferences"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Languages className="h-4 w-4" />
+          </button>
+          <button
             onClick={onDisconnect}
-            title="Disconnect"
+            title={t("navigation.disconnect")}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LogOut className="h-4 w-4" />
@@ -427,8 +445,8 @@ export function Sidebar({
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            title="GitHub"
-            aria-label="GitHub repository"
+            title={t("navigation.github")}
+            aria-label={t("navigation.github")}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <GitHubIcon className="h-4 w-4" />

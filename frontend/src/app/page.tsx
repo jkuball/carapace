@@ -3,9 +3,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ConnectForm } from "@/components/connect-form";
 import { JobsView } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
+import { PreferencesView } from "@/components/preferences-view";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
@@ -86,7 +88,7 @@ type ConnectionState = {
   token: string;
 };
 
-type AppView = "chat" | "jobs";
+type AppView = "chat" | "jobs" | "preferences";
 
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
@@ -113,9 +115,16 @@ export default function Home() {
 }
 
 function HomeContent() {
+  const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "jobs" ? "jobs" : "chat";
+  const initialView = (() => {
+    const view = searchParams.get("view");
+    if (view === "jobs" || view === "preferences") {
+      return view;
+    }
+    return "chat";
+  })();
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
     server: "",
@@ -152,8 +161,8 @@ function HomeContent() {
   // Sync activeSessionId → URL query param
   useEffect(() => {
     const params = new URLSearchParams();
-    if (activeView === "jobs") {
-      params.set("view", "jobs");
+    if (activeView !== "chat") {
+      params.set("view", activeView);
     } else if (activeSessionId) {
       params.set("session", activeSessionId);
     }
@@ -412,6 +421,13 @@ function HomeContent() {
     setSidebarOpen(false);
   }
 
+  function handleOpenPreferences(): void {
+    setRequestedJobId(null);
+    setActiveSessionId(null);
+    setActiveView("preferences");
+    setSidebarOpen(false);
+  }
+
   function handleOpenJobSettings(jobId: string): void {
     setRequestedJobId(jobId);
     setActiveSessionId(null);
@@ -525,6 +541,7 @@ function HomeContent() {
           onNew={handleNewSession}
           onGoHome={handleGoHome}
           onOpenJobs={handleOpenJobs}
+          onOpenPreferences={handleOpenPreferences}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
@@ -551,8 +568,14 @@ function HomeContent() {
             )}
           </button>
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
-            {activeView !== "jobs" ? (
+            <span className="text-sm font-semibold">
+              {activeView === "jobs"
+                ? t("navigation.jobs")
+                : activeView === "preferences"
+                  ? t("navigation.preferences")
+                  : t("app.name")}
+            </span>
+            {activeView === "chat" ? (
               <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={serverVersion} />
             ) : null}
           </div>
@@ -567,6 +590,8 @@ function HomeContent() {
             onSessionActivated={handleForkSession}
             requestedJobId={requestedJobId}
           />
+        ) : activeView === "preferences" ? (
+          <PreferencesView />
         ) : activeSessionId ? (
           <ChatView
             key={activeSessionId}
@@ -586,9 +611,9 @@ function HomeContent() {
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <p className="text-lg font-medium text-foreground/80">carapace</p>
+              <p className="text-lg font-medium text-foreground/80">{t("app.name")}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Select a session or start a new one
+                {t("home.empty.description")}
               </p>
               <NewSessionButton
                 onCreate={handleNewSession}

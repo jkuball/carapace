@@ -1,0 +1,31 @@
+{
+    "app": {
+        "name": "carapace"
+    },
+    "navigation": {
+        "home": "Start",
+        "jobs": "Jobs",
+        "preferences": "Einstellungen",
+        "disconnect": "Trennen",
+        "github": "GitHub-Repository"
+    },
+    "home": {
+        "empty": {
+            "description": "Waehle eine Sitzung aus oder starte eine neue"
+        }
+    },
+    "preferences": {
+        "title": "Einstellungen",
+        "description": "Frontend-Einstellungen fuer Sprache und anderes app-weites Verhalten.",
+        "currentLocale": "Aktuelle Oberflaechensprache: {locale}",
+        "language": {
+            "label": "Sprache",
+            "description": "Waehle, wie die Oberflaechensprache bestimmt wird.",
+            "options": {
+                "system": "System",
+                "en": "English",
+                "de": "Deutsch"
+            }
+        }
+    }
+}

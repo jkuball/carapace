@@ -1,0 +1,31 @@
+{
+    "app": {
+        "name": "carapace"
+    },
+    "navigation": {
+        "home": "Home",
+        "jobs": "Jobs",
+        "preferences": "Preferences",
+        "disconnect": "Disconnect",
+        "github": "GitHub repository"
+    },
+    "home": {
+        "empty": {
+            "description": "Select a session or start a new one"
+        }
+    },
+    "preferences": {
+        "title": "Preferences",
+        "description": "Frontend settings for language and other app-level behavior.",
+        "currentLocale": "Current interface language: {locale}",
+        "language": {
+            "label": "Language",
+            "description": "Choose how the interface language is resolved.",
+            "options": {
+                "system": "System",
+                "en": "English",
+                "de": "Deutsch"
+            }
+        }
+    }
+}
