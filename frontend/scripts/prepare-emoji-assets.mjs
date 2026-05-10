@@ -47,6 +47,12 @@ const generatedFilePath = path.join(
   "lib",
   "emoji.generated.ts",
 );
+const EXPECTED_SVG_FILE_COUNT = 4010;
+
+if (canReusePreparedAssets()) {
+  process.stdout.write("Prepared bundled Twemoji assets already up to date.\n");
+  process.exit(0);
+}
 
 const sourceDir = await resolveSourceDir();
 
@@ -74,6 +80,18 @@ writeGeneratedModule({
 process.stdout.write(
   `Prepared bundled Twemoji assets with ${copied.size} SVG files.\n`,
 );
+
+function canReusePreparedAssets() {
+  if (!existsSync(generatedFilePath) || !existsSync(publicEmojiDir)) {
+    return false;
+  }
+
+  const svgFileCount = readdirSync(publicEmojiDir).filter((entryName) =>
+    entryName.endsWith(".svg"),
+  ).length;
+
+  return svgFileCount === EXPECTED_SVG_FILE_COUNT;
+}
 
 async function resolveSourceDir() {
   for (const candidateDir of CANDIDATE_SOURCE_DIRS) {
