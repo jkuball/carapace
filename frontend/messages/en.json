@@ -1,0 +1,568 @@
+{
+    "app": {
+        "name": "carapace",
+        "description": "Security-first personal AI agent"
+    },
+    "navigation": {
+        "home": "Home",
+        "settings": "Settings",
+        "jobs": "Jobs",
+        "preferences": "Preferences",
+        "disconnect": "Disconnect",
+        "github": "GitHub repository"
+    },
+    "home": {
+        "empty": {
+            "description": "Select a session or start a new one"
+        }
+    },
+    "connect": {
+        "description": "Connect to your server",
+        "serverLabel": "Server URL",
+        "tokenLabel": "Bearer Token",
+        "tokenPlaceholder": "Paste your token",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "errors": {
+            "invalidToken": "Invalid token",
+            "serverError": "Server error: {status}",
+            "connectionFailed": "Connection failed"
+        }
+    },
+    "preferences": {
+        "title": "Preferences",
+        "description": "Frontend settings for language and other app-level behavior.",
+        "currentLocale": "Current interface language: {locale}",
+        "language": {
+            "label": "Language",
+            "description": "Choose how the interface language is resolved.",
+            "options": {
+                "system": "System",
+                "en": "English",
+                "de": "Deutsch"
+            }
+        }
+    },
+    "newSessionButton": {
+        "label": "New session",
+        "chooseMode": "Choose session mode",
+        "attended": {
+            "title": "Attended",
+            "description": "Chat normally and approve escalations in place."
+        },
+        "unattended": {
+            "title": "Unattended",
+            "description": "Runs on its own with no user approval path."
+        }
+    },
+    "chatInput": {
+        "disabled": "Input disabled",
+        "sendMessageTooltip": "Send message (Enter)",
+        "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
+        "stopGenerationTooltip": "Stop generation",
+        "queued": "Queued: {message}",
+        "placeholder": "Message carapace…",
+        "usageBreakdown": {
+            "systemLine": "system: {percent}%",
+            "userLine": "user: {percent}%",
+            "assistantLine": "assistant: {percent}%",
+            "toolCallsLine": "tool calls: {percent}%",
+            "toolOutputsLine": "tool outputs: {percent}%",
+            "otherLine": "other: {percent}%"
+        },
+        "context": {
+            "limit": "Context limit: {tokens} tokens.",
+            "assumedLimit": "Assuming a {tokens} context limit.",
+            "lastRequestTokens": "{tokens} API tokens (last agent request)",
+            "clickForUsage": "Click to send /usage to the agent for more details.",
+            "tokensLabel": "{tokens} tokens"
+        },
+        "budget": {
+            "budgetLabel": "{label} budget",
+            "current": "Current: {value}",
+            "max": "Max: {value}",
+            "remaining": "Remaining: {value}",
+            "exhausted": "Budget exhausted."
+        }
+    },
+    "approval": {
+        "general": {
+            "title": "Approval Required",
+            "toolLabel": "Tool:",
+            "reasonLabel": "Reason:",
+            "riskLabel": "Risk:",
+            "arguments": "Arguments",
+            "allow": "Approve",
+            "denyPlaceholder": "Why should this be blocked?",
+            "risk": {
+                "high": "high",
+                "medium": "medium",
+                "low": "low"
+            }
+        },
+        "denialNote": {
+            "deny": "Deny",
+            "optionalNote": "Optional note for the agent",
+            "addNote": "Add note",
+            "hideNote": "Hide note"
+        },
+        "credential": {
+            "title": "Credential Request",
+            "skillLabel": "Skill:",
+            "allow": "Allow",
+            "denyPlaceholder": "Why should this credential access be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        },
+        "domainAccess": {
+            "title": "Domain Access Request",
+            "domainLabel": "Domain:",
+            "triggeredByLabel": "Triggered by:",
+            "allow": "Allow {domain}",
+            "denyPlaceholder": "Why should this be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        },
+        "gitPush": {
+            "title": "Git Push Request",
+            "refLabel": "Ref:",
+            "reasonLabel": "Reason:",
+            "changedFiles": "{count, plural, one {# changed file} other {# changed files}}",
+            "allow": "Allow Push",
+            "denyPlaceholder": "Why should this push be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        }
+    },
+    "versionBadge": {
+        "frontend": "Frontend: {version}",
+        "backend": "Backend: {version}",
+        "unknown": "unknown",
+        "mismatchTooltip": "Version mismatch between frontend and backend containers.",
+        "mismatchSr": "Frontend and backend versions do not match."
+    },
+    "toolCallBadge": {
+        "approvalBadge": {
+            "review": "review",
+            "skill": "skill",
+            "bypass": "bypass",
+            "denied": "denied"
+        },
+        "fallbacks": {
+            "missingPath": "(missing path)",
+            "missingCommand": "(missing command)",
+            "missingSkillName": "(missing skill_name)",
+            "credential": "credential"
+        },
+        "labels": {
+            "read": "read",
+            "wrote": "wrote",
+            "replaced": "replaced",
+            "activatedSkill": "activated skill",
+            "executed": "executed",
+            "listedCredentials": "listed credentials",
+            "credentialDenied": "credential denied",
+            "accessedCredential": "accessed credential",
+            "domainDenied": "domain denied",
+            "accessedDomain": "accessed domain",
+            "gitPush": "git push",
+            "readAction": "read",
+            "write": "write",
+            "activateSkill": "activate skill",
+            "execute": "execute",
+            "listCredentials": "list credentials",
+            "accessCredential": "access credential",
+            "accessDomain": "access domain",
+            "replace": "replace"
+        },
+        "summaries": {
+            "readFirstLines": "first {count} lines of {path}",
+            "readLinesRange": "lines {start} to {end} of {path}",
+            "writeLines": "{count} lines to {path}",
+            "lineCount": "{count} lines",
+            "lineCountWithReplacement": "{source} lines with {replacement} lines",
+            "replaceInPath": "{lineSummary} in {path}{suffix}",
+            "allMatchesSuffix": " (all matches)"
+        },
+        "details": {
+            "activateSkillPromptPrefix": "Agent wants to activate the",
+            "activateSkillPromptSuffix": "skill.",
+            "sentinelLabel": "Sentinel:",
+            "sentinelReviewing": "Reviewing this tool call.",
+            "userLabel": "User:",
+            "deniedByUser": "Denied by user.",
+            "contexts": "Contexts:",
+            "domains": "Domains:",
+            "credentials": "Credentials",
+            "name": "Name",
+            "path": "Path",
+            "description": "Description",
+            "activation": "Activation",
+            "skillInstructions": "Skill Instructions",
+            "source": "Source",
+            "replacement": "Replacement",
+            "diff": "Diff",
+            "arguments": "Arguments",
+            "result": "Result"
+        }
+    },
+    "commandResult": {
+        "help": {
+            "command": "Command",
+            "description": "Description"
+        },
+        "rules": {
+            "id": "ID",
+            "trigger": "Trigger",
+            "mode": "Mode",
+            "status": {
+                "label": "Status",
+                "disabled": "disabled",
+                "alwaysOn": "always-on",
+                "activated": "activated"
+            }
+        },
+        "models": {
+            "type": "Type",
+            "model": "Model",
+            "default": "Default",
+            "available": "Available:",
+            "contextWindow": "({tokens} ctx)",
+            "currentLabel": "Current model:",
+            "defaultLabel": "Default: {model}"
+        },
+        "usage": {
+            "none": "No token usage recorded yet.",
+            "total": "Total: {total} tokens ({input} in + {output} out)",
+            "toolCalls": "Tool Calls: {count}",
+            "byModel": "By Model",
+            "byCategory": "By Category",
+            "context": "Context",
+            "table": {
+                "source": "Source",
+                "input": "Input",
+                "output": "Output",
+                "cacheRead": "Cache Read",
+                "cacheWrite": "Cache Write",
+                "requests": "Requests",
+                "cost": "Cost"
+            },
+            "contextTable": {
+                "source": "Source",
+                "tokens": "Tokens",
+                "system": "System %",
+                "user": "User %",
+                "assistant": "Assistant %",
+                "toolCalls": "Tool Calls %",
+                "toolOutputs": "Tool Outputs %",
+                "other": "Other %"
+            }
+        },
+        "budget": {
+            "none": "No session budgets configured.",
+            "title": "Session Budgets",
+            "table": {
+                "metric": "Metric",
+                "current": "Current",
+                "limit": "Limit",
+                "remaining": "Remaining",
+                "used": "Used",
+                "blocked": "blocked"
+            }
+        }
+    },
+    "chatView": {
+        "inputDisabled": {
+            "archived": "Unarchive first",
+            "unattended": "This session is unattended. Fork it first to continue here."
+        },
+        "waiting": {
+            "processingPrompt": "Processing prompt...",
+            "thinking": "Thinking...",
+            "generating": "Generating...",
+            "working": "Working..."
+        },
+        "unknown": "Unknown",
+        "status": {
+            "connecting": "Connecting…",
+            "disconnected": "Disconnected"
+        },
+        "empty": {
+            "start": "Send a message to get started",
+            "connectingSession": "Connecting to session…"
+        },
+        "errors": {
+            "unexpected": "Unexpected error",
+            "resetTarget": "Could not resolve reset target.",
+            "forkTarget": "Could not resolve fork target."
+        },
+        "confirm": {
+            "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
+            "scaleDownSandbox": "Scale down the sandbox for this session? Storage will be kept.",
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo.",
+            "unarchiveSession": "Unarchive this session? It will return to the active session list.",
+            "makePrivate": "Mark this session private? Existing knowledge commits will remain in git history."
+        },
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "includeInRepo": "Include in repo",
+            "keepPrivate": "Keep private",
+            "delete": "Delete session"
+        },
+        "badges": {
+            "archived": "Archived",
+            "private": "Private",
+            "pinned": "Pinned",
+            "favorite": "Favorite",
+            "unattended": "Unattended",
+            "interactive": "Interactive"
+        },
+        "inspector": {
+            "actions": "Actions",
+            "session": "Session"
+        },
+        "session": {
+            "title": "Title",
+            "id": "ID",
+            "copyId": "Copy session id",
+            "idCopied": "Copied session id",
+            "idCopiedShort": "Copied",
+            "source": "Source",
+            "created": "Created",
+            "lastActive": "Last active",
+            "messages": "Messages",
+            "totalCost": "Total cost",
+            "job": "Job",
+            "reference": "Reference"
+        },
+        "source": {
+            "unknown": "Unknown",
+            "job": "Job",
+            "web": "Web",
+            "cli": "CLI"
+        },
+        "jobRun": {
+            "title": "Latest Job Run",
+            "job": "Job",
+            "ranAt": "Ran at",
+            "schedule": "Schedule",
+            "data": "Data",
+            "trigger": {
+                "label": "Trigger",
+                "api": "API",
+                "cron": "Cron",
+                "manual": "Manual"
+            }
+        },
+        "sandbox": {
+            "title": "Sandbox",
+            "refreshing": "Refreshing…",
+            "checking": "Checking sandbox…",
+            "status": {
+                "missing": "Not Started",
+                "running": "Running",
+                "scaled_down": "Spun Down",
+                "pending": "Starting Up",
+                "stopped": "Stopped",
+                "error": "Error"
+            },
+            "actions": {
+                "start": "Start sandbox",
+                "starting": "Starting sandbox",
+                "scaleDown": "Scale down sandbox",
+                "scalingDown": "Scaling down sandbox",
+                "reset": "Reset sandbox"
+            },
+            "storage": {
+                "used": "{size} used",
+                "none": "no sandbox storage",
+                "allocated": "{size} allocated"
+            }
+        },
+        "knowledge": {
+            "title": "Knowledge",
+            "commit": "Commit to repo",
+            "committed": "Committed",
+            "committedToRepo": "Committed to knowledge",
+            "notCommittedYet": "Not committed yet",
+            "savedAt": "Saved {timestamp}",
+            "commitDisabledNoHistory": "This session has no conversation history yet.",
+            "noNewChanges": "{status}. No new changes to commit.",
+            "privateExistingCommits": "Session is private. Existing knowledge commits remain unchanged.",
+            "privateExcluded": "Session is private and will not be committed to knowledge.",
+            "includedInRepo": "Session is included in knowledge commits to your repo.",
+            "badges": {
+                "excluded": "Excluded",
+                "missing": "Missing",
+                "outdated": "Outdated",
+                "upToDate": "Up to Date"
+            }
+        },
+        "mobile": {
+            "details": "Details",
+            "done": "Done"
+        }
+    },
+    "message": {
+        "copy": "Copy message",
+        "copied": "Copied",
+        "codeBlock": {
+            "copy": "Copy code",
+            "copied": "Copied"
+        },
+        "thinking": {
+            "streaming": "thinking",
+            "complete": "thought"
+        },
+        "thinkingMeta": {
+            "duration": "for {duration}",
+            "reasoning": "{count} reasoning"
+        },
+        "actions": {
+            "fork": "Fork session from here",
+            "retry": "Retry turn",
+            "reset": "Reset conversation to after this turn"
+        },
+        "finalStatus": {
+            "status": {
+                "success": "success",
+                "warning": "warning"
+            },
+            "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
+        }
+    },
+    "jobs": {
+        "settingsSections": "Settings sections",
+        "savedJobs": "Saved Jobs",
+        "loading": "Loading jobs...",
+        "paused": "Paused",
+        "unattendedTooltip": "Unattended sessions cannot escalate tool calls",
+        "confirmDelete": "Delete job {name}?",
+        "summary": {
+            "onDemandOnly": "On-demand only",
+            "cronTriggerCount": "{count, plural, one {# cron trigger} other {# cron triggers}}"
+        },
+        "validation": {
+            "idRequired": "Job ID is required.",
+            "nameRequired": "Job name is required.",
+            "promptRequired": "Prompt is required.",
+            "persistentSessionMustBeAttended": "Persistent-session jobs must be attended.",
+            "cronEmpty": "Cron expressions must not be empty.",
+            "cronInvalid": "Cron expression is invalid: {expression}."
+        },
+        "cron": {
+            "invalidExpression": "Invalid cron expression."
+        },
+        "triggerKind": {
+            "scheduled": "Scheduled",
+            "manual": "Manual"
+        },
+        "errors": {
+            "load": "Failed to load jobs.",
+            "refresh": "Failed to refresh jobs.",
+            "save": "Failed to save job.",
+            "delete": "Failed to delete job.",
+            "run": "Failed to run job.",
+            "saveBeforeRun": "Save the job before running it.",
+            "saveChangesBeforeRun": "Save job changes before running it."
+        },
+        "notices": {
+            "refreshed": "Jobs refreshed.",
+            "created": "Job created.",
+            "saved": "Job saved.",
+            "deleted": "Job deleted.",
+            "runStartedNewSession": "Run started in new session {sessionId}.",
+            "runStartedSession": "Run started in session {sessionId}."
+        },
+        "actions": {
+            "refresh": "Refresh jobs",
+            "new": "New job",
+            "clear": "Clear",
+            "delete": "Delete",
+            "save": "Save",
+            "addTrigger": "Add trigger",
+            "remove": "Remove",
+            "runNow": "Run now"
+        },
+        "empty": {
+            "noJobs": "No jobs yet. Create one to store prompts and optional cron schedules in jobs.yaml."
+        },
+        "editor": {
+            "newJob": "New job",
+            "editing": "Editing {name}",
+            "jobFallback": "job"
+        },
+        "fields": {
+            "name": "Name",
+            "jobId": "Job ID",
+            "enabled": "Enabled",
+            "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
+            "unattended": "Run unattended",
+            "unattendedHelp": "Tool calls will not be escalated to you.",
+            "persistentSession": "Persistent Session",
+            "persistentSessionDisabled": "Can't be used in unattended mode",
+            "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
+            "prompt": "Prompt",
+            "expression": "Expression",
+            "timeZone": "Time Zone",
+            "inputOptional": "Input (Optional)"
+        },
+        "placeholders": {
+            "name": "Nightly inbox review",
+            "jobId": "nightly-inbox-review",
+            "prompt": "Summarize new tasks, triage urgent items, then propose next actions."
+        },
+        "sections": {
+            "cronTriggers": "Cron Triggers",
+            "cronTriggersDescription": "Leave empty for on-demand jobs.",
+            "noTriggers": "No cron triggers configured.",
+            "runJob": "Run Job",
+            "previousInvocations": "Previous Invocations",
+            "previousInvocationsDescription": "Select an invocation to open its session.",
+            "saveToViewHistory": "Save this job to view invocation history.",
+            "noInvocations": "No invocations yet. Refresh sessions to load newly completed runs.",
+            "ranAt": "Ran at {timestamp}"
+        }
+    },
+    "sidebar": {
+        "time": {
+            "justNow": "just now"
+        },
+        "messageCount": "{count, plural, one {# message} other {# messages}}",
+        "unattendedSession": "Unattended session",
+        "privateSession": "Private session",
+        "knowledgeCommitted": "All changes committed to knowledge",
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "delete": "Delete session",
+            "deleteEmpty": "Delete empty session",
+            "shiftSkip": "Shift+click to skip confirmation"
+        },
+        "confirm": {
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
+        },
+        "sections": {
+            "archived": "Archived"
+        },
+        "empty": "No sessions yet",
+        "loadingMore": "Loading more sessions"
+    }
+}

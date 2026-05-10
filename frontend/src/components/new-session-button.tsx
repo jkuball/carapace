@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 interface NewSessionButtonProps {
@@ -17,6 +18,7 @@ export function NewSessionButton({
   fullWidth = false,
   className,
 }: NewSessionButtonProps) {
+  const t = useTranslations("newSessionButton");
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -65,12 +67,12 @@ export function NewSessionButton({
           )}
         >
           <Plus className="h-4 w-4" />
-          New session
+          {t("label")}
         </button>
         <button
           onClick={() => setOpen((current) => !current)}
           disabled={disabled}
-          aria-label="Choose session mode"
+          aria-label={t("chooseMode")}
           aria-expanded={open}
           aria-haspopup="menu"
           className={cn(
@@ -92,18 +94,18 @@ export function NewSessionButton({
             onClick={() => handleCreate(false)}
             className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
           >
-            <span className="text-sm font-medium text-foreground">Attended</span>
+            <span className="text-sm font-medium text-foreground">{t("attended.title")}</span>
             <span className="text-xs text-muted-foreground">
-              Chat normally and approve escalations in place.
+              {t("attended.description")}
             </span>
           </button>
           <button
             onClick={() => handleCreate(true)}
             className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
           >
-            <span className="text-sm font-medium text-foreground">Unattended</span>
+            <span className="text-sm font-medium text-foreground">{t("unattended.title")}</span>
             <span className="text-xs text-muted-foreground">
-              Runs on its own with no user approval path.
+              {t("unattended.description")}
             </span>
           </button>
         </div>

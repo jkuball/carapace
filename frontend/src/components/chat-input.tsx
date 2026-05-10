@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,13 +75,14 @@ export function ChatInput({
   onInterrupt,
   connected,
   disabled = false,
-  disabledPlaceholder = "Input disabled",
+  disabledPlaceholder,
   waiting,
   queuedMessage,
   commands = [],
   availableModelEntries = [],
   usage,
 }: ChatInputProps) {
+  const t = useTranslations("chatInput");
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -239,16 +241,17 @@ export function ChatInput({
   }
 
   const hasText = value.trim().length > 0;
+  const disabledPlaceholderText = disabledPlaceholder ?? t("disabled");
 
   let tooltip: string;
   if (disabled) {
-    tooltip = disabledPlaceholder;
+    tooltip = disabledPlaceholderText;
   } else if (!waiting) {
-    tooltip = "Send message (Enter)";
+    tooltip = t("sendMessageTooltip");
   } else if (hasText) {
-    tooltip = "Enter to queue · ⌥Enter to interrupt · Click to stop";
+    tooltip = t("queueInterruptStopTooltip");
   } else {
-    tooltip = "Stop generation";
+    tooltip = t("stopGenerationTooltip");
   }
 
   return (
@@ -256,7 +259,7 @@ export function ChatInput({
       {queuedMessage && (
         <div className="mx-auto max-w-3xl mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />
-          <span className="truncate">Queued: {queuedMessage}</span>
+          <span className="truncate">{t("queued", { message: queuedMessage })}</span>
         </div>
       )}
       <div className="relative mx-auto max-w-3xl">
@@ -346,7 +349,7 @@ export function ChatInput({
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={disabled ? disabledPlaceholder : "Message carapace…"}
+            placeholder={disabled ? disabledPlaceholderText : t("placeholder")}
             rows={1}
             disabled={disabled}
             className={cn(
@@ -397,23 +400,26 @@ function turnGaugeTokens(u: TurnUsage): number {
 
 const GAUGE_BREAKDOWN_ORDER: {
   key: keyof TurnUsageBreakdownPct;
-  label: string;
+  labelKey: "system" | "user" | "assistant" | "toolCalls" | "toolOutputs" | "other";
   className: string;
 }[] = [
-  { key: "system", label: "system", className: "bg-sky-500/80" },
-  { key: "user", label: "user", className: "bg-emerald-500/80" },
-  { key: "assistant", label: "assistant", className: "bg-violet-500/80" },
-  { key: "tool_calls", label: "tool calls", className: "bg-amber-500/80" },
-  { key: "tool_returns", label: "tool outputs", className: "bg-orange-500/80" },
-  { key: "other", label: "other", className: "bg-muted-foreground/60" },
+  { key: "system", labelKey: "system", className: "bg-sky-500/80" },
+  { key: "user", labelKey: "user", className: "bg-emerald-500/80" },
+  { key: "assistant", labelKey: "assistant", className: "bg-violet-500/80" },
+  { key: "tool_calls", labelKey: "toolCalls", className: "bg-amber-500/80" },
+  { key: "tool_returns", labelKey: "toolOutputs", className: "bg-orange-500/80" },
+  { key: "other", labelKey: "other", className: "bg-muted-foreground/60" },
 ];
 
-function breakdownTooltipLines(bp: TurnUsageBreakdownPct): string[] {
+function breakdownTooltipLines(
+  bp: TurnUsageBreakdownPct,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string[] {
   const lines: string[] = [];
-  for (const { key, label } of GAUGE_BREAKDOWN_ORDER) {
+  for (const { key, labelKey } of GAUGE_BREAKDOWN_ORDER) {
     const v = bp[key];
     if (key === "other" && v <= 0) continue;
-    lines.push(`${label}: ${v.toFixed(1)}%`);
+    lines.push(t(`usageBreakdown.${labelKey}Line`, { percent: v.toFixed(1) }));
   }
   return lines;
 }
@@ -558,6 +564,7 @@ function ContextGauge({
   availableModelEntries: AvailableModelInfo[];
   onClickUsage?: () => void;
 }) {
+  const t = useTranslations("chatInput");
   const ctx = turnGaugeTokens(usage);
   const cap = contextTokenCap(usage, availableModelEntries);
   const fillPct = Math.min((ctx / cap) * 100, 100);
@@ -568,16 +575,16 @@ function ContextGauge({
   const matched = findModelEntryForGauge(usage.model, availableModelEntries);
   const limitFromConfig = matched?.max_input_tokens != null;
   const limitNote = limitFromConfig
-    ? `Context limit: ${formatTokens(cap)} tokens.`
-    : `Assuming a ${formatTokens(cap)} context limit.`;
+    ? t("context.limit", { tokens: formatTokens(cap) })
+    : t("context.assumedLimit", { tokens: formatTokens(cap) });
 
   const tooltipLines = [
-    `${formatTokens(ctx)} API tokens (last agent request)`,
+    t("context.lastRequestTokens", { tokens: formatTokens(ctx) }),
     limitNote,
-    "Click to send /usage to the agent for more details.",
+    t("context.clickForUsage"),
   ];
   if (bp) {
-    tooltipLines.push("", ...breakdownTooltipLines(bp));
+    tooltipLines.push("", ...breakdownTooltipLines(bp, t));
   }
 
   const tooltip = tooltipLines.join("\n");
@@ -641,7 +648,7 @@ function ContextGauge({
           !onClickUsage && "cursor-default",
         )}
       >
-        {formatTokens(ctx)} tokens
+        {t("context.tokensLabel", { tokens: formatTokens(ctx) })}
       </button>
     </div>
   );
@@ -654,6 +661,7 @@ function BudgetGaugeRow({
   gauge: BudgetGauge;
   onClickUsage?: () => void;
 }) {
+  const t = useTranslations("chatInput");
   const fillClassName =
     gauge.key === "input"
       ? "rounded-l-full bg-emerald-500/75"
@@ -662,18 +670,18 @@ function BudgetGaugeRow({
         : "rounded-l-full bg-amber-500/80";
 
   const tooltipLines = [
-    `${gauge.label} budget`,
-    `Current: ${gauge.current_value}`,
-    `Max: ${gauge.limit_value}`,
+    t("budget.budgetLabel", { label: gauge.label }),
+    t("budget.current", { value: gauge.current_value }),
+    t("budget.max", { value: gauge.limit_value }),
   ];
   if (gauge.remaining_value) {
-    tooltipLines.push(`Remaining: ${gauge.remaining_value}`);
+    tooltipLines.push(t("budget.remaining", { value: gauge.remaining_value }));
   }
   if (gauge.unavailable_reason) {
     tooltipLines.push(gauge.unavailable_reason);
   }
   if (gauge.reached) {
-    tooltipLines.push("Budget exhausted.");
+    tooltipLines.push(t("budget.exhausted"));
   }
 
   return (

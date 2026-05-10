@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -17,16 +18,19 @@ interface DenialNoteActionsProps {
 
 export function DenialNoteActions({
   allowLabel,
-  denyLabel = "Deny",
-  noteLabel = "Optional note for the agent",
+  denyLabel,
+  noteLabel,
   notePlaceholder,
   onAllow,
   onDeny,
   allowButtonClassName,
   denyButtonClassName,
 }: DenialNoteActionsProps) {
+  const t = useTranslations("approval.denialNote");
   const [message, setMessage] = useState("");
   const [showNote, setShowNote] = useState(false);
+  const resolvedDenyLabel = denyLabel ?? t("deny");
+  const resolvedNoteLabel = noteLabel ?? t("optionalNote");
 
   function toggleNote(): void {
     if (showNote) {
@@ -58,20 +62,20 @@ export function DenialNoteActions({
             denyButtonClassName,
           )}
         >
-          {denyLabel}
+          {resolvedDenyLabel}
         </button>
         <button
           type="button"
           onClick={toggleNote}
           className="text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
-          {showNote ? "Hide note" : "Add note"}
+          {showNote ? t("hideNote") : t("addNote")}
         </button>
       </div>
 
       {showNote && (
         <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">{noteLabel}</span>
+          <span className="text-xs text-muted-foreground">{resolvedNoteLabel}</span>
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}

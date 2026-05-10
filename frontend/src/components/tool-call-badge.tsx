@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
   ChevronRight,
@@ -72,6 +73,11 @@ const OMIT_ARG_LABEL: Record<string, ReadonlySet<string>> = {
 
 const MAX_SUMMARY_VALUE_CHARS = 4096;
 
+type TranslateFn = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
+
 function stringArg(args: Record<string, unknown>, key: string): string {
   const v = args[key];
   return typeof v === "string" ? v : "";
@@ -99,16 +105,19 @@ function lineCount(text: string): number {
   return text.split("\n").length;
 }
 
-function formatReadSummary(args: Record<string, unknown>): string {
-  const path = stringArg(args, "path") || "(missing path)";
+function formatReadSummary(
+  args: Record<string, unknown>,
+  t: TranslateFn,
+): string {
+  const path = stringArg(args, "path") || t("fallbacks.missingPath");
   const offset = Math.max(0, intArg(args, "offset") ?? 0);
   const limit = Math.max(1, intArg(args, "limit") ?? 100);
   if (offset === 0) {
-    return `first ${limit} lines of ${path}`;
+    return t("summaries.readFirstLines", { count: limit, path });
   }
   const start = offset + 1;
   const end = offset + limit;
-  return `lines ${start} to ${end} of ${path}`;
+  return t("summaries.readLinesRange", { start, end, path });
 }
 
 function countOutputLines(body: string): number {
@@ -121,41 +130,56 @@ function formatReadSummaryFromSplit(
   args: Record<string, unknown>,
   path: string,
   split: ReturnType<typeof splitReadToolResult> | null,
+  t: TranslateFn,
 ): string {
-  const fallback = formatReadSummary(args);
+  const fallback = formatReadSummary(args, t);
   if (!split?.hasSplit) return fallback;
   const offset = Math.max(0, intArg(args, "offset") ?? 0);
   const limit = Math.max(1, intArg(args, "limit") ?? 100);
   const bodyLines = countOutputLines(split.body);
 
   if (offset === 0 && bodyLines < limit) return path;
-  if (offset === 0) return `first ${bodyLines || limit} lines of ${path}`;
+  if (offset === 0) {
+    return t("summaries.readFirstLines", {
+      count: bodyLines || limit,
+      path,
+    });
+  }
 
   if (bodyLines > 0) {
     const start = offset + 1;
     const end = offset + bodyLines;
-    return `lines ${start} to ${end} of ${path}`;
+    return t("summaries.readLinesRange", { start, end, path });
   }
   return fallback;
 }
 
-function formatWriteSummary(args: Record<string, unknown>): string {
-  const path = stringArg(args, "path") || "(missing path)";
+function formatWriteSummary(
+  args: Record<string, unknown>,
+  t: TranslateFn,
+): string {
+  const path = stringArg(args, "path") || t("fallbacks.missingPath");
   const contentLines = lineCount(stringArg(args, "content"));
-  return `${contentLines} lines to ${path}`;
+  return t("summaries.writeLines", { count: contentLines, path });
 }
 
-function formatStrReplaceSummary(args: Record<string, unknown>): string {
-  const path = stringArg(args, "path") || "(missing path)";
+function formatStrReplaceSummary(
+  args: Record<string, unknown>,
+  t: TranslateFn,
+): string {
+  const path = stringArg(args, "path") || t("fallbacks.missingPath");
   const srcLines = lineCount(stringArg(args, "old_string"));
   const dstLines = lineCount(stringArg(args, "new_string"));
   const replaceAll = boolArg(args, "replace_all");
   const lineSummary =
     srcLines === dstLines
-      ? `${srcLines} lines`
-      : `${srcLines} lines with ${dstLines} lines`;
-  const suffix = replaceAll ? " (all matches)" : "";
-  return `${lineSummary} in ${path}${suffix}`;
+      ? t("summaries.lineCount", { count: srcLines })
+      : t("summaries.lineCountWithReplacement", {
+          source: srcLines,
+          replacement: dstLines,
+        });
+  const suffix = replaceAll ? t("summaries.allMatchesSuffix") : "";
+  return t("summaries.replaceInPath", { lineSummary, path, suffix });
 }
 
 function formatCredentialAccessSummary(args: Record<string, unknown>): string {
@@ -172,10 +196,11 @@ function formatProxyDomainSummary(args: Record<string, unknown>): string {
 function formatArgsSummary(
   tool: string,
   args: Record<string, unknown>,
+  t: TranslateFn,
 ): string {
   if (tool === "use_skill") return stringArg(args, "skill_name");
-  if (tool === "write") return formatWriteSummary(args);
-  if (tool === "str_replace") return formatStrReplaceSummary(args);
+  if (tool === "write") return formatWriteSummary(args, t);
+  if (tool === "str_replace") return formatStrReplaceSummary(args, t);
   if (tool === "credential_access") return formatCredentialAccessSummary(args);
   if (tool === "proxy_domain") return formatProxyDomainSummary(args);
   if (tool === "git_push") return stringArg(args, "ref");
@@ -202,7 +227,7 @@ function formatArgsSummary(
 function getExecCommand(args: Record<string, unknown>): string {
   const raw = args.command;
   if (typeof raw === "string" && raw.trim().length > 0) return raw;
-  return "(missing command)";
+  return "";
 }
 
 function buildShellTranscript(command: string, output?: string): string {
@@ -214,10 +239,10 @@ function buildShellTranscript(command: string, output?: string): string {
   return `${fence}shell\n${payload}\n${fence}`;
 }
 
-function getUseSkillName(args: Record<string, unknown>): string {
+function getUseSkillName(args: Record<string, unknown>, t: TranslateFn): string {
   const raw = args.skill_name;
   if (typeof raw === "string" && raw.trim().length > 0) return raw;
-  return "(missing skill_name)";
+  return t("fallbacks.missingSkillName");
 }
 
 function formatUseSkillResult(result: string): string {
@@ -258,6 +283,76 @@ function buildUnifiedDiff(oldText: string, newText: string): string {
   return lines.join("\n");
 }
 
+interface ToolLabelOptions {
+  tool: string;
+  isSuccessful: boolean;
+  isReadTool: boolean;
+  isWriteTool: boolean;
+  isStrReplaceTool: boolean;
+  isUseSkillTool: boolean;
+  isExecTool: boolean;
+  isCredentialAccessTool: boolean;
+  isCredentialList: boolean;
+  isProxyDomainTool: boolean;
+  isGitPushTool: boolean;
+  verdict?: ApprovalVerdict;
+}
+
+function resolveToolLabel(
+  options: ToolLabelOptions,
+  t: (key: string) => string,
+): string {
+  const {
+    tool,
+    isSuccessful,
+    isReadTool,
+    isWriteTool,
+    isStrReplaceTool,
+    isUseSkillTool,
+    isExecTool,
+    isCredentialAccessTool,
+    isCredentialList,
+    isProxyDomainTool,
+    isGitPushTool,
+    verdict,
+  } = options;
+
+  if (isSuccessful) {
+    if (isReadTool) return t("labels.read");
+    if (isWriteTool) return t("labels.wrote");
+    if (isStrReplaceTool) return t("labels.replaced");
+    if (isUseSkillTool) return t("labels.activatedSkill");
+    if (isExecTool) return t("labels.executed");
+    if (isCredentialAccessTool) {
+      if (isCredentialList) return t("labels.listedCredentials");
+      return verdict === "deny"
+        ? t("labels.credentialDenied")
+        : t("labels.accessedCredential");
+    }
+    if (isProxyDomainTool) {
+      return verdict === "deny"
+        ? t("labels.domainDenied")
+        : t("labels.accessedDomain");
+    }
+    if (isGitPushTool) return t("labels.gitPush");
+    return tool;
+  }
+
+  if (isReadTool) return t("labels.readAction");
+  if (isWriteTool) return t("labels.write");
+  if (isUseSkillTool) return t("labels.activateSkill");
+  if (isExecTool) return t("labels.execute");
+  if (isCredentialAccessTool) {
+    return isCredentialList
+      ? t("labels.listCredentials")
+      : t("labels.accessCredential");
+  }
+  if (isProxyDomainTool) return t("labels.accessDomain");
+  if (isGitPushTool) return t("labels.gitPush");
+  if (isStrReplaceTool) return t("labels.replace");
+  return tool;
+}
+
 function ApprovalBadge({
   source,
   verdict,
@@ -267,6 +362,8 @@ function ApprovalBadge({
   verdict?: ApprovalVerdict;
   tooltip?: string;
 }) {
+  const t = useTranslations("toolCallBadge.approvalBadge");
+
   if (source === "safe-list") {
     return (
       <span
@@ -286,7 +383,7 @@ function ApprovalBadge({
           title={tooltip || undefined}
         >
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
-          review
+          {t("review")}
         </span>
       );
     }
@@ -331,7 +428,7 @@ function ApprovalBadge({
     return (
       <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-teal-500/10 text-teal-600 dark:text-teal-400">
         <Puzzle className="h-2.5 w-2.5" />
-        skill
+        {t("skill")}
       </span>
     );
   }
@@ -340,7 +437,7 @@ function ApprovalBadge({
     return (
       <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-gray-500/10 text-gray-500 dark:text-gray-400">
         <Zap className="h-2.5 w-2.5" />
-        bypass
+        {t("bypass")}
       </span>
     );
   }
@@ -349,7 +446,7 @@ function ApprovalBadge({
     return (
       <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-600 dark:text-red-400">
         <ShieldAlert className="h-2.5 w-2.5" />
-        denied
+        {t("denied")}
       </span>
     );
   }
@@ -371,6 +468,7 @@ export function ToolCallBadge({
   loading,
   childCalls,
 }: ToolCallBadgeProps) {
+  const t = useTranslations("toolCallBadge");
   const [open, setOpen] = useState(false);
   const [skillInstructionsOpen, setSkillInstructionsOpen] = useState(false);
   void _detail;
@@ -410,9 +508,9 @@ export function ToolCallBadge({
   const execCommand = isExecTool ? getExecCommand(args) : "";
   const execTitle = isExecTool ? stringArg(args, "title") : "";
   const execTranscript = isExecTool
-    ? buildShellTranscript(execCommand, result)
+    ? buildShellTranscript(execCommand || t("fallbacks.missingCommand"), result)
     : "";
-  const useSkillName = isUseSkillTool ? getUseSkillName(args) : "";
+  const useSkillName = isUseSkillTool ? getUseSkillName(args, t) : "";
   const useSkillSplit =
     isUseSkillTool && result != null ? splitUseSkillResult(result) : null;
   const useSkillStatus = useSkillSplit?.status ?? "";
@@ -440,49 +538,34 @@ export function ToolCallBadge({
   const isCompleted =
     !loading && (result != null || exitCode != null || isAuxiliaryTool);
   const isSuccessful = isCompleted && !isError;
-  const toolLabel = isSuccessful
-    ? isWriteTool
-      ? "wrote"
-      : isStrReplaceTool
-        ? "replaced"
-        : isUseSkillTool
-          ? "activated skill"
-          : isExecTool
-            ? "executed"
-            : isCredentialAccessTool
-              ? isCredentialList
-                ? "listed credentials"
-                : verdict === "deny"
-                  ? "credential denied"
-                  : "accessed credential"
-              : isProxyDomainTool
-                ? verdict === "deny"
-                  ? "domain denied"
-                  : "accessed domain"
-                : isGitPushTool
-                  ? "git push"
-                  : tool
-    : isUseSkillTool
-      ? "activate skill"
-      : isExecTool
-        ? "execute"
-        : isCredentialAccessTool
-          ? isCredentialList
-            ? "list credentials"
-            : "access credential"
-          : isProxyDomainTool
-            ? "access domain"
-            : isGitPushTool
-              ? "git push"
-              : isStrReplaceTool
-                ? "replace"
-                : tool;
+  const toolLabel = resolveToolLabel(
+    {
+      tool,
+      isSuccessful,
+      isReadTool,
+      isWriteTool,
+      isStrReplaceTool,
+      isUseSkillTool,
+      isExecTool,
+      isCredentialAccessTool,
+      isCredentialList,
+      isProxyDomainTool,
+      isGitPushTool,
+      verdict,
+    },
+    t,
+  );
   const argsSummary =
     isExecTool && execTitle
       ? execTitle
       : isReadTool
-        ? formatReadSummaryFromSplit(args, readPath || "(missing path)", readSplit)
-        : formatArgsSummary(tool, args);
+        ? formatReadSummaryFromSplit(
+            args,
+            readPath || t("fallbacks.missingPath"),
+            readSplit,
+            t,
+          )
+        : formatArgsSummary(tool, args, t);
   const contextCount = contexts?.length ?? 0;
   const contextTooltip = contexts?.join("\n") ?? "";
   const writeLang = isWriteTool ? languageFromFilePath(writePath) : "text";
@@ -548,7 +631,7 @@ export function ToolCallBadge({
               : childCalls?.filter(c => c.tool === "credential_access").map(c => {
                   const name = c.args.name as string | undefined;
                   const vp = c.args.vault_path as string | undefined;
-                  return name || vp || "credential";
+                  return name || vp || t("fallbacks.credential");
                 }).join("\n") ?? "";
 
             // Count domains: from use_skill declared_domains + child proxy_domain events
@@ -600,11 +683,11 @@ export function ToolCallBadge({
         <div className="ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-xs">
           {isUseSkillTool && (
             <div className="text-muted-foreground">
-              Agent wants to activate the{" "}
+              {t("details.activateSkillPromptPrefix")}{" "}
               <span className="font-mono text-foreground/85">
                 {useSkillName}
               </span>{" "}
-              skill.
+              {t("details.activateSkillPromptSuffix")}
             </div>
           )}
 
@@ -612,9 +695,9 @@ export function ToolCallBadge({
             <div className="text-[11px] text-muted-foreground leading-relaxed">
                 <span className="font-medium text-foreground/70">
                   <Loader2 className="inline h-3 w-3 -translate-y-px mr-1 animate-spin" />
-                  Sentinel:
+                  {t("details.sentinelLabel")}
                 </span>{" "}
-                Reviewing this tool call.
+                {t("details.sentinelReviewing")}
             </div>
           )}
 
@@ -622,7 +705,7 @@ export function ToolCallBadge({
             <div className="text-[11px] text-muted-foreground leading-relaxed">
                 <span className="font-medium text-foreground/70">
                   <ShieldCheck className="inline h-3 w-3 -translate-y-px mr-1" />
-                  Sentinel:
+                  {t("details.sentinelLabel")}
                 </span>{" "}
               {sentinelExplanation}
             </div>
@@ -630,14 +713,14 @@ export function ToolCallBadge({
 
           {showUserDecision && (
             <div className="text-[11px] text-muted-foreground leading-relaxed">
-              <span className="font-medium text-foreground/70">{verdict === "deny" ? <UserX className="inline h-3 w-3 -translate-y-px mr-1" /> : <UserCheck className="inline h-3 w-3 -translate-y-px mr-1" />}User: </span>
-              {finalDecisionMessage || "Denied by user."}
+              <span className="font-medium text-foreground/70">{verdict === "deny" ? <UserX className="inline h-3 w-3 -translate-y-px mr-1" /> : <UserCheck className="inline h-3 w-3 -translate-y-px mr-1" />}{t("details.userLabel")} </span>
+              {finalDecisionMessage || t("details.deniedByUser")}
             </div>
           )}
 
           {contexts && contexts.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] font-medium text-muted-foreground">Contexts:</span>
+              <span className="text-[11px] font-medium text-muted-foreground">{t("details.contexts")}</span>
               {contexts.map((ctx) => (
                 <span
                   key={ctx}
@@ -670,7 +753,7 @@ export function ToolCallBadge({
                 ) as string[];
                 return domains.length > 0 ? (
                   <div className="text-[11px] text-muted-foreground">
-                    <span className="font-medium text-foreground/70"><Globe className="inline h-3 w-3 -translate-y-px mr-1" />Domains: </span>
+                    <span className="font-medium text-foreground/70"><Globe className="inline h-3 w-3 -translate-y-px mr-1" />{t("details.domains")} </span>
                     {domains.map((d, i) => (
                       <span key={d}>
                         {i > 0 && ", "}
@@ -687,13 +770,13 @@ export function ToolCallBadge({
                 ) as Array<{ vault_path: string; name?: string; description?: string }>;
                 return creds.length > 0 ? (
                   <div>
-                    <div className="text-[11px] font-medium text-foreground/70 mb-1"><KeyRound className="inline h-3 w-3 -translate-y-px mr-1" />Credentials</div>
+                    <div className="text-[11px] font-medium text-foreground/70 mb-1"><KeyRound className="inline h-3 w-3 -translate-y-px mr-1" />{t("details.credentials")}</div>
                     <table className="text-[11px] w-full border-collapse">
                       <thead>
                         <tr className="text-left text-muted-foreground/70">
-                          <th className="font-medium pr-3 pb-0.5">Name</th>
-                          <th className="font-medium pr-3 pb-0.5">Path</th>
-                          <th className="font-medium pb-0.5">Description</th>
+                          <th className="font-medium pr-3 pb-0.5">{t("details.name")}</th>
+                          <th className="font-medium pr-3 pb-0.5">{t("details.path")}</th>
+                          <th className="font-medium pb-0.5">{t("details.description")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -712,7 +795,7 @@ export function ToolCallBadge({
 
               {useSkillStatus && (
                 <div>
-                  <div className="text-[11px] font-medium text-foreground/70 mb-1"><Zap className="inline h-3 w-3 -translate-y-px mr-1" />Activation</div>
+                  <div className="text-[11px] font-medium text-foreground/70 mb-1"><Zap className="inline h-3 w-3 -translate-y-px mr-1" />{t("details.activation")}</div>
                   <div className="text-[11px] text-muted-foreground whitespace-pre-wrap">
                     {useSkillStatus}
                   </div>
@@ -732,7 +815,7 @@ export function ToolCallBadge({
                         skillInstructionsOpen && "rotate-90",
                       )}
                     />
-                    <span className="font-medium text-foreground/70">Skill Instructions</span>
+                    <span className="font-medium text-foreground/70">{t("details.skillInstructions")}</span>
                   </button>
                   {skillInstructionsOpen && (
                     <div className="border-t border-border/40">
@@ -812,7 +895,7 @@ export function ToolCallBadge({
                   )}
                 >
                   <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                    Source
+                    {t("details.source")}
                   </div>
                   <MarkdownContent content={strReplaceSourceMarkdown} />
                 </div>
@@ -824,7 +907,7 @@ export function ToolCallBadge({
                   )}
                 >
                   <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                    Replacement
+                    {t("details.replacement")}
                   </div>
                   <MarkdownContent content={strReplaceReplacementMarkdown} />
                 </div>
@@ -837,7 +920,7 @@ export function ToolCallBadge({
                 )}
               >
                 <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                  Diff
+                  {t("details.diff")}
                 </div>
                 <MarkdownContent content={strReplaceDiffMarkdown} />
               </div>
@@ -858,7 +941,7 @@ export function ToolCallBadge({
             <>
               <details open>
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors font-medium select-none">
-                  Arguments
+                  {t("details.arguments")}
                 </summary>
                 <pre className="mt-1.5 rounded-md bg-muted p-2.5 font-mono overflow-x-auto border border-border/40">
                   {JSON.stringify(args, null, 2)}
@@ -868,7 +951,7 @@ export function ToolCallBadge({
               {result != null && (
                 <details open>
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors font-medium select-none">
-                    Result
+                    {t("details.result")}
                   </summary>
                   <pre
                     className={cn(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Check, Copy } from "lucide-react";
 import {
   Children,
@@ -92,6 +93,7 @@ function wrapPlainFenceWithLineNumbers(children: ReactNode): ReactNode {
 }
 
 export function MarkdownPre({ children, ...props }: MarkdownPreProps) {
+  const t = useTranslations("message.codeBlock");
   const preRef = useRef<HTMLPreElement>(null);
   const preProps = { ...props };
   delete (preProps as { node?: unknown }).node;
@@ -128,8 +130,8 @@ export function MarkdownPre({ children, ...props }: MarkdownPreProps) {
         <button
           type="button"
           className="md-code-block-copy"
-          aria-label={copied ? "Copied" : "Copy code"}
-          title="Copy"
+          aria-label={copied ? t("copied") : t("copy")}
+          title={copied ? t("copied") : t("copy")}
           onClick={() => void copy()}
         >
           {copied ? (

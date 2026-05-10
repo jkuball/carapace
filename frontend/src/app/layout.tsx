@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "@/components/app-providers";
+import { defaultLocale, getLocaleMessages } from "@/lib/i18n";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -8,10 +9,13 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+const defaultMessages = getLocaleMessages(defaultLocale) as {
+  app?: { description?: string };
+};
 
 export const metadata: Metadata = {
   title: "carapace",
-  description: "Security-first personal AI agent",
+  description: defaultMessages.app?.description ?? "Security-first personal AI agent",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -30,11 +34,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={defaultLocale} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

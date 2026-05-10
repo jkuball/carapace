@@ -1,9 +1,13 @@
 "use client";
 
 import cronstrue from "cronstrue";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Settings2, Trash2 } from "lucide-react";
+import "cronstrue/locales/de";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { createJob, deleteJob, listJobs, runJob, updateJob } from "@/lib/api";
+import { useAppLocale } from "@/components/locale-provider";
+import { PreferencesView } from "@/components/preferences-view";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +17,11 @@ interface JobsViewProps {
   sessions: SessionInfo[];
   onSessionActivated: (session: SessionInfo) => void;
   requestedJobId?: string | null;
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
 }
+
+export type SettingsTab = "jobs" | "preferences";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -70,32 +78,6 @@ function createEmptyJob(): JobDefinition {
   };
 }
 
-function summarizeJob(job: JobDefinition): string {
-  if (job.triggers.length === 0) {
-    return "On-demand only";
-  }
-
-  if (job.triggers.length === 1) {
-    const [trigger] = job.triggers;
-    const expression = trigger.expression.trim();
-    if (!expression) {
-      return "1 cron trigger";
-    }
-
-    try {
-      return cronstrue.toString(expression, {
-        throwExceptionOnParseError: true,
-        use24HourTimeFormat: true,
-      });
-    } catch {
-      return "1 cron trigger";
-    }
-  }
-
-  const count = job.triggers.length;
-  return `${count} cron trigger${count === 1 ? "" : "s"}`;
-}
-
 function normalizeJobDraft(draft: JobDefinition): JobDefinition {
   return {
     ...draft,
@@ -109,25 +91,6 @@ function normalizeJobDraft(draft: JobDefinition): JobDefinition {
       timezone: trigger.timezone?.trim() || null,
     })),
   };
-}
-
-function validateJobDraft(draft: JobDefinition): string | null {
-  if (!draft.id.trim()) return "Job id is required.";
-  if (!draft.name.trim()) return "Job name is required.";
-  if (!draft.prompt.trim()) return "Prompt is required.";
-
-  const persistentSessionId = draft.persistent_session_id?.trim();
-  if (persistentSessionId && draft.unattended) {
-    return "Persistent-session jobs must be attended.";
-  }
-
-  const emptyTrigger = draft.triggers.find((trigger) => !trigger.expression.trim());
-  if (emptyTrigger) return "Cron expressions must not be empty.";
-
-  const invalidTrigger = draft.triggers.find((trigger) => describeCronExpression(trigger.expression)?.invalid);
-  if (invalidTrigger) return `Cron expression is invalid: ${invalidTrigger.expression}.`;
-
-  return null;
 }
 
 function formatSessionOption(session: SessionInfo): string {
@@ -145,51 +108,18 @@ function toKebabCaseId(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function describeCronExpression(expression: string): { text: string; invalid: boolean } | null {
-  const trimmed = expression.trim();
-  if (trimmed.length === 0) {
-    return null;
-  }
-
-  try {
-    return {
-      text: cronstrue.toString(trimmed, {
-        throwExceptionOnParseError: true,
-        use24HourTimeFormat: true,
-      }),
-      invalid: false,
-    };
-  } catch {
-    return {
-      text: "Invalid cron expression.",
-      invalid: true,
-    };
-  }
-}
-
-function formatInvocationTimestamp(value: string): string {
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) {
-    return value;
-  }
-
-  return new Date(parsed).toLocaleString();
-}
-
-function formatTriggerKindLabel(triggerKind: SessionLatestJobRun["trigger_kind"]): string {
-  switch (triggerKind) {
-    case "cron":
-      return "Scheduled";
-    case "api":
-      return "Manual";
-    case "manual":
-      return "Manual";
-    default:
-      return triggerKind;
-  }
-}
-
-export function JobsView({ server, token, sessions, onSessionActivated, requestedJobId }: JobsViewProps) {
+export function JobsView({
+  server,
+  token,
+  sessions,
+  onSessionActivated,
+  requestedJobId,
+  activeTab,
+  onTabChange,
+}: JobsViewProps) {
+  const t = useTranslations("jobs");
+  const tRoot = useTranslations();
+  const { locale } = useAppLocale();
   const [detectedTimeZone] = useState(() => browserTimeZone());
   const [jobs, setJobs] = useState<JobDefinition[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | "new">("new");
@@ -205,6 +135,113 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
   const selectedJobIdRef = useRef<string | "new">("new");
   const appliedRequestedJobIdRef = useRef<string | null>(null);
   const openTriggerExamplesRef = useRef<HTMLDivElement | null>(null);
+
+  const formatCronText = useCallback((expression: string): string => {
+    try {
+      return cronstrue.toString(expression, {
+        throwExceptionOnParseError: true,
+        use24HourTimeFormat: true,
+        locale,
+      });
+    } catch {
+      try {
+        return cronstrue.toString(expression, {
+          throwExceptionOnParseError: true,
+          use24HourTimeFormat: true,
+        });
+      } catch {
+        return expression;
+      }
+    }
+  }, [locale]);
+
+  const describeCronExpression = useCallback((expression: string): { text: string; invalid: boolean } | null => {
+    const trimmed = expression.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    try {
+      return {
+        text: formatCronText(trimmed),
+        invalid: false,
+      };
+    } catch {
+      return {
+        text: t("cron.invalidExpression"),
+        invalid: true,
+      };
+    }
+  }, [formatCronText, t]);
+
+  const summarizeJob = useCallback((job: JobDefinition): string => {
+    if (job.triggers.length === 0) {
+      return t("summary.onDemandOnly");
+    }
+
+    if (job.triggers.length === 1) {
+      const [trigger] = job.triggers;
+      const expression = trigger.expression.trim();
+      if (!expression) {
+        return t("summary.cronTriggerCount", { count: 1 });
+      }
+
+      try {
+        return formatCronText(expression);
+      } catch {
+        return t("summary.cronTriggerCount", { count: 1 });
+      }
+    }
+
+    return t("summary.cronTriggerCount", { count: job.triggers.length });
+  }, [formatCronText, t]);
+
+  const validateJobDraft = useCallback((nextDraft: JobDefinition): string | null => {
+    if (!nextDraft.id.trim()) return t("validation.idRequired");
+    if (!nextDraft.name.trim()) return t("validation.nameRequired");
+    if (!nextDraft.prompt.trim()) return t("validation.promptRequired");
+
+    const persistentSessionId = nextDraft.persistent_session_id?.trim();
+    if (persistentSessionId && nextDraft.unattended) {
+      return t("validation.persistentSessionMustBeAttended");
+    }
+
+    const emptyTrigger = nextDraft.triggers.find((trigger) => !trigger.expression.trim());
+    if (emptyTrigger) return t("validation.cronEmpty");
+
+    const invalidTrigger = nextDraft.triggers.find(
+      (trigger) => describeCronExpression(trigger.expression)?.invalid,
+    );
+    if (invalidTrigger) {
+      return t("validation.cronInvalid", { expression: invalidTrigger.expression });
+    }
+
+    return null;
+  }, [describeCronExpression, t]);
+
+  const formatTriggerKindLabel = useCallback((triggerKind: SessionLatestJobRun["trigger_kind"]): string => {
+    switch (triggerKind) {
+      case "cron":
+        return t("triggerKind.scheduled");
+      case "api":
+      case "manual":
+        return t("triggerKind.manual");
+      default:
+        return triggerKind;
+    }
+  }, [t]);
+
+  const formatLocalizedInvocationTimestamp = useCallback((value: string): string => {
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(parsed);
+  }, [locale]);
 
   const selectableSessions = useMemo(
     () => sessions.filter((session) => !session.attributes.unattended && !session.attributes.archived),
@@ -239,15 +276,12 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
   const cronExamples = useMemo(
     () => CRON_EXAMPLE_EXPRESSIONS.map((expression) => ({
       expression,
-      description: cronstrue.toString(expression, {
-        throwExceptionOnParseError: true,
-        use24HourTimeFormat: true,
-      }),
+      description: formatCronText(expression),
     })),
-    [],
+    [formatCronText],
   );
   const normalizedDraft = useMemo(() => normalizeJobDraft(draft), [draft]);
-  const draftValidationError = useMemo(() => validateJobDraft(normalizedDraft), [normalizedDraft]);
+  const draftValidationError = useMemo(() => validateJobDraft(normalizedDraft), [normalizedDraft, validateJobDraft]);
   const isDraftDirty = useMemo(() => {
     const baseline = selectedJob ? normalizeJobDraft(selectedJob) : createEmptyJob();
     return JSON.stringify(normalizedDraft) !== JSON.stringify(baseline);
@@ -307,7 +341,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
         selectJob(response.jobs, nextSelectedJobId);
       } catch (loadError) {
         if (cancelled) return;
-        setError(loadError instanceof Error ? loadError.message : "Failed to load jobs.");
+        setError(loadError instanceof Error ? loadError.message : t("errors.load"));
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -319,7 +353,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
     return () => {
       cancelled = true;
     };
-  }, [server, token]);
+  }, [server, t, token]);
 
   useEffect(() => {
     if (openTriggerExamples === null) {
@@ -403,7 +437,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
         setNotice(message);
       }
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Failed to refresh jobs.");
+      setError(refreshError instanceof Error ? refreshError.message : t("errors.refresh"));
     } finally {
       setLoading(false);
     }
@@ -431,9 +465,12 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
       const saved = selectedJobId === "new"
         ? await createJob(server, token, normalizedDraft)
         : await updateJob(server, token, normalizedDraft.id, normalizedDraft);
-      await refreshJobs(selectedJobId === "new" ? "Job created." : "Job saved.", saved.id);
+      await refreshJobs(
+        selectedJobId === "new" ? t("notices.created") : t("notices.saved"),
+        saved.id,
+      );
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save job.");
+      setError(saveError instanceof Error ? saveError.message : t("errors.save"));
     } finally {
       setSaving(false);
     }
@@ -445,7 +482,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
       return;
     }
 
-    if (!window.confirm(`Delete job ${draft.name || draft.id}?`)) {
+    if (!window.confirm(t("confirmDelete", { name: draft.name || draft.id }))) {
       return;
     }
 
@@ -454,9 +491,9 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
     setNotice(null);
     try {
       await deleteJob(server, token, draft.id);
-      await refreshJobs("Job deleted.", "new");
+      await refreshJobs(t("notices.deleted"), "new");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete job.");
+      setError(deleteError instanceof Error ? deleteError.message : t("errors.delete"));
     } finally {
       setSaving(false);
     }
@@ -464,13 +501,13 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
 
   async function handleRun(): Promise<void> {
     if (selectedJobId === "new") {
-      setError("Save the job before running it.");
+      setError(t("errors.saveBeforeRun"));
       setNotice(null);
       return;
     }
 
     if (isDraftDirty) {
-      setError("Save job changes before running it.");
+      setError(t("errors.saveChangesBeforeRun"));
       setNotice(null);
       return;
     }
@@ -481,68 +518,117 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
     try {
       const result = await runJob(server, token, draft.id, runData === "" ? undefined : runData);
       setNotice(result.created_new_session
-        ? `Run started in new session ${result.session_id}.`
-        : `Run started in session ${result.session_id}.`);
+        ? t("notices.runStartedNewSession", { sessionId: result.session_id })
+        : t("notices.runStartedSession", { sessionId: result.session_id }));
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Failed to run job.");
+      setError(runError instanceof Error ? runError.message : t("errors.run"));
     } finally {
       setRunning(false);
     }
   }
 
   const selectedSessionValue = draft.persistent_session_id ?? "";
+  const isJobsTab = activeTab === "jobs";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
-      <div className="border-b border-border/80 px-5 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
-              <Settings2 className="h-3.5 w-3.5" />
-              Settings
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Jobs</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Manage prompts, cron triggers, and reusable attended sessions for automated agent runs.
-            </p>
+      <div className="px-5 pt-4 sm:px-6">
+        <div className="flex flex-col">
+          <div className="pb-4">
+            <h1 className="text-2xl font-semibold tracking-tight">{tRoot("navigation.settings")}</h1>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div
+            role="tablist"
+            aria-label={t("settingsSections")}
+            className="flex items-end gap-1 border-b border-border/80"
+          >
             <button
+              id="settings-tab-preferences"
               type="button"
-              onClick={() => void refreshJobs("Jobs refreshed.")}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-              disabled={loading}
+              role="tab"
+              aria-selected={!isJobsTab}
+              aria-controls="settings-panel-preferences"
+              tabIndex={!isJobsTab ? 0 : -1}
+              onClick={() => onTabChange("preferences")}
+              className={cn(
+                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                !isJobsTab
+                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
+              )}
             >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              Refresh
+              {tRoot("navigation.preferences")}
             </button>
             <button
+              id="settings-tab-jobs"
               type="button"
-              onClick={handleCreateNew}
-              className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background hover:bg-foreground/90"
+              role="tab"
+              aria-selected={isJobsTab}
+              aria-controls="settings-panel-jobs"
+              tabIndex={isJobsTab ? 0 : -1}
+              onClick={() => onTabChange("jobs")}
+              className={cn(
+                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isJobsTab
+                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
+              )}
             >
-              <Plus className="h-4 w-4" />
-              New job
+              {tRoot("navigation.jobs")}
             </button>
           </div>
+
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]">
+      {isJobsTab ? (
+        <div
+          id="settings-panel-jobs"
+          role="tabpanel"
+          aria-labelledby="settings-tab-jobs"
+          className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]"
+        >
         <aside className="border-b border-border/80 bg-background/65 lg:border-r lg:border-b-0">
           <div className="flex h-full min-h-0 flex-col">
-            <div className="border-b border-border/70 px-5 py-3 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Saved Jobs
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-3">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {t("savedJobs")}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void refreshJobs(t("notices.refreshed"))}
+                  title={t("actions.refresh")}
+                  aria-label={t("actions.refresh")}
+                  className={cn(
+                    "rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                    loading && "pointer-events-none",
+                  )}
+                  disabled={loading}
+                >
+                  <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNew}
+                  title={t("actions.new")}
+                  aria-label={t("actions.new")}
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {loading ? (
                 <div className="flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading jobs...
+                  {t("loading")}
                 </div>
               ) : jobs.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border bg-background/80 px-4 py-6 text-sm text-muted-foreground">
-                  No jobs yet. Create one to store prompts and optional cron schedules in jobs.yaml.
+                  {t("empty.noJobs")}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -577,10 +663,10 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                           {!job.enabled && (
                             <span className={cn(
                               "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium flex items-center gap-1",
-                              selected ? "bg-amber-900/20 text-amber-700" : "bg-amber-100 text-amber-700",
+                              "bg-amber-100 text-amber-700",
                             )}>
                               <Pause className="h-3 w-3" />
-                              Paused
+                              {t("paused")}
                             </span>
                           )}
                         </div>
@@ -591,7 +677,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                           <span>{summarizeJob(job)}</span>
                           {job.unattended && (
                             <span
-                              title="Unattended sessions cannot escalate tool calls"
+                              title={t("unattendedTooltip")}
                               className={cn(
                                 "rounded-full p-1 inline-flex items-center",
                               )}
@@ -613,7 +699,9 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
           <div className="mx-auto flex max-w-4xl flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border bg-background/88 px-5 py-4 shadow-sm">
               <p className="text-sm text-muted-foreground">
-                {selectedJobId === "new" ? "New job" : `Editing ${draft.id || draft.name || "job"}`}
+                {selectedJobId === "new"
+                  ? t("editor.newJob")
+                  : t("editor.editing", { name: draft.id || draft.name || t("editor.jobFallback") })}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {notice && !isDraftDirty ? <p className="text-sm text-emerald-700">{notice}</p> : null}
@@ -624,7 +712,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                   disabled={saving || running}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {selectedJobId === "new" ? "Clear" : "Delete"}
+                  {selectedJobId === "new" ? t("actions.clear") : t("actions.delete")}
                 </button>
                 <button
                   type="button"
@@ -633,7 +721,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                   disabled={saving || running || loading || draftValidationError !== null || !isDraftDirty}
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save
+                  {t("actions.save")}
                 </button>
               </div>
             </div>
@@ -641,7 +729,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
             <div className="rounded-3xl border border-border bg-background/88 p-5 shadow-sm">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Name</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.name")}</span>
                   <input
                     value={draft.name}
                     onChange={(event) => {
@@ -654,13 +742,13 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
 
                       updateDraft(nextPatch);
                     }}
-                    placeholder="Nightly inbox review"
+                    placeholder={t("placeholders.name")}
                     disabled={saving || running}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Job ID</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.jobId")}</span>
                   <input
                     value={draft.id}
                     onChange={(event) => {
@@ -668,7 +756,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                       setIsIdAutogenerated(selectedJobId === "new" && !id.trim());
                       updateDraft({ id });
                     }}
-                    placeholder="nightly-inbox-review"
+                    placeholder={t("placeholders.jobId")}
                     disabled={saving || running || selectedJobId !== "new"}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
                   />
@@ -686,8 +774,8 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
                     <span>
-                      <span className="block text-sm font-medium">Enabled</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">Paused jobs stay in jobs.yaml but never run from cron.</span>
+                      <span className="block text-sm font-medium">{t("fields.enabled")}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{t("fields.enabledHelp")}</span>
                     </span>
                   </label>
 
@@ -706,14 +794,14 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
                     <span>
-                      <span className="block text-sm font-medium">Run unattended</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">Tool calls will not be escalated to you.</span>
+                      <span className="block text-sm font-medium">{t("fields.unattended")}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{t("fields.unattendedHelp")}</span>
                     </span>
                   </label>
                 </div>
 
                 <div className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Persistent Session</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.persistentSession")}</span>
                   <input
                     list="jobs-session-options"
                     value={selectedSessionValue}
@@ -721,7 +809,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                       persistent_session_id: event.target.value || null,
                       unattended: event.target.value ? false : draft.unattended,
                     })}
-                    placeholder={draft.unattended ? "Can't be used in unattended mode" : undefined}
+                    placeholder={draft.unattended ? t("fields.persistentSessionDisabled") : undefined}
                     disabled={saving || running || draft.unattended}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
                   />
@@ -730,17 +818,17 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                       <option key={session.session_id} value={session.session_id} label={formatSessionOption(session)} />
                     ))}
                   </datalist>
-                  <p className="text-xs text-muted-foreground">Reuse an existing session instead of creating a new one on every job invocation.</p>
+                  <p className="text-xs text-muted-foreground">{t("fields.persistentSessionHelp")}</p>
                 </div>
               </div>
 
               <div className="mt-4">
                 <label className="space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Prompt</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.prompt")}</span>
                   <textarea
                     value={draft.prompt}
                     onChange={(event) => updateDraft({ prompt: event.target.value })}
-                    placeholder="Summarize new tasks, triage urgent items, then propose next actions."
+                    placeholder={t("placeholders.prompt")}
                     disabled={saving || running}
                     rows={9}
                     className="w-full rounded-2xl border border-border bg-background px-3 py-3 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
@@ -752,9 +840,9 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
             <div className="rounded-3xl border border-border bg-background/88 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Cron Triggers</h2>
+                  <h2 className="text-lg font-semibold">{t("sections.cronTriggers")}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Leave empty for on-demand jobs.
+                    {t("sections.cronTriggersDescription")}
                   </p>
                 </div>
                 <button
@@ -767,13 +855,13 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                   disabled={saving || running}
                 >
                   <Plus className="h-4 w-4" />
-                  Add trigger
+                  {t("actions.addTrigger")}
                 </button>
               </div>
 
               {draft.triggers.length === 0 ? (
                 <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-                  No cron triggers configured.
+                  {t("sections.noTriggers")}
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
@@ -787,7 +875,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Expression</span>
+                          <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.expression")}</span>
                         </div>
                         <div
                           ref={openTriggerExamples === index ? openTriggerExamplesRef : null}
@@ -840,7 +928,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                         </div>
                       </div>
                       <label className="space-y-1.5">
-                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Time Zone</span>
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.timeZone")}</span>
                         <select
                           value={trigger.timezone ?? detectedTimeZone}
                           onChange={(event) => updateTrigger(index, { timezone: event.target.value || null })}
@@ -870,7 +958,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                           disabled={saving || running}
                         >
                           <Trash2 className="h-4 w-4" />
-                          Remove
+                          {t("actions.remove")}
                         </button>
                       </div>
                       {cronDescription ? (
@@ -896,7 +984,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
             <div className="rounded-3xl border border-border bg-background/88 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Run Job</h2>
+                  <h2 className="text-lg font-semibold">{t("sections.runJob")}</h2>
                 </div>
                 <button
                   type="button"
@@ -905,11 +993,11 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                   disabled={saving || running || selectedJobId === "new" || isDraftDirty}
                 >
                   {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  Run now
+                  {t("actions.runNow")}
                 </button>
               </div>
               <label className="mt-4 block space-y-1.5">
-                <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Input (Optional)</span>
+                <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.inputOptional")}</span>
                 <textarea
                   value={runData}
                   onChange={(event) => setRunData(event.target.value)}
@@ -923,18 +1011,18 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
             <div className="rounded-3xl border border-border bg-background/88 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Previous Invocations</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Select an invocation to open its session.</p>
+                  <h2 className="text-lg font-semibold">{t("sections.previousInvocations")}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("sections.previousInvocationsDescription")}</p>
                 </div>
               </div>
 
               {selectedJobId === "new" ? (
                 <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-                  Save this job to view invocation history.
+                  {t("sections.saveToViewHistory")}
                 </div>
               ) : selectedJobInvocations.length === 0 ? (
                 <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-                  No invocations yet. Refresh sessions to load newly completed runs.
+                  {t("sections.noInvocations")}
                 </div>
               ) : (
                 <div className="mt-4 space-y-2">
@@ -962,7 +1050,7 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
                           </span>
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
-                          Ran at {formatInvocationTimestamp(latestJobRun.triggered_at)}
+                          {t("sections.ranAt", { timestamp: formatLocalizedInvocationTimestamp(latestJobRun.triggered_at) })}
                         </div>
                       </button>
                     );
@@ -979,7 +1067,17 @@ export function JobsView({ server, token, sessions, onSessionActivated, requeste
 
           </div>
         </section>
-      </div>
+        </div>
+      ) : (
+        <div
+          id="settings-panel-preferences"
+          role="tabpanel"
+          aria-labelledby="settings-tab-preferences"
+          className="min-h-0 flex-1 bg-background/65"
+        >
+          <PreferencesView embedded />
+        </div>
+      )}
     </div>
   );
 }

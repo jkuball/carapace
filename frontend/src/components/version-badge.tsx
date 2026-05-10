@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export function VersionBadge({
   textClassName,
   iconClassName,
 }: VersionBadgeProps) {
+  const t = useTranslations("versionBadge");
   const normalizedFrontendVersion = normalizeVersion(frontendVersion);
   const normalizedBackendVersion = normalizeVersion(backendVersion);
   const visibleVersion = normalizedBackendVersion || normalizedFrontendVersion;
@@ -34,9 +36,9 @@ export function VersionBadge({
     && normalizedFrontendVersion !== normalizedBackendVersion;
 
   const tooltip = [
-    `Frontend: ${normalizedFrontendVersion ?? "unknown"}`,
-    `Backend: ${normalizedBackendVersion ?? "unknown"}`,
-    ...(hasMismatch ? ["", "Version mismatch between frontend and backend containers."] : []),
+    t("frontend", { version: normalizedFrontendVersion ?? t("unknown") }),
+    t("backend", { version: normalizedBackendVersion ?? t("unknown") }),
+    ...(hasMismatch ? ["", t("mismatchTooltip")] : []),
   ].join("\n");
 
   return (
@@ -48,7 +50,7 @@ export function VersionBadge({
       {hasMismatch ? (
         <>
           <AlertTriangle className={cn("h-3.5 w-3.5 text-amber-600", iconClassName)} />
-          <span className="sr-only">Frontend and backend versions do not match.</span>
+          <span className="sr-only">{t("mismatchSr")}</span>
         </>
       ) : null}
     </span>

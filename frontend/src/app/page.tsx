@@ -3,8 +3,9 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ConnectForm } from "@/components/connect-form";
-import { JobsView } from "@/components/jobs-view";
+import { JobsView, type SettingsTab } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
@@ -29,7 +30,6 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
 }
 
 const SESSION_PAGE_SIZE = 50;
-const APP_TITLE = "carapace";
 const MAX_DOCUMENT_TITLE_LENGTH = 30;
 const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
 
@@ -86,7 +86,7 @@ type ConnectionState = {
   token: string;
 };
 
-type AppView = "chat" | "jobs";
+type AppView = "chat" | "settings";
 
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
@@ -113,9 +113,24 @@ export default function Home() {
 }
 
 function HomeContent() {
+  const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialView = searchParams.get("view") === "jobs" ? "jobs" : "chat";
+  const searchParamsKey = searchParams.toString();
+  const initialView: AppView = (() => {
+    const view = searchParams.get("view");
+    if (view === "settings" || view === "jobs" || view === "preferences") {
+      return "settings";
+    }
+    return "chat";
+  })();
+  const initialSettingsTab: SettingsTab = (() => {
+    const tab = searchParams.get("tab");
+    if (tab === "jobs") {
+      return "jobs";
+    }
+    return "preferences";
+  })();
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
     server: "",
@@ -124,11 +139,12 @@ function HomeContent() {
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialView === "jobs" ? null : searchParams.get("session"),
+    initialView === "chat" ? searchParams.get("session") : null,
   );
   const [activeView, setActiveView] = useState<AppView>(
     initialView,
   );
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab);
   const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -152,8 +168,11 @@ function HomeContent() {
   // Sync activeSessionId → URL query param
   useEffect(() => {
     const params = new URLSearchParams();
-    if (activeView === "jobs") {
-      params.set("view", "jobs");
+    if (activeView === "settings") {
+      params.set("view", "settings");
+      if (settingsTab === "jobs") {
+        params.set("tab", settingsTab);
+      }
     } else if (activeSessionId) {
       params.set("session", activeSessionId);
     }
@@ -166,7 +185,7 @@ function HomeContent() {
     } else {
       router.replace("/", { scroll: false });
     }
-  }, [activeSessionId, activeView, router]);
+  }, [activeSessionId, activeView, router, settingsTab]);
 
   useEffect(() => {
     // Defer to avoid synchronous setState in effect body.
@@ -408,17 +427,19 @@ function HomeContent() {
     setSidebarOpen(false);
   }
 
-  function handleOpenJobs(): void {
+  function handleOpenSettings(tab: SettingsTab = "preferences"): void {
     setRequestedJobId(null);
     setActiveSessionId(null);
-    setActiveView("jobs");
+    setSettingsTab(tab);
+    setActiveView("settings");
     setSidebarOpen(false);
   }
 
   function handleOpenJobSettings(jobId: string): void {
     setRequestedJobId(jobId);
     setActiveSessionId(null);
-    setActiveView("jobs");
+    setSettingsTab("jobs");
+    setActiveView("settings");
     setSidebarOpen(false);
   }
 
@@ -484,9 +505,17 @@ function HomeContent() {
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
 
   useEffect(() => {
+    const appTitle = t("app.name");
+    if (activeView === "settings") {
+      const viewTitle = settingsTab === "jobs"
+        ? t("navigation.jobs")
+        : t("navigation.settings");
+      document.title = `${viewTitle} • ${appTitle}`;
+      return;
+    }
+
     const sessionTitle = activeSession?.title?.trim();
-    const useDefaultTitle = activeView !== "chat"
-      || !activeSession
+    const useDefaultTitle = !activeSession
       || activeSession.attributes.private
       || !sessionTitle;
     const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
@@ -494,9 +523,9 @@ function HomeContent() {
       : sessionTitle;
 
     document.title = useDefaultTitle
-      ? APP_TITLE
-      : `${truncatedTitle} • ${APP_TITLE}`;
-  }, [activeSession, activeView]);
+      ? appTitle
+      : `${truncatedTitle} • ${appTitle}`;
+  }, [activeSession, activeView, searchParamsKey, settingsTab, t]);
 
   if (!connected) {
     return <ConnectForm onConnect={handleConnect} />;
@@ -528,7 +557,7 @@ function HomeContent() {
           onSelect={handleSelectSession}
           onNew={handleNewSession}
           onGoHome={handleGoHome}
-          onOpenJobs={handleOpenJobs}
+          onOpenSettings={() => handleOpenSettings()}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
@@ -555,21 +584,25 @@ function HomeContent() {
             )}
           </button>
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
-            {activeView !== "jobs" ? (
+            <span className="text-sm font-semibold">
+              {activeView === "settings" ? t("navigation.settings") : t("app.name")}
+            </span>
+            {activeView === "chat" ? (
               <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={serverVersion} />
             ) : null}
           </div>
         </div>
 
         {/* Chat or empty state */}
-        {activeView === "jobs" ? (
+        {activeView === "settings" ? (
           <JobsView
             server={server}
             token={token}
             sessions={sessions}
             onSessionActivated={handleForkSession}
             requestedJobId={requestedJobId}
+            activeTab={settingsTab}
+            onTabChange={setSettingsTab}
           />
         ) : activeSessionId ? (
           <ChatView
@@ -590,9 +623,9 @@ function HomeContent() {
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <p className="text-lg font-medium text-foreground/80">carapace</p>
+              <p className="text-lg font-medium text-foreground/80">{t("app.name")}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Select a session or start a new one
+                {t("home.empty.description")}
               </p>
               <NewSessionButton
                 onCreate={handleNewSession}

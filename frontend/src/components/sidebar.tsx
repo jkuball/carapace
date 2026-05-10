@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
+import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton } from "@/components/new-session-button";
 import { VersionBadge } from "@/components/version-badge";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -12,20 +14,20 @@ import {
   cn,
   formatBytes,
   sandboxStatusIndicatorClass,
-  sandboxStatusLabel,
+  sandboxStatusKey,
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 
 interface SidebarProps {
   sessions: SessionInfo[];
   activeSessionId: string | null;
-  activeView?: "chat" | "jobs";
+  activeView?: "chat" | "settings";
   frontendVersion?: string | null;
   backendVersion?: string | null;
   onSelect: (sessionId: string) => void;
   onNew: (unattended?: boolean) => void;
   onGoHome: () => void;
-  onOpenJobs: () => void;
+  onOpenSettings: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDelete: (sessionId: string) => void;
   onDisconnect: () => void;
@@ -34,21 +36,6 @@ interface SidebarProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)}d ago`;
-  return d.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
 }
 
 function sandboxSummary(session: SessionInfo): SessionSandboxSnapshot | null {
@@ -74,17 +61,6 @@ function runSidebarAttributeUpdate(promise: Promise<SessionInfo>): void {
   });
 }
 
-function shouldConfirmSessionDeletion(
-  session: Pick<SessionInfo, "message_count">,
-  event: { shiftKey: boolean },
-): boolean {
-  return session.message_count === 0
-    || shouldConfirmDestructiveAction(
-      event,
-      "Delete this session? Chat history and sandbox state will be removed.",
-    );
-}
-
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -107,7 +83,7 @@ export function Sidebar({
   onSelect,
   onNew,
   onGoHome,
-  onOpenJobs,
+  onOpenSettings,
   onUpdateAttributes,
   onDelete,
   onDisconnect,
@@ -117,10 +93,66 @@ export function Sidebar({
   loadingMore = false,
   onLoadMore,
 }: SidebarProps) {
+  const t = useTranslations();
+  const tSidebar = useTranslations("sidebar");
+  const { locale } = useAppLocale();
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [referenceTime, setReferenceTime] = useState<number | null>(null);
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
   const archivedSessions = sessions.filter((session) => session.attributes.archived);
+
+  useEffect(() => {
+    const updateReferenceTime = (): void => {
+      setReferenceTime(Date.now());
+    };
+
+    updateReferenceTime();
+    const intervalId = window.setInterval(updateReferenceTime, 60_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  function formatTime(iso: string): string {
+    const parsed = Date.parse(iso);
+    if (Number.isNaN(parsed)) {
+      return iso;
+    }
+
+    if (referenceTime === null) {
+      return new Intl.DateTimeFormat(locale, {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(parsed);
+    }
+
+    const diff = referenceTime - parsed;
+    if (diff < 60_000) return tSidebar("time.justNow");
+
+    const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    if (diff < 3_600_000) return formatter.format(-Math.floor(diff / 60_000), "minute");
+    if (diff < 86_400_000) return formatter.format(-Math.floor(diff / 3_600_000), "hour");
+    if (diff < 604_800_000) return formatter.format(-Math.floor(diff / 86_400_000), "day");
+
+    return new Intl.DateTimeFormat(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(parsed);
+  }
+
+  function shouldConfirmSessionDeletion(
+    session: Pick<SessionInfo, "message_count">,
+    event: { shiftKey: boolean },
+  ): boolean {
+    return session.message_count === 0
+      || shouldConfirmDestructiveAction(
+        event,
+        tSidebar("confirm.deleteSession"),
+      );
+  }
 
   useEffect(() => {
     if (!hasMore || !onLoadMore) return;
@@ -173,6 +205,7 @@ export function Sidebar({
       ? session.channel_type
       : null;
     const lastActiveLabel = formatTime(session.last_active);
+    const messageCountLabel = tSidebar("messageCount", { count: session.message_count });
     const hasSandboxInfo = !!sandbox;
     const selectSession = (): void => {
       onSelect(session.session_id);
@@ -212,10 +245,10 @@ export function Sidebar({
           {showUnattendedIcon ? (
             <span
               className="mt-0.5 inline-flex shrink-0 items-center text-emerald-700"
-              title="Unattended session"
+              title={tSidebar("unattendedSession")}
             >
               <Bot className="h-3.5 w-3.5" />
-              <span className="sr-only">Unattended session</span>
+              <span className="sr-only">{tSidebar("unattendedSession")}</span>
             </span>
           ) : null}
         </div>
@@ -226,7 +259,7 @@ export function Sidebar({
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                   <span className="inline-flex items-center gap-1.5">
                     <span
-                      title={sandboxStatusLabel(sandbox.status)}
+                      title={t(`chatView.sandbox.status.${sandboxStatusKey(sandbox.status)}`)}
                       className={cn(
                         "h-1.5 w-1.5 shrink-0 rounded-full",
                         sandboxStatusIndicatorClass(sandbox.status),
@@ -237,11 +270,11 @@ export function Sidebar({
                   {sandboxLabel ? <span aria-hidden="true">·</span> : null}
                   <span
                     className="inline-flex items-center gap-1"
-                    title={`${session.message_count} ${session.message_count === 1 ? "message" : "messages"}`}
+                    title={messageCountLabel}
                   >
                     <span>{session.message_count}</span>
                     <Mail className="mt-px h-3 w-3 shrink-0" />
-                    <span className="sr-only">{session.message_count === 1 ? "message" : "messages"}</span>
+                    <span className="sr-only">{messageCountLabel}</span>
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -252,10 +285,10 @@ export function Sidebar({
                   {showKnowledgeIndicator ? (
                     <span
                       className="inline-flex items-center"
-                      title={showPrivateIcon ? "Private session" : (session.knowledge_last_archive_path ?? "All changes committed to knowledge")}
+                      title={showPrivateIcon ? tSidebar("privateSession") : (session.knowledge_last_archive_path ?? tSidebar("knowledgeCommitted"))}
                     >
                       {showPrivateIcon ? <Lock className="mt-px h-3 w-3 shrink-0" /> : <Save className="mt-px h-3 w-3 shrink-0" />}
-                      <span className="sr-only">{showPrivateIcon ? "Private session" : "All changes committed to knowledge"}</span>
+                      <span className="sr-only">{showPrivateIcon ? tSidebar("privateSession") : tSidebar("knowledgeCommitted")}</span>
                     </span>
                   ) : null}
                 </div>
@@ -264,11 +297,11 @@ export function Sidebar({
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
                 <span
                   className="inline-flex items-center gap-1"
-                  title={`${session.message_count} ${session.message_count === 1 ? "message" : "messages"}`}
+                  title={messageCountLabel}
                 >
                   <span>{session.message_count}</span>
                   <Mail className="mt-px h-3 w-3 shrink-0" />
-                  <span className="sr-only">{session.message_count === 1 ? "message" : "messages"}</span>
+                  <span className="sr-only">{messageCountLabel}</span>
                 </span>
                 <span aria-hidden="true">·</span>
                 <span>{lastActiveLabel}</span>
@@ -278,10 +311,10 @@ export function Sidebar({
                 {showKnowledgeIndicator ? (
                   <span
                     className="inline-flex items-center"
-                    title={showPrivateIcon ? "Private session" : (session.knowledge_last_archive_path ?? "All changes committed to knowledge")}
+                    title={showPrivateIcon ? tSidebar("privateSession") : (session.knowledge_last_archive_path ?? tSidebar("knowledgeCommitted"))}
                   >
                     {showPrivateIcon ? <Lock className="mt-px h-3 w-3 shrink-0" /> : <Save className="mt-px h-3 w-3 shrink-0" />}
-                    <span className="sr-only">{showPrivateIcon ? "Private session" : "All changes committed to knowledge"}</span>
+                    <span className="sr-only">{showPrivateIcon ? tSidebar("privateSession") : tSidebar("knowledgeCommitted")}</span>
                   </span>
                 ) : null}
               </div>
@@ -293,7 +326,7 @@ export function Sidebar({
               event.stopPropagation();
               runSidebarAttributeUpdate(onUpdateAttributes(session.session_id, { pinned: !session.attributes.pinned }));
             }}
-            title={session.attributes.pinned ? "Unpin session" : "Pin session"}
+            title={session.attributes.pinned ? tSidebar("actions.unpin") : tSidebar("actions.pin")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               session.attributes.pinned
@@ -308,7 +341,7 @@ export function Sidebar({
               event.stopPropagation();
               runSidebarAttributeUpdate(onUpdateAttributes(session.session_id, { favorite: !session.attributes.favorite }));
             }}
-            title={session.attributes.favorite ? "Remove favorite" : "Favorite session"}
+            title={session.attributes.favorite ? tSidebar("actions.unfavorite") : tSidebar("actions.favorite")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               session.attributes.favorite
@@ -327,14 +360,14 @@ export function Sidebar({
                   nextArchived
                   && !shouldConfirmDestructiveAction(
                     event,
-                    "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo.",
+                    tSidebar("confirm.archiveSession"),
                   )
                 ) {
                   return;
                 }
                 runSidebarAttributeUpdate(onUpdateAttributes(session.session_id, { archived: nextArchived }));
               }}
-              title={session.attributes.archived ? "Unarchive session" : ["Archive session", "Shift+click to skip confirmation"].join("\n")}
+              title={session.attributes.archived ? tSidebar("actions.unarchive") : [tSidebar("actions.archive"), tSidebar("actions.shiftSkip")].join("\n")}
               className={cn(
                 "rounded-md p-1.5 transition-colors",
                 session.attributes.archived
@@ -359,8 +392,8 @@ export function Sidebar({
               onDelete(session.session_id);
             }}
             title={session.message_count === 0
-              ? "Delete empty session"
-              : ["Delete session", "Shift+click to skip confirmation"].join("\n")}
+              ? tSidebar("actions.deleteEmpty")
+              : [tSidebar("actions.delete"), tSidebar("actions.shiftSkip")].join("\n")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               "text-muted-foreground/0 group-hover:text-muted-foreground",
@@ -382,7 +415,7 @@ export function Sidebar({
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 leading-none">
             <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">carapace</span>
+            <span className="text-sm font-semibold tracking-tight">{t("app.name")}</span>
           </div>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
         </div>
@@ -390,8 +423,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={onGoHome}
-            title="Home"
-            aria-label="Home"
+            title={t("navigation.home")}
+            aria-label={t("navigation.home")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
               activeView === "chat" && activeSessionId === null
@@ -403,12 +436,12 @@ export function Sidebar({
           </button>
           <button
             type="button"
-            onClick={onOpenJobs}
-            title="Jobs settings"
-            aria-label="Jobs settings"
+            onClick={onOpenSettings}
+            title={t("navigation.settings")}
+            aria-label={t("navigation.settings")}
             className={cn(
               "rounded-md p-1.5 transition-colors",
-              activeView === "jobs"
+              activeView === "settings"
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
@@ -417,7 +450,7 @@ export function Sidebar({
           </button>
           <button
             onClick={onDisconnect}
-            title="Disconnect"
+            title={t("navigation.disconnect")}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LogOut className="h-4 w-4" />
@@ -427,8 +460,8 @@ export function Sidebar({
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            title="GitHub"
-            aria-label="GitHub repository"
+            title={t("navigation.github")}
+            aria-label={t("navigation.github")}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <GitHubIcon className="h-4 w-4" />
@@ -448,14 +481,14 @@ export function Sidebar({
           {archivedSessions.length > 0 ? (
             <div>
               <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                Archived
+                {tSidebar("sections.archived")}
               </div>
               {renderSessionSection(archivedSessions)}
             </div>
           ) : null}
           {sessions.length === 0 && !loading && (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-              No sessions yet
+              {tSidebar("empty")}
             </p>
           )}
           {hasMore || loadingMore ? (
@@ -463,7 +496,7 @@ export function Sidebar({
               {loadingMore ? (
                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading more sessions
+                  {tSidebar("loadingMore")}
                 </div>
               ) : (
                 <div className="h-4" aria-hidden="true" />

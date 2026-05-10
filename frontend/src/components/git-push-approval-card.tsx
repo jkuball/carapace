@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { GitBranch } from "lucide-react";
 import type { EscalationDecision, GitPushApprovalRequest } from "@/lib/types";
@@ -9,17 +10,17 @@ interface GitPushApprovalCardProps {
   decision?: EscalationDecision;
 }
 
-const DECISION_LABELS: Record<EscalationDecision, string> = {
-  allow: "Allowed",
-  deny: "Denied",
-};
-
 export function GitPushApprovalCard({
   request,
   onRespond,
   decision,
 }: GitPushApprovalCardProps) {
+  const t = useTranslations("approval.gitPush");
   const resolved = decision !== undefined;
+  const decisionLabels: Record<EscalationDecision, string> = {
+    allow: t("decision.allow"),
+    deny: t("decision.deny"),
+  };
 
   return (
     <div
@@ -32,25 +33,24 @@ export function GitPushApprovalCard({
     >
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-warning-foreground/70">
         <GitBranch className="h-3.5 w-3.5" />
-        Git Push Request
+        {t("title")}
       </div>
 
       <div className="space-y-1.5">
         <div>
-          <span className="text-muted-foreground">Ref: </span>
+          <span className="text-muted-foreground">{t("refLabel")} </span>
           <span className="font-mono font-medium">{request.ref}</span>
         </div>
         {request.explanation && (
           <div>
-            <span className="text-muted-foreground">Reason: </span>
+            <span className="text-muted-foreground">{t("reasonLabel")} </span>
             <span className="text-foreground/80">{request.explanation}</span>
           </div>
         )}
         {request.changed_files.length > 0 && (
           <details className="mt-1">
             <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-              {request.changed_files.length} changed file
-              {request.changed_files.length !== 1 && "s"}
+              {t("changedFiles", { count: request.changed_files.length })}
             </summary>
             <ul className="mt-1 space-y-0.5 pl-3 font-mono text-xs text-foreground/80">
               {request.changed_files.map((f) => (
@@ -61,15 +61,15 @@ export function GitPushApprovalCard({
         )}
         {resolved && decision && (
           <div className="text-xs text-muted-foreground italic">
-            {DECISION_LABELS[decision]}
+            {decisionLabels[decision]}
           </div>
         )}
       </div>
 
       {!resolved && (
         <DenialNoteActions
-          allowLabel="Allow Push"
-          notePlaceholder="Why should this push be blocked?"
+          allowLabel={t("allow")}
+          notePlaceholder={t("denyPlaceholder")}
           onAllow={() => onRespond("allow")}
           onDeny={(message) => onRespond("deny", message)}
         />
