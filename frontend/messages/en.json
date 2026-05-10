@@ -42,6 +42,18 @@
             }
         }
     },
+    "newSessionButton": {
+        "label": "New session",
+        "chooseMode": "Choose session mode",
+        "attended": {
+            "title": "Attended",
+            "description": "Chat normally and approve escalations in place."
+        },
+        "unattended": {
+            "title": "Unattended",
+            "description": "Runs on its own with no user approval path."
+        }
+    },
     "chatInput": {
         "disabled": "Input disabled",
         "sendMessageTooltip": "Send message (Enter)",

@@ -42,6 +42,18 @@
             }
         }
     },
+    "newSessionButton": {
+        "label": "Neue Sitzung",
+        "chooseMode": "Sitzungsmodus auswählen",
+        "attended": {
+            "title": "Begleitet",
+            "description": "Normal chatten und Eskalationen direkt bestätigen."
+        },
+        "unattended": {
+            "title": "Unbeaufsichtigt",
+            "description": "Läuft eigenständig ohne Freigabepfad durch dich."
+        }
+    },
     "chatInput": {
         "disabled": "Eingabe deaktiviert",
         "sendMessageTooltip": "Nachricht senden (Enter)",
