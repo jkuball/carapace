@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.113.3 (2026-05-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix reuse check for Twemoji preparation
+  ([`c0a91f4`](https://github.com/thiesgerken/carapace/commit/c0a91f4ed22a68c370a044b6f1f6465cef1f2c21))
+
+## v0.113.2 (2026-05-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: replace button with span for unattended session indicator
+  ([`3e1e1a9`](https://github.com/thiesgerken/carapace/commit/3e1e1a9428c7aca40717e6f8a54e6d8529a1b409))
+
+### Other
+
+
+- ideas
+  ([`23c2214`](https://github.com/thiesgerken/carapace/commit/23c221421dddef81c8388eba14144e26d3f43a69))
+
 ## v0.113.1 (2026-05-10)
 
 
