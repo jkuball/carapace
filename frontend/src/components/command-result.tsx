@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   decodeAvailableModel,
   decodeSlashCommand,
@@ -43,7 +44,24 @@ interface CommandResultViewProps {
   data: unknown;
 }
 
+function ruleStatusLabel(
+  status: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  switch (status) {
+    case "disabled":
+      return t("rules.status.disabled");
+    case "always-on":
+      return t("rules.status.alwaysOn");
+    case "activated":
+      return t("rules.status.activated");
+    default:
+      return status;
+  }
+}
+
 export function CommandResultView({ command, data }: CommandResultViewProps) {
+  const t = useTranslations("commandResult");
   const helpData = decodeHelpData(data);
   if (command === "help" && helpData) {
     return (
@@ -51,8 +69,8 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="pb-1 pr-4 font-medium">Command</th>
-              <th className="pb-1 font-medium">Description</th>
+              <th className="pb-1 pr-4 font-medium">{t("help.command")}</th>
+              <th className="pb-1 font-medium">{t("help.description")}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,10 +93,10 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="pb-1 pr-3 font-medium">ID</th>
-              <th className="pb-1 pr-3 font-medium">Trigger</th>
-              <th className="pb-1 pr-3 font-medium">Mode</th>
-              <th className="pb-1 font-medium">Status</th>
+              <th className="pb-1 pr-3 font-medium">{t("rules.id")}</th>
+              <th className="pb-1 pr-3 font-medium">{t("rules.trigger")}</th>
+              <th className="pb-1 pr-3 font-medium">{t("rules.mode")}</th>
+              <th className="pb-1 font-medium">{t("rules.status.label")}</th>
             </tr>
           </thead>
           <tbody>
@@ -99,7 +117,7 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
                             : "text-muted-foreground"
                     }
                   >
-                    {r.status}
+                    {ruleStatusLabel(r.status, t)}
                   </span>
                 </td>
               </tr>
@@ -130,9 +148,9 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="pb-1 pr-4 font-medium">Type</th>
-              <th className="pb-1 pr-4 font-medium">Model</th>
-              <th className="pb-1 font-medium">Default</th>
+              <th className="pb-1 pr-4 font-medium">{t("models.type")}</th>
+              <th className="pb-1 pr-4 font-medium">{t("models.model")}</th>
+              <th className="pb-1 font-medium">{t("models.default")}</th>
             </tr>
           </thead>
           <tbody>
@@ -149,7 +167,7 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
         </table>
         {command === "models" && available.length > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            <span className="font-medium">Available: </span>
+            <span className="font-medium">{t("models.available")} </span>
             {available.map((entry, i) => {
               const id = entry.id;
               if (!id) return null;
@@ -161,7 +179,7 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
                   {maxTok != null && (
                     <span className="text-muted-foreground/90">
                       {" "}
-                      ({maxTok.toLocaleString()} ctx)
+                      {t("models.contextWindow", { tokens: maxTok.toLocaleString() })}
                     </span>
                   )}
                 </span>
@@ -191,12 +209,12 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
     return (
       <div className="my-1 text-sm">
         <p>
-          <span className="text-muted-foreground">Current model: </span>
+          <span className="text-muted-foreground">{t("models.currentLabel")} </span>
           <span className="font-mono">{modelData.current}</span>
         </p>
         {modelData.default && modelData.default !== modelData.current && (
           <p className="text-xs text-muted-foreground">
-            Default: {modelData.default}
+            {t("models.defaultLabel", { model: modelData.default })}
           </p>
         )}
       </div>
@@ -213,12 +231,12 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
     return (
       <div className="my-1 text-sm">
         <p>
-          <span className="text-muted-foreground">Current model: </span>
+          <span className="text-muted-foreground">{t("models.currentLabel")} </span>
           <span className="font-mono">{modelData.current}</span>
         </p>
         {modelData.default && modelData.default !== modelData.current && (
           <p className="text-xs text-muted-foreground">
-            Default: {modelData.default}
+            {t("models.defaultLabel", { model: modelData.default })}
           </p>
         )}
       </div>
@@ -458,6 +476,7 @@ function lastRequestRowsShowOtherPct(rows: LastLlmRequestRow[]): boolean {
 }
 
 function UsageView({ data }: { data: UsagePayload }) {
+  const t = useTranslations("commandResult");
   const budgetGauges = Array.isArray(data.budget_gauges) ? data.budget_gauges : [];
   const totalToolCalls = data.total_tool_calls ?? 0;
   const allBuckets = [
@@ -480,7 +499,7 @@ function UsageView({ data }: { data: UsagePayload }) {
   if (isEmpty) {
     return (
       <p className="my-1 text-sm text-muted-foreground">
-        No token usage recorded yet.
+        {t("usage.none")}
       </p>
     );
   }
@@ -500,20 +519,20 @@ function UsageView({ data }: { data: UsagePayload }) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="pb-1 pr-3 font-medium">Source</th>
-              <th className="pb-1 pr-3 font-medium text-right">Input</th>
-              <th className="pb-1 pr-3 font-medium text-right">Output</th>
+              <th className="pb-1 pr-3 font-medium">{t("usage.table.source")}</th>
+              <th className="pb-1 pr-3 font-medium text-right">{t("usage.table.input")}</th>
+              <th className="pb-1 pr-3 font-medium text-right">{t("usage.table.output")}</th>
               {hasCache && (
-                <th className="pb-1 pr-3 font-medium text-right">Cache Read</th>
+                <th className="pb-1 pr-3 font-medium text-right">{t("usage.table.cacheRead")}</th>
               )}
               {hasCache && (
                 <th className="pb-1 pr-3 font-medium text-right">
-                  Cache Write
+                  {t("usage.table.cacheWrite")}
                 </th>
               )}
-              <th className="pb-1 pr-3 font-medium text-right">Requests</th>
+              <th className="pb-1 pr-3 font-medium text-right">{t("usage.table.requests")}</th>
               {showCost && hasCosts && (
-                <th className="pb-1 font-medium text-right">Cost</th>
+                <th className="pb-1 font-medium text-right">{t("usage.table.cost")}</th>
               )}
             </tr>
           </thead>
@@ -574,40 +593,44 @@ function UsageView({ data }: { data: UsagePayload }) {
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">
-        Total: {fmt(total)} tokens ({fmt(data.total_input)} in +{" "}
-        {fmt(data.total_output)} out){costStr}
+        {t("usage.total", {
+          total: fmt(total),
+          input: fmt(data.total_input),
+          output: fmt(data.total_output),
+        })}
+        {costStr}
       </p>
       <p className="mb-2 text-xs text-muted-foreground">
-        Tool Calls: {fmt(totalToolCalls)}
+        {t("usage.toolCalls", { count: fmt(totalToolCalls) })}
       </p>
       {budgetGauges.length > 0 ? <BudgetTable gauges={budgetGauges} /> : null}
       {Object.keys(data.models).length > 0 &&
-        renderTable("By Model", data.models, true)}
+        renderTable(t("usage.byModel"), data.models, true)}
       {Object.keys(data.categories).length > 0 &&
-        renderTable("By Category", data.categories, true, categoryCosts)}
+        renderTable(t("usage.byCategory"), data.categories, true, categoryCosts)}
       {lastRequestRows.length > 0 ? (
         <div className="mt-2 text-sm">
           <p className="mb-1 text-xs font-medium text-muted-foreground">
-            Context
+            {t("usage.context")}
           </p>
           <table className="w-full">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="pb-1 pr-2 font-medium">Source</th>
-                <th className="pb-1 pr-2 font-medium text-right">Tokens</th>
-                <th className="pb-1 pr-2 font-medium text-right">System %</th>
-                <th className="pb-1 pr-2 font-medium text-right">User %</th>
+                <th className="pb-1 pr-2 font-medium">{t("usage.contextTable.source")}</th>
+                <th className="pb-1 pr-2 font-medium text-right">{t("usage.contextTable.tokens")}</th>
+                <th className="pb-1 pr-2 font-medium text-right">{t("usage.contextTable.system")}</th>
+                <th className="pb-1 pr-2 font-medium text-right">{t("usage.contextTable.user")}</th>
                 <th className="pb-1 pr-2 font-medium text-right">
-                  Assistant %
+                  {t("usage.contextTable.assistant")}
                 </th>
                 <th className="pb-1 pr-2 font-medium text-right">
-                  Tool Calls %
+                  {t("usage.contextTable.toolCalls")}
                 </th>
                 <th className="pb-1 pr-2 font-medium text-right">
-                  Tool Outputs %
+                  {t("usage.contextTable.toolOutputs")}
                 </th>
                 {showOtherPctCol ? (
-                  <th className="pb-1 font-medium text-right">Other %</th>
+                  <th className="pb-1 font-medium text-right">{t("usage.contextTable.other")}</th>
                 ) : null}
               </tr>
             </thead>
@@ -658,13 +681,14 @@ function UsageView({ data }: { data: UsagePayload }) {
 }
 
 function BudgetView({ data }: { data: BudgetPayload }) {
+  const t = useTranslations("commandResult");
   if (data.error) {
     return <p className="my-1 text-sm text-destructive">{data.error}</p>;
   }
   if (data.gauges.length === 0) {
     return (
       <div className="my-1 text-sm text-muted-foreground">
-        <p>{data.message ?? "No session budgets configured."}</p>
+        <p>{data.message ?? t("budget.none")}</p>
         {data.usage_hint ? <p className="mt-1 text-xs">{data.usage_hint}</p> : null}
       </div>
     );
@@ -683,19 +707,20 @@ function BudgetView({ data }: { data: BudgetPayload }) {
 }
 
 function BudgetTable({ gauges }: { gauges: BudgetGaugeData[] }) {
+  const t = useTranslations("commandResult");
   return (
     <div className="my-2 text-sm">
       <p className="mb-1 text-xs font-medium text-muted-foreground">
-        Session Budgets
+        {t("budget.title")}
       </p>
       <table className="w-full">
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted-foreground">
-            <th className="pb-1 pr-3 font-medium">Metric</th>
-            <th className="pb-1 pr-3 font-medium text-right">Current</th>
-            <th className="pb-1 pr-3 font-medium text-right">Limit</th>
-            <th className="pb-1 pr-3 font-medium text-right">Remaining</th>
-            <th className="pb-1 font-medium text-right">Used</th>
+            <th className="pb-1 pr-3 font-medium">{t("budget.table.metric")}</th>
+            <th className="pb-1 pr-3 font-medium text-right">{t("budget.table.current")}</th>
+            <th className="pb-1 pr-3 font-medium text-right">{t("budget.table.limit")}</th>
+            <th className="pb-1 pr-3 font-medium text-right">{t("budget.table.remaining")}</th>
+            <th className="pb-1 font-medium text-right">{t("budget.table.used")}</th>
           </tr>
         </thead>
         <tbody>
@@ -713,7 +738,7 @@ function BudgetTable({ gauges }: { gauges: BudgetGaugeData[] }) {
               </td>
               <td className="py-1 text-xs text-right tabular-nums">
                 {gauge.unavailable_reason ? (
-                  <span className="text-destructive">blocked</span>
+                  <span className="text-destructive">{t("budget.table.blocked")}</span>
                 ) : (
                   `${gauge.fill_pct.toFixed(1)}%`
                 )}

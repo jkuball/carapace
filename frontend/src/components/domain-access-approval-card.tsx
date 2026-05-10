@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Globe } from "lucide-react";
 import type { EscalationDecision, DomainAccessApprovalRequest } from "@/lib/types";
@@ -9,17 +10,17 @@ interface DomainAccessApprovalCardProps {
   decision?: EscalationDecision;
 }
 
-const DECISION_LABELS: Record<EscalationDecision, string> = {
-  allow: "Allowed",
-  deny: "Denied",
-};
-
 export function DomainAccessApprovalCard({
   request,
   onRespond,
   decision,
 }: DomainAccessApprovalCardProps) {
+  const t = useTranslations("approval.domainAccess");
   const resolved = decision !== undefined;
+  const decisionLabels: Record<EscalationDecision, string> = {
+    allow: t("decision.allow"),
+    deny: t("decision.deny"),
+  };
 
   return (
     <div
@@ -32,17 +33,17 @@ export function DomainAccessApprovalCard({
     >
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-warning-foreground/70">
         <Globe className="h-3.5 w-3.5" />
-        Domain Access Request
+        {t("title")}
       </div>
 
       <div className="space-y-1.5">
         <div>
-          <span className="text-muted-foreground">Domain: </span>
+          <span className="text-muted-foreground">{t("domainLabel")} </span>
           <span className="font-mono font-medium">{request.domain}</span>
         </div>
         {request.command && (
           <div>
-            <span className="text-muted-foreground">Triggered by: </span>
+            <span className="text-muted-foreground">{t("triggeredByLabel")} </span>
             <span className="font-mono text-xs text-foreground/80">
               {request.command}
             </span>
@@ -50,15 +51,15 @@ export function DomainAccessApprovalCard({
         )}
         {resolved && decision && (
           <div className="text-xs text-muted-foreground italic">
-            {DECISION_LABELS[decision]}
+            {decisionLabels[decision]}
           </div>
         )}
       </div>
 
       {!resolved && (
         <DenialNoteActions
-          allowLabel={`Allow ${request.domain}`}
-          notePlaceholder="Why should this be blocked?"
+          allowLabel={t("allow", { domain: request.domain })}
+          notePlaceholder={t("denyPlaceholder")}
           onAllow={() => onRespond("allow")}
           onDeny={(message) => onRespond("deny", message)}
         />

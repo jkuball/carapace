@@ -48,7 +48,185 @@
         "queueInterruptStopTooltip": "Enter zum Einreihen · ⌥Enter zum Unterbrechen · Klicken zum Stoppen",
         "stopGenerationTooltip": "Generierung stoppen",
         "queued": "Warteschlange: {message}",
-        "placeholder": "Nachricht an carapace…"
+        "placeholder": "Nachricht an carapace…",
+        "usageBreakdown": {
+            "systemLine": "System: {percent}%",
+            "userLine": "User: {percent}%",
+            "assistantLine": "Assistant: {percent}%",
+            "toolCallsLine": "Tool-Aufrufe: {percent}%",
+            "toolOutputsLine": "Tool-Ausgaben: {percent}%",
+            "otherLine": "Sonstiges: {percent}%"
+        },
+        "context": {
+            "limit": "Kontextlimit: {tokens} Tokens.",
+            "assumedLimit": "Angenommenes Kontextlimit: {tokens} Tokens.",
+            "lastRequestTokens": "{tokens} API-Tokens (letzte Agent-Anfrage)",
+            "clickForUsage": "Klicken, um /usage an den Agenten zu senden und mehr Details zu sehen.",
+            "tokensLabel": "{tokens} Tokens"
+        },
+        "budget": {
+            "budgetLabel": "Budget für {label}",
+            "current": "Aktuell: {value}",
+            "max": "Maximal: {value}",
+            "remaining": "Verbleibend: {value}",
+            "exhausted": "Budget ausgeschöpft."
+        }
+    },
+    "approval": {
+        "denialNote": {
+            "deny": "Ablehnen",
+            "optionalNote": "Optionale Notiz für den Agenten",
+            "addNote": "Notiz hinzufügen",
+            "hideNote": "Notiz ausblenden"
+        },
+        "domainAccess": {
+            "title": "Domain-Zugriffsanfrage",
+            "domainLabel": "Domain:",
+            "triggeredByLabel": "Ausgelöst durch:",
+            "allow": "{domain} erlauben",
+            "denyPlaceholder": "Warum sollte das blockiert werden?",
+            "decision": {
+                "allow": "Erlaubt",
+                "deny": "Abgelehnt"
+            }
+        }
+    },
+    "versionBadge": {
+        "frontend": "Frontend: {version}",
+        "backend": "Backend: {version}",
+        "unknown": "unbekannt",
+        "mismatchTooltip": "Versionen von Frontend- und Backend-Containern stimmen nicht überein.",
+        "mismatchSr": "Frontend- und Backend-Versionen stimmen nicht überein."
+    },
+    "toolCallBadge": {
+        "approvalBadge": {
+            "review": "Prüfung",
+            "skill": "Skill",
+            "bypass": "Bypass",
+            "denied": "abgelehnt"
+        },
+        "fallbacks": {
+            "missingPath": "(Pfad fehlt)",
+            "missingCommand": "(Befehl fehlt)",
+            "missingSkillName": "(skill_name fehlt)",
+            "credential": "Zugangsdaten"
+        },
+        "labels": {
+            "read": "gelesen",
+            "wrote": "geschrieben",
+            "replaced": "ersetzt",
+            "activatedSkill": "Skill aktiviert",
+            "executed": "ausgeführt",
+            "listedCredentials": "Zugangsdaten aufgelistet",
+            "credentialDenied": "Zugangsdaten abgelehnt",
+            "accessedCredential": "Zugangsdaten verwendet",
+            "domainDenied": "Domain abgelehnt",
+            "accessedDomain": "Domain angefragt",
+            "gitPush": "git push",
+            "readAction": "lese",
+            "write": "schreibe",
+            "activateSkill": "aktiviere Skill",
+            "execute": "führe aus",
+            "listCredentials": "liste Zugangsdaten auf",
+            "accessCredential": "Zugangsdaten verwenden",
+            "accessDomain": "Domain verwenden",
+            "replace": "ersetze"
+        },
+        "summaries": {
+            "readFirstLines": "erste {count} Zeilen von {path}",
+            "readLinesRange": "Zeilen {start} bis {end} von {path}",
+            "writeLines": "{count} Zeilen nach {path} geschrieben",
+            "lineCount": "{count} Zeilen",
+            "lineCountWithReplacement": "{source} Zeilen mit {replacement} Zeilen",
+            "replaceInPath": "{lineSummary} in {path}{suffix}",
+            "allMatchesSuffix": " (alle Treffer)"
+        },
+        "details": {
+            "activateSkillPromptPrefix": "Agent möchte den",
+            "activateSkillPromptSuffix": "Skill aktivieren.",
+            "sentinelLabel": "Sentinel:",
+            "sentinelReviewing": "Dieser Tool-Aufruf wird geprüft.",
+            "userLabel": "Benutzer:",
+            "deniedByUser": "Vom Benutzer abgelehnt.",
+            "contexts": "Kontext:",
+            "domains": "Domains:",
+            "credentials": "Zugangsdaten",
+            "name": "Name",
+            "path": "Pfad",
+            "description": "Beschreibung",
+            "activation": "Aktivierung",
+            "skillInstructions": "Skill-Anweisungen",
+            "source": "Quelle",
+            "replacement": "Ersetzung",
+            "diff": "Diff",
+            "arguments": "Argumente",
+            "result": "Ergebnis"
+        }
+    },
+    "commandResult": {
+        "help": {
+            "command": "Befehl",
+            "description": "Beschreibung"
+        },
+        "rules": {
+            "id": "ID",
+            "trigger": "Auslöser",
+            "mode": "Modus",
+            "status": {
+                "label": "Status",
+                "disabled": "deaktiviert",
+                "alwaysOn": "immer aktiv",
+                "activated": "aktiviert"
+            }
+        },
+        "models": {
+            "type": "Typ",
+            "model": "Modell",
+            "default": "Standard",
+            "available": "Verfügbar:",
+            "contextWindow": "({tokens} Kontext)",
+            "currentLabel": "Aktuelles Modell:",
+            "defaultLabel": "Standard: {model}"
+        },
+        "usage": {
+            "none": "Noch keine Token-Nutzung aufgezeichnet.",
+            "total": "Gesamt: {total} Tokens ({input} rein + {output} raus)",
+            "toolCalls": "Tool-Aufrufe: {count}",
+            "byModel": "Nach Modell",
+            "byCategory": "Nach Kategorie",
+            "context": "Kontext",
+            "table": {
+                "source": "Quelle",
+                "input": "Eingabe",
+                "output": "Ausgabe",
+                "cacheRead": "Cache gelesen",
+                "cacheWrite": "Cache geschrieben",
+                "requests": "Anfragen",
+                "cost": "Kosten"
+            },
+            "contextTable": {
+                "source": "Quelle",
+                "tokens": "Tokens",
+                "system": "System %",
+                "user": "User %",
+                "assistant": "Assistant %",
+                "toolCalls": "Tool-Aufrufe %",
+                "toolOutputs": "Tool-Ausgaben %",
+                "other": "Sonstiges %"
+            }
+        },
+        "budget": {
+            "none": "Keine Sitzungsbudgets konfiguriert.",
+            "title": "Sitzungsbudgets",
+            "table": {
+                "metric": "Metrik",
+                "current": "Aktuell",
+                "limit": "Limit",
+                "remaining": "Verbleibend",
+                "used": "Verwendet",
+                "blocked": "blockiert"
+            }
+        }
     },
     "chatView": {
         "inputDisabled": {
@@ -201,7 +379,7 @@
                 "success": "Erfolg",
                 "warning": "Warnung"
             },
-            "notice": "Agent hat Aufgabe mit einer Meldung vom Typ {status} beendet. Die Sitzung ist jetzt schreibgeschützt, du kannst sie aber forken um weiter zu chatten."
+            "notice": "Der Agent hat die Aufgabe mit einer Meldung vom Typ {status} beendet. Die Sitzung ist jetzt schreibgeschützt, du kannst sie aber forken um weiter zu chatten."
         }
     },
     "jobs": {

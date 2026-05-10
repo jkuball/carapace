@@ -48,7 +48,185 @@
         "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
         "stopGenerationTooltip": "Stop generation",
         "queued": "Queued: {message}",
-        "placeholder": "Message carapace…"
+        "placeholder": "Message carapace…",
+        "usageBreakdown": {
+            "systemLine": "system: {percent}%",
+            "userLine": "user: {percent}%",
+            "assistantLine": "assistant: {percent}%",
+            "toolCallsLine": "tool calls: {percent}%",
+            "toolOutputsLine": "tool outputs: {percent}%",
+            "otherLine": "other: {percent}%"
+        },
+        "context": {
+            "limit": "Context limit: {tokens} tokens.",
+            "assumedLimit": "Assuming a {tokens} context limit.",
+            "lastRequestTokens": "{tokens} API tokens (last agent request)",
+            "clickForUsage": "Click to send /usage to the agent for more details.",
+            "tokensLabel": "{tokens} tokens"
+        },
+        "budget": {
+            "budgetLabel": "{label} budget",
+            "current": "Current: {value}",
+            "max": "Max: {value}",
+            "remaining": "Remaining: {value}",
+            "exhausted": "Budget exhausted."
+        }
+    },
+    "approval": {
+        "denialNote": {
+            "deny": "Deny",
+            "optionalNote": "Optional note for the agent",
+            "addNote": "Add note",
+            "hideNote": "Hide note"
+        },
+        "domainAccess": {
+            "title": "Domain Access Request",
+            "domainLabel": "Domain:",
+            "triggeredByLabel": "Triggered by:",
+            "allow": "Allow {domain}",
+            "denyPlaceholder": "Why should this be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        }
+    },
+    "versionBadge": {
+        "frontend": "Frontend: {version}",
+        "backend": "Backend: {version}",
+        "unknown": "unknown",
+        "mismatchTooltip": "Version mismatch between frontend and backend containers.",
+        "mismatchSr": "Frontend and backend versions do not match."
+    },
+    "toolCallBadge": {
+        "approvalBadge": {
+            "review": "review",
+            "skill": "skill",
+            "bypass": "bypass",
+            "denied": "denied"
+        },
+        "fallbacks": {
+            "missingPath": "(missing path)",
+            "missingCommand": "(missing command)",
+            "missingSkillName": "(missing skill_name)",
+            "credential": "credential"
+        },
+        "labels": {
+            "read": "read",
+            "wrote": "wrote",
+            "replaced": "replaced",
+            "activatedSkill": "activated skill",
+            "executed": "executed",
+            "listedCredentials": "listed credentials",
+            "credentialDenied": "credential denied",
+            "accessedCredential": "accessed credential",
+            "domainDenied": "domain denied",
+            "accessedDomain": "accessed domain",
+            "gitPush": "git push",
+            "readAction": "read",
+            "write": "write",
+            "activateSkill": "activate skill",
+            "execute": "execute",
+            "listCredentials": "list credentials",
+            "accessCredential": "access credential",
+            "accessDomain": "access domain",
+            "replace": "replace"
+        },
+        "summaries": {
+            "readFirstLines": "first {count} lines of {path}",
+            "readLinesRange": "lines {start} to {end} of {path}",
+            "writeLines": "{count} lines to {path}",
+            "lineCount": "{count} lines",
+            "lineCountWithReplacement": "{source} lines with {replacement} lines",
+            "replaceInPath": "{lineSummary} in {path}{suffix}",
+            "allMatchesSuffix": " (all matches)"
+        },
+        "details": {
+            "activateSkillPromptPrefix": "Agent wants to activate the",
+            "activateSkillPromptSuffix": "skill.",
+            "sentinelLabel": "Sentinel:",
+            "sentinelReviewing": "Reviewing this tool call.",
+            "userLabel": "User:",
+            "deniedByUser": "Denied by user.",
+            "contexts": "Contexts:",
+            "domains": "Domains:",
+            "credentials": "Credentials",
+            "name": "Name",
+            "path": "Path",
+            "description": "Description",
+            "activation": "Activation",
+            "skillInstructions": "Skill Instructions",
+            "source": "Source",
+            "replacement": "Replacement",
+            "diff": "Diff",
+            "arguments": "Arguments",
+            "result": "Result"
+        }
+    },
+    "commandResult": {
+        "help": {
+            "command": "Command",
+            "description": "Description"
+        },
+        "rules": {
+            "id": "ID",
+            "trigger": "Trigger",
+            "mode": "Mode",
+            "status": {
+                "label": "Status",
+                "disabled": "disabled",
+                "alwaysOn": "always-on",
+                "activated": "activated"
+            }
+        },
+        "models": {
+            "type": "Type",
+            "model": "Model",
+            "default": "Default",
+            "available": "Available:",
+            "contextWindow": "({tokens} ctx)",
+            "currentLabel": "Current model:",
+            "defaultLabel": "Default: {model}"
+        },
+        "usage": {
+            "none": "No token usage recorded yet.",
+            "total": "Total: {total} tokens ({input} in + {output} out)",
+            "toolCalls": "Tool Calls: {count}",
+            "byModel": "By Model",
+            "byCategory": "By Category",
+            "context": "Context",
+            "table": {
+                "source": "Source",
+                "input": "Input",
+                "output": "Output",
+                "cacheRead": "Cache Read",
+                "cacheWrite": "Cache Write",
+                "requests": "Requests",
+                "cost": "Cost"
+            },
+            "contextTable": {
+                "source": "Source",
+                "tokens": "Tokens",
+                "system": "System %",
+                "user": "User %",
+                "assistant": "Assistant %",
+                "toolCalls": "Tool Calls %",
+                "toolOutputs": "Tool Outputs %",
+                "other": "Other %"
+            }
+        },
+        "budget": {
+            "none": "No session budgets configured.",
+            "title": "Session Budgets",
+            "table": {
+                "metric": "Metric",
+                "current": "Current",
+                "limit": "Limit",
+                "remaining": "Remaining",
+                "used": "Used",
+                "blocked": "blocked"
+            }
+        }
     },
     "chatView": {
         "inputDisabled": {
