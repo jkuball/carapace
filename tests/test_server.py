@@ -407,6 +407,42 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     assert "* * * * *" in message
 
 
+@pytest.mark.asyncio
+async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        srv.JobDefinition.model_validate(
+            {
+                "id": "timezone-ambiguous",
+                "name": "Timezone Ambiguous",
+                "prompt": "Summarize the day.",
+                "triggers": [
+                    {"expression": "* * * * *", "timezone": "UTC"},
+                    {"expression": "* * * * *", "timezone": "Europe/Berlin"},
+                ],
+            }
+        )
+    )
+
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await srv._run_job_definition(
+        srv._jobs_store.get_job("timezone-ambiguous"),
+        trigger_kind="cron",
+        triggered_at=datetime(2026, 5, 9, 10, 1, tzinfo=UTC),
+        cron_expression="* * * * *",
+        trigger_timezone="Europe/Berlin",
+    )
+
+    assert dispatched.job_id == "timezone-ambiguous"
+    (_session_id, message), kwargs = submit_message.await_args
+    assert kwargs == {}
+    assert "2026-05-09T12:01:00+02:00" in message
+
+
 def test_update_session_privacy(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
