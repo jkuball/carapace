@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.112.4 (2026-05-09)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv:python3.14-trixie-slim Docker digest to 4ec5872
+  ([`8b54e0d`](https://github.com/thiesgerken/carapace/commit/8b54e0d70157efd24780b3f5b7c13e346c22c821))
+
+- ⬆️ chore: upgrade debian:trixie-20260505 Docker digest to e2d08da
+  ([`1943b32`](https://github.com/thiesgerken/carapace/commit/1943b32de4cbd7d899e6d31c00c6f77c3d78def9))
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv Docker digest to 3a59a3c
+  ([`3f78150`](https://github.com/thiesgerken/carapace/commit/3f78150ef7cbcce93862aa81c298f9687e957266))
+
+- ⬆️ chore: upgrade pnpm/action-setup digest to 91ab88e
+  ([`bc6c72e`](https://github.com/thiesgerken/carapace/commit/bc6c72eec5277a5407fb4bf7528ffd028b873e2f))
+
+- ⬆️ chore: upgrade redis:8-alpine Docker digest to d146f83
+  ([`a2c84a1`](https://github.com/thiesgerken/carapace/commit/a2c84a1a709b4d6b1b4cb1a44f847979c94f1757))
+
+### Other
+
+
+- docs: update roadmap to include new features and remove memory section
+  ([`13e8e43`](https://github.com/thiesgerken/carapace/commit/13e8e432c787064acce23b28caba6a4805c2d40e))
+
 ## v0.112.3 (2026-05-08)
 
 

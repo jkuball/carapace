@@ -2125,7 +2125,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="min-h-0 flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-h-0 flex flex-1 flex-col">
           <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="flex items-start justify-between gap-3">
