@@ -611,7 +611,7 @@ packages:
     resolution: {integrity: sha512-wgAVj6nUWAolAu8YFvzT2cTBIElWHkjZwFYovF+xsqKsW2ADxM/X2opxj5NsF/qVccAOjRNe8X2IdPzMsWyHTg==}
 
   '@twemoji/api@https://github.com/jdecked/twemoji/archive/refs/tags/v17.0.2.tar.gz':
-    resolution: {integrity: sha512-oSToVUzg2tzR07kpgR0xryfuKZIhiYk29z7pHcWlFDUPctDEbkcC2v2zZa5OGGTT041L5ZN+caUJFFNH+BgctA==}
+    resolution: {integrity: sha512-5xIdBcFLpRW4goXNdNNz497TzMHF2a76yElEaqISxVPj+KpJB82KuXHczfjhhTCsPaP1lAhM3qPtvAhMG7e71A==}
     version: 17.0.2
 
   '@twemoji/parser@17.0.1':
