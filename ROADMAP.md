@@ -11,8 +11,8 @@
 - [ ] forbid session to use some skills (include/exclude) — useful for cronjobs
 - [ ] harden sandbox so trusted exec allowlists are meaningful (run as non-root, read-only root fs where possible, avoid command alias / path tampering) — important prerequisite for auto-approving read-only commands like `rg`, `ls`, `cat`
 - [ ] an actual database backend instead of files
-- [ ] after adding cronjobs a backend refactor/review might be in order
-- [ ] i18n (persisted in local storage? put into settings default to user lang? construe, time formatting, ..)
+- [ ] a backend refactor/review might be in order
+- [ ] update readme with new cronjob feature + outline goals of the project better?
 - [ ] bundle a skill for carapace itself - firing jobs, creating subsessions, ...
 
 ## Knowledge Repo Handling
