@@ -320,7 +320,7 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
     assert session_id == payload["session_id"]
     assert kwargs == {}
     assert "Summarize the day." in message
-    assert "reason: api" in message
+    assert "triggered via the API" in message
     assert '{"source":"calendar","items":3}' in message
 
 
@@ -403,8 +403,8 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     (session_id, message), kwargs = submit_message.await_args
     assert kwargs == {}
     assert session_id
-    assert "reason: cron" in message
-    assert "- cron: * * * * *" in message
+    assert "triggered automatically" in message
+    assert "* * * * *" in message
 
 
 def test_update_session_privacy(client, auth_headers):
