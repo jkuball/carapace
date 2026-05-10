@@ -645,12 +645,21 @@ async def _run_job_definition(
     _engine.session_mgr.save_state(state)
     _engine.update_active_state(state.session_id, latest_job_run=job_run_context)
 
+    trigger_timezone = (
+        next(
+            (t.timezone for t in job.triggers if t.expression == cron_expression and t.timezone),
+            None,
+        )
+        if cron_expression
+        else None
+    )
     message = build_job_run_message(
         job,
         trigger_kind=trigger_kind,
         triggered_at=effective_triggered_at,
         payload=payload,
         cron_expression=cron_expression,
+        timezone=trigger_timezone,
     )
     await _engine.submit_message(state.session_id, message)
 

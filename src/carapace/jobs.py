@@ -28,24 +28,35 @@ def build_job_run_message(
     triggered_at: datetime,
     payload: str | None = None,
     cron_expression: str | None = None,
+    timezone: str | None = None,
 ) -> str:
+    tz = ZoneInfo(timezone) if timezone else UTC
+    time_str = triggered_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    title = job.name if job.name else job.id
+
+    match trigger_kind:
+        case "cron":
+            trigger_sentence = (
+                f"The job was triggered automatically at {time_str} due to cron rule `{cron_expression}` on the job."
+            )
+        case "api":
+            trigger_sentence = f"The job was triggered via the API at {time_str}."
+        case "manual":
+            trigger_sentence = f"The job was triggered manually at {time_str}."
+        case _:
+            trigger_sentence = f"The job was triggered at {time_str}."
+
     sections = [
-        job.prompt.rstrip(),
+        f"This is an invocation of job `{job.id}` ({title}).",
         "",
-        "Trigger Context",
-        f"- reason: {trigger_kind}",
-        f"- time: {triggered_at.astimezone(UTC).isoformat()}",
+        f"Job instructions: {job.prompt.rstrip()}",
+        "",
+        trigger_sentence,
     ]
-    if cron_expression:
-        sections.append(f"- cron: {cron_expression}")
+
     if payload:
-        sections.extend(
-            [
-                "",
-                "Data",
-                payload,
-            ]
-        )
+        sections.append(f"\nThe following additional data was supplied for this invocation:\n\n{payload}")
+
     return "\n".join(sections).strip()
 
 
