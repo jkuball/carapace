@@ -14,7 +14,7 @@ import {
   cn,
   formatBytes,
   sandboxStatusIndicatorClass,
-  sandboxStatusLabel,
+  sandboxStatusKey,
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 
@@ -259,7 +259,7 @@ export function Sidebar({
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                   <span className="inline-flex items-center gap-1.5">
                     <span
-                      title={sandboxStatusLabel(sandbox.status)}
+                      title={t(`chatView.sandbox.status.${sandboxStatusKey(sandbox.status)}`)}
                       className={cn(
                         "h-1.5 w-1.5 shrink-0 rounded-full",
                         sandboxStatusIndicatorClass(sandbox.status),

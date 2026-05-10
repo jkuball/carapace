@@ -1,6 +1,7 @@
 {
     "app": {
-        "name": "carapace"
+        "name": "carapace",
+        "description": "Sicherheitsorientierter persönlicher KI-Agent"
     },
     "navigation": {
         "home": "Start",
@@ -85,11 +86,35 @@
         }
     },
     "approval": {
+        "general": {
+            "title": "Freigabe erforderlich",
+            "toolLabel": "Tool:",
+            "reasonLabel": "Grund:",
+            "riskLabel": "Risiko:",
+            "arguments": "Argumente",
+            "allow": "Freigeben",
+            "denyPlaceholder": "Warum sollte das blockiert werden?",
+            "risk": {
+                "high": "hoch",
+                "medium": "mittel",
+                "low": "niedrig"
+            }
+        },
         "denialNote": {
             "deny": "Ablehnen",
             "optionalNote": "Optionale Notiz für den Agenten",
             "addNote": "Notiz hinzufügen",
             "hideNote": "Notiz ausblenden"
+        },
+        "credential": {
+            "title": "Zugangsdatenanfrage",
+            "skillLabel": "Skill:",
+            "allow": "Erlauben",
+            "denyPlaceholder": "Warum sollte dieser Zugang blockiert werden?",
+            "decision": {
+                "allow": "Erlaubt",
+                "deny": "Abgelehnt"
+            }
         },
         "domainAccess": {
             "title": "Domain-Zugriffsanfrage",
@@ -97,6 +122,18 @@
             "triggeredByLabel": "Ausgelöst durch:",
             "allow": "{domain} erlauben",
             "denyPlaceholder": "Warum sollte das blockiert werden?",
+            "decision": {
+                "allow": "Erlaubt",
+                "deny": "Abgelehnt"
+            }
+        },
+        "gitPush": {
+            "title": "Git-Push-Anfrage",
+            "refLabel": "Ref:",
+            "reasonLabel": "Grund:",
+            "changedFiles": "{count, plural, one {# geänderte Datei} other {# geänderte Dateien}}",
+            "allow": "Push erlauben",
+            "denyPlaceholder": "Warum sollte dieser Push blockiert werden?",
             "decision": {
                 "allow": "Erlaubt",
                 "deny": "Abgelehnt"
@@ -333,6 +370,14 @@
             "title": "Sandbox",
             "refreshing": "Aktualisiere…",
             "checking": "Prüfe Sandbox…",
+            "status": {
+                "missing": "Nicht gestartet",
+                "running": "Läuft",
+                "scaled_down": "Heruntergefahren",
+                "pending": "Startet",
+                "stopped": "Gestoppt",
+                "error": "Fehler"
+            },
             "actions": {
                 "start": "Sandbox starten",
                 "starting": "Sandbox wird gestartet",

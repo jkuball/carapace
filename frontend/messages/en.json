@@ -1,6 +1,7 @@
 {
     "app": {
-        "name": "carapace"
+        "name": "carapace",
+        "description": "Security-first personal AI agent"
     },
     "navigation": {
         "home": "Home",
@@ -85,11 +86,35 @@
         }
     },
     "approval": {
+        "general": {
+            "title": "Approval Required",
+            "toolLabel": "Tool:",
+            "reasonLabel": "Reason:",
+            "riskLabel": "Risk:",
+            "arguments": "Arguments",
+            "allow": "Approve",
+            "denyPlaceholder": "Why should this be blocked?",
+            "risk": {
+                "high": "high",
+                "medium": "medium",
+                "low": "low"
+            }
+        },
         "denialNote": {
             "deny": "Deny",
             "optionalNote": "Optional note for the agent",
             "addNote": "Add note",
             "hideNote": "Hide note"
+        },
+        "credential": {
+            "title": "Credential Request",
+            "skillLabel": "Skill:",
+            "allow": "Allow",
+            "denyPlaceholder": "Why should this credential access be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
         },
         "domainAccess": {
             "title": "Domain Access Request",
@@ -97,6 +122,18 @@
             "triggeredByLabel": "Triggered by:",
             "allow": "Allow {domain}",
             "denyPlaceholder": "Why should this be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        },
+        "gitPush": {
+            "title": "Git Push Request",
+            "refLabel": "Ref:",
+            "reasonLabel": "Reason:",
+            "changedFiles": "{count, plural, one {# changed file} other {# changed files}}",
+            "allow": "Allow Push",
+            "denyPlaceholder": "Why should this push be blocked?",
             "decision": {
                 "allow": "Allowed",
                 "deny": "Denied"
@@ -333,6 +370,14 @@
             "title": "Sandbox",
             "refreshing": "Refreshing…",
             "checking": "Checking sandbox…",
+            "status": {
+                "missing": "Not Started",
+                "running": "Running",
+                "scaled_down": "Spun Down",
+                "pending": "Starting Up",
+                "stopped": "Stopped",
+                "error": "Error"
+            },
             "actions": {
                 "start": "Start sandbox",
                 "starting": "Starting sandbox",

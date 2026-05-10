@@ -37,7 +37,7 @@ import {
   cn,
   formatBytes,
   sandboxStatusIndicatorClass,
-  sandboxStatusLabel,
+  sandboxStatusKey,
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 import { Message } from "./message";
@@ -2076,7 +2076,13 @@ export function ChatView({
                     : "bg-slate-300",
               )}
             />
-            <span className="truncate">{sandboxLoading ? t("sandbox.refreshing") : sandbox ? sandboxStatusLabel(sandbox.status) : t("sandbox.checking")}</span>
+            <span className="truncate">
+              {sandboxLoading
+                ? t("sandbox.refreshing")
+                : sandbox
+                  ? t(`sandbox.status.${sandboxStatusKey(sandbox.status)}`)
+                  : t("sandbox.checking")}
+            </span>
           </div>
           <div className="text-xs text-muted-foreground">{sandboxStorageLabel(sandbox, t)}</div>
         </div>

@@ -45,20 +45,15 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-export function sandboxStatusLabel(status: SandboxStatus): string {
+export function sandboxStatusKey(status: SandboxStatus): SandboxStatus {
   switch (status) {
     case "missing":
-      return "Not Started";
     case "running":
-      return "Running";
     case "scaled_down":
-      return "Spun Down";
     case "pending":
-      return "Starting Up";
     case "stopped":
-      return "Stopped";
     case "error":
-      return "Error";
+      return status;
   }
 }
 

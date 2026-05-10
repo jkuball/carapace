@@ -33,6 +33,22 @@ interface LocaleContextValue {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
+function resolveMessageString(
+  messages: AbstractIntlMessages,
+  path: string[],
+): string | null {
+  let current: unknown = messages;
+
+  for (const segment of path) {
+    if (typeof current !== "object" || current === null) {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return typeof current === "string" ? current : null;
+}
+
 function resolveBrowserLocale(): SupportedLocale {
   if (typeof navigator === "undefined") {
     return defaultLocale;
@@ -75,10 +91,32 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     () => getLocaleMessages(locale),
     [locale],
   );
+  const appDescription = useMemo(
+    () => resolveMessageString(messages, ["app", "description"]),
+    [messages],
+  );
 
   useEffect(() => {
     document.documentElement.lang = locale;
-  }, [locale]);
+
+    if (!appDescription) {
+      return;
+    }
+
+    const existingDescription = document.head.querySelector(
+      'meta[name="description"]',
+    );
+    const descriptionMeta = existingDescription instanceof HTMLMetaElement
+      ? existingDescription
+      : document.createElement("meta");
+
+    if (!(existingDescription instanceof HTMLMetaElement)) {
+      descriptionMeta.name = "description";
+      document.head.appendChild(descriptionMeta);
+    }
+
+    descriptionMeta.content = appDescription;
+  }, [appDescription, locale]);
 
   const value = useMemo<LocaleContextValue>(
     () => ({

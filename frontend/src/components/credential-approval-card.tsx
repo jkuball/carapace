@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { KeyRound } from "lucide-react";
 import type {
@@ -12,17 +13,17 @@ interface CredentialApprovalCardProps {
   decision?: EscalationDecision;
 }
 
-const DECISION_LABELS: Record<EscalationDecision, string> = {
-  allow: "Allowed",
-  deny: "Denied",
-};
-
 export function CredentialApprovalCard({
   request,
   onRespond,
   decision,
 }: CredentialApprovalCardProps) {
+  const t = useTranslations("approval.credential");
   const resolved = decision !== undefined;
+  const decisionLabels: Record<EscalationDecision, string> = {
+    allow: t("decision.allow"),
+    deny: t("decision.deny"),
+  };
 
   return (
     <div
@@ -35,13 +36,13 @@ export function CredentialApprovalCard({
     >
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-warning-foreground/70">
         <KeyRound className="h-3.5 w-3.5" />
-        Credential Request
+        {t("title")}
       </div>
 
       <div className="space-y-1.5">
         {request.skill_name && (
           <div>
-            <span className="text-muted-foreground">Skill: </span>
+            <span className="text-muted-foreground">{t("skillLabel")} </span>
             <span className="font-medium">{request.skill_name}</span>
           </div>
         )}
@@ -66,15 +67,15 @@ export function CredentialApprovalCard({
         )}
         {resolved && decision && (
           <div className="text-xs text-muted-foreground italic">
-            {DECISION_LABELS[decision]}
+            {decisionLabels[decision]}
           </div>
         )}
       </div>
 
       {!resolved && (
         <DenialNoteActions
-          allowLabel="Allow"
-          notePlaceholder="Why should this credential access be blocked?"
+          allowLabel={t("allow")}
+          notePlaceholder={t("denyPlaceholder")}
           onAllow={() => onRespond("allow")}
           onDeny={(message) => onRespond("deny", message)}
         />
