@@ -11,16 +11,16 @@
     },
     "home": {
         "empty": {
-            "description": "Waehle eine Sitzung aus oder starte eine neue"
+            "description": "Wähle eine Sitzung aus oder starte eine neue"
         }
     },
     "preferences": {
         "title": "Einstellungen",
-        "description": "Frontend-Einstellungen fuer Sprache und anderes app-weites Verhalten.",
-        "currentLocale": "Aktuelle Oberflaechensprache: {locale}",
+        "description": "Frontend-Einstellungen für Sprache und anderes app-weites Verhalten.",
+        "currentLocale": "Aktuelle Oberflächensprache: {locale}",
         "language": {
             "label": "Sprache",
-            "description": "Waehle, wie die Oberflaechensprache bestimmt wird.",
+            "description": "Wähle, wie die Oberflächensprache bestimmt wird.",
             "options": {
                 "system": "System",
                 "en": "English",
