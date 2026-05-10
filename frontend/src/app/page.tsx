@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { ConnectForm } from "@/components/connect-form";
+import { JobsView } from "@/components/jobs-view";
 import { NewSessionButton } from "@/components/new-session-button";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
@@ -27,6 +28,8 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
 }
 
 const SESSION_PAGE_SIZE = 50;
+const APP_TITLE = "carapace";
+const MAX_DOCUMENT_TITLE_LENGTH = 30;
 
 function mergeSessions(
   current: SessionInfo[],
@@ -73,11 +76,15 @@ function sortSessions(sessions: SessionInfo[]): SessionInfo[] {
   return [...sessions].sort(compareSessions);
 }
 
+const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
+
 type ConnectionState = {
   connected: boolean;
   server: string;
   token: string;
 };
+
+type AppView = "chat" | "jobs";
 
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
@@ -106,6 +113,7 @@ export default function Home() {
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialView = searchParams.get("view") === "jobs" ? "jobs" : "chat";
   const [connection, setConnection] = useState<ConnectionState>({
     connected: false,
     server: "",
@@ -113,8 +121,12 @@ function HomeContent() {
   });
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    searchParams.get("session"),
+    initialView === "jobs" ? null : searchParams.get("session"),
   );
+  const [activeView, setActiveView] = useState<AppView>(
+    initialView,
+  );
+  const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
   const [refreshingSessions, setRefreshingSessions] = useState(false);
@@ -136,14 +148,22 @@ function HomeContent() {
 
   // Sync activeSessionId → URL query param
   useEffect(() => {
-    if (activeSessionId) {
-      router.replace(`?session=${encodeURIComponent(activeSessionId)}`, {
+    const params = new URLSearchParams();
+    if (activeView === "jobs") {
+      params.set("view", "jobs");
+    } else if (activeSessionId) {
+      params.set("session", activeSessionId);
+    }
+
+    const query = params.toString();
+    if (query) {
+      router.replace(`?${query}`, {
         scroll: false,
       });
     } else {
       router.replace("/", { scroll: false });
     }
-  }, [activeSessionId, router]);
+  }, [activeSessionId, activeView, router]);
 
   useEffect(() => {
     // Defer to avoid synchronous setState in effect body.
@@ -305,7 +325,9 @@ function HomeContent() {
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
+    setRequestedJobId(null);
     setActiveSessionId(null);
+    setActiveView("chat");
   }
 
   async function handleNewSession(unattended = false) {
@@ -313,7 +335,9 @@ function HomeContent() {
     try {
       const session = await createSession(server, token, { unattended });
       setSessions((prev) => sortSessions([session, ...prev]));
+      setRequestedJobId(null);
       setActiveSessionId(session.session_id);
+      setActiveView("chat");
       setSidebarOpen(false);
     } catch {
       // handled in UI
@@ -345,7 +369,30 @@ function HomeContent() {
   }, [server, token]);
 
   function handleSelectSession(id: string) {
+    setRequestedJobId(null);
     setActiveSessionId(id);
+    setActiveView("chat");
+    setSidebarOpen(false);
+  }
+
+  function handleOpenJobs(): void {
+    setRequestedJobId(null);
+    setActiveSessionId(null);
+    setActiveView("jobs");
+    setSidebarOpen(false);
+  }
+
+  function handleOpenJobSettings(jobId: string): void {
+    setRequestedJobId(jobId);
+    setActiveSessionId(null);
+    setActiveView("jobs");
+    setSidebarOpen(false);
+  }
+
+  function handleGoHome(): void {
+    setRequestedJobId(null);
+    setActiveSessionId(null);
+    setActiveView("chat");
     setSidebarOpen(false);
   }
 
@@ -392,6 +439,7 @@ function HomeContent() {
   const handleForkSession = useCallback((session: SessionInfo) => {
     handleSessionUpdate(session);
     setActiveSessionId(session.session_id);
+    setActiveView("chat");
     setSidebarOpen(false);
   }, []);
 
@@ -401,6 +449,21 @@ function HomeContent() {
   }, [activeSessionId, handleDeleteSession]);
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
+
+  useEffect(() => {
+    const sessionTitle = activeSession?.title?.trim();
+    const useDefaultTitle = activeView !== "chat"
+      || !activeSession
+      || activeSession.attributes.private
+      || !sessionTitle;
+    const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
+      ? `${sessionTitle.slice(0, MAX_DOCUMENT_TITLE_LENGTH - 3)}...`
+      : sessionTitle;
+
+    document.title = useDefaultTitle
+      ? APP_TITLE
+      : `${truncatedTitle} • ${APP_TITLE}`;
+  }, [activeSession, activeView]);
 
   if (!connected) {
     return <ConnectForm onConnect={handleConnect} />;
@@ -426,11 +489,15 @@ function HomeContent() {
         <Sidebar
           sessions={sessions}
           activeSessionId={activeSessionId}
+          activeView={activeView}
           onSelect={handleSelectSession}
           onNew={handleNewSession}
+          onGoHome={handleGoHome}
+          onOpenJobs={handleOpenJobs}
           onUpdateAttributes={handleUpdateSessionAttributes}
           onDelete={handleDeleteSession}
           onDisconnect={handleDisconnect}
+          githubUrl={GITHUB_REPO_URL}
           loading={loading}
           hasMore={sessionListHasMore}
           loadingMore={loadingMoreSessions}
@@ -452,11 +519,19 @@ function HomeContent() {
               <Menu className="h-5 w-5" />
             )}
           </button>
-          <span className="text-sm font-semibold">carapace</span>
+          <span className="text-sm font-semibold">{activeView === "jobs" ? "Jobs" : "carapace"}</span>
         </div>
 
         {/* Chat or empty state */}
-        {activeSessionId ? (
+        {activeView === "jobs" ? (
+          <JobsView
+            server={server}
+            token={token}
+            sessions={sessions}
+            onSessionActivated={handleForkSession}
+            requestedJobId={requestedJobId}
+          />
+        ) : activeSessionId ? (
           <ChatView
             key={activeSessionId}
             server={server}
@@ -468,6 +543,7 @@ function HomeContent() {
             onSessionUpdate={handleActiveSessionUpdate}
             onSandboxUpdate={handleActiveSessionSandboxUpdate}
             onForkSession={handleForkSession}
+            onOpenJobSettings={handleOpenJobSettings}
             onUpdateSessionAttributes={handleUpdateSessionAttributes}
             onDeleteSession={handleActiveSessionDelete}
           />

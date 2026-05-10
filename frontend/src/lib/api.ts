@@ -1,5 +1,8 @@
 import type {
   HistoryMessage,
+  JobDefinition,
+  JobRunResult,
+  JobsFile,
   SessionArchiveCommitResponse,
   SessionAttributesPatch,
   SessionInfo,
@@ -290,6 +293,76 @@ export async function fetchModels(
   if (!res.ok) return [];
   const raw: unknown = await res.json();
   return decodeAvailableModels(raw);
+}
+
+export async function listJobs(
+  server: string,
+  token: string,
+): Promise<JobsFile> {
+  const res = await fetch(`${server}/api/jobs`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to list jobs: ${res.status}`);
+  return res.json();
+}
+
+export async function createJob(
+  server: string,
+  token: string,
+  body: JobDefinition,
+): Promise<JobDefinition> {
+  const res = await fetch(`${server}/api/jobs`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Failed to create job: ${res.status}`);
+  return res.json();
+}
+
+export async function updateJob(
+  server: string,
+  token: string,
+  jobId: string,
+  body: JobDefinition,
+): Promise<JobDefinition> {
+  const res = await fetch(`${server}/api/jobs/${encodeURIComponent(jobId)}`, {
+    method: "PUT",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Failed to update job: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteJob(
+  server: string,
+  token: string,
+  jobId: string,
+): Promise<void> {
+  const res = await fetch(`${server}/api/jobs/${encodeURIComponent(jobId)}`, {
+    method: "DELETE",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to delete job: ${res.status}`);
+}
+
+export async function runJob(
+  server: string,
+  token: string,
+  jobId: string,
+  data?: string,
+): Promise<JobRunResult> {
+  const res = await fetch(
+    `${server}/api/jobs/${encodeURIComponent(jobId)}/run`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify({ data: data ?? null }),
+    },
+  );
+  if (!res.ok) throw new Error(`Failed to run job: ${res.status}`);
+  return res.json();
 }
 
 export function wsUrl(

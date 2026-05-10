@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,6 +19,7 @@ from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
+from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
@@ -95,6 +97,8 @@ def _setup_server(tmp_path, monkeypatch):
         session_mgr=session_mgr,
         config=config.sessions.commit,
     )
+    srv._jobs_store = JobsStore(tmp_path)
+    srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
 
 
 @pytest.fixture()
@@ -214,6 +218,229 @@ def test_get_session(client, auth_headers):
     resp = client.get(f"/api/sessions/{sid}", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["session_id"] == sid
+
+
+def test_get_session_includes_total_cost_usd(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    class _FakeUsage:
+        def estimated_cost(self) -> dict[str, Decimal]:
+            return {"total": Decimal("0.0123")}
+
+    monkeypatch.setattr(srv._engine.session_mgr, "load_usage", lambda session_id: _FakeUsage())
+
+    resp = client.get(f"/api/sessions/{sid}", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["total_cost_usd"] == pytest.approx(0.0123)
+
+
+def test_jobs_crud_roundtrip(client, auth_headers):
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Daily Briefing",
+            "prompt": "Summarize the day.",
+            "unattended": True,
+            "triggers": [{"expression": "0 9 * * *", "timezone": "UTC"}],
+        },
+    )
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["id"] == "daily-briefing"
+
+    list_resp = client.get("/api/jobs", headers=auth_headers)
+    assert list_resp.status_code == 200
+    assert [job["id"] for job in list_resp.json()["jobs"]] == ["daily-briefing"]
+
+    get_resp = client.get("/api/jobs/daily-briefing", headers=auth_headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["name"] == "Daily Briefing"
+
+    update_resp = client.put(
+        "/api/jobs/daily-briefing",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Updated Briefing",
+            "prompt": "Summarize the updates.",
+            "unattended": True,
+            "triggers": [],
+        },
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["name"] == "Updated Briefing"
+
+    delete_resp = client.delete("/api/jobs/daily-briefing", headers=auth_headers)
+    assert delete_resp.status_code == 204
+
+    missing_resp = client.get("/api/jobs/daily-briefing", headers=auth_headers)
+    assert missing_resp.status_code == 404
+
+
+def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers, monkeypatch):
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "daily-briefing",
+            "name": "Daily Briefing",
+            "prompt": "Summarize the day.",
+            "unattended": True,
+            "triggers": [],
+        },
+    )
+
+    run_resp = client.post(
+        "/api/jobs/daily-briefing/run",
+        headers=auth_headers,
+        json={"data": '{"source":"calendar","items":3}'},
+    )
+
+    assert run_resp.status_code == 200
+    payload = run_resp.json()
+    assert payload["job_id"] == "daily-briefing"
+    assert payload["created_new_session"] is True
+    assert payload["session"]["channel_type"] == "job"
+    assert payload["session"]["latest_job_run"]["job_id"] == "daily-briefing"
+    assert payload["session"]["latest_job_run"]["data"] == '{"source":"calendar","items":3}'
+
+    session_resp = client.get(f"/api/sessions/{payload['session_id']}", headers=auth_headers)
+    assert session_resp.status_code == 200
+    assert session_resp.json()["latest_job_run"]["job_id"] == "daily-briefing"
+    assert session_resp.json()["latest_job_run"]["data"] == '{"source":"calendar","items":3}'
+
+    (session_id, message), kwargs = submit_message.await_args
+    assert session_id == payload["session_id"]
+    assert kwargs == {}
+    assert "Summarize the day." in message
+    assert "triggered via the API" in message
+    assert '{"source":"calendar","items":3}' in message
+
+
+def test_run_job_uses_existing_persistent_session(client, auth_headers, monkeypatch):
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    state = srv._engine.session_mgr.create_session(unattended=False)
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "team-planning",
+            "name": "Team Planning",
+            "prompt": "Continue planning.",
+            "unattended": False,
+            "persistent_session_id": state.session_id,
+            "triggers": [],
+        },
+    )
+    assert create_resp.status_code == 201
+
+    run_resp = client.post("/api/jobs/team-planning/run", headers=auth_headers)
+
+    assert run_resp.status_code == 200
+    payload = run_resp.json()
+    assert payload["created_new_session"] is False
+    assert payload["session_id"] == state.session_id
+
+    (session_id, message), kwargs = submit_message.await_args
+    assert session_id == state.session_id
+    assert kwargs == {}
+    assert "Continue planning." in message
+
+
+def test_run_job_rejects_missing_persistent_session(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(srv._engine, "submit_message", AsyncMock())
+
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "team-planning",
+            "name": "Team Planning",
+            "prompt": "Continue planning.",
+            "unattended": False,
+            "persistent_session_id": "missing-session",
+            "triggers": [],
+        },
+    )
+    assert create_resp.status_code == 201
+
+    run_resp = client.post("/api/jobs/team-planning/run", headers=auth_headers)
+    assert run_resp.status_code == 409
+    assert "persistent session" in run_resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        srv.JobDefinition.model_validate(
+            {
+                "id": "daily-briefing",
+                "name": "Daily Briefing",
+                "prompt": "Summarize the day.",
+                "triggers": [{"expression": "* * * * *"}],
+            }
+        )
+    )
+
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await srv._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
+
+    assert dispatched == 1
+    (session_id, message), kwargs = submit_message.await_args
+    assert kwargs == {}
+    assert session_id
+    assert "triggered automatically" in message
+    assert "* * * * *" in message
+
+
+@pytest.mark.asyncio
+async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        srv.JobDefinition.model_validate(
+            {
+                "id": "timezone-ambiguous",
+                "name": "Timezone Ambiguous",
+                "prompt": "Summarize the day.",
+                "triggers": [
+                    {"expression": "* * * * *", "timezone": "UTC"},
+                    {"expression": "* * * * *", "timezone": "Europe/Berlin"},
+                ],
+            }
+        )
+    )
+
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await srv._run_job_definition(
+        srv._jobs_store.get_job("timezone-ambiguous"),
+        trigger_kind="cron",
+        triggered_at=datetime(2026, 5, 9, 10, 1, tzinfo=UTC),
+        cron_expression="* * * * *",
+        trigger_timezone="Europe/Berlin",
+    )
+
+    assert dispatched.job_id == "timezone-ambiguous"
+    (_session_id, message), kwargs = submit_message.await_args
+    assert kwargs == {}
+    assert "2026-05-09T12:01:00+02:00" in message
 
 
 def test_update_session_privacy(client, auth_headers):

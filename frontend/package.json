@@ -14,14 +14,15 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cronstrue": "^3.14.0",
     "diff": "^9.0.0",
     "emoji-regex": "^10.6.0",
     "katex": "^0.16.45",
-    "lucide-react": "^1.7.0",
-    "next": "^16.2.2",
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.6",
     "next-themes": "^0.4.6",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "rehype-pretty-code": "^0.14.3",
@@ -31,15 +32,14 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.0.5",
-    "@tailwindcss/postcss": "^4.2.2",
-    "@types/node": "^25.5.2",
+    "@eslint/compat": "^2.1.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^10.0.0",
-    "eslint-config-next": "^16.2.2",
-    "tailwindcss": "^4.2.2",
-    "jdecked-twemoji-assets": "https://github.com/jdecked/twemoji/archive/refs/tags/v17.0.2.tar.gz",
-    "typescript": "^6.0.2"
+    "eslint": "^10.3.0",
+    "eslint-config-next": "^16.2.6",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3"
   }
 }

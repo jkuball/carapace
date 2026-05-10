@@ -12,6 +12,9 @@ from carapace.models import (
     AgentConfig,
     AvailableModelEntry,
     Config,
+    JobCronTrigger,
+    JobDefinition,
+    JobsFile,
     SessionBudget,
     SessionState,
     agent_available_model_entries,
@@ -34,6 +37,65 @@ def test_config_defaults():
     assert cfg.sandbox.network_name == "carapace-sandbox"
     ids = {e.model_id for e in cfg.agent.available_models}
     assert ids == {"anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5"}
+
+
+def test_job_cron_trigger_accepts_valid_expression_and_timezone() -> None:
+    trigger = JobCronTrigger.model_validate({"expression": "0 9 * * *", "timezone": "Europe/Berlin"})
+    assert trigger.expression == "0 9 * * *"
+    assert trigger.timezone == "Europe/Berlin"
+
+
+def test_job_cron_trigger_rejects_empty_expression() -> None:
+    with pytest.raises(ValidationError, match="must not be empty"):
+        JobCronTrigger.model_validate({"expression": "   "})
+
+
+def test_job_cron_trigger_rejects_invalid_expression() -> None:
+    with pytest.raises(ValidationError, match="invalid cron expression"):
+        JobCronTrigger.model_validate({"expression": "not-a-cron"})
+
+
+def test_job_cron_trigger_rejects_invalid_timezone() -> None:
+    with pytest.raises(ValidationError, match="IANA time zone"):
+        JobCronTrigger.model_validate({"expression": "0 9 * * *", "timezone": "Mars/Phobos"})
+
+
+def test_job_definition_rejects_persistent_session_for_unattended_job() -> None:
+    with pytest.raises(ValidationError, match="unattended must be false"):
+        JobDefinition.model_validate(
+            {
+                "id": "morning-briefing",
+                "name": "Morning Briefing",
+                "prompt": "Summarize the day.",
+                "unattended": True,
+                "persistent_session_id": "2026-05-09-10-00-deadbeef",
+            }
+        )
+
+
+def test_job_definition_accepts_attended_persistent_session() -> None:
+    job = JobDefinition.model_validate(
+        {
+            "id": "team-planning",
+            "name": "Team Planning",
+            "prompt": "Continue planning.",
+            "unattended": False,
+            "persistent_session_id": "2026-05-09-10-00-deadbeef",
+        }
+    )
+    assert job.persistent_session_id == "2026-05-09-10-00-deadbeef"
+
+
+def test_jobs_file_rejects_duplicate_job_ids() -> None:
+    with pytest.raises(ValidationError, match="duplicate job id"):
+        JobsFile.model_validate(
+            {
+                "jobs": [
+                    {"id": "daily", "name": "Daily", "prompt": "First."},
+                    {"id": "daily", "name": "Daily Again", "prompt": "Second."},
+                ]
+            }
+        )
 
 
 def test_session_budget_zero_values_normalize_to_unlimited() -> None:

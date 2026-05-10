@@ -47,13 +47,23 @@ export interface SessionInfo {
   last_active: string;
   title?: string;
   attributes: SessionAttributes;
+  latest_job_run?: SessionLatestJobRun | null;
   knowledge_last_committed_at?: string | null;
   knowledge_last_archive_path?: string | null;
   knowledge_last_commit_trigger?: string | null;
   activated_rules: string[];
   disabled_rules: string[];
   message_count: number;
+  total_cost_usd?: number | null;
   sandbox?: SessionSandboxSnapshot | null;
+}
+
+export interface SessionLatestJobRun {
+  job_id: string;
+  trigger_kind: "api" | "cron" | "manual";
+  triggered_at: string;
+  data?: string | null;
+  cron_expression?: string | null;
 }
 
 export interface SessionListPage {
@@ -69,6 +79,35 @@ export interface SessionArchiveCommitResponse {
   committed_at?: string | null;
   trigger: string;
   reason?: string | null;
+}
+
+// Jobs
+
+export interface JobCronTrigger {
+  type: "cron";
+  expression: string;
+  timezone?: string | null;
+}
+
+export interface JobDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  triggers: JobCronTrigger[];
+  prompt: string;
+  unattended: boolean;
+  persistent_session_id?: string | null;
+}
+
+export interface JobsFile {
+  jobs: JobDefinition[];
+}
+
+export interface JobRunResult {
+  job_id: string;
+  session_id: string;
+  created_new_session: boolean;
+  session: SessionInfo;
 }
 
 export interface HistoryMessage {
