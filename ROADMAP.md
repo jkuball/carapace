@@ -12,6 +12,7 @@
 - [ ] harden sandbox so trusted exec allowlists are meaningful (run as non-root, read-only root fs where possible, avoid command alias / path tampering) — important prerequisite for auto-approving read-only commands like `rg`, `ls`, `cat`
 - [ ] an actual database backend instead of files
 - [ ] after adding cronjobs a backend refactor/review might be in order
+- [ ] i18n (persisted in local storage? put into settings default to user lang? construe, time formatting, ..)
 
 ## Knowledge Repo Handling
 

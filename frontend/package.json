@@ -14,6 +14,7 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cronstrue": "^3.14.0",
     "diff": "^9.0.0",
     "emoji-regex": "^10.6.0",
     "katex": "^0.16.45",
@@ -38,8 +39,8 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^10.0.0",
     "eslint-config-next": "^16.2.2",
-    "tailwindcss": "^4.2.2",
     "jdecked-twemoji-assets": "https://github.com/jdecked/twemoji/archive/refs/tags/v17.0.2.tar.gz",
+    "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2"
   }
 }
