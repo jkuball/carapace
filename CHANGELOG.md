@@ -1,6 +1,84 @@
 # CHANGELOG
 
 
+## v0.113.0 (2026-05-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: address follow-up review comments
+  ([`b94d293`](https://github.com/thiesgerken/carapace/commit/b94d293643f3cc7d5f7b45a2da8ebdbf2ccba5a7))
+
+- 🐛 fix: address remaining frontend review comments
+  ([`4835dca`](https://github.com/thiesgerken/carapace/commit/4835dca780392154b84f4243c190fdf15ee54a01))
+
+- 🐛 fix: auto-generate Job ID from name input and prevent running unsaved jobs
+  ([`83a556c`](https://github.com/thiesgerken/carapace/commit/83a556c35a9f2e9b5338bd098c7ff00259f06cd2))
+
+- 🐛 fix: avoid duplicate cron boundary runs
+  ([`939f7ae`](https://github.com/thiesgerken/carapace/commit/939f7ae710f989332325fe23b3e585b2a5d677ec))
+
+- 🐛 fix: address jobs review comments
+  ([`a3d1433`](https://github.com/thiesgerken/carapace/commit/a3d1433b4e55e321099b66ba9ad460ee1f677982))
+
+### Other
+
+
+- add timezone support for cron job triggers and corresponding tests
+  ([`3e39444`](https://github.com/thiesgerken/carapace/commit/3e39444cfc3606b65ee3f065eb447a98d2eff02e))
+
+- fix twemoji setup
+  ([`02186f5`](https://github.com/thiesgerken/carapace/commit/02186f562c019dc55a86ef6e7864fd510e9171d4))
+
+- pnpm update
+  ([`c2a6a99`](https://github.com/thiesgerken/carapace/commit/c2a6a996c9f3a4ed76bb767303613fd3f407236a))
+
+- fix hash
+  ([`0b24400`](https://github.com/thiesgerken/carapace/commit/0b244007bfbd3529c50d76c3eb02d889c9098bea))
+
+- improve job UI
+  ([`29888ba`](https://github.com/thiesgerken/carapace/commit/29888ba7e015b4d3f4c6409bb844ecf35790019c))
+
+- better timestamps for the agent
+  ([`001e1da`](https://github.com/thiesgerken/carapace/commit/001e1da7f379947d6ca257eb7bd1f993820a3771))
+
+- fix tests
+  ([`b290c77`](https://github.com/thiesgerken/carapace/commit/b290c77dd9a9a9825218440ab86af000237c0989))
+
+- improve job prompts
+  ([`6c0288f`](https://github.com/thiesgerken/carapace/commit/6c0288fc2596443b54109fa0fd0e6585e063d04e))
+
+- ui: add a nice cron display
+  ([`de86dfd`](https://github.com/thiesgerken/carapace/commit/de86dfdcd85e1df2da6d1263699cb0455302196c))
+
+- Add aria-labels to buttons in Sidebar for improved accessibility
+  ([`1f018d1`](https://github.com/thiesgerken/carapace/commit/1f018d12b57695e6af723c77f67d6856513acfda))
+
+- ui for cronjobs
+  ([`7ab651c`](https://github.com/thiesgerken/carapace/commit/7ab651c1bc31487f66c0201911aa586255e80f47))
+
+- add scheduler service
+  ([`72f3da5`](https://github.com/thiesgerken/carapace/commit/72f3da548aff321049dbdd8fd154a4284985ccfa))
+
+### ✨ Features
+
+
+- ✨ feat: update document title based on active session and view
+  ([`2f63122`](https://github.com/thiesgerken/carapace/commit/2f63122ec26fddc66f28b07558bfb9d87e79c19c))
+
+- ✨ feat: improve job run data and jobs ui
+  ([`96afbba`](https://github.com/thiesgerken/carapace/commit/96afbbaea991259a059df45d08e33c6cd35ccc0f))
+
+- ✨ feat: add (cron)jobs
+  ([`9372a01`](https://github.com/thiesgerken/carapace/commit/9372a01822360ba86e20e2c923d94e7b0c4ad35d))
+
+### 💄 UI/UX
+
+
+- 💄 style: polish sidebar navigation
+  ([`bf1866a`](https://github.com/thiesgerken/carapace/commit/bf1866aa6fdd2e368445c3854e0fb86544a244b0))
+
 ## v0.112.4 (2026-05-09)
 
 
