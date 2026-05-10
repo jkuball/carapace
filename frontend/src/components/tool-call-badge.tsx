@@ -230,6 +230,13 @@ function getExecCommand(args: Record<string, unknown>): string {
   return "";
 }
 
+function normalizeOptionalLabel(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return "";
+  if (/^(null|none)$/i.test(trimmed)) return "";
+  return trimmed;
+}
+
 function buildShellTranscript(command: string, output?: string): string {
   const body = ["❯ " + command];
   const normalizedOutput = output?.replace(/\n+$/, "") ?? "";
@@ -506,7 +513,9 @@ export function ToolCallBadge({
       ? fencedCodeBlock(languageFromFilePath(readPath), readSplit.body)
       : "";
   const execCommand = isExecTool ? getExecCommand(args) : "";
-  const execTitle = isExecTool ? stringArg(args, "title") : "";
+  const execTitle = isExecTool
+    ? normalizeOptionalLabel(stringArg(args, "title"))
+    : "";
   const execTranscript = isExecTool
     ? buildShellTranscript(execCommand || t("fallbacks.missingCommand"), result)
     : "";
