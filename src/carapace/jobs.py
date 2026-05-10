@@ -30,21 +30,21 @@ def build_job_run_message(
     cron_expression: str | None = None,
     timezone: str | None = None,
 ) -> str:
-    tz = ZoneInfo(timezone) if timezone else UTC
-    time_str = triggered_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     title = job.name if job.name else job.id
+    tz = ZoneInfo(timezone) if timezone else UTC
+    iso_time = triggered_at.astimezone(tz).isoformat()
 
     match trigger_kind:
         case "cron":
             trigger_sentence = (
-                f"The job was triggered automatically at {time_str} due to cron rule `{cron_expression}` on the job."
+                f"The job was triggered automatically at {iso_time} due to cron rule `{cron_expression}` on the job."
             )
-        case "api":
-            trigger_sentence = f"The job was triggered via the API at {time_str}."
         case "manual":
-            trigger_sentence = f"The job was triggered manually at {time_str}."
+            trigger_sentence = f"The job was triggered manually at {iso_time}."
+        case "api":
+            trigger_sentence = f"The job was triggered via the API at {iso_time}."
         case _:
-            trigger_sentence = f"The job was triggered at {time_str}."
+            trigger_sentence = f"The job was triggered at {iso_time}."
 
     sections = [
         f"This is an invocation of job `{job.id}` ({title}).",
