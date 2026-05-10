@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.114.0 (2026-05-10)
+
+
+### Other
+
+
+- roadmap
+  ([`56c99fe`](https://github.com/thiesgerken/carapace/commit/56c99feea6ac8eac8b9f3180546421707d833690))
+
+- docs
+  ([`7a57f73`](https://github.com/thiesgerken/carapace/commit/7a57f731598b6c2e1a8bf52d32582ffdcc63675e))
+
+- fix: replace useLayoutEffect with useEffect in HomeContent for better performance
+  ([`637b0a4`](https://github.com/thiesgerken/carapace/commit/637b0a4222c736b4298da283fd740ea71963663f))
+
+- feat: add code block copy functionality with internationalization support
+  ([`ce6bf22`](https://github.com/thiesgerken/carapace/commit/ce6bf22843060597d3d498dacf90444d78ecd6cc))
+
+- more i18n
+  ([`9c3ee20`](https://github.com/thiesgerken/carapace/commit/9c3ee20b47e6ce6e4a6462bc9579389540966943))
+
+- feat: add internationalization support for new session button
+  ([`34bdc5e`](https://github.com/thiesgerken/carapace/commit/34bdc5e91d7cc679e27d2a261e3c4af6b1593257))
+
+- fix: update German translations for preferences and improve error handling in JobsView
+  ([`b946830`](https://github.com/thiesgerken/carapace/commit/b9468304949dc7dd71e56ae98e98f9aca813d39e))
+
+- fix: update HomeContent to use useLayoutEffect and include searchParamsKey
+  ([`5cf545c`](https://github.com/thiesgerken/carapace/commit/5cf545c032120f33dfdbb5e6db8676c531352a69))
+
+- further i18n
+  ([`91cf87d`](https://github.com/thiesgerken/carapace/commit/91cf87d56e0fd08d800ff365c312acd64be984c0))
+
+- i18n
+  ([`e0aade6`](https://github.com/thiesgerken/carapace/commit/e0aade6ade3dd8159cdade7ce08de9bf3aa3ed2f))
+
+- ui ux fixes
+  ([`132c9c5`](https://github.com/thiesgerken/carapace/commit/132c9c5000b0e4553a40bf24453b257e61f89e50))
+
 ## v0.113.3 (2026-05-10)
 
 
@@ -19,35 +58,26 @@
 - 🐛 fix: replace button with span for unattended session indicator
   ([`3e1e1a9`](https://github.com/thiesgerken/carapace/commit/3e1e1a9428c7aca40717e6f8a54e6d8529a1b409))
 
+- 🐛 fix: keep locale under settings tabs
+  ([`dc23481`](https://github.com/thiesgerken/carapace/commit/dc23481e5a6857a4a24836c90c53095ae13fbfa0))
+
 ### Other
 
+
+- fix: update initial active session logic based on view type
+  ([`75e89d4`](https://github.com/thiesgerken/carapace/commit/75e89d4f747235dda68b78b7079d9dc51e1f9e98))
+
+- fix: correct German translations in de.json
+  ([`94f89d0`](https://github.com/thiesgerken/carapace/commit/94f89d0d51168af76df29630238f940ae0643d8d))
+
+- fix lint issues
+  ([`387905e`](https://github.com/thiesgerken/carapace/commit/387905e58251e502625b4711b65f83c277eca857))
 
 - ideas
   ([`23c2214`](https://github.com/thiesgerken/carapace/commit/23c221421dddef81c8388eba14144e26d3f43a69))
 
 ## v0.113.1 (2026-05-10)
 
-
-### ♻️ Refactoring
-
-
-- ♻️ refactor: drop dead CARAPACE_VERSION fallback and test /api/meta
-  ([`52d2b3a`](https://github.com/thiesgerken/carapace/commit/52d2b3a4add9ad78e3a0c59810fe66500b8fb0f4))
-
-### Other
-
-
-- favicon
-  ([`def5d78`](https://github.com/thiesgerken/carapace/commit/def5d78e2ec8bd0dc366be11cadc0b4018170a1d))
-
-- add route
-  ([`dfc5ba6`](https://github.com/thiesgerken/carapace/commit/dfc5ba63be2edba4eecab8502bec0c59bb5b13da))
-
-- add version display
-  ([`88068af`](https://github.com/thiesgerken/carapace/commit/88068af68dc7da052b603a6994ea34b204c18868))
-
-- 🎨 style: update turtle favicon
-  ([`ec45484`](https://github.com/thiesgerken/carapace/commit/ec45484696b546c322859be2aa230bdef1866443))
 
 ### ⬆️ Dependencies
 
@@ -67,14 +97,23 @@
 - 🐛 fix: address remaining frontend review comments
   ([`4835dca`](https://github.com/thiesgerken/carapace/commit/4835dca780392154b84f4243c190fdf15ee54a01))
 
-- 🐛 fix: auto-generate Job ID from name input and prevent running unsaved jobs
-  ([`83a556c`](https://github.com/thiesgerken/carapace/commit/83a556c35a9f2e9b5338bd098c7ff00259f06cd2))
+## v0.112.4 (2026-05-09)
 
-- 🐛 fix: avoid duplicate cron boundary runs
-  ([`939f7ae`](https://github.com/thiesgerken/carapace/commit/939f7ae710f989332325fe23b3e585b2a5d677ec))
 
-- 🐛 fix: address jobs review comments
-  ([`a3d1433`](https://github.com/thiesgerken/carapace/commit/a3d1433b4e55e321099b66ba9ad460ee1f677982))
+### ✨ Features
+
+
+- ✨ feat: add frontend i18n foundation
+  ([`6d1dab3`](https://github.com/thiesgerken/carapace/commit/6d1dab3c19f82e4adf378bfd914dd6c71445676e))
+
+- ✨ feat: update document title based on active session and view
+  ([`2f63122`](https://github.com/thiesgerken/carapace/commit/2f63122ec26fddc66f28b07558bfb9d87e79c19c))
+
+- ✨ feat: improve job run data and jobs ui
+  ([`96afbba`](https://github.com/thiesgerken/carapace/commit/96afbbaea991259a059df45d08e33c6cd35ccc0f))
+
+- ✨ feat: add (cron)jobs
+  ([`9372a01`](https://github.com/thiesgerken/carapace/commit/9372a01822360ba86e20e2c923d94e7b0c4ad35d))
 
 ### Other
 
@@ -109,32 +148,32 @@
 - Add aria-labels to buttons in Sidebar for improved accessibility
   ([`1f018d1`](https://github.com/thiesgerken/carapace/commit/1f018d12b57695e6af723c77f67d6856513acfda))
 
+- favicon
+  ([`def5d78`](https://github.com/thiesgerken/carapace/commit/def5d78e2ec8bd0dc366be11cadc0b4018170a1d))
+
+- add route
+  ([`dfc5ba6`](https://github.com/thiesgerken/carapace/commit/dfc5ba63be2edba4eecab8502bec0c59bb5b13da))
+
+- add version display
+  ([`88068af`](https://github.com/thiesgerken/carapace/commit/88068af68dc7da052b603a6994ea34b204c18868))
+
+- 🎨 style: update turtle favicon
+  ([`ec45484`](https://github.com/thiesgerken/carapace/commit/ec45484696b546c322859be2aa230bdef1866443))
+
 - ui for cronjobs
   ([`7ab651c`](https://github.com/thiesgerken/carapace/commit/7ab651c1bc31487f66c0201911aa586255e80f47))
 
 - add scheduler service
   ([`72f3da5`](https://github.com/thiesgerken/carapace/commit/72f3da548aff321049dbdd8fd154a4284985ccfa))
 
-### ✨ Features
+- docs: update roadmap to include new features and remove memory section
+  ([`13e8e43`](https://github.com/thiesgerken/carapace/commit/13e8e432c787064acce23b28caba6a4805c2d40e))
+
+### ♻️ Refactoring
 
 
-- ✨ feat: update document title based on active session and view
-  ([`2f63122`](https://github.com/thiesgerken/carapace/commit/2f63122ec26fddc66f28b07558bfb9d87e79c19c))
-
-- ✨ feat: improve job run data and jobs ui
-  ([`96afbba`](https://github.com/thiesgerken/carapace/commit/96afbbaea991259a059df45d08e33c6cd35ccc0f))
-
-- ✨ feat: add (cron)jobs
-  ([`9372a01`](https://github.com/thiesgerken/carapace/commit/9372a01822360ba86e20e2c923d94e7b0c4ad35d))
-
-### 💄 UI/UX
-
-
-- 💄 style: polish sidebar navigation
-  ([`bf1866a`](https://github.com/thiesgerken/carapace/commit/bf1866aa6fdd2e368445c3854e0fb86544a244b0))
-
-## v0.112.4 (2026-05-09)
-
+- ♻️ refactor: drop dead CARAPACE_VERSION fallback and test /api/meta
+  ([`52d2b3a`](https://github.com/thiesgerken/carapace/commit/52d2b3a4add9ad78e3a0c59810fe66500b8fb0f4))
 
 ### ⬆️ Dependencies
 
@@ -154,11 +193,23 @@
 - ⬆️ chore: upgrade redis:8-alpine Docker digest to d146f83
   ([`a2c84a1`](https://github.com/thiesgerken/carapace/commit/a2c84a1a709b4d6b1b4cb1a44f847979c94f1757))
 
-### Other
+### 🐛 Bug Fixes
 
 
-- docs: update roadmap to include new features and remove memory section
-  ([`13e8e43`](https://github.com/thiesgerken/carapace/commit/13e8e432c787064acce23b28caba6a4805c2d40e))
+- 🐛 fix: auto-generate Job ID from name input and prevent running unsaved jobs
+  ([`83a556c`](https://github.com/thiesgerken/carapace/commit/83a556c35a9f2e9b5338bd098c7ff00259f06cd2))
+
+- 🐛 fix: avoid duplicate cron boundary runs
+  ([`939f7ae`](https://github.com/thiesgerken/carapace/commit/939f7ae710f989332325fe23b3e585b2a5d677ec))
+
+- 🐛 fix: address jobs review comments
+  ([`a3d1433`](https://github.com/thiesgerken/carapace/commit/a3d1433b4e55e321099b66ba9ad460ee1f677982))
+
+### 💄 UI/UX
+
+
+- 💄 style: polish sidebar navigation
+  ([`bf1866a`](https://github.com/thiesgerken/carapace/commit/bf1866aa6fdd2e368445c3854e0fb86544a244b0))
 
 ## v0.112.3 (2026-05-08)
 
