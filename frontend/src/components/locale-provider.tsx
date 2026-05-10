@@ -45,16 +45,11 @@ function resolveBrowserLocale(): SupportedLocale {
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [localeOverride, setLocaleOverrideState] = useState<LocaleOverride>(
-    "system",
+    getLocaleOverride,
   );
-  const [browserLocale, setBrowserLocale] = useState<SupportedLocale>(
-    defaultLocale,
+  const [browserLocale] = useState<SupportedLocale>(
+    resolveBrowserLocale,
   );
-
-  useEffect(() => {
-    setLocaleOverrideState(getLocaleOverride());
-    setBrowserLocale(resolveBrowserLocale());
-  }, []);
 
   const locale = resolveLocale(localeOverride, browserLocale);
   const messages = useMemo<AbstractIntlMessages>(
