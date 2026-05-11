@@ -73,6 +73,23 @@ def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
         asyncio.run(_run())
 
 
+def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session().session_id
+        engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/models")
+            assert result is not None
+            assert result["command"] == "models"
+            assert "available" in result["data"]
+            assert result["data"]["available"]
+            assert "models" not in result["data"]
+
+        asyncio.run(_run())
+
+
 def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)

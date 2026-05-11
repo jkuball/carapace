@@ -172,24 +172,30 @@ def _render_command_result(data: dict[str, Any]) -> None:
             _render_budget(payload)
 
         case "models":
-            if "models" in payload:
-                for model_type, info in payload["models"].items():
-                    marker = " [dim](overridden)[/dim]" if info["current"] != info["default"] else ""
-                    console.print(f"  [bold]{model_type}:[/bold] {info['current']}{marker}")
-                if payload.get("available"):
-                    parts: list[str] = []
-                    for item in payload["available"]:
-                        if isinstance(item, str):
-                            parts.append(item)
-                        elif isinstance(item, dict) and item.get("id"):
-                            s = str(item["id"])
-                            mt = item.get("max_input_tokens")
-                            if mt is not None:
-                                s += f" (max_input_tokens={mt})"
-                            parts.append(s)
-                    if parts:
-                        console.print()
-                        console.print("  [dim]Available:[/dim] " + ", ".join(parts))
+            available = payload.get("available") or []
+            if not available:
+                console.print("No models available.")
+            else:
+                table = Table(title="Available Models")
+                table.add_column("ID", style="bold")
+                table.add_column("Provider")
+                table.add_column("Name")
+                table.add_column("Context", justify="right")
+                for item in available:
+                    if isinstance(item, str):
+                        table.add_row(item, "", "", "")
+                        continue
+                    if not isinstance(item, dict) or not item.get("id"):
+                        continue
+                    max_tokens = item.get("max_input_tokens")
+                    ctx = f"{max_tokens:,}" if isinstance(max_tokens, int) else ""
+                    table.add_row(
+                        str(item["id"]),
+                        str(item.get("provider") or ""),
+                        str(item.get("name") or ""),
+                        ctx,
+                    )
+                console.print(table)
 
         case "model":
             if "models" in payload:

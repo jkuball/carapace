@@ -233,7 +233,12 @@
             "model": "Model",
             "default": "Default",
             "available": "Available:",
+            "provider": "Type",
+            "name": "Name",
+            "context": "Context",
             "contextWindow": "({tokens} ctx)",
+            "contextWindowShort": "{tokens} ctx",
+            "noneAvailable": "No models available.",
             "currentLabel": "Current model:",
             "defaultLabel": "Default: {model}"
         },

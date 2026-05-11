@@ -129,12 +129,50 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
   }
 
   const modelData = decodeModelData(data);
+  if (command === "models" && modelData?.available) {
+    const available = modelData.available;
+    return (
+      <div className="my-2 text-sm">
+        {available.length === 0 ? (
+          <p className="text-muted-foreground">{t("models.noneAvailable")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-1 pr-4 font-medium">{t("models.model")}</th>
+                  <th className="pb-1 pr-4 font-medium">{t("models.provider")}</th>
+                  <th className="pb-1 pr-4 font-medium">{t("models.name")}</th>
+                  <th className="pb-1 font-medium">{t("models.context")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {available.map((entry) => {
+                  const maxTok = entry.max_input_tokens ?? null;
+                  return (
+                    <tr key={entry.id} className="border-b border-border/50 align-top">
+                      <td className="py-1 pr-4 font-mono text-xs text-foreground">{entry.id}</td>
+                      <td className="py-1 pr-4 text-xs text-muted-foreground">{entry.provider || "-"}</td>
+                      <td className="py-1 pr-4 text-xs">{entry.name || entry.id}</td>
+                      <td className="py-1 text-xs text-muted-foreground">
+                        {maxTok == null ? "-" : t("models.contextWindowShort", { tokens: maxTok.toLocaleString() })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (
     modelData?.models &&
-    (command === "models" || command === "model")
+    command === "model"
   ) {
     const models = modelData.models;
-    const available = modelData.available ?? [];
     return (
       <div className="my-2 text-sm">
         {command === "model" && modelData.error ? (
@@ -160,28 +198,6 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
             ))}
           </tbody>
         </table>
-        {command === "models" && available.length > 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            <span className="font-medium">{t("models.available")} </span>
-            {available.map((entry, i) => {
-              const id = entry.id;
-              if (!id) return null;
-              const maxTok = entry.max_input_tokens ?? null;
-              return (
-                <span key={`${id}-${i}`}>
-                  {i > 0 && ", "}
-                  <code className="text-foreground">{id}</code>
-                  {maxTok != null && (
-                    <span className="text-muted-foreground/90">
-                      {" "}
-                      {t("models.contextWindow", { tokens: maxTok.toLocaleString() })}
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </p>
-        )}
         {command === "model" && modelData.message ? (
           <p className="mt-2 text-sm text-muted-foreground">{modelData.message}</p>
         ) : null}

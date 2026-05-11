@@ -1079,10 +1079,9 @@ class SessionEngine(SessionTurnMixin):
     _MODEL_TYPES: tuple[ModelType, ...] = ("agent", "sentinel", "title")
 
     def _handle_models_command(self, active: ActiveSession) -> dict[str, Any]:
-        """Show all model types with their current and default values."""
-        models = self._models_slash_view(active)
+        """Show the available model catalog for selection."""
         available = [e.model_dump(mode="json", by_alias=True) for e in self.available_model_entries]
-        return {"command": "models", "data": {"models": models, "available": available}}
+        return {"command": "models", "data": {"available": available}}
 
     def _models_slash_view(self, active: ActiveSession) -> dict[str, dict[str, str]]:
         defaults = {
