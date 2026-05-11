@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.0 (2026-05-11)
+
+
+### ✨ Features
+
+
+- ✨ feat: model pickers for jobs and sessions
+  ([`0a71183`](https://github.com/thiesgerken/carapace/commit/0a71183d424c71596feff4b431f843327fbfd429))
+
 ## v0.116.0 (2026-05-11)
 
 
