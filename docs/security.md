@@ -107,7 +107,6 @@ The action log is a per-session, append-only chronological record of all signifi
 | `ToolResultEntry`       | Tool returned a result (metadata only, not content)         |
 | `ApprovalEntry`         | User approved or denied an escalated action                 |
 | `SkillActivatedEntry`   | A skill was activated (metadata only)                       |
-| `UserVouchedEntry`      | User explicitly vouched for context via `/approve-context`  |
 | `GitPushEntry`          | Git push evaluated by sentinel (ref, decision, explanation) |
 | `CredentialAccessEntry` | Credential access attempt (vault paths, decision)           |
 
@@ -170,15 +169,6 @@ carapace follows strict veto semantics: if **any** part of the security system s
 - A user denial on an escalated action is always final.
 
 This makes the system easy to reason about: the strictest judgment always wins.
-
-## Slash commands
-
-Users can interact with the security system through slash commands:
-
-| Command            | Description                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `/security`        | Show the current security policy and a summary of the action log                      |
-| `/approve-context` | Record a `UserVouchedEntry` in the action log, signaling trust in the current context |
 
 ## Prompt injection hardening
 

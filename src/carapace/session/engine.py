@@ -41,7 +41,6 @@ import carapace.security as security_mod
 from carapace.agent.loop import run_agent_turn as _run_agent_turn
 from carapace.git.store import GitStore
 from carapace.llm import model_settings_for_config
-from carapace.memory import MemoryStore
 from carapace.models import (
     AvailableModelEntry,
     Config,
@@ -62,7 +61,6 @@ from carapace.security.context import (
     ApprovalVerdict,
     SessionSecurity,
     UserEscalationDecision,
-    UserVouchedEntry,
     normalize_optional_message,
 )
 from carapace.security.sentinel import Sentinel
@@ -748,7 +746,6 @@ class SessionEngine(SessionTurnMixin):
             skill_catalog=self._skill_catalog,
             agent_model=agent_model,
             agent_model_id=agent_model_id,
-            verbose=active.verbose,
             tool_call_callback=tool_call_callback,
             tool_result_callback=tool_result_callback,
             append_session_events=_append_session_events,
@@ -921,28 +918,6 @@ class SessionEngine(SessionTurnMixin):
         if cmd == "/help":
             return {"command": "help", "data": {"commands": SLASH_COMMANDS}}
 
-        if cmd == "/security":
-            security_path = self._knowledge_dir / "SECURITY.md"
-            policy = security_path.read_text() if security_path.exists() else "(no SECURITY.md loaded)"
-            log_count = len(active.security.action_log) if active.security else 0
-            eval_count = active.security.sentinel_eval_count if active.security else 0
-            return {
-                "command": "security",
-                "data": {
-                    "policy_preview": policy[:500] + ("..." if len(policy) > 500 else ""),
-                    "action_log_entries": log_count,
-                    "sentinel_evaluations": eval_count,
-                },
-            }
-
-        if cmd == "/approve-context":
-            if active.security:
-                active.security.append(UserVouchedEntry())
-            return {
-                "command": "approve-context",
-                "data": {"message": "Recorded: you vouch for the current agent context as trustworthy."},
-            }
-
         if cmd == "/session":
             grants_summary = context_grants_session_summary(
                 session_id,
@@ -962,11 +937,6 @@ class SessionEngine(SessionTurnMixin):
         if cmd == "/skills":
             skills = [{"name": s.name, "description": s.description.strip()} for s in self._skill_catalog]
             return {"command": "skills", "data": skills}
-
-        if cmd == "/memory":
-            store = MemoryStore(self._knowledge_dir)
-            files = store.list_files()
-            return {"command": "memory", "data": files}
 
         if cmd == "/retitle":
             arg = parts[1].strip() if len(parts) > 1 else ""
@@ -988,21 +958,8 @@ class SessionEngine(SessionTurnMixin):
             return self._handle_models_command(active)
 
         if cmd == "/model":
-            return self._handle_model_all_command(
+            return await self._handle_model_selector_command(
                 active,
-                parts[1].strip() if len(parts) > 1 else "",
-            )
-
-        if cmd in ("/model-agent", "/model-sentinel", "/model-title"):
-            model_map: dict[str, ModelType] = {
-                "/model-agent": "agent",
-                "/model-sentinel": "sentinel",
-                "/model-title": "title",
-            }
-            model_type = model_map[cmd]
-            return await self._handle_model_command(
-                active,
-                model_type,
                 parts[1].strip() if len(parts) > 1 else "",
                 slash_line=command.strip(),
             )
@@ -1122,10 +1079,9 @@ class SessionEngine(SessionTurnMixin):
     _MODEL_TYPES: tuple[ModelType, ...] = ("agent", "sentinel", "title")
 
     def _handle_models_command(self, active: ActiveSession) -> dict[str, Any]:
-        """Show all model types with their current and default values."""
-        models = self._models_slash_view(active)
+        """Show the available model catalog for selection."""
         available = [e.model_dump(mode="json", by_alias=True) for e in self.available_model_entries]
-        return {"command": "models", "data": {"models": models, "available": available}}
+        return {"command": "models", "data": {"available": available}}
 
     def _models_slash_view(self, active: ActiveSession) -> dict[str, dict[str, str]]:
         defaults = {
@@ -1139,6 +1095,29 @@ class SessionEngine(SessionTurnMixin):
             "title": active.title_model_name,
         }
         return {t: {"current": overrides[t] or defaults[t], "default": defaults[t]} for t in self._MODEL_TYPES}
+
+    async def _handle_model_selector_command(
+        self, active: ActiveSession, arg: str, *, slash_line: str
+    ) -> dict[str, Any]:
+        """Process ``/model [ROLE] [MODEL | reset]`` while keeping ``/model MODEL`` as ``all``."""
+        if not arg:
+            return self._handle_model_all_command(active, "")
+
+        target_aliases: dict[str, ModelType | Literal["all"]] = {
+            "all": "all",
+            "agent": "agent",
+            "sentinel": "sentinel",
+            "title": "title",
+        }
+        args = arg.split(maxsplit=1)
+        target = target_aliases.get(args[0].lower())
+        if target is None:
+            return self._handle_model_all_command(active, arg)
+
+        remainder = args[1].strip() if len(args) == 2 else ""
+        if target == "all":
+            return self._handle_model_all_command(active, remainder)
+        return await self._handle_model_command(active, target, remainder, slash_line=slash_line)
 
     def _handle_model_all_command(self, active: ActiveSession, arg: str) -> dict[str, Any]:
         """Process ``/model [MODEL | reset]`` — show or set all three model roles at once."""
@@ -1183,7 +1162,7 @@ class SessionEngine(SessionTurnMixin):
     async def _handle_model_command(
         self, active: ActiveSession, model_type: ModelType, arg: str, *, slash_line: str
     ) -> dict[str, Any]:
-        """Process ``/model-(agent|sentinel|title) [MODEL | reset]``."""
+        """Process ``/model ROLE [MODEL | reset]`` for one model role."""
         cmd_name = {"agent": "model-agent", "sentinel": "model-sentinel", "title": "model-title"}[model_type]
         defaults = {
             "agent": self._config.agent.model,
@@ -1248,7 +1227,7 @@ class SessionEngine(SessionTurnMixin):
         """Regenerate the session title using the current title model.
 
         *pending_user_line* is the slash command line not yet persisted to events (e.g. first
-        ``/model-title`` in a session).
+        ``/model title`` in a session).
         """
         session_id = active.state.session_id
         events = list(self._session_mgr.load_events(session_id))

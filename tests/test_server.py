@@ -1276,7 +1276,7 @@ def _consume_status(ws):
 
 
 def test_ws_help_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
     with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
@@ -1289,24 +1289,28 @@ def test_ws_help_command(client, auth_headers, bearer):
         assert msg["type"] == "command_result"
         assert msg["command"] == "help"
         assert "commands" in msg["data"]
+        commands = {entry["command"] for entry in msg["data"]["commands"]}
+        assert "/skills" in commands
+        assert "/session" in commands
+        assert "/security" not in commands
+        assert "/approve-context" not in commands
+        assert "/memory" not in commands
 
 
-def test_ws_security_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
-    sid = create_resp.json()["session_id"]
+def test_list_commands_excludes_removed_commands(client, auth_headers):
+    resp = client.get("/api/commands", headers=auth_headers)
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
-        _consume_status(ws)
-        ws.send_json({"type": "message", "content": "/security"})
-        echo = ws.receive_json()
-        assert echo["type"] == "user_message"
-        msg = ws.receive_json()
-        assert msg["type"] == "command_result"
-        assert msg["command"] == "security"
+    assert resp.status_code == 200
+    commands = {entry["command"] for entry in resp.json()}
+    assert "/skills" in commands
+    assert "/session" in commands
+    assert "/security" not in commands
+    assert "/approve-context" not in commands
+    assert "/memory" not in commands
 
 
-def test_ws_session_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
+def test_ws_session_command_for_web(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
     with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
@@ -1318,6 +1322,7 @@ def test_ws_session_command(client, auth_headers, bearer):
         assert msg["type"] == "command_result"
         assert msg["command"] == "session"
         assert msg["data"]["session_id"] == sid
+        assert msg["data"]["channel_type"] == "web"
 
 
 def test_ws_reset_to_turn_emits_ack(client, auth_headers, bearer):
@@ -1461,35 +1466,6 @@ def test_ws_skills_command(client, auth_headers, bearer):
         msg = ws.receive_json()
         assert msg["type"] == "command_result"
         assert msg["command"] == "skills"
-
-
-def test_ws_memory_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
-    sid = create_resp.json()["session_id"]
-
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
-        _consume_status(ws)
-        ws.send_json({"type": "message", "content": "/memory"})
-        echo = ws.receive_json()
-        assert echo["type"] == "user_message"
-        msg = ws.receive_json()
-        assert msg["type"] == "command_result"
-        assert msg["command"] == "memory"
-
-
-def test_ws_verbose_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
-    sid = create_resp.json()["session_id"]
-
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
-        _consume_status(ws)
-        ws.send_json({"type": "message", "content": "/verbose"})
-        echo = ws.receive_json()
-        assert echo["type"] == "user_message"
-        msg = ws.receive_json()
-        assert msg["type"] == "command_result"
-        assert msg["command"] == "verbose"
-        assert msg["data"]["verbose"] is False
 
 
 def test_ws_unknown_command(client, auth_headers, bearer):

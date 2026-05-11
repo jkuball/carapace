@@ -11,11 +11,8 @@ from carapace.usage import BudgetGauge, LlmRequestPhase, LlmSource
 FinalStatus = Literal["success", "warning"]
 
 SLASH_COMMANDS: list[dict[str, str]] = [
-    {"command": "/security", "description": "Show security policy summary"},
-    {"command": "/approve-context", "description": "Vouch for the current agent context as trustworthy"},
     {"command": "/session", "description": "Show current session state"},
     {"command": "/skills", "description": "List available skills"},
-    {"command": "/memory", "description": "List memory files"},
     {
         "command": "/retitle",
         "description": "Regenerate session title, or set it: /retitle My title",
@@ -29,18 +26,14 @@ SLASH_COMMANDS: list[dict[str, str]] = [
     },
     {
         "command": "/model",
-        "description": "View or switch agent, sentinel, and title models together (e.g. /model openai:gpt-4o)",
+        "description": "View models, switch all with /model all NAME, or target one with /model sentinel NAME",
     },
     {
         "command": "/budget",
         "description": "Show current budgets. Set with /budget input N, /budget output N, "
         + "/budget cost N, or /budget tools N",
     },
-    {"command": "/model-agent", "description": "View or switch the agent model only"},
-    {"command": "/model-sentinel", "description": "View or switch the sentinel model"},
-    {"command": "/model-title", "description": "View or switch the title model"},
     {"command": "/usage", "description": "Show token usage for this session"},
-    {"command": "/verbose", "description": "Toggle tool call display"},
     {"command": "/quit", "description": "Disconnect"},
     {"command": "/help", "description": "Show this help"},
 ]

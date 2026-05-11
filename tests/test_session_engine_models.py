@@ -73,6 +73,23 @@ def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
         asyncio.run(_run())
 
 
+def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session().session_id
+        engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/models")
+            assert result is not None
+            assert result["command"] == "models"
+            assert "available" in result["data"]
+            assert result["data"]["available"]
+            assert "models" not in result["data"]
+
+        asyncio.run(_run())
+
+
 def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
@@ -290,8 +307,8 @@ def test_handle_slash_command_model_sets_all_three(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_agent_only(tmp_path: Path):
-    """``/model-agent`` changes only the agent model."""
+def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Path):
+    """``/model sentinel NAME`` mirrors target-first slash commands like ``/budget``."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
         state = engine.session_mgr.create_session()
@@ -299,13 +316,50 @@ def test_handle_slash_command_model_agent_only(tmp_path: Path):
         active = engine.get_or_activate(sid)
 
         async def _run() -> None:
-            result = await engine.handle_slash_command(sid, "/model-agent openai:gpt-4o")
+            result = await engine.handle_slash_command(sid, "/model sentinel openai:gpt-4o")
             assert result is not None
-            assert result["command"] == "model-agent"
+            assert result["command"] == "model-sentinel"
             assert result["data"]["current"] == "openai:gpt-4o"
-            assert active.agent_model_name == "openai:gpt-4o"
-            assert active.sentinel_model_name is None
+            assert active.agent_model_name is None
+            assert active.sentinel_model_name == "openai:gpt-4o"
             assert active.title_model_name is None
+
+        asyncio.run(_run())
+
+
+def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
+    """``/model all NAME`` explicitly targets the all-model path."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session()
+        sid = state.session_id
+        active = engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/model all openai:gpt-4o")
+            assert result is not None
+            assert result["command"] == "model"
+            for key in ("agent", "sentinel", "title"):
+                assert result["data"]["models"][key]["current"] == "openai:gpt-4o"
+            assert active.agent_model_name == "openai:gpt-4o"
+            assert active.sentinel_model_name == "openai:gpt-4o"
+            assert active.title_model_name == "openai:gpt-4o"
+
+        asyncio.run(_run())
+
+
+def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Path):
+    """Legacy ``/model-role`` aliases are no longer accepted."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session()
+        sid = state.session_id
+        engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            assert await engine.handle_slash_command(sid, "/model-agent openai:gpt-4o") is None
+            assert await engine.handle_slash_command(sid, "/model-sentinel openai:gpt-4o") is None
+            assert await engine.handle_slash_command(sid, "/model-title openai:gpt-4o") is None
 
         asyncio.run(_run())
 

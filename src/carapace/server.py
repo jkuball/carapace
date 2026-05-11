@@ -1565,24 +1565,6 @@ async def chat_ws(
                     await websocket.close(code=1000)
                     break
 
-                if user_input.lower() == "/verbose":
-                    active.verbose = not active.verbose
-                    state_str = "on" if active.verbose else "off"
-                    result = CommandResult(
-                        command="verbose",
-                        data={"verbose": active.verbose, "message": f"Verbose mode {state_str}"},
-                    )
-                    await _send(websocket, UserMessageNotification(content=user_input))
-                    await _send(websocket, result)
-                    _engine.session_mgr.append_events(
-                        session_id,
-                        [
-                            {"role": "user", "content": user_input},
-                            {"role": "command", "command": result.command, "data": result.data},
-                        ],
-                    )
-                    continue
-
                 cmd_result = await _engine.handle_slash_command(session_id, user_input)
                 if cmd_result:
                     result = CommandResult(

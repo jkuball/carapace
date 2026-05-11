@@ -37,6 +37,24 @@ def test_handle_slash_command_session(tmp_path: Path):
         asyncio.run(_run())
 
 
+def test_handle_slash_command_session_for_web(tmp_path: Path):
+    """``/session`` also works for web sessions."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session(channel_type="web")
+        sid = state.session_id
+        engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/session")
+            assert result is not None
+            assert result["command"] == "session"
+            assert result["data"]["session_id"] == sid
+            assert result["data"]["channel_type"] == "web"
+
+        asyncio.run(_run())
+
+
 def test_handle_slash_command_unknown(tmp_path: Path):
     """handle_slash_command returns None for unknown commands."""
     with _patch_sentinel():

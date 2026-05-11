@@ -148,33 +148,33 @@ channels:
 
 ## Slash commands
 
-Slash commands are the user's control interface for managing sessions and security. Both the WebSocket and Matrix channels support them.
+Slash commands are the user's control interface for managing sessions. Interactive channels share most commands, with a few transport-specific exceptions.
 
-### Common commands (both channels)
-
-| Command            | Effect                                                                         |
-| ------------------ | ------------------------------------------------------------------------------ |
-| `/help`            | Show available commands                                                        |
-| `/security`        | Show security policy preview and action log summary                            |
-| `/approve-context` | Vouch for the current context (records trust signal for the sentinel)          |
-| `/session`         | Show session metadata and domain allowlist                                     |
-| `/skills`          | List available skills                                                          |
-| `/memory`          | List memory files                                                              |
-| `/usage`           | Show token usage breakdown with cost estimates                                 |
-| `/pull`            | Pull from external Git remote (if configured)                                  |
-| `/push`            | Push to external Git remote (if configured)                                    |
-| `/reload`          | Reset sandbox — destroy container + workspace, fresh git clone on next command |
-
-### WebSocket-only commands
+### Common interactive commands
 
 | Command                         | Effect                                                         |
 | ------------------------------- | -------------------------------------------------------------- |
-| `/verbose`                      | Toggle tool call display                                       |
+| `/help`                         | Show available commands                                        |
+| `/session`                      | Show session metadata and domain allowlist                     |
+| `/skills`                       | List available skills                                          |
+| `/retitle`                      | Regenerate session title, or set it explicitly                 |
+| `/budget`                       | Show or update session budgets                                 |
+| `/usage`                        | Show token usage breakdown with cost estimates                 |
+| `/pull`                         | Pull from external Git remote (if configured)                  |
+| `/push`                         | Push to external Git remote (if configured)                    |
+| `/reload`                       | Reset sandbox — destroy container + workspace, fresh git clone |
 | `/models`                       | View all models (agent, sentinel, title) and available options |
-| `/model [NAME\|reset]`          | View or switch the agent model                                 |
+| `/model [NAME\|reset]`          | View or switch all models together or target one specifically  |
+| `/model-agent [NAME\|reset]`    | View or switch the agent model                                 |
 | `/model-sentinel [NAME\|reset]` | View or switch the sentinel model                              |
 | `/model-title [NAME\|reset]`    | View or switch the title model                                 |
-| `/quit` / `/exit`               | Close WebSocket connection                                     |
+
+### WebSocket-only commands
+
+| Command           | Effect                     |
+| ----------------- | -------------------------- |
+| `/quit` / `/exit` | Close WebSocket chat       |
+| `/quit` / `/exit` | Close WebSocket connection |
 
 ### Matrix-only commands
 

@@ -172,24 +172,30 @@ def _render_command_result(data: dict[str, Any]) -> None:
             _render_budget(payload)
 
         case "models":
-            if "models" in payload:
-                for model_type, info in payload["models"].items():
-                    marker = " [dim](overridden)[/dim]" if info["current"] != info["default"] else ""
-                    console.print(f"  [bold]{model_type}:[/bold] {info['current']}{marker}")
-                if payload.get("available"):
-                    parts: list[str] = []
-                    for item in payload["available"]:
-                        if isinstance(item, str):
-                            parts.append(item)
-                        elif isinstance(item, dict) and item.get("id"):
-                            s = str(item["id"])
-                            mt = item.get("max_input_tokens")
-                            if mt is not None:
-                                s += f" (max_input_tokens={mt})"
-                            parts.append(s)
-                    if parts:
-                        console.print()
-                        console.print("  [dim]Available:[/dim] " + ", ".join(parts))
+            available = payload.get("available") or []
+            if not available:
+                console.print("No models available.")
+            else:
+                table = Table(title="Available Models")
+                table.add_column("ID", style="bold")
+                table.add_column("Provider")
+                table.add_column("Name")
+                table.add_column("Context", justify="right")
+                for item in available:
+                    if isinstance(item, str):
+                        table.add_row(item, "", "", "")
+                        continue
+                    if not isinstance(item, dict) or not item.get("id"):
+                        continue
+                    max_tokens = item.get("max_input_tokens")
+                    ctx = f"{max_tokens:,}" if isinstance(max_tokens, int) else ""
+                    table.add_row(
+                        str(item["id"]),
+                        str(item.get("provider") or ""),
+                        str(item.get("name") or ""),
+                        ctx,
+                    )
+                console.print(table)
 
         case "model":
             if "models" in payload:
@@ -218,9 +224,6 @@ def _render_command_result(data: dict[str, Any]) -> None:
                 console.print(f"[bold]Current model:[/bold] {payload['current']}")
                 if payload.get("default") and payload["default"] != payload["current"]:
                     console.print(f"[dim]Default: {payload['default']}[/dim]")
-
-        case "verbose":
-            console.print(f"[dim]{payload['message']}[/dim]")
 
         case _:
             console.print(f"[dim]{payload}[/dim]")
@@ -534,6 +537,7 @@ async def _chat_loop(ws_url: str) -> None:
     """Connect to the server WebSocket and run the interactive REPL."""
     ws = await _connect_ws(ws_url)
     pending_message: str | None = None
+    show_tool_events = True
     try:
         while True:
             if pending_message is None:
@@ -553,6 +557,12 @@ async def _chat_loop(ws_url: str) -> None:
                     await ws.send(json.dumps({"type": "message", "content": user_input}))
                     console.print("[dim]Goodbye.[/dim]")
                     break
+
+                if user_input.lower() == "/verbose":
+                    show_tool_events = not show_tool_events
+                    state = "on" if show_tool_events else "off"
+                    console.print(f"[dim]Tool call display {state}.[/dim]")
+                    continue
             else:
                 user_input = pending_message
                 pending_message = None
@@ -567,7 +577,7 @@ async def _chat_loop(ws_url: str) -> None:
                 continue
 
             try:
-                await _read_server_responses(ws)
+                await _read_server_responses(ws, show_tool_events=show_tool_events)
             except ConnectionClosed:
                 console.print("[dim]Server disconnected while reading response — reconnecting…[/dim]")
                 ws = await _connect_ws(ws_url)
@@ -583,7 +593,7 @@ async def _chat_loop(ws_url: str) -> None:
         await ws.close()
 
 
-async def _read_server_responses(ws) -> None:
+async def _read_server_responses(ws, *, show_tool_events: bool = True) -> None:
     """Read and render server messages until a terminal response (done/command_result/error)."""
     streamed = ""
     live: Live | None = None
@@ -634,17 +644,19 @@ async def _read_server_responses(ws) -> None:
 
                 case "tool_call":
                     _stop_live()
-                    detail = msg.get("detail", "")
-                    console.print(f"  [dim]{msg['tool']}({msg['args']}) {detail}[/dim]")
+                    if show_tool_events:
+                        detail = msg.get("detail", "")
+                        console.print(f"  [dim]{msg['tool']}({msg['args']}) {detail}[/dim]")
 
                 case "tool_result":
                     _stop_live()
-                    result_text = msg.get("result", "")
-                    if result_text:
-                        truncated = result_text[:500]
-                        if len(result_text) > 500:
-                            truncated += "…"
-                        console.print(f"  [dim]→ {truncated}[/dim]")
+                    if show_tool_events:
+                        result_text = msg.get("result", "")
+                        if result_text:
+                            truncated = result_text[:500]
+                            if len(result_text) > 500:
+                                truncated += "…"
+                            console.print(f"  [dim]→ {truncated}[/dim]")
 
                 case "approval_request":
                     _stop_live()

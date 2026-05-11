@@ -233,7 +233,12 @@
             "model": "Modell",
             "default": "Standard",
             "available": "Verfügbar:",
+            "provider": "Art",
+            "name": "Name",
+            "context": "Kontext",
             "contextWindow": "({tokens} Kontext)",
+            "contextWindowShort": "{tokens} Kontext",
+            "noneAvailable": "Keine Modelle verfügbar.",
             "currentLabel": "Aktuelles Modell:",
             "defaultLabel": "Standard: {model}"
         },

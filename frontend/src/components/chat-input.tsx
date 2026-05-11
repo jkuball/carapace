@@ -48,12 +48,9 @@ function visibleBudgetGauges(u: TurnUsage): BudgetGauge[] {
   });
 }
 
-const MODEL_COMMANDS = [
-  "/model",
-  "/model-agent",
-  "/model-sentinel",
-  "/model-title",
-];
+const MODEL_COMMANDS = ["/model"];
+
+const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title"]);
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -115,40 +112,75 @@ export function ChatInput({
     return commands.filter((c) => c.command.startsWith(prefix));
   }, [value, showMenu, commands]);
 
-  // Model argument autocomplete for /model, /model-agent, /model-sentinel, /model-title
-  const modelSuggestions = useMemo((): { items: string[]; prefix: string } => {
-    const lower = value.toLowerCase();
-    const match = MODEL_COMMANDS.find((c) => lower.startsWith(c + " "));
-    if (!match) return { items: [], prefix: "" };
+  // Model argument autocomplete for /model
+  const modelSuggestions = useMemo(
+    (): { items: string[]; replaceFrom: number } => {
+      const empty = { items: [], replaceFrom: value.length };
+      const lower = value.toLowerCase();
+      const match = MODEL_COMMANDS.find((c) => lower.startsWith(c + " "));
+      if (!match) return empty;
 
-    const afterCmd = value.slice(match.length + 1);
-    const partial = afterCmd.trimStart().toLowerCase();
+      const afterCmd = value.slice(match.length + 1);
+      const afterCmdTrimmed = afterCmd.trimStart();
+      const replaceFromBase = match.length + 1 + (afterCmd.length - afterCmdTrimmed.length);
 
-    // Don't show suggestions if there's already a complete argument with space after
-    if (afterCmd.trimEnd().includes(" ")) return { items: [], prefix: "" };
+      if (match === "/model") {
+        const firstArgMatch = afterCmdTrimmed.match(/^(\S+)(\s+)(.*)$/);
+        if (
+          firstArgMatch &&
+          MODEL_TARGETS.has(firstArgMatch[1].toLowerCase()) &&
+          afterCmdTrimmed.length > firstArgMatch[1].length
+        ) {
+          const modelPart = firstArgMatch[3] ?? "";
+          if (modelPart.trimEnd().includes(" ")) return empty;
 
-    // Don't show if the argument already exactly matches a model
-    if (availableModelIds.some((m) => m.toLowerCase() === partial))
-      return { items: [], prefix: "" };
+          const modelPartTrimmed = modelPart.trimStart();
+          const partial = modelPartTrimmed.toLowerCase();
+          if (availableModelIds.some((m) => m.toLowerCase() === partial)) {
+            return empty;
+          }
 
-    const suggestions = availableModelIds.filter((m) =>
-      m.toLowerCase().startsWith(partial),
-    );
-    return { items: suggestions, prefix: afterCmd };
-  }, [value, availableModelIds]);
+          return {
+            items: availableModelIds.filter((m) =>
+              m.toLowerCase().startsWith(partial),
+            ),
+            replaceFrom:
+              replaceFromBase +
+              firstArgMatch[1].length +
+              firstArgMatch[2].length +
+              (modelPart.length - modelPartTrimmed.length),
+          };
+        }
+      }
+
+      const partial = afterCmdTrimmed.toLowerCase();
+
+      // Don't show suggestions if there's already a complete argument with space after
+      if (afterCmd.trimEnd().includes(" ")) return empty;
+
+      // Don't show if the argument already exactly matches a model
+      if (availableModelIds.some((m) => m.toLowerCase() === partial)) {
+        return empty;
+      }
+
+      return {
+        items: availableModelIds.filter((m) =>
+          m.toLowerCase().startsWith(partial),
+        ),
+        replaceFrom: replaceFromBase,
+      };
+    },
+    [value, availableModelIds],
+  );
 
   const showModelMenu = modelSuggestions.items.length > 0;
 
   const selectModelSuggestion = useCallback(
     (item: string) => {
-      const prefix = value.slice(
-        0,
-        value.length - modelSuggestions.prefix.length,
-      );
-      setValue(prefix + item);
+      setValue(value.slice(0, modelSuggestions.replaceFrom) + item);
       textareaRef.current?.focus();
     },
-    [value, modelSuggestions.prefix],
+    [value, modelSuggestions.replaceFrom],
   );
 
   // Scroll selected item into view

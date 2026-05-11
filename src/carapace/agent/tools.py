@@ -210,7 +210,6 @@ async def _gate(ctx: RunContext[Deps], tool_name: str, args: dict[str, Any]) -> 
             usage_tracker=ctx.deps.usage_tracker,
             assert_llm_budget_available=ctx.deps.assert_llm_budget_available,
             usage_limits=ctx.deps.llm_usage_limits() if ctx.deps.llm_usage_limits is not None else None,
-            verbose=ctx.deps.verbose,
             tool_call_callback=ctx.deps.tool_call_callback,
         )
     except security.SecurityDeniedError as exc:
