@@ -12,7 +12,10 @@ frontend_root=$(cd "$script_dir/.." && pwd)
 icon_svg="$frontend_root/src/app/icon.svg"
 favicon_ico="$frontend_root/src/app/favicon.ico"
 
-magick "$icon_svg" \
+# Render the SVG at higher density first. Otherwise ImageMagick rasterizes the
+# 36x36 source at its intrinsic size and upscales it, which makes the favicon
+# blurry and can bake in a solid background.
+magick -background none -density 144 "$icon_svg" \
   \( -clone 0 -resize 48x48 \) \
   \( -clone 0 -resize 32x32 \) \
   \( -clone 0 -resize 16x16 \) \

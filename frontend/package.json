@@ -5,6 +5,7 @@
   "scripts": {
     "prepare:emoji": "node ./scripts/prepare-emoji-assets.mjs",
     "generate:favicon": "./scripts/generate_favicon.sh",
+    "generate:pwa-icons": "./scripts/generate_pwa_icons.sh",
     "predev": "pnpm prepare:emoji",
     "dev": "next dev",
     "prebuild": "pnpm prepare:emoji",
