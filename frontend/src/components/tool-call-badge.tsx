@@ -231,7 +231,29 @@ function getExecCommand(args: Record<string, unknown>): string {
 }
 
 function normalizeOptionalLabel(value: string): string {
-  const trimmed = value.trim();
+  let trimmed = value.trim();
+  if (trimmed.length === 0) return "";
+
+  const quotePairs: ReadonlyArray<readonly [string, string]> = [
+    ['"', '"'],
+    ["'", "'"],
+    ["`", "`"],
+    ["“", "”"],
+    ["‘", "’"],
+  ];
+
+  let changed = true;
+  while (changed && trimmed.length >= 2) {
+    changed = false;
+    for (const [open, close] of quotePairs) {
+      if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
+        trimmed = trimmed.slice(open.length, trimmed.length - close.length).trim();
+        changed = true;
+        break;
+      }
+    }
+  }
+
   if (trimmed.length === 0) return "";
   if (/^(null|none)$/i.test(trimmed)) return "";
   return trimmed;
