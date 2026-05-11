@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.115.1 (2026-05-11)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv Docker digest to 841c8e6
+  ([`42e1ba2`](https://github.com/thiesgerken/carapace/commit/42e1ba26f0293a6d204d019d3ed9c0e4626a9909))
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv:python3.14-trixie-slim Docker digest to f0b28d1
+  ([`42fda20`](https://github.com/thiesgerken/carapace/commit/42fda2051b2a0deb71457b1d2eb148a6674a9b05))
+
+- ⬆️ chore: Lock file maintenance
+  ([`a898cf1`](https://github.com/thiesgerken/carapace/commit/a898cf1f403ccd420a814e14b65bc5621986e76f))
+
+- ⬆️ chore: upgrade pnpm/action-setup digest to 739bfe4
+  ([`2f03ac4`](https://github.com/thiesgerken/carapace/commit/2f03ac4a52758425d5047a6cb29f9979923288f5))
+
 ## v0.115.0 (2026-05-11)
 
 
