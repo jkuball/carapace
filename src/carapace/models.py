@@ -266,9 +266,18 @@ class JobDefinition(BaseModel):
     prompt: str
     unattended: bool = True
     persistent_session_id: str | None = None
+    agent_model_name: str | None = None
+    sentinel_model_name: str | None = None
+    title_model_name: str | None = None
 
     @model_validator(mode="after")
     def _validate_job(self) -> JobDefinition:
+        def normalize_optional_model_name(value: str | None) -> str | None:
+            if value is None:
+                return None
+            normalized = value.strip()
+            return normalized or None
+
         self.id = self.id.strip()
         if not self.id:
             raise ValueError("job id must not be empty")
@@ -281,6 +290,10 @@ class JobDefinition(BaseModel):
         if not self.prompt:
             raise ValueError("job prompt must not be empty")
 
+        self.agent_model_name = normalize_optional_model_name(self.agent_model_name)
+        self.sentinel_model_name = normalize_optional_model_name(self.sentinel_model_name)
+        self.title_model_name = normalize_optional_model_name(self.title_model_name)
+
         if self.persistent_session_id is None:
             return self
 
@@ -289,6 +302,8 @@ class JobDefinition(BaseModel):
             raise ValueError("job persistent_session_id must not be empty when set")
         if self.unattended:
             raise ValueError("job unattended must be false when persistent_session_id is set")
+        if any((self.agent_model_name, self.sentinel_model_name, self.title_model_name)):
+            raise ValueError("job model overrides cannot be used with persistent_session_id")
         self.persistent_session_id = persistent_session_id
         return self
 
@@ -316,8 +331,12 @@ class AvailableModelEntry(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    provider: str
-    name: str
+    provider: str = Field(
+        description="API kind used to access the model, such as anthropic, openai, or openai-chat.",
+    )
+    name: str = Field(
+        description="Provider-specific model name sent to that API.",
+    )
     id: str | None = Field(
         default=None,
         description="Stable id for this row (slash commands, API). Defaults to provider:name.",

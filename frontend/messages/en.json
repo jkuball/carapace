@@ -348,7 +348,7 @@
             "created": "Created",
             "lastActive": "Last active",
             "messages": "Messages",
-            "totalCost": "Total cost",
+            "totalCost": "Cost",
             "job": "Job",
             "reference": "Reference"
         },
@@ -519,6 +519,12 @@
             "persistentSession": "Persistent Session",
             "persistentSessionDisabled": "Can't be used in unattended mode",
             "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
+            "models": "Models",
+            "modelsHelp": "Optional per-job overrides for fresh sessions created by this job.",
+            "modelsDisabled": "Persistent sessions keep their own model selection.",
+            "agentModel": "Agent Model",
+            "sentinelModel": "Sentinel Model",
+            "titleModel": "Title Model",
             "prompt": "Prompt",
             "expression": "Expression",
             "timeZone": "Time Zone",
@@ -527,7 +533,8 @@
         "placeholders": {
             "name": "Nightly inbox review",
             "jobId": "nightly-inbox-review",
-            "prompt": "Summarize new tasks, triage urgent items, then propose next actions."
+            "prompt": "Summarize new tasks, triage urgent items, then propose next actions.",
+            "model": "Leave empty for default"
         },
         "sections": {
             "cronTriggers": "Cron Triggers",

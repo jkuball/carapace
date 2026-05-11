@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { useAppLocale } from "@/components/locale-provider";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
@@ -810,6 +811,7 @@ export function ChatView({
   onDeleteSession,
 }: ChatViewProps) {
   const t = useTranslations("chatView");
+  const tRoot = useTranslations();
   const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [waiting, setWaiting] = useState(false);
@@ -832,6 +834,8 @@ export function ChatView({
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
   const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | null>(null);
+  const [updatingSessionModel, setUpdatingSessionModel] = useState<"agent" | "sentinel" | null>(null);
+  const [modelUpdateError, setModelUpdateError] = useState<string | null>(null);
   const [turnActionBusyIndex, setTurnActionBusyIndex] = useState<number | null>(null);
   const [knowledgeNotice, setKnowledgeNotice] = useState<{
     tone: "neutral" | "success" | "error";
@@ -875,6 +879,10 @@ export function ChatView({
 
   useEffect(() => {
     setMobileInspectorOpen(false);
+  }, [sessionId]);
+
+  useEffect(() => {
+    setModelUpdateError(null);
   }, [sessionId]);
 
   // Fetch available slash commands and models on mount
@@ -1634,6 +1642,31 @@ export function ChatView({
     }
   }
 
+  async function handleUpdateSessionModel(modelType: "agent" | "sentinel", value: string | null) {
+    if (!session || updatingSessionModel || waiting || deletingSession || sessionArchived) {
+      return;
+    }
+
+    const fieldName = modelType === "agent" ? "agent_model_name" : "sentinel_model_name";
+    const currentValue = modelType === "agent"
+      ? session.agent_model_name ?? null
+      : session.sentinel_model_name ?? null;
+    if (currentValue === value) {
+      return;
+    }
+
+    setUpdatingSessionModel(modelType);
+    setModelUpdateError(null);
+    try {
+      const updated = await updateSession(server, token, sessionId, { [fieldName]: value });
+      onSessionUpdate?.(updated);
+    } catch (error) {
+      setModelUpdateError(errorDetail(error, t));
+    } finally {
+      setUpdatingSessionModel(null);
+    }
+  }
+
   function handleApproval(
     toolCallId: string,
     approved: boolean,
@@ -1788,6 +1821,15 @@ export function ChatView({
         : undefined;
   const sessionDisplayTitle = session?.title?.trim() || sessionId;
   const source = localizedSessionSourceInfo(session, t);
+    const defaultModelLabel = tRoot("commandResult.models.default");
+    const agentModelOptions = useMemo(
+      () => withSelectedModelOption(availableModelEntries, session?.agent_model_name),
+      [availableModelEntries, session?.agent_model_name],
+    );
+    const sentinelModelOptions = useMemo(
+      () => withSelectedModelOption(availableModelEntries, session?.sentinel_model_name),
+      [availableModelEntries, session?.sentinel_model_name],
+    );
   const sourceJobId = sessionSourceJobId(session);
   const latestJobRun = session?.latest_job_run ?? null;
   const latestJobData = formatSessionJobData(latestJobRun?.data);
@@ -1991,6 +2033,40 @@ export function ChatView({
             </span>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          {tRoot("jobs.fields.models")}
+        </div>
+
+        <div className="mt-3 space-y-3">
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{tRoot("jobs.fields.agentModel")}</span>
+            <ModelPicker
+              value={session?.agent_model_name}
+              entries={agentModelOptions}
+              onChange={(value) => void handleUpdateSessionModel("agent", value)}
+              disabled={!session || waiting || deletingSession || sessionArchived || updatingSessionModel !== null}
+              defaultLabel={defaultModelLabel}
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{tRoot("jobs.fields.sentinelModel")}</span>
+            <ModelPicker
+              value={session?.sentinel_model_name}
+              entries={sentinelModelOptions}
+              onChange={(value) => void handleUpdateSessionModel("sentinel", value)}
+              disabled={!session || waiting || deletingSession || sessionArchived || updatingSessionModel !== null}
+              defaultLabel={defaultModelLabel}
+            />
+          </label>
+        </div>
+
+        {modelUpdateError ? (
+          <div className="mt-3 text-xs text-destructive">{modelUpdateError}</div>
+        ) : null}
       </section>
 
       {latestJobRun ? (

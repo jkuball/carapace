@@ -307,6 +307,9 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
             "name": "Daily Briefing",
             "prompt": "Summarize the day.",
             "unattended": True,
+            "agent_model_name": "openai:gpt-5.4",
+            "sentinel_model_name": "openai:gpt-5.4-mini",
+            "title_model_name": "openai:gpt-5.4-nano",
             "triggers": [],
         },
     )
@@ -329,6 +332,12 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
     assert session_resp.status_code == 200
     assert session_resp.json()["latest_job_run"]["job_id"] == "daily-briefing"
     assert session_resp.json()["latest_job_run"]["data"] == '{"source":"calendar","items":3}'
+
+    state = srv._engine.session_mgr.load_state(payload["session_id"])
+    assert state is not None
+    assert state.agent_model_name == "openai:gpt-5.4"
+    assert state.sentinel_model_name == "openai:gpt-5.4-mini"
+    assert state.title_model_name == "openai:gpt-5.4-nano"
 
     (session_id, message), kwargs = submit_message.await_args
     assert session_id == payload["session_id"]
@@ -512,6 +521,75 @@ def test_update_session_rejects_unattended_mode_change(client, auth_headers):
 
     assert resp.status_code == 409
     assert "fork the session instead" in resp.json()["detail"]
+
+
+def test_update_session_models_updates_active_session_state(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+    active = srv._engine.get_or_activate(sid)
+    original_state = active.state
+    agent_model_name = srv._config.agent.model
+    sentinel_model_name = srv._config.agent.sentinel_model
+
+    resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={
+            "agent_model_name": agent_model_name,
+            "sentinel_model_name": sentinel_model_name,
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["agent_model_name"] == agent_model_name
+    assert resp.json()["sentinel_model_name"] == sentinel_model_name
+    assert active.state is original_state
+    assert active.state.agent_model_name == agent_model_name
+    assert active.state.sentinel_model_name == sentinel_model_name
+    persisted = srv._engine.session_mgr.load_state(sid)
+    assert persisted is not None
+    assert persisted.agent_model_name == agent_model_name
+    assert persisted.sentinel_model_name == sentinel_model_name
+
+    reset_resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"agent_model_name": None, "sentinel_model_name": None},
+    )
+
+    assert reset_resp.status_code == 200
+    assert reset_resp.json()["agent_model_name"] is None
+    assert reset_resp.json()["sentinel_model_name"] is None
+    assert active.state.agent_model_name is None
+    assert active.state.sentinel_model_name is None
+
+
+def test_update_session_single_model_preserves_other_override(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+    active = srv._engine.get_or_activate(sid)
+
+    first_resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"sentinel_model_name": srv._config.agent.sentinel_model},
+    )
+
+    assert first_resp.status_code == 200
+    assert first_resp.json()["agent_model_name"] is None
+    assert first_resp.json()["sentinel_model_name"] == srv._config.agent.sentinel_model
+
+    second_resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"agent_model_name": srv._config.agent.model},
+    )
+
+    assert second_resp.status_code == 200
+    assert second_resp.json()["agent_model_name"] == srv._config.agent.model
+    assert second_resp.json()["sentinel_model_name"] == srv._config.agent.sentinel_model
+    assert active.state.agent_model_name == srv._config.agent.model
+    assert active.state.sentinel_model_name == srv._config.agent.sentinel_model
 
 
 def test_list_sessions_excludes_archived_by_default(client, auth_headers):

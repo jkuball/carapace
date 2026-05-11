@@ -46,6 +46,8 @@ export interface SessionInfo {
   created_at: string;
   last_active: string;
   title?: string;
+  agent_model_name?: string | null;
+  sentinel_model_name?: string | null;
   attributes: SessionAttributes;
   latest_job_run?: SessionLatestJobRun | null;
   knowledge_last_committed_at?: string | null;
@@ -97,6 +99,9 @@ export interface JobDefinition {
   prompt: string;
   unattended: boolean;
   persistent_session_id?: string | null;
+  agent_model_name?: string | null;
+  sentinel_model_name?: string | null;
+  title_model_name?: string | null;
 }
 
 export interface JobsFile {

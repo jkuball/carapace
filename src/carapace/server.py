@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from genai_prices import UpdatePrices
 from loguru import logger
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from carapace import get_version
@@ -525,6 +525,20 @@ class SessionAttributesPatch(BaseModel):
 
 class SessionUpdateRequest(BaseModel):
     attributes: SessionAttributesPatch | None = None
+    agent_model_name: str | None = None
+    sentinel_model_name: str | None = None
+
+    @field_validator("agent_model_name", "sentinel_model_name", mode="before")
+    @classmethod
+    def _normalize_model_name_field(cls, value: str | None) -> str | None:
+        return cls._normalize_optional_model_name(value)
+
+    @staticmethod
+    def _normalize_optional_model_name(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class SessionForkRequest(BaseModel):
@@ -541,6 +555,8 @@ class SessionInfo(BaseModel):
     created_at: str
     last_active: str
     title: str | None = None
+    agent_model_name: str | None = None
+    sentinel_model_name: str | None = None
     attributes: SessionAttributes
     latest_job_run: SessionJobRunContext | None = None
     knowledge_last_committed_at: str | None = None
@@ -566,6 +582,8 @@ class SessionInfo(BaseModel):
             created_at=state.created_at.isoformat(),
             last_active=state.last_active.isoformat(),
             title=state.title,
+            agent_model_name=state.agent_model_name,
+            sentinel_model_name=state.sentinel_model_name,
             attributes=state.attributes,
             latest_job_run=state.latest_job_run.model_copy(deep=True) if state.latest_job_run is not None else None,
             knowledge_last_committed_at=(
@@ -629,6 +647,9 @@ async def _run_job_definition(
             private=_engine.config.sessions.default_private,
             unattended=job.unattended,
         )
+        state.agent_model_name = job.agent_model_name
+        state.sentinel_model_name = job.sentinel_model_name
+        state.title_model_name = job.title_model_name
         created_new_session = True
     else:
         state = _engine.session_mgr.load_state(job.persistent_session_id)
@@ -832,6 +853,11 @@ async def update_session(
     if state is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    next_attributes: SessionAttributes | None = None
+    previous_attributes: SessionAttributes | None = None
+    archive_changed = False
+    archive_now = False
+
     if body.attributes is not None:
         previous_attributes = state.attributes.model_copy(deep=True)
         next_attributes = state.attributes.model_copy(deep=True)
@@ -851,6 +877,24 @@ async def update_session(
         if archive_changed and _engine.is_agent_running(session_id):
             raise HTTPException(status_code=409, detail="Cannot archive a session while an agent turn is running")
 
+    model_changes: dict[str, str | None] = {}
+    if "agent_model_name" in body.model_fields_set:
+        model_changes["agent_model_name"] = body.agent_model_name
+    if "sentinel_model_name" in body.model_fields_set:
+        model_changes["sentinel_model_name"] = body.sentinel_model_name
+
+    previous_models: dict[str, str | None] = {}
+    if model_changes:
+        previous_models = {
+            "agent_model_name": state.agent_model_name,
+            "sentinel_model_name": state.sentinel_model_name,
+        }
+        try:
+            state = _engine.update_session_model_overrides(session_id, **model_changes)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if next_attributes is not None:
         state.attributes = next_attributes
         _engine.session_mgr.save_state(state)
         _engine.update_active_state(session_id, attributes=next_attributes)
@@ -867,9 +911,12 @@ async def update_session(
                     raise HTTPException(status_code=404, detail="Session not found")
                 state = refreshed
         except Exception:
-            state.attributes = previous_attributes
-            _engine.session_mgr.save_state(state)
-            _engine.update_active_state(session_id, attributes=previous_attributes)
+            if previous_attributes is not None:
+                state.attributes = previous_attributes
+                _engine.session_mgr.save_state(state)
+                _engine.update_active_state(session_id, attributes=previous_attributes)
+            if model_changes:
+                state = _engine.update_session_model_overrides(session_id, **previous_models)
             raise
 
         if archive_changed and archive_now:

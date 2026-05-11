@@ -94,7 +94,11 @@ export async function updateSession(
   server: string,
   token: string,
   sessionId: string,
-  body: { attributes?: SessionAttributesPatch },
+  body: {
+    attributes?: SessionAttributesPatch;
+    agent_model_name?: string | null;
+    sentinel_model_name?: string | null;
+  },
 ): Promise<SessionInfo> {
   const res = await fetch(`${server}/api/sessions/${sessionId}`, {
     method: "PATCH",

@@ -97,6 +97,13 @@ from carapace.ws_models import (
     TurnUsageBreakdownPct,
 )
 
+
+class _UnsetType:
+    pass
+
+
+_UNSET = _UnsetType()
+
 ModelType = Literal["agent", "sentinel", "title"]
 
 _DEFAULT_CONTEXT_CAP_TOKENS = 200_000
@@ -625,6 +632,37 @@ class SessionEngine(SessionTurnMixin):
                 if hasattr(value, "model_copy"):
                     value = value.model_copy(deep=True)
                 setattr(active.state, field_name, value)
+
+    def update_session_model_overrides(
+        self,
+        session_id: str,
+        *,
+        agent_model_name: str | None | _UnsetType = _UNSET,
+        sentinel_model_name: str | None | _UnsetType = _UNSET,
+    ) -> SessionState:
+        """Persist agent and sentinel model overrides without routing through slash commands."""
+        active = self._active.get(session_id)
+        state = active.state if active is not None else self._session_mgr.load_state(session_id)
+        if state is None:
+            raise KeyError(session_id)
+
+        if not isinstance(agent_model_name, _UnsetType):
+            next_agent_model = None if agent_model_name is None else self._resolve_model(agent_model_name)
+            if active is not None:
+                self._apply_model_override(active, "agent", agent_model_name, next_agent_model)
+            else:
+                state.agent_model_name = agent_model_name
+
+        if not isinstance(sentinel_model_name, _UnsetType):
+            if sentinel_model_name is not None:
+                self._resolve_model(sentinel_model_name)
+            if active is not None:
+                self._apply_model_override(active, "sentinel", sentinel_model_name, None)
+            else:
+                state.sentinel_model_name = sentinel_model_name
+
+        self._session_mgr.save_state(state)
+        return state
 
     def is_agent_running(self, session_id: str) -> bool:
         active = self._active.get(session_id)

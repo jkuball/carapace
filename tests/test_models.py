@@ -86,6 +86,37 @@ def test_job_definition_accepts_attended_persistent_session() -> None:
     assert job.persistent_session_id == "2026-05-09-10-00-deadbeef"
 
 
+def test_job_definition_rejects_model_overrides_for_persistent_session() -> None:
+    with pytest.raises(ValidationError, match="model overrides cannot be used"):
+        JobDefinition.model_validate(
+            {
+                "id": "team-planning",
+                "name": "Team Planning",
+                "prompt": "Continue planning.",
+                "unattended": False,
+                "persistent_session_id": "2026-05-09-10-00-deadbeef",
+                "agent_model_name": "openai:gpt-5.4",
+            }
+        )
+
+
+def test_job_definition_normalizes_optional_model_overrides() -> None:
+    job = JobDefinition.model_validate(
+        {
+            "id": "daily-briefing",
+            "name": "Daily Briefing",
+            "prompt": "Summarize the day.",
+            "agent_model_name": "  openai:gpt-5.4  ",
+            "sentinel_model_name": "   ",
+            "title_model_name": " openai:gpt-5.4-mini ",
+        }
+    )
+
+    assert job.agent_model_name == "openai:gpt-5.4"
+    assert job.sentinel_model_name is None
+    assert job.title_model_name == "openai:gpt-5.4-mini"
+
+
 def test_jobs_file_rejects_duplicate_job_ids() -> None:
     with pytest.raises(ValidationError, match="duplicate job id"):
         JobsFile.model_validate(

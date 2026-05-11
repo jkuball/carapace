@@ -348,7 +348,7 @@
             "created": "Erstellt",
             "lastActive": "Zuletzt aktiv",
             "messages": "Nachrichten",
-            "totalCost": "Gesamtkosten",
+            "totalCost": "Kosten",
             "job": "Job",
             "reference": "Referenz"
         },
@@ -519,6 +519,12 @@
             "persistentSession": "Persistente Sitzung",
             "persistentSessionDisabled": "Kann im unbeaufsichtigten Modus nicht verwendet werden",
             "persistentSessionHelp": "Verwende eine bestehende Sitzung, statt bei jedem Joblauf eine neue zu erstellen.",
+            "models": "Modelle",
+            "modelsHelp": "Optionale job-spezifische Overrides für neue Sitzungen, die dieser Job erstellt.",
+            "modelsDisabled": "Persistente Sitzungen behalten ihre eigene Modellauswahl.",
+            "agentModel": "Agent-Modell",
+            "sentinelModel": "Sentinel-Modell",
+            "titleModel": "Titel-Modell",
             "prompt": "Prompt",
             "expression": "Ausdruck",
             "timeZone": "Zeitzone",
@@ -527,7 +533,8 @@
         "placeholders": {
             "name": "Nächtliche Inbox-Prüfung",
             "jobId": "naechtliche-inbox-pruefung",
-            "prompt": "Fasse neue Aufgaben zusammen, priorisiere Dringendes und schlage dann nächste Schritte vor."
+            "prompt": "Fasse neue Aufgaben zusammen, priorisiere Dringendes und schlage dann nächste Schritte vor.",
+            "model": "Leer lassen für Standardmodell"
         },
         "sections": {
             "cronTriggers": "Cron-Trigger",
