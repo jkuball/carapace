@@ -331,22 +331,18 @@ def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_agent_only(tmp_path: Path):
-    """``/model-agent`` changes only the agent model."""
+def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Path):
+    """Legacy ``/model-role`` aliases are no longer accepted."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
         state = engine.session_mgr.create_session()
         sid = state.session_id
-        active = engine.get_or_activate(sid)
+        engine.get_or_activate(sid)
 
         async def _run() -> None:
-            result = await engine.handle_slash_command(sid, "/model-agent openai:gpt-4o")
-            assert result is not None
-            assert result["command"] == "model-agent"
-            assert result["data"]["current"] == "openai:gpt-4o"
-            assert active.agent_model_name == "openai:gpt-4o"
-            assert active.sentinel_model_name is None
-            assert active.title_model_name is None
+            assert await engine.handle_slash_command(sid, "/model-agent openai:gpt-4o") is None
+            assert await engine.handle_slash_command(sid, "/model-sentinel openai:gpt-4o") is None
+            assert await engine.handle_slash_command(sid, "/model-title openai:gpt-4o") is None
 
         asyncio.run(_run())
 

@@ -48,12 +48,7 @@ function visibleBudgetGauges(u: TurnUsage): BudgetGauge[] {
   });
 }
 
-const MODEL_COMMANDS = [
-  "/model",
-  "/model-agent",
-  "/model-sentinel",
-  "/model-title",
-];
+const MODEL_COMMANDS = ["/model"];
 
 const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title"]);
 
@@ -117,7 +112,7 @@ export function ChatInput({
     return commands.filter((c) => c.command.startsWith(prefix));
   }, [value, showMenu, commands]);
 
-  // Model argument autocomplete for /model, /model-agent, /model-sentinel, /model-title
+  // Model argument autocomplete for /model
   const modelSuggestions = useMemo(
     (): { items: string[]; replaceFrom: number } => {
       const empty = { items: [], replaceFrom: value.length };

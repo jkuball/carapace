@@ -36,9 +36,6 @@ SLASH_COMMANDS: list[dict[str, str]] = [
         "description": "Show current budgets. Set with /budget input N, /budget output N, "
         + "/budget cost N, or /budget tools N",
     },
-    {"command": "/model-agent", "description": "View or switch the agent model only"},
-    {"command": "/model-sentinel", "description": "View or switch the sentinel model"},
-    {"command": "/model-title", "description": "View or switch the title model"},
     {"command": "/usage", "description": "Show token usage for this session"},
     {"command": "/quit", "description": "Disconnect"},
     {"command": "/help", "description": "Show this help"},

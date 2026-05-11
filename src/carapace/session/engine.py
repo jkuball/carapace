@@ -993,20 +993,6 @@ class SessionEngine(SessionTurnMixin):
                 slash_line=command.strip(),
             )
 
-        if cmd in ("/model-agent", "/model-sentinel", "/model-title"):
-            model_map: dict[str, ModelType] = {
-                "/model-agent": "agent",
-                "/model-sentinel": "sentinel",
-                "/model-title": "title",
-            }
-            model_type = model_map[cmd]
-            return await self._handle_model_command(
-                active,
-                model_type,
-                parts[1].strip() if len(parts) > 1 else "",
-                slash_line=command.strip(),
-            )
-
         if cmd == "/usage":
             tracker = active.usage_tracker
             costs = tracker.estimated_cost()
@@ -1206,7 +1192,7 @@ class SessionEngine(SessionTurnMixin):
     async def _handle_model_command(
         self, active: ActiveSession, model_type: ModelType, arg: str, *, slash_line: str
     ) -> dict[str, Any]:
-        """Process ``/model-(agent|sentinel|title) [MODEL | reset]``."""
+        """Process ``/model ROLE [MODEL | reset]`` for one model role."""
         cmd_name = {"agent": "model-agent", "sentinel": "model-sentinel", "title": "model-title"}[model_type]
         defaults = {
             "agent": self._config.agent.model,
@@ -1271,7 +1257,7 @@ class SessionEngine(SessionTurnMixin):
         """Regenerate the session title using the current title model.
 
         *pending_user_line* is the slash command line not yet persisted to events (e.g. first
-        ``/model-title`` in a session).
+        ``/model title`` in a session).
         """
         session_id = active.state.session_id
         events = list(self._session_mgr.load_events(session_id))
