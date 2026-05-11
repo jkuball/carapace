@@ -437,10 +437,10 @@ def test_format_approval_request_includes_tool_name():
 def test_format_command_result_help():
     result = CommandResult(
         command="help",
-        data={"commands": [{"command": "/security", "description": "Show security policy"}]},
+        data={"commands": [{"command": "/session", "description": "Show current session state"}]},
     )
     text = _format_command_result_text(result)
-    assert "/security" in text
+    assert "/session" in text
 
 
 def test_format_command_result_security():

@@ -41,7 +41,6 @@ import carapace.security as security_mod
 from carapace.agent.loop import run_agent_turn as _run_agent_turn
 from carapace.git.store import GitStore
 from carapace.llm import model_settings_for_config
-from carapace.memory import MemoryStore
 from carapace.models import (
     AvailableModelEntry,
     Config,
@@ -62,7 +61,6 @@ from carapace.security.context import (
     ApprovalVerdict,
     SessionSecurity,
     UserEscalationDecision,
-    UserVouchedEntry,
     normalize_optional_message,
 )
 from carapace.security.sentinel import Sentinel
@@ -920,28 +918,6 @@ class SessionEngine(SessionTurnMixin):
         if cmd == "/help":
             return {"command": "help", "data": {"commands": SLASH_COMMANDS}}
 
-        if cmd == "/security":
-            security_path = self._knowledge_dir / "SECURITY.md"
-            policy = security_path.read_text() if security_path.exists() else "(no SECURITY.md loaded)"
-            log_count = len(active.security.action_log) if active.security else 0
-            eval_count = active.security.sentinel_eval_count if active.security else 0
-            return {
-                "command": "security",
-                "data": {
-                    "policy_preview": policy[:500] + ("..." if len(policy) > 500 else ""),
-                    "action_log_entries": log_count,
-                    "sentinel_evaluations": eval_count,
-                },
-            }
-
-        if cmd == "/approve-context":
-            if active.security:
-                active.security.append(UserVouchedEntry())
-            return {
-                "command": "approve-context",
-                "data": {"message": "Recorded: you vouch for the current agent context as trustworthy."},
-            }
-
         if cmd == "/session":
             grants_summary = context_grants_session_summary(
                 session_id,
@@ -961,11 +937,6 @@ class SessionEngine(SessionTurnMixin):
         if cmd == "/skills":
             skills = [{"name": s.name, "description": s.description.strip()} for s in self._skill_catalog]
             return {"command": "skills", "data": skills}
-
-        if cmd == "/memory":
-            store = MemoryStore(self._knowledge_dir)
-            files = store.list_files()
-            return {"command": "memory", "data": files}
 
         if cmd == "/retitle":
             arg = parts[1].strip() if len(parts) > 1 else ""

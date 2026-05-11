@@ -11,11 +11,8 @@ from carapace.usage import BudgetGauge, LlmRequestPhase, LlmSource
 FinalStatus = Literal["success", "warning"]
 
 SLASH_COMMANDS: list[dict[str, str]] = [
-    {"command": "/security", "description": "Show security policy summary"},
-    {"command": "/approve-context", "description": "Vouch for the current agent context as trustworthy"},
     {"command": "/session", "description": "Show current session state"},
     {"command": "/skills", "description": "List available skills"},
-    {"command": "/memory", "description": "List memory files"},
     {
         "command": "/retitle",
         "description": "Regenerate session title, or set it: /retitle My title",

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from carapace.memory import MemoryStore
 from carapace.models import Deps, context_grants_session_summary
-from carapace.security.context import UserVouchedEntry
 from carapace.ws_models import CommandResult
 
 
@@ -24,26 +22,6 @@ def handle_matrix_slash_command(
 
     if cmd == "/help":
         return CommandResult(command="help", data={"commands": slash_commands})
-
-    if cmd == "/security":
-        policy = security_md or "(no SECURITY.md loaded)"
-        log_count = len(deps.security.action_log)
-        eval_count = deps.security.sentinel_eval_count
-        return CommandResult(
-            command="security",
-            data={
-                "policy_preview": policy[:500] + ("..." if len(policy) > 500 else ""),
-                "action_log_entries": log_count,
-                "sentinel_evaluations": eval_count,
-            },
-        )
-
-    if cmd == "/approve-context":
-        deps.security.append(UserVouchedEntry())
-        return CommandResult(
-            command="approve-context",
-            data={"message": "Recorded: you vouch for the current agent context as trustworthy."},
-        )
 
     if cmd == "/session":
         session_id = deps.session_state.session_id
@@ -65,11 +43,6 @@ def handle_matrix_slash_command(
     if cmd == "/skills":
         skills = [{"name": s.name, "description": s.description.strip()} for s in deps.skill_catalog]
         return CommandResult(command="skills", data=skills)
-
-    if cmd == "/memory":
-        store = MemoryStore(deps.data_dir)
-        files = store.list_files()
-        return CommandResult(command="memory", data=files)
 
     if cmd == "/usage":
         tracker = deps.usage_tracker
