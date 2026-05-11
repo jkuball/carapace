@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.116.0 (2026-05-11)
+
+
+### ✨ Features
+
+
+- ✨ fix: correct argument matching in /model command suggestions
+  ([`1d01f44`](https://github.com/thiesgerken/carapace/commit/1d01f44665d0d768776f09be5affd99b3768b1d6))
+
+- ✨ feat: /model <role> <model> instead of /model-<role> commands
+  ([`33964b6`](https://github.com/thiesgerken/carapace/commit/33964b624c7910cac3327ca4868c624d87e302d2))
+
+### Other
+
+
+- better /models slash command
+  ([`8d37e5f`](https://github.com/thiesgerken/carapace/commit/8d37e5f47790d17ace15df1b925e77064b482127))
+
+- 🔥 cleanup more slash commands
+  ([`1e75277`](https://github.com/thiesgerken/carapace/commit/1e7527752a9cc1b44dc71bd2ebe53a25559e686a))
+
+- 🔥 remove legacy slash commands for model setting
+  ([`11abf1a`](https://github.com/thiesgerken/carapace/commit/11abf1ae65662e3eb370db73163bd88c2d3dba8d))
+
+- 🔥 remove /verbose slash command in web ui
+  ([`9606834`](https://github.com/thiesgerken/carapace/commit/96068342ba9f48147c7bd6fdb74c7b61799c14b1))
+
 ## v0.115.1 (2026-05-11)
 
 
