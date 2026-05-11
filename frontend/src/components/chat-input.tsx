@@ -116,22 +116,22 @@ export function ChatInput({
   const modelSuggestions = useMemo(
     (): { items: string[]; replaceFrom: number } => {
       const empty = { items: [], replaceFrom: value.length };
-    const lower = value.toLowerCase();
-    const match = MODEL_COMMANDS.find((c) => lower.startsWith(c + " "));
+      const lower = value.toLowerCase();
+      const match = MODEL_COMMANDS.find((c) => lower.startsWith(c + " "));
       if (!match) return empty;
 
-    const afterCmd = value.slice(match.length + 1);
+      const afterCmd = value.slice(match.length + 1);
       const afterCmdTrimmed = afterCmd.trimStart();
       const replaceFromBase = match.length + 1 + (afterCmd.length - afterCmdTrimmed.length);
 
       if (match === "/model") {
-        const firstArgMatch = afterCmdTrimmed.match(/^(\S+)(?:\s+(.*))?$/);
+        const firstArgMatch = afterCmdTrimmed.match(/^(\S+)(\s+)(.*)$/);
         if (
           firstArgMatch &&
           MODEL_TARGETS.has(firstArgMatch[1].toLowerCase()) &&
           afterCmdTrimmed.length > firstArgMatch[1].length
         ) {
-          const modelPart = firstArgMatch[2] ?? "";
+          const modelPart = firstArgMatch[3] ?? "";
           if (modelPart.trimEnd().includes(" ")) return empty;
 
           const modelPartTrimmed = modelPart.trimStart();
@@ -147,7 +147,7 @@ export function ChatInput({
             replaceFrom:
               replaceFromBase +
               firstArgMatch[1].length +
-              1 +
+              firstArgMatch[2].length +
               (modelPart.length - modelPartTrimmed.length),
           };
         }
@@ -155,10 +155,10 @@ export function ChatInput({
 
       const partial = afterCmdTrimmed.toLowerCase();
 
-    // Don't show suggestions if there's already a complete argument with space after
+      // Don't show suggestions if there's already a complete argument with space after
       if (afterCmd.trimEnd().includes(" ")) return empty;
 
-    // Don't show if the argument already exactly matches a model
+      // Don't show if the argument already exactly matches a model
       if (availableModelIds.some((m) => m.toLowerCase() === partial)) {
         return empty;
       }
