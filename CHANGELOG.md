@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.115.0 (2026-05-11)
+
+
+### ✨ Features
+
+
+- ✨ feat: make the ui installable as a PWA
+  ([`43ca221`](https://github.com/thiesgerken/carapace/commit/43ca221c7ed03a8099662fab3a2cec83282ac043))
+
 ## v0.114.2 (2026-05-11)
 
 
