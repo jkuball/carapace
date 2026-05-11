@@ -988,9 +988,10 @@ class SessionEngine(SessionTurnMixin):
             return self._handle_models_command(active)
 
         if cmd == "/model":
-            return self._handle_model_all_command(
+            return await self._handle_model_selector_command(
                 active,
                 parts[1].strip() if len(parts) > 1 else "",
+                slash_line=command.strip(),
             )
 
         if cmd in ("/model-agent", "/model-sentinel", "/model-title"):
@@ -1139,6 +1140,29 @@ class SessionEngine(SessionTurnMixin):
             "title": active.title_model_name,
         }
         return {t: {"current": overrides[t] or defaults[t], "default": defaults[t]} for t in self._MODEL_TYPES}
+
+    async def _handle_model_selector_command(
+        self, active: ActiveSession, arg: str, *, slash_line: str
+    ) -> dict[str, Any]:
+        """Process ``/model [ROLE] [MODEL | reset]`` while keeping ``/model MODEL`` as ``all``."""
+        if not arg:
+            return self._handle_model_all_command(active, "")
+
+        target_aliases: dict[str, ModelType | Literal["all"]] = {
+            "all": "all",
+            "agent": "agent",
+            "sentinel": "sentinel",
+            "title": "title",
+        }
+        args = arg.split(maxsplit=1)
+        target = target_aliases.get(args[0].lower())
+        if target is None:
+            return self._handle_model_all_command(active, arg)
+
+        remainder = args[1].strip() if len(args) == 2 else ""
+        if target == "all":
+            return self._handle_model_all_command(active, remainder)
+        return await self._handle_model_command(active, target, remainder, slash_line=slash_line)
 
     def _handle_model_all_command(self, active: ActiveSession, arg: str) -> dict[str, Any]:
         """Process ``/model [MODEL | reset]`` — show or set all three model roles at once."""

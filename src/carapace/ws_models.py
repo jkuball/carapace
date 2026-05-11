@@ -29,7 +29,7 @@ SLASH_COMMANDS: list[dict[str, str]] = [
     },
     {
         "command": "/model",
-        "description": "View or switch agent, sentinel, and title models together (e.g. /model openai:gpt-4o)",
+        "description": "View models, switch all with /model all NAME, or target one with /model sentinel NAME",
     },
     {
         "command": "/budget",

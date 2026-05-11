@@ -290,6 +290,47 @@ def test_handle_slash_command_model_sets_all_three(tmp_path: Path):
         asyncio.run(_run())
 
 
+def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Path):
+    """``/model sentinel NAME`` mirrors target-first slash commands like ``/budget``."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session()
+        sid = state.session_id
+        active = engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/model sentinel openai:gpt-4o")
+            assert result is not None
+            assert result["command"] == "model-sentinel"
+            assert result["data"]["current"] == "openai:gpt-4o"
+            assert active.agent_model_name is None
+            assert active.sentinel_model_name == "openai:gpt-4o"
+            assert active.title_model_name is None
+
+        asyncio.run(_run())
+
+
+def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
+    """``/model all NAME`` explicitly targets the all-model path."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session()
+        sid = state.session_id
+        active = engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/model all openai:gpt-4o")
+            assert result is not None
+            assert result["command"] == "model"
+            for key in ("agent", "sentinel", "title"):
+                assert result["data"]["models"][key]["current"] == "openai:gpt-4o"
+            assert active.agent_model_name == "openai:gpt-4o"
+            assert active.sentinel_model_name == "openai:gpt-4o"
+            assert active.title_model_name == "openai:gpt-4o"
+
+        asyncio.run(_run())
+
+
 def test_handle_slash_command_model_agent_only(tmp_path: Path):
     """``/model-agent`` changes only the agent model."""
     with _patch_sentinel():
