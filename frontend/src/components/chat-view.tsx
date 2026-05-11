@@ -843,6 +843,7 @@ export function ChatView({
   } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mobileInspectorTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const isAtBottomRef = useRef(true);
   const lastThinkingStartedAtRef = useRef<string | null>(null);
   const queueRef = useRef<string | null>(null);
@@ -884,6 +885,25 @@ export function ChatView({
   useEffect(() => {
     setModelUpdateError(null);
   }, [sessionId]);
+
+  const handleMobileInspectorTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    mobileInspectorTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleMobileInspectorTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const start = mobileInspectorTouchStartRef.current;
+    if (!start) return;
+
+    mobileInspectorTouchStartRef.current = null;
+    const touch = event.changedTouches[0];
+    const dx = Math.abs(touch.clientX - start.x);
+    const dy = touch.clientY - start.y;
+
+    if (dy > 48 && dy > dx) {
+      setMobileInspectorOpen(false);
+    }
+  }, []);
 
   // Fetch available slash commands and models on mount
   useEffect(() => {
@@ -2237,7 +2257,7 @@ export function ChatView({
       <div className="min-h-0 flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-h-0 flex flex-1 flex-col">
           <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 sm:items-start">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-foreground">{sessionDisplayTitle}</div>
                 <div className="mt-1 hidden truncate font-mono text-xs text-muted-foreground sm:block">
@@ -2329,24 +2349,30 @@ export function ChatView({
             className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
             onClick={() => setMobileInspectorOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-hidden rounded-t-3xl border border-border bg-background shadow-2xl">
-            <div className="flex justify-center border-b border-border px-4 pt-2 pb-1.5">
-              <span className="h-1.5 w-12 rounded-full bg-border/80" />
-            </div>
-            <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-2.5">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-foreground">{t("mobile.details")}</div>
-                <div className="truncate text-xs text-muted-foreground">{sessionDisplayTitle}</div>
+          <div className="absolute inset-x-0 bottom-0 flex max-h-[85vh] min-h-0 flex-col overflow-hidden rounded-t-3xl border border-border bg-background shadow-2xl">
+            <div
+              className="border-b border-border"
+              onTouchStart={handleMobileInspectorTouchStart}
+              onTouchEnd={handleMobileInspectorTouchEnd}
+            >
+              <div className="flex justify-center px-4 pt-2 pb-1.5">
+                <span className="h-1.5 w-12 rounded-full bg-border/80" />
               </div>
-              <button
-                type="button"
-                onClick={() => setMobileInspectorOpen(false)}
-                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-medium hover:bg-muted"
-              >
-                {t("mobile.done")}
-              </button>
+              <div className="flex items-start justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground">{t("mobile.details")}</div>
+                  <div className="truncate text-xs text-muted-foreground">{sessionDisplayTitle}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileInspectorOpen(false)}
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-medium hover:bg-muted"
+                >
+                  {t("mobile.done")}
+                </button>
+              </div>
             </div>
-            <div className="overflow-y-auto p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
               {inspectorContent}
             </div>
           </div>
