@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.114.2 (2026-05-11)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: normalize exec title fallbacks
+  ([`d9f1664`](https://github.com/thiesgerken/carapace/commit/d9f16643e6604f494c95facff4296b76ffe8ceeb))
+
 ## v0.114.1 (2026-05-10)
 
 
