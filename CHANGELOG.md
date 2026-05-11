@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.1 (2026-05-11)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fixes for mobile layout
+  ([`1a47dfb`](https://github.com/thiesgerken/carapace/commit/1a47dfb47930ce866039fab3bd52beefefe8e22c))
+
 ## v0.117.0 (2026-05-11)
 
 
