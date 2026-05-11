@@ -1477,21 +1477,6 @@ def test_ws_memory_command(client, auth_headers, bearer):
         assert msg["command"] == "memory"
 
 
-def test_ws_verbose_command(client, auth_headers, bearer):
-    create_resp = client.post("/api/sessions", headers=auth_headers)
-    sid = create_resp.json()["session_id"]
-
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
-        _consume_status(ws)
-        ws.send_json({"type": "message", "content": "/verbose"})
-        echo = ws.receive_json()
-        assert echo["type"] == "user_message"
-        msg = ws.receive_json()
-        assert msg["type"] == "command_result"
-        assert msg["command"] == "verbose"
-        assert msg["data"]["verbose"] is False
-
-
 def test_ws_unknown_command(client, auth_headers, bearer):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]

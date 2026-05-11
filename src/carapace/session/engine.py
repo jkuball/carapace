@@ -748,7 +748,6 @@ class SessionEngine(SessionTurnMixin):
             skill_catalog=self._skill_catalog,
             agent_model=agent_model,
             agent_model_id=agent_model_id,
-            verbose=active.verbose,
             tool_call_callback=tool_call_callback,
             tool_result_callback=tool_result_callback,
             append_session_events=_append_session_events,

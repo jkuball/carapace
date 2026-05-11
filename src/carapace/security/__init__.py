@@ -57,7 +57,6 @@ async def evaluate_with(
     usage_tracker: UsageTracker | None = None,
     assert_llm_budget_available: Callable[[], None] | None = None,
     usage_limits: UsageLimits | None = None,
-    verbose: bool = True,
     tool_call_callback: Any = None,
 ) -> None:
     """Main security gate. Auto-allows safe tools; asks the sentinel for everything else.
@@ -112,14 +111,13 @@ async def evaluate_with(
             )
             return
 
-    if verbose:
-        _log_tool_call(
-            tool_name,
-            args,
-            "[sentinel] reviewing",
-            tool_call_callback,
-            approval_source="sentinel",
-        )
+    _log_tool_call(
+        tool_name,
+        args,
+        "[sentinel] reviewing",
+        tool_call_callback,
+        approval_source="sentinel",
+    )
 
     try:
         verdict = await sentinel.evaluate_tool_call(

@@ -756,7 +756,6 @@ class Deps(BaseModel):
         description="carapace-registered model id (custom id or provider:name); usage keys, not provider wire ids.",
     )
 
-    verbose: bool = True
     tool_call_callback: ToolCallCallback | None = None
     tool_result_callback: Callable[[ToolResult], None] | None = None
     append_session_events: Callable[[list[dict[str, Any]]], None] | None = None

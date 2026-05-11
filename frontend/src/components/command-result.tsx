@@ -128,11 +128,6 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
     );
   }
 
-  const verboseData = decodeVerboseData(data);
-  if (command === "verbose" && verboseData) {
-    return <p className="my-1 text-sm text-muted-foreground">{verboseData.message}</p>;
-  }
-
   const modelData = decodeModelData(data);
   if (
     modelData?.models &&
@@ -306,12 +301,6 @@ function decodeRulesData(d: unknown): RuleRow[] | null {
       return { id, trigger, mode, status };
     })
     .filter((entry): entry is RuleRow => entry !== null);
-}
-
-function decodeVerboseData(d: unknown): { message: string } | null {
-  if (!isRecord(d)) return null;
-  const message = readString(d, "message");
-  return message === undefined ? null : { message };
 }
 
 function decodeModelSelections(

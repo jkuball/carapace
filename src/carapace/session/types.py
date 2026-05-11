@@ -117,7 +117,6 @@ class ActiveSession:
     llm_request_log: LlmRequestLog = field(default_factory=LlmRequestLog)
     llm_request_state: LlmRequestState | None = None
     llm_request_thinking: dict[str, str] = field(default_factory=dict)
-    verbose: bool = True
     agent_model: Model | None = None
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None

@@ -169,7 +169,6 @@ Slash commands are the user's control interface for managing sessions and securi
 
 | Command                         | Effect                                                         |
 | ------------------------------- | -------------------------------------------------------------- |
-| `/verbose`                      | Toggle tool call display                                       |
 | `/models`                       | View all models (agent, sentinel, title) and available options |
 | `/model [NAME\|reset]`          | View or switch the agent model                                 |
 | `/model-sentinel [NAME\|reset]` | View or switch the sentinel model                              |
