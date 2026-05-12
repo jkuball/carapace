@@ -21,6 +21,7 @@ from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
+from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import CredentialAccessEntry
@@ -99,6 +100,10 @@ def _setup_server(tmp_path, monkeypatch):
     )
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
+    srv._notification_store = NotificationStore(tmp_path)
+    srv._notification_presence = NotificationPresenceRegistry(
+        ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
+    )
 
 
 @pytest.fixture()
@@ -141,6 +146,85 @@ def test_meta_returns_version(client, auth_headers, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json() == {"version": "test-version"}
+
+
+def test_notification_subscription_roundtrip(client, auth_headers):
+    resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Phone",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["device_name"] == "Phone"
+    assert data["preferences"]["escalation_pending"] is True
+
+    list_resp = client.get("/api/notifications/subscriptions", headers=auth_headers)
+
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) == 1
+    assert list_resp.json()[0]["subscription_id"] == data["subscription_id"]
+
+
+def test_notification_preferences_patch_persists(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+
+    patch_resp = client.patch(
+        f"/api/notifications/subscriptions/{subscription_id}/preferences",
+        headers=auth_headers,
+        json={"attended_turn_completed": False},
+    )
+
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["preferences"]["attended_turn_completed"] is False
+
+    owner_key = derive_owner_key(_TEST_TOKEN)
+    stored = srv._notification_store.list_subscriptions(owner_key=owner_key)
+    assert stored[0].notification_prefs.attended_turn_completed is False
+
+
+def test_notification_presence_updates_registry(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Laptop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+
+    presence_resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert presence_resp.status_code == 200
+    assert presence_resp.json() == {"heartbeat_received": True}
+    assert srv._notification_presence.is_session_actively_handled("session-1") is True
 
 
 # --- Sessions REST ---
