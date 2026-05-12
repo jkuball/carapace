@@ -169,3 +169,15 @@ export async function dispatchWindowEvent(event: Event): Promise<void> {
     window.dispatchEvent(event);
   });
 }
+
+export async function dispatchDocumentEvent(event: Event): Promise<void> {
+  await act(async () => {
+    document.dispatchEvent(event);
+  });
+}
+
+export async function runInAct(callback: () => void | Promise<void>): Promise<void> {
+  await act(async () => {
+    await callback();
+  });
+}
