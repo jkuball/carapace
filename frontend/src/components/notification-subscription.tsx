@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOff, BellRing, Loader2, Smartphone } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   deleteNotificationSubscription,
@@ -115,62 +115,80 @@ function NotificationSubscriptionContent({
   translate: NotificationTranslator;
 }) {
   const [pushSupported, setPushSupported] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification === "undefined" ? "default" : Notification.permission,
+  );
   const [subscription, setSubscription] = useState<NotificationSubscriptionRecord | null>(null);
-  const [deviceName, setDeviceName] = useState("");
+  const [deviceName, setDeviceName] = useState(() => getNotificationDeviceName() || buildNotificationDeviceName());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const hydrateSubscriptionState = useCallback(async () => {
-    const supported = supportsPushNotifications();
-    setPushSupported(supported);
-    setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
-
-    const fallbackDeviceName = getNotificationDeviceName() || buildNotificationDeviceName();
-    setDeviceName((current) => current || fallbackDeviceName);
-
-    if (!server || !token || !supported) {
-      setSubscription(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const registration = await registerNotificationServiceWorker();
-      const browserSubscription = await registration?.pushManager.getSubscription() ?? null;
-      const subscriptions = await listNotificationSubscriptions(server, token);
-      const storedSubscriptionId = getNotificationSubscriptionId();
-      let activeSubscription = subscriptions.find(
-        (candidate) => candidate.subscription_id === storedSubscriptionId,
-      ) ?? null;
-      if (!activeSubscription && browserSubscription) {
-        activeSubscription = subscriptions.find(
-          (candidate) => candidate.endpoint === browserSubscription.endpoint,
-        ) ?? null;
-      }
-
-      if (activeSubscription) {
-        saveNotificationSubscriptionId(activeSubscription.subscription_id);
-        saveNotificationDeviceName(activeSubscription.device_name);
-        setDeviceName(activeSubscription.device_name || fallbackDeviceName);
-      } else {
-        clearNotificationSubscriptionId();
-      }
-
-      setSubscription(activeSubscription);
-      setError("");
-    } catch (nextError) {
-      setError(resolveErrorMessage(nextError, t("status.loadFailed")));
-    } finally {
-      setLoading(false);
-    }
-  }, [server, t, token]);
-
   useEffect(() => {
-    void hydrateSubscriptionState();
-  }, [hydrateSubscriptionState]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const supported = supportsPushNotifications();
+      const fallbackDeviceName = getNotificationDeviceName() || buildNotificationDeviceName();
+
+      setPushSupported(supported);
+      setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
+      setDeviceName((current) => current || fallbackDeviceName);
+
+      if (!server || !token || !supported) {
+        setSubscription(null);
+        setError("");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      void (async () => {
+        try {
+          const registration = await registerNotificationServiceWorker();
+          const browserSubscription = await registration?.pushManager.getSubscription() ?? null;
+          const subscriptions = await listNotificationSubscriptions(server, token);
+          const storedSubscriptionId = getNotificationSubscriptionId();
+          let activeSubscription = subscriptions.find(
+            (candidate) => candidate.subscription_id === storedSubscriptionId,
+          ) ?? null;
+          if (!activeSubscription && browserSubscription) {
+            activeSubscription = subscriptions.find(
+              (candidate) => candidate.endpoint === browserSubscription.endpoint,
+            ) ?? null;
+          }
+
+          if (cancelled) {
+            return;
+          }
+
+          if (activeSubscription) {
+            saveNotificationSubscriptionId(activeSubscription.subscription_id);
+            saveNotificationDeviceName(activeSubscription.device_name);
+            setDeviceName(activeSubscription.device_name || fallbackDeviceName);
+          } else {
+            clearNotificationSubscriptionId();
+          }
+
+          setSubscription(activeSubscription);
+          setError("");
+        } catch (nextError) {
+          if (cancelled) {
+            return;
+          }
+          setError(resolveErrorMessage(nextError, t("status.loadFailed")));
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      })();
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [server, t, token]);
 
   useEffect(() => {
     const refreshPermission = () => {

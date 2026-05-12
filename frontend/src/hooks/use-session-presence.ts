@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   postInteractivePresence,
   postNotificationSubscriptionPresence,
@@ -16,13 +16,8 @@ export function useSessionPresence(
   status: WebSocketStatus,
   sourceId: string,
 ): void {
-  const sourceIdRef = useRef(sourceId);
-  sourceIdRef.current = sourceId;
-
   useEffect(() => {
     if (!server || !token || !sessionId || status !== "connected") return;
-
-    const sourceId = sourceIdRef.current;
 
     const sendPresence = async (
       focusState: "visible" | "hidden" | "inactive",
@@ -75,5 +70,5 @@ export function useSessionPresence(
       window.removeEventListener("blur", syncPresence);
       void sendPresence("inactive");
     };
-  }, [server, token, sessionId, status]);
+  }, [server, token, sessionId, status, sourceId]);
 }

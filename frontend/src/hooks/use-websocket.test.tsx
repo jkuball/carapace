@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { useRef } from "react";
+import { useEffect } from "react";
 import { useWebSocket } from "./use-websocket";
 import {
   flushReact,
@@ -143,10 +143,14 @@ function HookHarness({
   };
 }) {
   const state = useWebSocket(url, onMessage as never, onDisconnect);
-  stateRef.current = state as {
-    status: string;
-    send: (message: unknown) => void;
-  };
+
+  useEffect(() => {
+    stateRef.current = state as {
+      status: string;
+      send: (message: unknown) => void;
+    };
+  }, [state, stateRef]);
+
   return null;
 }
 
