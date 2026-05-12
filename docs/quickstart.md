@@ -91,6 +91,8 @@ In the web UI, public sessions expose a "Commit to knowledge" action. Private se
 
 ### Optional: enable notification delivery backend
 
+Full backend behavior and API details live in [notifications.md](notifications.md).
+
 Phase 2 adds server-side notification routing and Web Push delivery. Delivery is only active when all three VAPID settings are configured together.
 
 ```yaml

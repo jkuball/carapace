@@ -2,6 +2,8 @@
 
 This document describes JSON messages on the session chat WebSocket. The canonical Pydantic definitions live in [`src/carapace/ws_models.py`](../src/carapace/ws_models.py).
 
+For the broader notification backend, including presence, suppression, and push delivery, see [notifications.md](notifications.md).
+
 ## Endpoint and authentication
 
 - **URL:** `ws://<host>/api/chat/{session_id}` or `wss://…` for HTTPS deployments.

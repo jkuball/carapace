@@ -91,48 +91,14 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 
 carapace also keeps a separate notification state for each session. This state is not part of `SessionState`; it lives in a dedicated notification store plus a runtime presence registry.
 
-### Subscription storage
+See [notifications.md](notifications.md) for the full backend model, config, delivery, and API details.
 
-- Push subscriptions are stored under `$CARAPACE_DATA_DIR/notifications/subscriptions/<subscription_id>.yaml`
-- Each subscription carries per-device preferences plus expiry and heartbeat timestamps
-- Subscriptions are grouped by an `owner_key` derived from the authenticated bearer token in v1
-- Rotating `CARAPACE_TOKEN` therefore creates a new notification ownership bucket; existing device subscriptions must be recreated after rotation
+Short version:
 
-### Notification kinds and defaults
-
-| Kind | Meaning | Default |
-| ---- | ------- | ------- |
-| `escalation_pending` | A domain, git-push, or credential escalation needs a user decision | on |
-| `attended_turn_completed` | An attended session finished a turn | on |
-| `unattended_turn_completed` | An unattended session or cron-triggered run completed successfully | off |
-| `unattended_turn_failed` | An unattended session ended with a warning or failure | on |
-| `notification_clear` | Clear a previously shown notification across devices | internal |
-
-Notification ids are stable so devices can deduplicate and clear them:
-
-- Escalations: `esc:{session_id}:{request_id}`
-- Turn outcomes: `done:{session_id}:{assistant_event_index}:{kind}`
-
-### Active-session suppression
-
-Notification delivery is suppressed when the session is already being actively handled.
-
-A session counts as actively handled when at least one of these conditions is true:
-
-- a web client has recent presence with `focus_state = visible`
-- a CLI client is connected and not marked inactive
-- a Matrix room for the session has recent activity
-
-This same presence state is also used to clear pending notifications again when the user comes back to the session.
-
-### Clear semantics
-
-Pending notification ids are cleared when the session becomes active again, including:
-
-- the next user message in the session
-- a web presence heartbeat or websocket reconnect that marks the session active
-- Matrix activity that marks the session active again
-- escalation resolution
+- subscriptions live under `$CARAPACE_DATA_DIR/notifications/subscriptions/`
+- delivery is filtered by per-device preferences and suppressed while a session is actively handled
+- active handling is driven by shared web, CLI, and Matrix presence
+- pending notifications are cleared again when the user returns to the session
 
 ---
 
