@@ -239,6 +239,8 @@
             "contextWindow": "({tokens} Kontext)",
             "contextWindowShort": "{tokens} Kontext",
             "noneAvailable": "Keine Modelle verfügbar.",
+            "noMatches": "Keine passenden Modelle.",
+            "filterPlaceholder": "Modelle filtern...",
             "currentLabel": "Aktuelles Modell:",
             "defaultLabel": "Standard: {model}"
         },

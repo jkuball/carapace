@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { AvailableModelInfo } from "@/lib/api";
@@ -48,7 +48,9 @@ interface ModelPickerProps {
 export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }: ModelPickerProps) {
   const tModels = useTranslations("commandResult.models");
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -67,9 +69,32 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+
+    filterInputRef.current?.focus();
+    filterInputRef.current?.select();
+  }, [open]);
+
   const normalizedValue = value?.trim() || null;
   const selected = normalizedValue ? entries.find((entry) => entry.id === normalizedValue) ?? null : null;
   const triggerLabel = selected?.id ?? defaultLabel;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEntries = useMemo(() => {
+    if (!normalizedQuery) {
+      return entries;
+    }
+
+    return entries.filter((entry) => {
+      const searchableParts = [entry.id, entry.provider, entry.name]
+        .filter((part): part is string => typeof part === "string" && part.length > 0)
+        .map((part) => part.toLowerCase());
+      return searchableParts.some((part) => part.includes(normalizedQuery));
+    });
+  }, [entries, normalizedQuery]);
 
   return (
     <div ref={rootRef} className="relative">
@@ -92,6 +117,22 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
 
       {open && (
         <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-border bg-background shadow-xl">
+          <div className="border-b border-border/70 p-2">
+            <input
+              ref={filterInputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setOpen(false);
+                }
+              }}
+              placeholder={tModels("filterPlaceholder")}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
           <div className="max-h-72 overflow-y-auto p-2" role="listbox">
             <button
               type="button"
@@ -113,8 +154,10 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
 
             {entries.length === 0 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">{tModels("noneAvailable")}</div>
+            ) : filteredEntries.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">{tModels("noMatches")}</div>
             ) : (
-              entries.map((entry) => {
+              filteredEntries.map((entry) => {
                 const secondaryLabel = formatModelSecondaryLabel(entry);
                 const contextLabel = formatModelContextLabel(entry);
                 const isSelected = entry.id === normalizedValue;
