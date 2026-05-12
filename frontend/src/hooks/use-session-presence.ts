@@ -24,33 +24,30 @@ export function useSessionPresence(
     ) => {
       const subscriptionId = getNotificationSubscriptionId();
 
-      try {
-        const operations: Array<Promise<void>> = [
-          postInteractivePresence(server, token, {
-            session_id: sessionId,
-            source_id: sourceId,
-            client_type: "web",
-            focus_state: focusState,
-          }),
-        ];
-        if (subscriptionId) {
-          operations.push(
-            postNotificationSubscriptionPresence(
-              server,
-              token,
-              subscriptionId,
-              {
-                session_id: sessionId,
-                client_type: "web",
-                focus_state: focusState,
-              },
-            ),
-          );
-        }
-        await Promise.allSettled(operations);
-      } catch {
-        // Presence updates are best-effort and should not break chat.
+      const operations: Array<Promise<void>> = [
+        postInteractivePresence(server, token, {
+          session_id: sessionId,
+          source_id: sourceId,
+          client_type: "web",
+          focus_state: focusState,
+        }),
+      ];
+      if (subscriptionId) {
+        operations.push(
+          postNotificationSubscriptionPresence(
+            server,
+            token,
+            subscriptionId,
+            {
+              session_id: sessionId,
+              client_type: "web",
+              focus_state: focusState,
+            },
+          ),
+        );
       }
+
+      await Promise.allSettled(operations);
     };
 
     const syncPresence = () => {

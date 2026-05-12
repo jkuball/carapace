@@ -1,7 +1,7 @@
 "use client";
 
 import { BellOff, BellRing, Loader2, Smartphone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   deleteNotificationSubscription,
@@ -123,10 +123,20 @@ function NotificationSubscriptionContent({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const loadFailedMessageRef = useRef(t("status.loadFailed"));
+
+  useEffect(() => {
+    loadFailedMessageRef.current = t("status.loadFailed");
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
       const supported = supportsPushNotifications();
       const fallbackDeviceName = getNotificationDeviceName() || buildNotificationDeviceName();
 
@@ -175,20 +185,19 @@ function NotificationSubscriptionContent({
           if (cancelled) {
             return;
           }
-          setError(resolveErrorMessage(nextError, t("status.loadFailed")));
+          setError(resolveErrorMessage(nextError, loadFailedMessageRef.current));
         } finally {
           if (!cancelled) {
             setLoading(false);
           }
         }
       })();
-    }, 0);
+    });
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [server, t, token]);
+  }, [server, token]);
 
   useEffect(() => {
     const refreshPermission = () => {
