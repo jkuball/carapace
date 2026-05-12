@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.117.2 (2026-05-12)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: add model filtering functionality for model picker
+  ([`28a594b`](https://github.com/thiesgerken/carapace/commit/28a594bfc3d31e3ec3bacf0ba82f5c39f0ade462))
+
+### Other
+
+
+- 💚 ci: update renovate configuration to include group:allNonMajor
+  ([`91ef0a9`](https://github.com/thiesgerken/carapace/commit/91ef0a971eb43d68605ea61d3f5125229c27f2b0))
+
 ## v0.117.1 (2026-05-11)
 
 
