@@ -271,6 +271,33 @@ def test_interactive_presence_inactive_removes_registry_entry(client, auth_heade
     assert srv._notification_presence.is_session_actively_handled("session-1") is False
 
 
+def test_interactive_presence_clears_pending_notifications(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+    active = srv._engine.get_or_activate(sid)
+    active.pending_notification_ids = {f"done:{sid}:1:attended_turn_completed"}
+    srv._engine._notification_router = AsyncMock()
+    srv._engine._notification_router.clear_notifications = AsyncMock(return_value=1)
+
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": sid,
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert resp.status_code == 200
+    srv._engine._notification_router.clear_notifications.assert_awaited_once_with(
+        session_id=sid,
+        notif_id=f"done:{sid}:1:attended_turn_completed",
+    )
+    assert active.pending_notification_ids == set()
+
+
 # --- Sessions REST ---
 
 

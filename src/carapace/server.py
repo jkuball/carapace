@@ -60,7 +60,13 @@ from carapace.models import (
     SessionState,
     ToolResult,
 )
-from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
+from carapace.notifications import (
+    NotificationPresenceRegistry,
+    NotificationRouter,
+    NotificationStore,
+    WebPushSender,
+    derive_owner_key,
+)
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
 from carapace.sandbox.runtime import ContainerRuntime
@@ -116,6 +122,7 @@ _jobs_store: JobsStore
 _jobs_scheduler: JobsScheduler
 _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
+_notification_router: NotificationRouter
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
 _JOB_SCHEDULER_SWEEP_SECONDS = 60
@@ -246,7 +253,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         _jobs_store, \
         _jobs_scheduler, \
         _notification_store, \
-        _notification_presence
+        _notification_presence, \
+        _notification_router
 
     # 1. Load config
     config_path = get_config_path()
@@ -355,6 +363,27 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if _credential_registry.backend_names:
         logger.info(f"Credential backends: {', '.join(_credential_registry.backend_names)}")
 
+    token = get_token()
+    _notification_store = NotificationStore(_data_dir)
+    _notification_presence = NotificationPresenceRegistry(
+        ttl=timedelta(seconds=_config.notifications.presence_ttl_seconds)
+    )
+    _notification_router = NotificationRouter(
+        store=_notification_store,
+        presence=_notification_presence,
+        sender=WebPushSender(
+            store=_notification_store,
+            vapid_private_key=_config.notifications.vapid_private_key,
+            vapid_subject=_config.notifications.vapid_subject,
+            timeout_seconds=_config.notifications.send_timeout_seconds,
+            retry_attempts=_config.notifications.retry_attempts,
+            retry_backoff_seconds=_config.notifications.retry_backoff_seconds,
+            max_payload_bytes=_config.notifications.max_payload_bytes,
+            delivery_ttl_seconds=_config.notifications.delivery_ttl_seconds,
+        ),
+        owner_key=derive_owner_key(token),
+    )
+
     _engine = SessionEngine(
         config=_config,
         data_dir=_data_dir,
@@ -366,6 +395,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         sandbox_mgr=_sandbox_mgr,
         credential_registry=_credential_registry,
         model_factory=model_factory,
+        notification_router=_notification_router,
     )
     _session_archive = SessionArchiveService(
         knowledge_dir=knowledge_dir,
@@ -375,10 +405,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _jobs_store = JobsStore(_data_dir)
     _jobs_scheduler = JobsScheduler(_jobs_store)
-    _notification_store = NotificationStore(_data_dir)
-    _notification_presence = NotificationPresenceRegistry(
-        ttl=timedelta(seconds=_config.notifications.presence_ttl_seconds)
-    )
 
     # Git HTTP handler — serves the knowledge repo on the sandbox API
     _git_handler = GitHttpHandler(
@@ -425,7 +451,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     internal_task = asyncio.create_task(internal_server.serve())
     logger.info(f"Internal API listening on 127.0.0.1:{_config.server.internal_port}")
 
-    token = get_token()
     await _session_list_cache.start()
 
     price_updater = UpdatePrices()
@@ -605,7 +630,7 @@ def _owned_notification_subscription(subscription_id: str, token: str) -> Notifi
     return subscription
 
 
-def _set_notification_presence(
+async def _set_notification_presence(
     *,
     session_id: str,
     source_id: str,
@@ -623,6 +648,8 @@ def _set_notification_presence(
         focus_state=focus_state,
         now=now,
     )
+    if _notification_presence.is_session_actively_handled(session_id, now=now):
+        await _engine.clear_pending_notifications(session_id)
 
 
 @router.get("/notifications/subscriptions", response_model=list[NotificationSubscriptionResponse])
@@ -688,7 +715,7 @@ async def update_notification_presence(
     now = datetime.now(tz=UTC)
     updated = subscription.model_copy(update={"last_heartbeat": now, "expires_at": now + _notification_ttl()})
     _notification_store.save_subscription(updated)
-    _set_notification_presence(
+    await _set_notification_presence(
         session_id=request.session_id,
         source_id=subscription_id,
         client_type=request.client_type,
@@ -703,7 +730,7 @@ async def update_interactive_presence(
     request: InteractivePresenceRequest,
     _token: str = Depends(_verify_token),
 ) -> dict[str, bool]:
-    _set_notification_presence(
+    await _set_notification_presence(
         session_id=request.session_id,
         source_id=request.source_id,
         client_type=request.client_type,
@@ -1702,7 +1729,7 @@ async def chat_ws(
 
     ws_source_id = client_id.strip() if client_id else f"ws:{uuid.uuid4().hex}"
     ws_client_type: NotificationClientType = "cli" if current_state.channel_type == "cli" else "web"
-    _set_notification_presence(
+    await _set_notification_presence(
         session_id=session_id,
         source_id=ws_source_id,
         client_type=ws_client_type,

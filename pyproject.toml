@@ -25,6 +25,7 @@ dependencies = [
     "kr8s>=0.20,<1",
     "tiktoken>=0.8,<1",
     "redis>=7.4,<8",
+    "pywebpush>=2,<3",
 ]
 
 [project.scripts]

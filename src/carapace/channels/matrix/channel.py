@@ -271,7 +271,7 @@ class MatrixChannel:
             return False
         return True
 
-    def _note_presence(self, room_id: str, session_id: str) -> None:
+    async def _note_presence(self, room_id: str, session_id: str) -> None:
         if self._presence_registry is None:
             return
         self._presence_registry.update_presence(
@@ -280,6 +280,7 @@ class MatrixChannel:
             client_type="matrix",
             focus_state="visible",
         )
+        await self._engine.clear_pending_notifications(session_id)
 
     async def _send_text(self, room_id: str, text: str) -> str | None:
         """Send a markdown message; returns the sent event_id or None on error."""
@@ -369,7 +370,7 @@ class MatrixChannel:
         room_id = room.room_id
         session_id = self._room_sessions.get(room_id)
         if session_id:
-            self._note_presence(room_id, session_id)
+            await self._note_presence(room_id, session_id)
 
         # Tool approval
         if event.reacts_to in self._pending_approvals:
@@ -442,7 +443,7 @@ class MatrixChannel:
 
         room_id = room.room_id
         session_id = self._get_or_create_session(room_id)
-        self._note_presence(room_id, session_id)
+        await self._note_presence(room_id, session_id)
 
         logger.info(f"Matrix [{room_id}] <{event.sender}>: {body[:80]}")
 
@@ -541,7 +542,7 @@ class MatrixChannel:
             private=self._engine.config.sessions.default_private,
         )
         self._room_sessions[room_id] = new_state.session_id
-        self._note_presence(room_id, new_state.session_id)
+        await self._note_presence(room_id, new_state.session_id)
         # Clear any stale room-level pending approval
         self._room_pending.pop(room_id, None)
         logger.info(f"Matrix: reset session for {room_id} → {new_state.session_id}")

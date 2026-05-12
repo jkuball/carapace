@@ -34,6 +34,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import UsageLimits
 
 from carapace.models import Config, Deps, ToolCallCallback, ToolResult
+from carapace.notifications.router import NotificationRouter, build_turn_outcome_notification_id
 from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
 from carapace.session.manager import SessionManager
@@ -102,6 +103,7 @@ class SessionTurnHost(Protocol):
     _session_mgr: SessionManager
     _sandbox_mgr: SandboxManager
     _llm_semaphore: asyncio.Semaphore
+    _notification_router: NotificationRouter | None
 
     async def _broadcast(
         self,
@@ -532,6 +534,23 @@ class SessionTurnMixin(SessionTurnHost):
         if final_status is not None:
             assistant_event["final_status"] = final_status
         self._session_mgr.append_events(session_id, [assistant_event])
+        assistant_event_index = len(self._session_mgr.load_events(session_id)) - 1
+
+        if self._notification_router is not None:
+            notification_kind = (
+                "unattended_turn_completed" if active.state.attributes.unattended else "attended_turn_completed"
+            )
+            delivered = await self._notification_router.dispatch_turn_outcome(
+                session_id=session_id,
+                assistant_event_index=assistant_event_index,
+                kind=notification_kind,
+                title="Job Completed" if active.state.attributes.unattended else "Session Update",
+                body=_truncate_for_log(output, 160),
+            )
+            if delivered > 0:
+                active.pending_notification_ids.add(
+                    build_turn_outcome_notification_id(session_id, assistant_event_index, notification_kind)
+                )
 
         if output.startswith("Unexpected agent output type:"):
             await self._broadcast(active, "on_error", output, turn_terminal=True)
@@ -577,6 +596,23 @@ class SessionTurnMixin(SessionTurnHost):
             terminal_message=terminal_message,
             final_status="warning" if (terminal_message and active.state.attributes.unattended) else None,
         )
+        if self._notification_router is not None and terminal_message and active.state.attributes.unattended:
+            assistant_event_index = len(self._session_mgr.load_events(session_id)) - 1
+            delivered = await self._notification_router.dispatch_turn_outcome(
+                session_id=session_id,
+                assistant_event_index=assistant_event_index,
+                kind="unattended_turn_failed",
+                title="Job Failed",
+                body=_truncate_for_log(terminal_message, 160),
+            )
+            if delivered > 0:
+                active.pending_notification_ids.add(
+                    build_turn_outcome_notification_id(
+                        session_id,
+                        assistant_event_index,
+                        "unattended_turn_failed",
+                    )
+                )
 
     def _save_user_message_on_failure(
         self,

@@ -374,6 +374,14 @@ class NotificationsConfig(BaseModel):
     presence_ttl_seconds: int = 60
     subscription_ttl_days: int = 30
     default_preferences: NotificationPreferences = Field(default_factory=NotificationPreferences)
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str | None = None
+    send_timeout_seconds: int = 10
+    retry_attempts: int = 2
+    retry_backoff_seconds: float = 1.0
+    max_payload_bytes: int = 4096
+    delivery_ttl_seconds: int = 600
 
     @model_validator(mode="after")
     def _validate(self) -> NotificationsConfig:
@@ -381,6 +389,28 @@ class NotificationsConfig(BaseModel):
             raise ValueError("notifications.presence_ttl_seconds must be > 0")
         if self.subscription_ttl_days <= 0:
             raise ValueError("notifications.subscription_ttl_days must be > 0")
+        if self.vapid_public_key is not None:
+            self.vapid_public_key = self.vapid_public_key.strip() or None
+        if self.vapid_private_key is not None:
+            self.vapid_private_key = self.vapid_private_key.strip() or None
+        if self.vapid_subject is not None:
+            self.vapid_subject = self.vapid_subject.strip() or None
+        vapid_values = (self.vapid_public_key, self.vapid_private_key, self.vapid_subject)
+        if any(vapid_values) and not all(vapid_values):
+            raise ValueError(
+                "notifications.vapid_public_key, notifications.vapid_private_key, "
+                + "and notifications.vapid_subject must be set together"
+            )
+        if self.send_timeout_seconds <= 0:
+            raise ValueError("notifications.send_timeout_seconds must be > 0")
+        if self.retry_attempts < 0:
+            raise ValueError("notifications.retry_attempts must be >= 0")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("notifications.retry_backoff_seconds must be >= 0")
+        if self.max_payload_bytes <= 0:
+            raise ValueError("notifications.max_payload_bytes must be > 0")
+        if self.delivery_ttl_seconds < 0:
+            raise ValueError("notifications.delivery_ttl_seconds must be >= 0")
         return self
 
 
