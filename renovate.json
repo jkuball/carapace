@@ -2,7 +2,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:best-practices",
-    ":preserveSemverRanges"
+    ":preserveSemverRanges",
+    "group:allNonMajor"
   ],
   "lockFileMaintenance": {
     "enabled": true,
@@ -11,8 +12,12 @@
   "packageRules": [
     {
       "description": "Disable digest pinning for the Helm chart values file",
-      "matchManagers": ["helm-values"],
-      "matchFileNames": ["charts/carapace/values.yaml"],
+      "matchManagers": [
+        "helm-values"
+      ],
+      "matchFileNames": [
+        "charts/carapace/values.yaml"
+      ],
       "pinDigests": false
     }
   ],
