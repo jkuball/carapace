@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { deleteNotificationSubscription, getVapidPublicKey } from "./api";
+import {
+  listNotificationSubscriptions,
+  postNotificationSubscriptionPresence,
+} from "./api";
 
 const originalFetch = globalThis.fetch;
 
@@ -68,4 +72,42 @@ test("deleteNotificationSubscription ignores missing subscriptions", async () =>
   );
 
   assert.equal(called, 1);
+});
+
+test("listNotificationSubscriptions surfaces backend detail messages on failure", async () => {
+  setFetch(
+    async () =>
+      new Response(
+        JSON.stringify({ detail: "subscription store unavailable" }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+  );
+
+  await assert.rejects(
+    () =>
+      listNotificationSubscriptions("https://carapace.example.test", "token-1"),
+    /subscription store unavailable/,
+  );
+});
+
+test("postNotificationSubscriptionPresence rejects failed heartbeats", async () => {
+  setFetch(async () => new Response(null, { status: 500 }));
+
+  await assert.rejects(
+    () =>
+      postNotificationSubscriptionPresence(
+        "https://carapace.example.test",
+        "token-1",
+        "sub-1",
+        {
+          session_id: "session-1",
+          client_type: "web",
+          focus_state: "visible",
+        },
+      ),
+    /Failed to update notification subscription presence: 500/,
+  );
 });

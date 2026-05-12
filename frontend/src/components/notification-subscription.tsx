@@ -30,6 +30,10 @@ import type {
 import { cn } from "@/lib/utils";
 
 type NotificationPreferenceKey = keyof NotificationPreferences;
+type NotificationTranslator = (
+  key: string,
+  values?: Record<string, string>,
+) => string;
 
 const PREFERENCE_KEYS: NotificationPreferenceKey[] = [
   "escalation_pending",
@@ -65,11 +69,41 @@ function readPushKeys(pushSubscription: PushSubscription): { p256dh: string; aut
 export function NotificationSubscription({
   server,
   token,
+  translate,
 }: {
   server: string;
   token: string;
+  translate?: NotificationTranslator;
 }) {
+  if (translate) {
+    return (
+      <NotificationSubscriptionContent
+        server={server}
+        token={token}
+        translate={translate}
+      />
+    );
+  }
+
   const t = useTranslations("preferences.notifications");
+  return (
+    <NotificationSubscriptionContent
+      server={server}
+      token={token}
+      translate={t}
+    />
+  );
+}
+
+function NotificationSubscriptionContent({
+  server,
+  token,
+  translate: t,
+}: {
+  server: string;
+  token: string;
+  translate: NotificationTranslator;
+}) {
   const [pushSupported, setPushSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [subscription, setSubscription] = useState<NotificationSubscriptionRecord | null>(null);

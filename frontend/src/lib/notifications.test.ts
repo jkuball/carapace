@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildNotificationDeviceName,
   decodeVapidPublicKey,
+  registerNotificationServiceWorker,
   supportsPushNotifications,
 } from "./notifications";
 
@@ -82,4 +83,42 @@ test("buildNotificationDeviceName derives a readable device and browser label", 
   });
 
   assert.equal(buildNotificationDeviceName(), "Android device (Chrome)");
+});
+
+test("registerNotificationServiceWorker delegates to navigator.serviceWorker when supported", async () => {
+  const registration = { scope: "/" } as ServiceWorkerRegistration;
+  let registerCall: { url: string; options: { scope: string } } | null = null;
+
+  setGlobal("window", {
+    isSecureContext: true,
+    Notification: class Notification {},
+    PushManager: class PushManager {},
+  });
+  setGlobal("navigator", {
+    serviceWorker: {
+      register: async (url: string, options: { scope: string }) => {
+        registerCall = { url, options };
+        return registration;
+      },
+    },
+  });
+
+  const result = await registerNotificationServiceWorker();
+
+  assert.equal(result, registration);
+  assert.deepEqual(registerCall, {
+    url: "/service-worker.js",
+    options: { scope: "/" },
+  });
+});
+
+test("registerNotificationServiceWorker returns null when push is unsupported", async () => {
+  setGlobal("window", {
+    isSecureContext: false,
+  });
+  setGlobal("navigator", {});
+
+  const result = await registerNotificationServiceWorker();
+
+  assert.equal(result, null);
 });

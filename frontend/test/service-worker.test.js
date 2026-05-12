@@ -119,6 +119,35 @@ test("push escalation payload shows notification with fallback tag and interacti
   assert.equal(options.data.sessionId, "session-2");
 });
 
+test("push payload falls back to text parsing and default assets", async () => {
+  const harness = await loadServiceWorkerHarness();
+  const event = waitableEvent({
+    data: {
+      json: () => {
+        throw new Error("json parse failed");
+      },
+      text: () =>
+        JSON.stringify({
+          kind: "attended_turn_completed",
+          notif_id: "done:session-3:5:attended_turn_completed",
+          title: "Done",
+          body: "Completed",
+          session_id: "session-3",
+          badge: "/badge-icon.png",
+        }),
+    },
+  });
+
+  harness.listeners.get("push")(event);
+  await event.promise;
+
+  assert.equal(harness.showNotificationCalls.length, 1);
+  const [, options] = harness.showNotificationCalls[0];
+  assert.equal(options.icon, "/pwa-192x192.png");
+  assert.equal(options.badge, "/pwa-192x192.png");
+  assert.equal(options.requireInteraction, false);
+});
+
 test("notificationclick focuses existing client and navigates to session", async () => {
   const harness = await loadServiceWorkerHarness();
   let focused = false;
@@ -153,4 +182,25 @@ test("notificationclick focuses existing client and navigates to session", async
   assert.equal(focused, true);
   assert.equal(navigatedTo, "https://carapace.example.test/?session=session-7");
   assert.deepEqual(harness.openWindowCalls, []);
+});
+
+test("notificationclick opens a new window when no existing client matches", async () => {
+  const harness = await loadServiceWorkerHarness();
+  let closed = false;
+  const event = waitableEvent({
+    notification: {
+      close: () => {
+        closed = true;
+      },
+      data: { sessionId: "session-8" },
+    },
+  });
+
+  harness.listeners.get("notificationclick")(event);
+  await event.promise;
+
+  assert.equal(closed, true);
+  assert.deepEqual(harness.openWindowCalls, [
+    "https://carapace.example.test/?session=session-8",
+  ]);
 });
