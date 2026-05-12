@@ -85,6 +85,16 @@ export function NotificationSubscription({
     );
   }
 
+  return <TranslatedNotificationSubscription server={server} token={token} />;
+}
+
+function TranslatedNotificationSubscription({
+  server,
+  token,
+}: {
+  server: string;
+  token: string;
+}) {
   const t = useTranslations("preferences.notifications");
   return (
     <NotificationSubscriptionContent
