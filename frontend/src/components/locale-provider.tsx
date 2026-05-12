@@ -13,6 +13,7 @@ import {
 import {
   defaultLocale,
   getLocaleMessages,
+  resolvePreferredLocale,
   type SupportedLocale,
   resolveLocale,
   supportedLocales,
@@ -54,10 +55,10 @@ function resolveBrowserLocale(): SupportedLocale {
     return defaultLocale;
   }
 
-  return resolveLocale(
-    "system",
-    navigator.languages[0] ?? navigator.language,
-  );
+  return resolvePreferredLocale([
+    ...(navigator.languages ?? []),
+    navigator.language,
+  ]);
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {

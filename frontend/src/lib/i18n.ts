@@ -28,6 +28,28 @@ export function normalizeLocale(
   return defaultLocale;
 }
 
+export function resolvePreferredLocale(
+  locales: readonly (string | null | undefined)[] | null | undefined,
+): SupportedLocale {
+  if (!Array.isArray(locales)) {
+    return defaultLocale;
+  }
+
+  for (const locale of locales) {
+    if (normalizeLocale(locale) === "de") {
+      return "de";
+    }
+  }
+
+  for (const locale of locales) {
+    if (normalizeLocale(locale) === "en") {
+      return "en";
+    }
+  }
+
+  return defaultLocale;
+}
+
 export function resolveLocale(
   localeOverride: "system" | SupportedLocale,
   browserLocale: string | null | undefined,
