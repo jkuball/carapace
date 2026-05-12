@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.3 (2026-05-12)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 better locale detection
+  ([`734543b`](https://github.com/thiesgerken/carapace/commit/734543b8de35afbcb5d55060893439f9a0265b60))
+
 ## v0.117.2 (2026-05-12)
 
 
