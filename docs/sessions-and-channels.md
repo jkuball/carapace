@@ -87,6 +87,53 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 - **Privacy**: Sessions start public by default, unless `sessions.default_private` is set to `true`
 - **Deletion**: Sessions can be deleted via the REST API (`DELETE /api/sessions/{id}`), which also cleans up any running sandbox container and may remove the committed `conversation.json` from the knowledge repo
 
+## Notifications and presence
+
+carapace also keeps a separate notification state for each session. This state is not part of `SessionState`; it lives in a dedicated notification store plus a runtime presence registry.
+
+### Subscription storage
+
+- Push subscriptions are stored under `$CARAPACE_DATA_DIR/notifications/subscriptions/<subscription_id>.yaml`
+- Each subscription carries per-device preferences plus expiry and heartbeat timestamps
+- Subscriptions are grouped by an `owner_key` derived from the authenticated bearer token in v1
+- Rotating `CARAPACE_TOKEN` therefore creates a new notification ownership bucket; existing device subscriptions must be recreated after rotation
+
+### Notification kinds and defaults
+
+| Kind | Meaning | Default |
+| ---- | ------- | ------- |
+| `escalation_pending` | A domain, git-push, or credential escalation needs a user decision | on |
+| `attended_turn_completed` | An attended session finished a turn | on |
+| `unattended_turn_completed` | An unattended session or cron-triggered run completed successfully | off |
+| `unattended_turn_failed` | An unattended session ended with a warning or failure | on |
+| `notification_clear` | Clear a previously shown notification across devices | internal |
+
+Notification ids are stable so devices can deduplicate and clear them:
+
+- Escalations: `esc:{session_id}:{request_id}`
+- Turn outcomes: `done:{session_id}:{assistant_event_index}:{kind}`
+
+### Active-session suppression
+
+Notification delivery is suppressed when the session is already being actively handled.
+
+A session counts as actively handled when at least one of these conditions is true:
+
+- a web client has recent presence with `focus_state = visible`
+- a CLI client is connected and not marked inactive
+- a Matrix room for the session has recent activity
+
+This same presence state is also used to clear pending notifications again when the user comes back to the session.
+
+### Clear semantics
+
+Pending notification ids are cleared when the session becomes active again, including:
+
+- the next user message in the session
+- a web presence heartbeat or websocket reconnect that marks the session active
+- Matrix activity that marks the session active again
+- escalation resolution
+
 ---
 
 ## Channel system
@@ -109,11 +156,24 @@ The primary interactive channel. A Next.js web app connects to the carapace serv
 | `/api/sessions/{id}/knowledge/commit` | `POST`   | Commit the session snapshot into the knowledge repo |
 | `/api/sessions/{id}/history`          | `GET`    | Get chat history (optional `limit` param)           |
 
+**Notification API:**
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/notifications/subscriptions` | `GET` | List current subscriptions for the authenticated owner key |
+| `/api/notifications/subscriptions` | `POST` | Create or update a push subscription |
+| `/api/notifications/subscriptions/{id}` | `DELETE` | Remove a push subscription |
+| `/api/notifications/subscriptions/{id}/preferences` | `PATCH` | Update per-device notification preferences |
+| `/api/notifications/subscriptions/{id}/presence` | `POST` | Update presence for a subscription-backed client and refresh expiry |
+| `/api/notifications/presence` | `POST` | Update interactive presence for clients that are not tied to a push subscription |
+
 **WebSocket protocol** (`/api/chat/{session_id}`):
 
 Message `type` values, JSON fields, authentication, and what the server sends on a **fresh connect** (including replay of pending approvals and escalations) are documented in **[websocket-session.md](websocket-session.md)**.
 
 Authentication uses a bearer token (`CARAPACE_TOKEN` env var) passed as a query parameter or `Authorization: Bearer` header.
+
+For presence tracking, the frontend also posts REST heartbeats and may attach a stable `client_id` query parameter to the WebSocket so reconnects map back to the same interactive client.
 
 ### Matrix Channel
 
@@ -125,6 +185,7 @@ Features:
 - Slash commands for session control (including `/reset`)
 - Per-room session mapping
 - Configurable allowed rooms and users
+- Matrix activity feeds the same active-session presence registry used for notification suppression and clearing
 
 Configuration in `config.yaml`:
 
