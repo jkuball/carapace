@@ -11,7 +11,8 @@
     "prebuild": "pnpm prepare:emoji",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "test": "node --import tsx --test src/lib/*.test.ts test/*.test.js"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -43,6 +44,7 @@
     "eslint": "^10.3.0",
     "eslint-config-next": "^16.2.6",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
 }
