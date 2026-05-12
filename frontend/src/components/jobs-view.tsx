@@ -1160,7 +1160,7 @@ export function JobsView({
           aria-labelledby="settings-tab-preferences"
           className="min-h-0 flex-1 bg-background/65"
         >
-          <PreferencesView embedded />
+          <PreferencesView embedded server={server} token={token} />
         </div>
       )}
     </div>

@@ -861,6 +861,10 @@ class ServerMeta(BaseModel):
     version: str
 
 
+class VapidPublicKeyResponse(BaseModel):
+    vapid_public_key: str
+
+
 async def _run_job_definition(
     job: JobDefinition,
     *,
@@ -1519,6 +1523,14 @@ async def list_commands(_token: str = Depends(_verify_token)) -> list[dict[str, 
 @router.get("/meta", response_model=ServerMeta)
 async def get_meta(_token: str = Depends(_verify_token)) -> ServerMeta:
     return ServerMeta(version=_APP_VERSION)
+
+
+@router.get("/config/vapid-public-key", response_model=VapidPublicKeyResponse)
+async def get_vapid_public_key() -> VapidPublicKeyResponse:
+    vapid_public_key = _config.notifications.vapid_public_key
+    if not vapid_public_key:
+        raise HTTPException(status_code=404, detail="VAPID public key is not configured")
+    return VapidPublicKeyResponse(vapid_public_key=vapid_public_key)
 
 
 @router.get("/models")

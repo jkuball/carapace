@@ -41,6 +41,54 @@
                 "en": "English",
                 "de": "Deutsch"
             }
+        },
+        "notifications": {
+            "title": "Push notifications",
+            "description": "Deliver escalations and turn outcomes to this browser or installed PWA.",
+            "status": {
+                "loading": "Checking notification support…",
+                "loadingShort": "Checking",
+                "enabled": "Notifications are enabled for this browser.",
+                "enabledShort": "Enabled",
+                "disabled": "Notifications are off for this browser.",
+                "disabledShort": "Off",
+                "unsupported": "This browser cannot receive Web Push notifications in the current context.",
+                "permissionDenied": "Browser notification permission is blocked. Re-enable it in browser or device settings.",
+                "permissionRequired": "Notification permission was not granted.",
+                "invalidSubscription": "Browser returned an incomplete push subscription.",
+                "loadFailed": "Failed to load notification settings.",
+                "enableFailed": "Failed to enable notifications.",
+                "disableFailed": "Failed to disable notifications.",
+                "preferencesFailed": "Failed to update notification preferences."
+            },
+            "deviceName": {
+                "label": "Device name",
+                "placeholder": "Android phone",
+                "hint": "Shown in server-side notification subscriptions for this browser."
+            },
+            "actions": {
+                "enable": "Enable notifications",
+                "enabling": "Enabling…",
+                "disable": "Disable notifications",
+                "disabling": "Disabling…"
+            },
+            "preferences": {
+                "label": "Send notifications for",
+                "escalation_pending": "Escalations that need approval",
+                "attended_turn_completed": "Attended sessions when a turn finishes",
+                "unattended_turn_completed": "Unattended jobs that finish successfully",
+                "unattended_turn_failed": "Unattended jobs that fail"
+            },
+            "meta": {
+                "permission": "Browser permission: {permission}",
+                "heartbeat": "Last heartbeat: {timestamp}",
+                "expires": "Subscription expires: {timestamp}"
+            },
+            "permission": {
+                "default": "not requested",
+                "granted": "granted",
+                "denied": "denied"
+            }
         }
     },
     "newSessionButton": {

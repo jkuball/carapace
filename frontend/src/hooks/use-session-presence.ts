@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { postInteractivePresence } from "@/lib/api";
-import { getPresenceClientId } from "@/lib/storage";
+import {
+  postInteractivePresence,
+  postNotificationSubscriptionPresence,
+} from "@/lib/api";
+import {
+  getNotificationSubscriptionId,
+  getPresenceClientId,
+} from "@/lib/storage";
 
 type WebSocketStatus = "disconnected" | "connecting" | "connected";
 
@@ -24,13 +30,32 @@ export function useSessionPresence(
     const sendPresence = async (
       focusState: "visible" | "hidden" | "inactive",
     ) => {
+      const subscriptionId = getNotificationSubscriptionId();
+
       try {
-        await postInteractivePresence(server, token, {
-          session_id: sessionId,
-          source_id: sourceId,
-          client_type: "web",
-          focus_state: focusState,
-        });
+        const operations: Array<Promise<void>> = [
+          postInteractivePresence(server, token, {
+            session_id: sessionId,
+            source_id: sourceId,
+            client_type: "web",
+            focus_state: focusState,
+          }),
+        ];
+        if (subscriptionId) {
+          operations.push(
+            postNotificationSubscriptionPresence(
+              server,
+              token,
+              subscriptionId,
+              {
+                session_id: sessionId,
+                client_type: "web",
+                focus_state: focusState,
+              },
+            ),
+          );
+        }
+        await Promise.allSettled(operations);
       } catch {
         // Presence updates are best-effort and should not break chat.
       }

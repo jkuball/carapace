@@ -148,6 +148,24 @@ def test_meta_returns_version(client, auth_headers, monkeypatch):
     assert resp.json() == {"version": "test-version"}
 
 
+def test_vapid_public_key_is_public_when_configured(client):
+    srv._config.notifications.vapid_public_key = "test-vapid-public-key"
+
+    resp = client.get("/api/config/vapid-public-key")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"vapid_public_key": "test-vapid-public-key"}
+
+
+def test_vapid_public_key_returns_404_when_missing(client):
+    srv._config.notifications.vapid_public_key = None
+
+    resp = client.get("/api/config/vapid-public-key")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "VAPID public key is not configured"
+
+
 def test_notification_subscription_roundtrip(client, auth_headers):
     resp = client.post(
         "/api/notifications/subscriptions",

@@ -3,10 +3,19 @@
 import { Globe2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppLocale } from "@/components/locale-provider";
+import { NotificationSubscription } from "@/components/notification-subscription";
 import type { LocaleOverride } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
-export function PreferencesView({ embedded = false }: { embedded?: boolean }) {
+export function PreferencesView({
+  embedded = false,
+  server,
+  token,
+}: {
+  embedded?: boolean;
+  server: string;
+  token: string;
+}) {
   const t = useTranslations("preferences");
   const { localeOverride, setLocaleOverride, systemLocale } = useAppLocale();
 
@@ -66,6 +75,10 @@ export function PreferencesView({ embedded = false }: { embedded?: boolean }) {
                 <option value="de">{localeLabels.de}</option>
               </select>
             </label>
+          </div>
+
+          <div className="mt-4">
+            <NotificationSubscription server={server} token={token} />
           </div>
         </section>
       </div>

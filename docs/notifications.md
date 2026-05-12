@@ -6,7 +6,7 @@ Current status:
 
 - Subscription storage, presence tracking, routing, suppression, clearing, and Web Push delivery are implemented on the backend.
 - The web frontend already reports interactive presence for active sessions.
-- End-user browser subscription UX and service worker handling are still future work. Until that exists, push subscriptions must be created through the notification API rather than through the web UI.
+- The web frontend now registers a service worker, can create browser push subscriptions from Preferences, and can receive `notification_clear` payloads to close matching notifications.
 
 ## Overview
 
@@ -44,12 +44,12 @@ Each subscription records:
 
 Default per-device preferences:
 
-| Kind | Default |
-| ---- | ------- |
-| `escalation_pending` | on |
-| `attended_turn_completed` | on |
-| `unattended_turn_completed` | off |
-| `unattended_turn_failed` | on |
+| Kind                        | Default |
+| --------------------------- | ------- |
+| `escalation_pending`        | on      |
+| `attended_turn_completed`   | on      |
+| `unattended_turn_completed` | off     |
+| `unattended_turn_failed`    | on      |
 
 ## Notification ids
 
@@ -154,23 +154,29 @@ If only some of them are set, config loading fails.
 
 ## API
 
-All notification endpoints use the same bearer token auth as the rest of the server.
+Notification subscription and presence endpoints use the same bearer token auth as the rest of the server.
+
+### Public config
+
+| Endpoint                       | Method | Purpose                                                                                       |
+| ------------------------------ | ------ | --------------------------------------------------------------------------------------------- |
+| `/api/config/vapid-public-key` | `GET`  | Expose the configured VAPID public key to browsers so they can call `PushManager.subscribe()` |
 
 ### Subscription lifecycle
 
-| Endpoint | Method | Purpose |
-| -------- | ------ | ------- |
-| `/api/notifications/subscriptions` | `GET` | List subscriptions for the current owner key |
-| `/api/notifications/subscriptions` | `POST` | Create or update a push subscription |
-| `/api/notifications/subscriptions/{subscription_id}` | `DELETE` | Delete a subscription |
-| `/api/notifications/subscriptions/{subscription_id}/preferences` | `PATCH` | Update per-device preferences |
+| Endpoint                                                         | Method   | Purpose                                      |
+| ---------------------------------------------------------------- | -------- | -------------------------------------------- |
+| `/api/notifications/subscriptions`                               | `GET`    | List subscriptions for the current owner key |
+| `/api/notifications/subscriptions`                               | `POST`   | Create or update a push subscription         |
+| `/api/notifications/subscriptions/{subscription_id}`             | `DELETE` | Delete a subscription                        |
+| `/api/notifications/subscriptions/{subscription_id}/preferences` | `PATCH`  | Update per-device preferences                |
 
 ### Presence updates
 
-| Endpoint | Method | Purpose |
-| -------- | ------ | ------- |
+| Endpoint                                                      | Method | Purpose                                                                    |
+| ------------------------------------------------------------- | ------ | -------------------------------------------------------------------------- |
 | `/api/notifications/subscriptions/{subscription_id}/presence` | `POST` | Heartbeat for subscription-backed presence and subscription expiry refresh |
-| `/api/notifications/presence` | `POST` | Heartbeat for interactive presence not tied to a push subscription |
+| `/api/notifications/presence`                                 | `POST` | Heartbeat for interactive presence not tied to a push subscription         |
 
 Presence request fields:
 
@@ -192,9 +198,9 @@ The web client also posts REST presence heartbeats alongside the WebSocket conne
 
 ## Current limitations
 
-- There is no built-in browser subscription UI yet.
-- There is no service worker in the frontend yet to receive and act on push payloads.
-- Delivery can be fully configured on the backend today, but end-to-end browser push requires the Phase 3 frontend work.
+- Browser push still depends on secure-context support in the current browser or installed PWA.
+- If VAPID keys are not configured on the server, the frontend can render the subscription controls but cannot complete Web Push registration.
+- Notification clicks currently route back into the session view, but there is no richer in-app notification center or foreground toast layer yet.
 
 ## Related docs
 
