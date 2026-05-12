@@ -226,6 +226,26 @@ export async function fetchHistory(
   return res.json();
 }
 
+export async function postInteractivePresence(
+  server: string,
+  token: string,
+  body: {
+    session_id: string;
+    source_id: string;
+    client_type: "web" | "matrix" | "cli";
+    focus_state: "visible" | "hidden" | "inactive";
+  },
+): Promise<void> {
+  const res = await fetch(`${server}/api/notifications/presence`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update presence: ${res.status}`);
+  }
+}
+
 export interface SlashCommand {
   command: string;
   description: string;
@@ -389,7 +409,12 @@ export function wsUrl(
   server: string,
   sessionId: string,
   token: string,
+  clientId?: string,
 ): string {
   const base = server.replace("http://", "ws://").replace("https://", "wss://");
-  return `${base}/api/chat/${sessionId}?token=${token}`;
+  const params = new URLSearchParams({ token });
+  if (clientId) {
+    params.set("client_id", clientId);
+  }
+  return `${base}/api/chat/${sessionId}?${params.toString()}`;
 }

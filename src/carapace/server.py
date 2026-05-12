@@ -5,6 +5,7 @@ import contextlib
 import logging  # stdlib logging used only for _InterceptHandler → loguru bridge
 import os
 import sys
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -446,6 +447,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             agent_model=agent_model,
             sandbox_mgr=_sandbox_mgr,
             engine=_engine,
+            presence_registry=_notification_presence,
         )
         await matrix_channel.start()
 
@@ -566,6 +568,18 @@ class NotificationPresenceRequest(BaseModel):
         return normalized
 
 
+class InteractivePresenceRequest(NotificationPresenceRequest):
+    source_id: str
+
+    @field_validator("source_id", mode="before")
+    @classmethod
+    def _normalize_source_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source_id must not be empty")
+        return normalized
+
+
 def _notification_ttl() -> timedelta:
     return timedelta(days=_config.notifications.subscription_ttl_days)
 
@@ -589,6 +603,26 @@ def _owned_notification_subscription(subscription_id: str, token: str) -> Notifi
     if subscription is None or subscription.owner_key != derive_owner_key(token):
         raise HTTPException(status_code=404, detail="Notification subscription not found")
     return subscription
+
+
+def _set_notification_presence(
+    *,
+    session_id: str,
+    source_id: str,
+    client_type: NotificationClientType,
+    focus_state: NotificationFocusState,
+    now: datetime | None = None,
+) -> None:
+    if focus_state == "inactive":
+        _notification_presence.remove_presence(session_id=session_id, source_id=source_id)
+        return
+    _notification_presence.update_presence(
+        session_id=session_id,
+        source_id=source_id,
+        client_type=client_type,
+        focus_state=focus_state,
+        now=now,
+    )
 
 
 @router.get("/notifications/subscriptions", response_model=list[NotificationSubscriptionResponse])
@@ -654,12 +688,26 @@ async def update_notification_presence(
     now = datetime.now(tz=UTC)
     updated = subscription.model_copy(update={"last_heartbeat": now, "expires_at": now + _notification_ttl()})
     _notification_store.save_subscription(updated)
-    _notification_presence.update_presence(
+    _set_notification_presence(
         session_id=request.session_id,
         source_id=subscription_id,
         client_type=request.client_type,
         focus_state=request.focus_state,
         now=now,
+    )
+    return {"heartbeat_received": True}
+
+
+@router.post("/notifications/presence")
+async def update_interactive_presence(
+    request: InteractivePresenceRequest,
+    _token: str = Depends(_verify_token),
+) -> dict[str, bool]:
+    _set_notification_presence(
+        session_id=request.session_id,
+        source_id=request.source_id,
+        client_type=request.client_type,
+        focus_state=request.focus_state,
     )
     return {"heartbeat_received": True}
 
@@ -1641,14 +1689,25 @@ async def chat_ws(
     websocket: WebSocket,
     session_id: str,
     _token: Annotated[str, Depends(_verify_ws_token)],
+    client_id: Annotated[str | None, Query()] = None,
 ) -> None:
-    if _engine.session_mgr.load_state(session_id) is None:
+    current_state = _engine.session_mgr.load_state(session_id)
+    if current_state is None:
         logger.warning(f"WebSocket rejected — session {session_id} not found")
         await websocket.close(code=4004, reason="Session not found")
         return
 
     await websocket.accept()
     logger.info(f"WebSocket connected for session {session_id}")
+
+    ws_source_id = client_id.strip() if client_id else f"ws:{uuid.uuid4().hex}"
+    ws_client_type: NotificationClientType = "cli" if current_state.channel_type == "cli" else "web"
+    _set_notification_presence(
+        session_id=session_id,
+        source_id=ws_source_id,
+        client_type=ws_client_type,
+        focus_state="visible",
+    )
 
     sub = WebSocketSubscriber(websocket)
     active = _engine.subscribe(session_id, sub)
@@ -1810,6 +1869,7 @@ async def chat_ws(
         with contextlib.suppress(Exception):
             await websocket.close(code=1011)
     finally:
+        _notification_presence.remove_presence(session_id=session_id, source_id=ws_source_id)
         _engine.unsubscribe(session_id, sub)
         logger.debug(f"WebSocket cleanup for session {session_id}")
 

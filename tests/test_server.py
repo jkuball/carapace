@@ -227,6 +227,50 @@ def test_notification_presence_updates_registry(client, auth_headers):
     assert srv._notification_presence.is_session_actively_handled("session-1") is True
 
 
+def test_interactive_presence_endpoint_updates_registry(client, auth_headers):
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"heartbeat_received": True}
+    assert srv._notification_presence.is_session_actively_handled("session-1") is True
+
+
+def test_interactive_presence_inactive_removes_registry_entry(client, auth_headers):
+    client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "inactive",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert srv._notification_presence.is_session_actively_handled("session-1") is False
+
+
 # --- Sessions REST ---
 
 
@@ -1457,6 +1501,17 @@ def test_ws_help_command(client, auth_headers, bearer):
         assert "/security" not in commands
         assert "/approve-context" not in commands
         assert "/memory" not in commands
+
+
+def test_ws_connection_updates_presence_registry(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=web-tab-1") as ws:
+        _consume_status(ws)
+        assert srv._notification_presence.is_session_actively_handled(sid) is True
+
+    assert srv._notification_presence.is_session_actively_handled(sid) is False
 
 
 def test_list_commands_excludes_removed_commands(client, auth_headers):

@@ -1,6 +1,7 @@
 const SERVER_KEY = "carapace_server";
 const TOKEN_KEY = "carapace_token";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
+const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
 
 export type LocaleOverride = "system" | "en" | "de";
 
@@ -39,4 +40,18 @@ export function getLocaleOverride(): LocaleOverride {
 
 export function saveLocaleOverride(localeOverride: LocaleOverride): void {
   localStorage.setItem(LOCALE_OVERRIDE_KEY, localeOverride);
+}
+
+export function getPresenceClientId(): string {
+  if (typeof window === "undefined") return "";
+
+  const existing = window.sessionStorage.getItem(PRESENCE_CLIENT_ID_KEY);
+  if (existing) return existing;
+
+  const generated =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `presence-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  window.sessionStorage.setItem(PRESENCE_CLIENT_ID_KEY, generated);
+  return generated;
 }

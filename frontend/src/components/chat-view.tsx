@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { useAppLocale } from "@/components/locale-provider";
+import { useSessionPresence } from "@/hooks/use-session-presence";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
   type AvailableModelInfo,
@@ -33,6 +34,7 @@ import type {
   TurnUsage,
 } from "@/lib/types";
 import { isRecord } from "@/lib/decoding";
+import { getPresenceClientId } from "@/lib/storage";
 import {
   canArchiveSession,
   cn,
@@ -1364,8 +1366,10 @@ export function ChatView({
     clearToolLoading();
     setWaiting(false);
   }, [clearToolLoading]);
-  const url = wsUrl(server, sessionId, token);
+  const presenceClientId = useRef(getPresenceClientId()).current;
+  const url = wsUrl(server, sessionId, token, presenceClientId);
   const { status, send } = useWebSocket(url, onMessage, onWsDisconnect);
+  useSessionPresence(server, token, sessionId, status, presenceClientId);
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
