@@ -181,6 +181,8 @@ def test_notification_subscription_roundtrip(client, auth_headers):
     assert resp.status_code == 200
     data = resp.json()
     assert data["device_name"] == "Phone"
+    assert data["endpoint"] == "https://push.example.test/sub-1"
+    assert data["subscribed_at"]
     assert data["preferences"]["escalation_pending"] is True
 
     list_resp = client.get("/api/notifications/subscriptions", headers=auth_headers)
@@ -188,6 +190,8 @@ def test_notification_subscription_roundtrip(client, auth_headers):
     assert list_resp.status_code == 200
     assert len(list_resp.json()) == 1
     assert list_resp.json()[0]["subscription_id"] == data["subscription_id"]
+    assert list_resp.json()[0]["endpoint"] == data["endpoint"]
+    assert list_resp.json()[0]["subscribed_at"] == data["subscribed_at"]
 
 
 def test_notification_preferences_patch_persists(client, auth_headers):
@@ -1555,6 +1559,20 @@ def test_ws_connection_updates_presence_registry(client, auth_headers, bearer):
     with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=web-tab-1") as ws:
         _consume_status(ws)
         assert srv._notification_presence.is_session_actively_handled(sid) is True
+
+    assert srv._notification_presence.is_session_actively_handled(sid) is False
+
+
+def test_ws_blank_client_id_falls_back_to_generated_source_id(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=%20%20%20") as ws:
+        _consume_status(ws)
+        entries = srv._notification_presence.list_presence(session_id=sid)
+        assert len(entries) == 1
+        assert entries[0].source_id.startswith("ws:")
+        assert entries[0].source_id != ""
 
     assert srv._notification_presence.is_session_actively_handled(sid) is False
 

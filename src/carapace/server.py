@@ -574,6 +574,8 @@ class NotificationSubscriptionCreateRequest(BaseModel):
 class NotificationSubscriptionResponse(BaseModel):
     subscription_id: str
     device_name: str
+    endpoint: str
+    subscribed_at: str
     expires_at: str
     last_heartbeat: str | None = None
     preferences: NotificationPreferences
@@ -617,6 +619,8 @@ def _notification_response(subscription: NotificationSubscription) -> Notificati
     return NotificationSubscriptionResponse(
         subscription_id=subscription.id,
         device_name=subscription.device_name,
+        endpoint=subscription.endpoint,
+        subscribed_at=subscription.subscribed_at.isoformat(),
         expires_at=subscription.expires_at.isoformat(),
         last_heartbeat=subscription.last_heartbeat.isoformat() if subscription.last_heartbeat is not None else None,
         preferences=subscription.notification_prefs.model_copy(deep=True),
@@ -1739,7 +1743,8 @@ async def chat_ws(
     await websocket.accept()
     logger.info(f"WebSocket connected for session {session_id}")
 
-    ws_source_id = client_id.strip() if client_id else f"ws:{uuid.uuid4().hex}"
+    normalized_client_id = client_id.strip() if client_id else ""
+    ws_source_id = normalized_client_id or f"ws:{uuid.uuid4().hex}"
     ws_client_type: NotificationClientType = "cli" if current_state.channel_type == "cli" else "web"
     await _set_notification_presence(
         session_id=session_id,

@@ -5,10 +5,7 @@ import {
   postInteractivePresence,
   postNotificationSubscriptionPresence,
 } from "@/lib/api";
-import {
-  getNotificationSubscriptionId,
-  getPresenceClientId,
-} from "@/lib/storage";
+import { getNotificationSubscriptionId } from "@/lib/storage";
 
 type WebSocketStatus = "disconnected" | "connecting" | "connected";
 
