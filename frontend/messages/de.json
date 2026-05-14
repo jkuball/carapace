@@ -489,8 +489,8 @@
             "copied": "Kopiert"
         },
         "thinking": {
-            "streaming": "Überlege",
-            "complete": "Überlegte"
+            "streaming": "Denke nach",
+            "complete": "Nachgedacht"
         },
         "thinkingMeta": {
             "durationStreaming": "seit {duration}",
