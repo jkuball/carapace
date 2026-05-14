@@ -204,3 +204,30 @@ test("notificationclick opens a new window when no existing client matches", asy
     "https://carapace.example.test/?session=session-8",
   ]);
 });
+
+test("notificationclick does not open a duplicate window when fallback client cannot navigate", async () => {
+  const harness = await loadServiceWorkerHarness();
+  let focused = false;
+
+  harness.self.clients.matchAll = async () => [
+    {
+      url: "https://carapace.example.test/?view=settings",
+      focus: async () => {
+        focused = true;
+      },
+    },
+  ];
+
+  const event = waitableEvent({
+    notification: {
+      close: () => undefined,
+      data: { sessionId: "session-9" },
+    },
+  });
+
+  harness.listeners.get("notificationclick")(event);
+  await event.promise;
+
+  assert.equal(focused, true);
+  assert.deepEqual(harness.openWindowCalls, []);
+});

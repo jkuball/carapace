@@ -75,6 +75,23 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
   }, [open]);
 
   useEffect(() => {
+    if (open || !query) {
+      return;
+    }
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setQuery("");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, query]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }

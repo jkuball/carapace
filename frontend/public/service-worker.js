@@ -59,8 +59,8 @@ async function focusOrOpenSession(sessionId) {
     }
     if (typeof client.navigate === "function") {
       await client.navigate(destination);
-      return;
     }
+    return;
   }
 
   await self.clients.openWindow(destination);
