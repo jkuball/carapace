@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.5 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: allow user msgs full width as well
+  ([`c37bc27`](https://github.com/thiesgerken/carapace/commit/c37bc271eb7c860c87124e916ff60a018b2394e6))
+
 ## v0.118.4 (2026-05-14)
 
 
