@@ -934,8 +934,10 @@ async def _run_job_definition(
             channel_type="job",
             channel_ref=f"job:{job.id}",
             budget=_engine.config.agent.default_session_budget,
-            private=_engine.config.sessions.default_private,
+            private=job.private,
             unattended=job.unattended,
+            ask_mode=job.ask_mode,
+            yolo_mode=job.yolo_mode,
         )
         state.agent_model_name = job.agent_model_name
         state.sentinel_model_name = job.sentinel_model_name

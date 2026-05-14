@@ -290,7 +290,10 @@ class JobDefinition(BaseModel):
     enabled: bool = True
     triggers: Annotated[list[JobCronTrigger], Field(default_factory=list)]
     prompt: str
+    private: bool = False
     unattended: bool = True
+    ask_mode: bool = False
+    yolo_mode: bool = False
     persistent_session_id: str | None = None
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None
@@ -320,6 +323,9 @@ class JobDefinition(BaseModel):
         self.sentinel_model_name = normalize_optional_model_name(self.sentinel_model_name)
         self.title_model_name = normalize_optional_model_name(self.title_model_name)
 
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("job ask_mode and yolo_mode are mutually exclusive")
+
         if self.persistent_session_id is None:
             return self
 
@@ -328,6 +334,8 @@ class JobDefinition(BaseModel):
             raise ValueError("job persistent_session_id must not be empty when set")
         if self.unattended:
             raise ValueError("job unattended must be false when persistent_session_id is set")
+        if any((self.private, self.ask_mode, self.yolo_mode)):
+            raise ValueError("job session mode overrides cannot be used with persistent_session_id")
         if any((self.agent_model_name, self.sentinel_model_name, self.title_model_name)):
             raise ValueError("job model overrides cannot be used with persistent_session_id")
         self.persistent_session_id = persistent_session_id

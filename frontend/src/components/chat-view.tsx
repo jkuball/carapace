@@ -2,9 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, BookOpen, Bot, Check, Copy, ExternalLink, Eye, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, PencilLine, Pin, Play, RotateCcw, Save, Settings2, ShieldCheck, Square, Star, Terminal, Trash2, Zap } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
+import { SessionOptionTiles } from "@/components/session-option-tiles";
 import { useAppLocale } from "@/components/locale-provider";
 import { useSessionPresence } from "@/hooks/use-session-presence";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -816,7 +817,6 @@ export function ChatView({
   onDeleteSession,
 }: ChatViewProps) {
   const t = useTranslations("chatView");
-  const tSessionOption = useTranslations("newSessionButton");
   const tRoot = useTranslations();
   const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1722,97 +1722,6 @@ export function ChatView({
     }
   }
 
-  function getSessionOptionCopy(key: "private" | "ask_mode" | "yolo_mode" | "unattended", active: boolean): {
-    title: string;
-    description: string;
-  } {
-    switch (key) {
-      case "private":
-        return active
-          ? {
-              title: tSessionOption("private.enabledTitle"),
-              description: tSessionOption("private.enabledDescription"),
-            }
-          : {
-              title: tSessionOption("private.disabledTitle"),
-              description: tSessionOption("private.disabledDescription"),
-            };
-      case "ask_mode":
-        return active
-          ? {
-              title: tSessionOption("ask.enabledTitle"),
-              description: tSessionOption("ask.enabledDescription"),
-            }
-          : {
-              title: tSessionOption("ask.disabledTitle"),
-              description: tSessionOption("ask.disabledDescription"),
-            };
-      case "yolo_mode":
-        return active
-          ? {
-              title: tSessionOption("yolo.enabledTitle"),
-              description: tSessionOption("yolo.enabledDescription"),
-            }
-          : {
-              title: tSessionOption("yolo.disabledTitle"),
-              description: tSessionOption("yolo.disabledDescription"),
-            };
-      case "unattended":
-        return active
-          ? {
-              title: tSessionOption("unattended.enabledTitle"),
-              description: tSessionOption("unattended.enabledDescription"),
-            }
-          : {
-              title: tSessionOption("unattended.disabledTitle"),
-              description: tSessionOption("unattended.disabledDescription"),
-            };
-    }
-  }
-
-  function getSessionOptionIcon(
-    key: "private" | "ask_mode" | "yolo_mode" | "unattended",
-    active: boolean,
-  ): LucideIcon {
-    switch (key) {
-      case "private":
-        return active ? Lock : BookOpen;
-      case "ask_mode":
-        return active ? Eye : PencilLine;
-      case "yolo_mode":
-        return active ? Zap : ShieldCheck;
-      case "unattended":
-        return active ? Bot : MessageSquare;
-    }
-  }
-
-  function getSessionOptionClasses(
-    key: "private" | "ask_mode" | "yolo_mode" | "unattended",
-    active: boolean,
-    disabled: boolean,
-  ): string {
-    if (disabled) {
-      return active
-        ? "border-border/70 bg-muted/60 text-foreground/70"
-        : "border-border/60 bg-background/70 text-muted-foreground";
-    }
-
-    if (!active) {
-      return "border-border/70 bg-background text-foreground hover:bg-muted/60 dark:hover:bg-muted/80";
-    }
-
-    switch (key) {
-      case "private":
-        return "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200/80 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-800/80";
-      case "ask_mode":
-        return "border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/70";
-      case "yolo_mode":
-        return "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/70";
-      case "unattended":
-        return "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/70";
-    }
-  }
-
   async function handleUpdateSessionModel(modelType: "agent" | "sentinel", value: string | null) {
     if (!session || updatingSessionModel || waiting || deletingSession || sessionArchived) {
       return;
@@ -2177,8 +2086,8 @@ export function ChatView({
         </dl>
 
         <div className="mt-4 border-t border-border/60 pt-4">
-          <div className="grid grid-cols-2 gap-2">
-            {([
+          <SessionOptionTiles
+            items={[
               {
                 key: "private",
                 active: sessionPrivate,
@@ -2201,42 +2110,9 @@ export function ChatView({
                 key: "unattended",
                 active: sessionUnattended,
                 disabled: true,
-                onClick: undefined,
               },
-            ] as const).map((option) => {
-              const copy = getSessionOptionCopy(option.key, option.active);
-              const Icon = getSessionOptionIcon(option.key, option.active);
-
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  aria-pressed={option.active}
-                  disabled={option.disabled}
-                  onClick={option.onClick}
-                  className={cn(
-                    "flex min-h-[7rem] w-full flex-col items-start justify-start rounded-xl border px-3 py-3 text-left transition-colors",
-                    option.disabled && "cursor-not-allowed",
-                    getSessionOptionClasses(option.key, option.active, option.disabled),
-                  )}
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span>{copy.title}</span>
-                  </span>
-                  <span
-                    className={cn(
-                      "mt-1 block min-h-[2.5rem] overflow-hidden text-xs leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]",
-                      option.active ? "text-current/80" : "text-muted-foreground",
-                      option.disabled && "text-current/70",
-                    )}
-                  >
-                    {copy.description}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+            ]}
+          />
 
           {showDelayedSessionAttributeStatus && updatingSessionAttribute === "private" ? (
             <div className="inline-flex items-center gap-2 pt-2 text-xs text-muted-foreground">

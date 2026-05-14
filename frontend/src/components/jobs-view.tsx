@@ -3,7 +3,7 @@
 import cronstrue from "cronstrue";
 import "cronstrue/locales/de";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   type AvailableModelInfo,
@@ -17,6 +17,7 @@ import {
 import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { PreferencesView } from "@/components/preferences-view";
+import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +85,10 @@ function createEmptyJob(): JobDefinition {
     enabled: true,
     triggers: [],
     prompt: "",
+    private: false,
     unattended: true,
+    ask_mode: false,
+    yolo_mode: false,
     persistent_session_id: null,
     agent_model_name: null,
     sentinel_model_name: null,
@@ -221,9 +225,24 @@ export function JobsView({
     if (!nextDraft.name.trim()) return t("validation.nameRequired");
     if (!nextDraft.prompt.trim()) return t("validation.promptRequired");
 
+    if (
+      nextDraft.persistent_session_id !== null
+      && nextDraft.persistent_session_id !== undefined
+      && !nextDraft.persistent_session_id.trim()
+    ) {
+      return t("validation.persistentSessionIdRequired");
+    }
+
+    if (nextDraft.ask_mode && nextDraft.yolo_mode) {
+      return t("validation.askAndYoloMutuallyExclusive");
+    }
+
     const persistentSessionId = nextDraft.persistent_session_id?.trim();
     if (persistentSessionId && nextDraft.unattended) {
       return t("validation.persistentSessionMustBeAttended");
+    }
+    if (persistentSessionId && (nextDraft.private || nextDraft.ask_mode || nextDraft.yolo_mode)) {
+      return t("validation.sessionModesRequireFreshSession");
     }
     if (
       persistentSessionId
@@ -248,6 +267,29 @@ export function JobsView({
 
     return null;
   }, [describeCronExpression, t]);
+
+  const toggleJobSessionOption = useCallback((key: SessionOptionKey) => {
+    const nextValue = !draft[key];
+    if (key === "unattended") {
+      updateDraft({
+        unattended: nextValue,
+        persistent_session_id: nextValue ? null : draft.persistent_session_id,
+      });
+      return;
+    }
+
+    if (key === "ask_mode") {
+      updateDraft({ ask_mode: nextValue, yolo_mode: nextValue ? false : draft.yolo_mode });
+      return;
+    }
+
+    if (key === "yolo_mode") {
+      updateDraft({ yolo_mode: nextValue, ask_mode: nextValue ? false : draft.ask_mode });
+      return;
+    }
+
+    updateDraft({ private: nextValue });
+  }, [draft, updateDraft]);
 
   const formatTriggerKindLabel = useCallback((triggerKind: SessionLatestJobRun["trigger_kind"]): string => {
     switch (triggerKind) {
@@ -500,13 +542,14 @@ export function JobsView({
   }
 
   async function handleSave(): Promise<void> {
-    const normalizedDraft = normalizeJobDraft(draft);
-    const validationError = validateJobDraft(normalizedDraft);
+    const validationError = validateJobDraft(draft);
     if (validationError) {
       setError(validationError);
       setNotice(null);
       return;
     }
+
+    const normalizedDraft = normalizeJobDraft(draft);
 
     setSaving(true);
     setError(null);
@@ -578,7 +621,8 @@ export function JobsView({
   }
 
   const selectedSessionValue = draft.persistent_session_id ?? "";
-  const hasPersistentSession = Boolean(draft.persistent_session_id?.trim());
+  const usePersistentSession = draft.persistent_session_id !== null;
+  const hasPersistentSessionId = Boolean(draft.persistent_session_id?.trim());
   const defaultModelLabel = tRoot("commandResult.models.default");
   const isJobsTab = activeTab === "jobs";
 
@@ -816,7 +860,7 @@ export function JobsView({
               </div>
 
               <div className="mt-4 space-y-3">
-                <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
+                <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/35 px-4 py-3">
                   <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background px-3 py-3">
                     <input
                       type="checkbox"
@@ -834,56 +878,95 @@ export function JobsView({
                   <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background px-3 py-3">
                     <input
                       type="checkbox"
-                      checked={draft.unattended}
-                      onChange={(event) => {
-                        const unattended = event.target.checked;
-                        updateDraft({
-                          unattended,
-                          persistent_session_id: unattended ? null : draft.persistent_session_id,
-                        });
-                      }}
-                      disabled={saving || running}
+                      checked={usePersistentSession}
+                      onChange={(event) => updateDraft({ persistent_session_id: event.target.checked ? "" : null })}
+                      disabled={saving || running || draft.unattended}
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
                     <span>
-                      <span className="block text-sm font-medium">{t("fields.unattended")}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{t("fields.unattendedHelp")}</span>
+                      <span className="block text-sm font-medium">{t("fields.persistentSession")}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {draft.unattended ? t("fields.persistentSessionDisabled") : t("fields.persistentSessionToggleHelp")}
+                      </span>
                     </span>
                   </label>
                 </div>
 
+                {!usePersistentSession ? (
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
+                    <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.newSession")}</div>
+
+                    <SessionOptionTiles
+                      items={SESSION_OPTION_ORDER.map((key) => ({
+                        key,
+                        active: draft[key],
+                        disabled: saving || running,
+                        onClick: () => toggleJobSessionOption(key),
+                      }))}
+                    />
+                  </div>
+                ) : null}
+
                 <div className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
                   <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.persistentSession")}</span>
-                  <input
-                    list="jobs-session-options"
-                    value={selectedSessionValue}
-                    onChange={(event) => {
-                      const persistentSessionId = event.target.value || null;
-                      updateDraft({
-                        persistent_session_id: persistentSessionId,
-                        unattended: persistentSessionId ? false : draft.unattended,
-                        agent_model_name: persistentSessionId ? null : draft.agent_model_name,
-                        sentinel_model_name: persistentSessionId ? null : draft.sentinel_model_name,
-                        title_model_name: persistentSessionId ? null : draft.title_model_name,
-                      });
-                    }}
-                    placeholder={draft.unattended ? t("fields.persistentSessionDisabled") : undefined}
-                    disabled={saving || running || draft.unattended}
-                    className="w-full rounded-xl border border-border bg-background px-3 py-2.5 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
-                  />
+                  <div className="relative">
+                    <input
+                      list="jobs-session-options"
+                      value={selectedSessionValue}
+                      onChange={(event) => {
+                        const persistentSessionId = event.target.value;
+                        updateDraft({
+                          persistent_session_id: persistentSessionId,
+                          unattended: persistentSessionId.trim() ? false : draft.unattended,
+                          private: persistentSessionId.trim() ? false : draft.private,
+                          ask_mode: persistentSessionId.trim() ? false : draft.ask_mode,
+                          yolo_mode: persistentSessionId.trim() ? false : draft.yolo_mode,
+                          agent_model_name: persistentSessionId.trim() ? null : draft.agent_model_name,
+                          sentinel_model_name: persistentSessionId.trim() ? null : draft.sentinel_model_name,
+                          title_model_name: persistentSessionId.trim() ? null : draft.title_model_name,
+                        });
+                      }}
+                      placeholder={draft.unattended ? t("fields.persistentSessionDisabled") : t("placeholders.persistentSession")}
+                      disabled={saving || running || draft.unattended || !usePersistentSession}
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                    {selectedSessionValue ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateDraft({
+                            persistent_session_id: "",
+                          });
+                        }}
+                        aria-label={t("actions.clearPersistentSession")}
+                        disabled={saving || running || draft.unattended || !usePersistentSession}
+                        className="absolute top-1/2 right-2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
                   <datalist id="jobs-session-options">
                     {selectableSessions.map((session) => (
                       <option key={session.session_id} value={session.session_id} label={formatSessionOption(session)} />
                     ))}
                   </datalist>
-                  <p className="text-xs text-muted-foreground">{t("fields.persistentSessionHelp")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {draft.unattended
+                      ? t("fields.persistentSessionDisabled")
+                      : !usePersistentSession
+                        ? t("fields.persistentSessionUncheckedHelp")
+                        : hasPersistentSessionId
+                          ? t("fields.persistentSessionActiveHelp")
+                          : t("fields.persistentSessionMissingIdHelp")}
+                  </p>
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
                   <div>
                     <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.models")}</span>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {hasPersistentSession ? t("fields.modelsDisabled") : t("fields.modelsHelp")}
+                      {usePersistentSession ? t("fields.modelsDisabled") : t("fields.modelsHelp")}
                     </p>
                   </div>
                   <div className="grid gap-3 xl:grid-cols-2">
@@ -893,7 +976,7 @@ export function JobsView({
                         value={draft.agent_model_name}
                         entries={agentModelOptions}
                         onChange={(value) => updateDraft({ agent_model_name: value })}
-                        disabled={saving || running || hasPersistentSession}
+                        disabled={saving || running || usePersistentSession}
                         defaultLabel={defaultModelLabel}
                       />
                     </label>
@@ -903,7 +986,7 @@ export function JobsView({
                         value={draft.sentinel_model_name}
                         entries={sentinelModelOptions}
                         onChange={(value) => updateDraft({ sentinel_model_name: value })}
-                        disabled={saving || running || hasPersistentSession}
+                        disabled={saving || running || usePersistentSession}
                         defaultLabel={defaultModelLabel}
                       />
                     </label>

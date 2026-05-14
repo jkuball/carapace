@@ -560,7 +560,9 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
             "id": "daily-briefing",
             "name": "Daily Briefing",
             "prompt": "Summarize the day.",
+            "private": True,
             "unattended": True,
+            "ask_mode": True,
             "agent_model_name": "openai:gpt-5.4",
             "sentinel_model_name": "openai:gpt-5.4-mini",
             "title_model_name": "openai:gpt-5.4-nano",
@@ -589,6 +591,9 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
 
     state = srv._engine.session_mgr.load_state(payload["session_id"])
     assert state is not None
+    assert state.attributes.private is True
+    assert state.attributes.ask_mode is True
+    assert state.attributes.yolo_mode is False
     assert state.agent_model_name == "openai:gpt-5.4"
     assert state.sentinel_model_name == "openai:gpt-5.4-mini"
     assert state.title_model_name == "openai:gpt-5.4-nano"

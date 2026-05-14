@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Bot, ChevronDown, Eye, Lock, MessageSquare, PencilLine, Plus, ShieldCheck, Zap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import { cn } from "@/lib/utils";
 
 export interface NewSessionOptions {
@@ -19,15 +19,6 @@ interface NewSessionButtonProps {
   fullWidth?: boolean;
   className?: string;
 }
-
-type SessionOptionKey = keyof NewSessionOptions;
-
-const OPTION_ORDER: SessionOptionKey[] = [
-  "private",
-  "ask_mode",
-  "yolo_mode",
-  "unattended",
-];
 
 export function NewSessionButton({
   onCreate,
@@ -68,7 +59,7 @@ export function NewSessionButton({
     onCreate(nextOptions);
   }
 
-  function handleToggleOption(key: keyof NewSessionOptions, checked: boolean) {
+  function handleToggleOption(key: SessionOptionKey, checked: boolean) {
     setOptions((current) => {
       const next = { ...current, [key]: checked };
       if (key === "ask_mode" && checked) {
@@ -79,84 +70,6 @@ export function NewSessionButton({
       }
       return next;
     });
-  }
-
-  function getOptionCopy(key: SessionOptionKey, active: boolean): {
-    title: string;
-    description: string;
-  } {
-    switch (key) {
-      case "private":
-        return active
-          ? {
-              title: t("private.enabledTitle"),
-              description: t("private.enabledDescription"),
-            }
-          : {
-              title: t("private.disabledTitle"),
-              description: t("private.disabledDescription"),
-            };
-      case "ask_mode":
-        return active
-          ? {
-              title: t("ask.enabledTitle"),
-              description: t("ask.enabledDescription"),
-            }
-          : {
-              title: t("ask.disabledTitle"),
-              description: t("ask.disabledDescription"),
-            };
-      case "yolo_mode":
-        return active
-          ? {
-              title: t("yolo.enabledTitle"),
-              description: t("yolo.enabledDescription"),
-            }
-          : {
-              title: t("yolo.disabledTitle"),
-              description: t("yolo.disabledDescription"),
-            };
-      case "unattended":
-        return active
-          ? {
-              title: t("unattended.enabledTitle"),
-              description: t("unattended.enabledDescription"),
-            }
-          : {
-              title: t("unattended.disabledTitle"),
-              description: t("unattended.disabledDescription"),
-            };
-    }
-  }
-
-  function getOptionIcon(key: SessionOptionKey, active: boolean): LucideIcon {
-    switch (key) {
-      case "private":
-        return active ? Lock : BookOpen;
-      case "ask_mode":
-        return active ? Eye : PencilLine;
-      case "yolo_mode":
-        return active ? Zap : ShieldCheck;
-      case "unattended":
-        return active ? Bot : MessageSquare;
-    }
-  }
-
-  function getOptionClasses(key: SessionOptionKey, active: boolean): string {
-    if (!active) {
-      return "border-border/70 bg-background text-foreground hover:bg-muted/60 dark:hover:bg-muted/80";
-    }
-
-    switch (key) {
-      case "private":
-        return "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200/80 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-800/80";
-      case "ask_mode":
-        return "border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/70";
-      case "yolo_mode":
-        return "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/70";
-      case "unattended":
-        return "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/70";
-    }
   }
 
   return (
@@ -200,39 +113,13 @@ export function NewSessionButton({
           aria-label={t("chooseOptions")}
           className="absolute right-0 z-20 mt-1 min-w-80 rounded-xl border border-border bg-background p-3 shadow-lg"
         >
-          <div className="grid grid-cols-2 gap-2">
-            {OPTION_ORDER.map((key) => {
-              const active = !!options[key];
-              const copy = getOptionCopy(key, active);
-              const Icon = getOptionIcon(key, active);
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => handleToggleOption(key, !active)}
-                  className={cn(
-                    "flex min-h-[7rem] w-full flex-col items-start justify-start rounded-xl border px-3 py-3 text-left transition-colors",
-                    getOptionClasses(key, active),
-                  )}
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span>{copy.title}</span>
-                  </span>
-                  <span
-                    className={cn(
-                      "mt-1 block min-h-[2.5rem] overflow-hidden text-xs leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]",
-                      active ? "text-current/80" : "text-muted-foreground",
-                    )}
-                  >
-                    {copy.description}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <SessionOptionTiles
+            items={SESSION_OPTION_ORDER.map((key) => ({
+              key,
+              active: !!options[key],
+              onClick: () => handleToggleOption(key, !options[key]),
+            }))}
+          />
         </div>
       ) : null}
     </div>
