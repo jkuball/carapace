@@ -332,11 +332,10 @@ export function Message({
         <div className="flex justify-end">
           <div
             className={cn(
-              "chat-copy-serif max-w-full rounded-2xl rounded-br-md px-3.5 py-2 text-sm md:max-w-[85%]",
-              "bg-user-bubble text-user-bubble-fg",
+              "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
             )}
           >
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            <MarkdownContent content={message.content} />
           </div>
         </div>
       );
