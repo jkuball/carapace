@@ -119,7 +119,14 @@ function ThinkingBadge({
       : reasoningDurationMs;
   const meta: string[] = [];
   if (typeof shownDurationMs === "number") {
-    meta.push(t("thinkingMeta.duration", { duration: formatDuration(shownDurationMs) }));
+    meta.push(
+      t(
+        streaming
+          ? "thinkingMeta.durationStreaming"
+          : "thinkingMeta.durationComplete",
+        { duration: formatDuration(shownDurationMs) },
+      ),
+    );
   }
   if (typeof reasoningTokens === "number" && reasoningTokens > 0) {
     meta.push(t("thinkingMeta.reasoning", { count: reasoningTokens.toLocaleString() }));

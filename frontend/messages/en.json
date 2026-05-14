@@ -486,7 +486,8 @@
             "complete": "thought"
         },
         "thinkingMeta": {
-            "duration": "for {duration}",
+            "durationStreaming": "for {duration}",
+            "durationComplete": "for {duration}",
             "reasoning": "{count} reasoning"
         },
         "actions": {

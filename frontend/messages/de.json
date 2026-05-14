@@ -486,7 +486,8 @@
             "complete": "nachgedacht"
         },
         "thinkingMeta": {
-            "duration": "für {duration}",
+            "durationStreaming": "seit {duration}",
+            "durationComplete": "{duration} lang",
             "reasoning": "{count} Reasoning"
         },
         "actions": {
