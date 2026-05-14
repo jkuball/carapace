@@ -217,9 +217,13 @@ class SessionSecurity:
         max_sentinel_calls_per_tool_call: int = 5,
         sentinel_domain_batch_window_ms: int = 100,
         unattended: bool = False,
+        ask_mode: bool = False,
+        yolo_mode: bool = False,
     ) -> None:
         self.session_id = session_id
         self.unattended = unattended
+        self.ask_mode = ask_mode
+        self.yolo_mode = yolo_mode
         self.action_log: list[
             UserMessageEntry
             | ToolCallEntry
@@ -259,6 +263,20 @@ class SessionSecurity:
         self._domain_scope_pending_requests: dict[str, PendingDomainRequest] = {}
         self._domain_scope_inflight_futures: dict[str, asyncio.Future[CachedDomainApproval]] = {}
         self._domain_scope_worker_task: asyncio.Task[None] | None = None
+
+    def set_policy(
+        self,
+        *,
+        unattended: bool | None = None,
+        ask_mode: bool | None = None,
+        yolo_mode: bool | None = None,
+    ) -> None:
+        if unattended is not None:
+            self.unattended = unattended
+        if ask_mode is not None:
+            self.ask_mode = ask_mode
+        if yolo_mode is not None:
+            self.yolo_mode = yolo_mode
 
     def _cancel_domain_future(self, future: asyncio.Future[CachedDomainApproval], message: str) -> None:
         if not future.done():

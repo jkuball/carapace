@@ -166,6 +166,33 @@ async def test_embedded_domain_substring_still_requires_review() -> None:
 
 
 @pytest.mark.anyio
+async def test_yolo_mode_auto_allows_domain_without_sentinel() -> None:
+    session = SessionSecurity("session-1", sentinel_domain_batch_window_ms=0, yolo_mode=True)
+    session.current_parent_tool_id = "tool-1"
+    domain_updates: list[tuple[str, str, str | None, str | None, str | None]] = []
+    sentinel = StubSentinel(batch_verdicts=[SentinelVerdict(decision="deny", explanation="should not run")])
+
+    session.set_domain_info_callback(
+        lambda domain, detail, source, verdict, explanation: domain_updates.append(
+            (domain, detail, source, verdict, explanation)
+        )
+    )
+
+    allowed = await evaluate_domain_with_stub(session, sentinel, "api.example.com", "python fetch.py")
+
+    assert allowed is True
+    assert sentinel.calls == []
+    assert sentinel.batch_calls == []
+    assert domain_updates[-1] == (
+        "api.example.com",
+        "[bypass] yolo mode auto-allowed",
+        "bypass",
+        "allow",
+        "YOLO mode bypassed sentinel.",
+    )
+
+
+@pytest.mark.anyio
 async def test_reused_allowed_domain_reports_auto_source() -> None:
     session = SessionSecurity("session-1", sentinel_domain_batch_window_ms=0)
     session.current_parent_tool_id = "tool-1"

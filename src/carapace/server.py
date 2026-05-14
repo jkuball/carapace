@@ -34,7 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from genai_prices import UpdatePrices
 from loguru import logger
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from carapace import get_version
@@ -775,6 +775,14 @@ class SessionCreateRequest(BaseModel):
     channel_ref: str = ""
     private: bool | None = None
     unattended: bool | None = None
+    ask_mode: bool | None = None
+    yolo_mode: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_modes(self) -> Self:
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("ask_mode and yolo_mode are mutually exclusive")
+        return self
 
 
 class SessionAttributesPatch(BaseModel):
@@ -783,6 +791,14 @@ class SessionAttributesPatch(BaseModel):
     pinned: bool | None = None
     favorite: bool | None = None
     unattended: bool | None = None
+    ask_mode: bool | None = None
+    yolo_mode: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_modes(self) -> Self:
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("ask_mode and yolo_mode are mutually exclusive")
+        return self
 
 
 class SessionUpdateRequest(BaseModel):
@@ -808,6 +824,14 @@ class SessionForkRequest(BaseModel):
     channel_type: str = "cli"
     channel_ref: str = ""
     unattended: bool | None = None
+    ask_mode: bool | None = None
+    yolo_mode: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_modes(self) -> Self:
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("ask_mode and yolo_mode are mutually exclusive")
+        return self
 
 
 class SessionInfo(BaseModel):
@@ -1075,6 +1099,8 @@ async def create_session(
         budget=_engine.config.agent.default_session_budget,
         private=_engine.config.sessions.default_private if body.private is None else body.private,
         unattended=False if body.unattended is None else body.unattended,
+        ask_mode=False if body.ask_mode is None else body.ask_mode,
+        yolo_mode=False if body.yolo_mode is None else body.yolo_mode,
     )
     return SessionInfo.from_state(state)
 
@@ -1126,9 +1152,12 @@ async def update_session(
 
     if body.attributes is not None:
         previous_attributes = state.attributes.model_copy(deep=True)
-        next_attributes = state.attributes.model_copy(deep=True)
-        for field_name, value in body.attributes.model_dump(exclude_none=True).items():
-            setattr(next_attributes, field_name, value)
+        merged_attributes = state.attributes.model_dump(mode="json")
+        merged_attributes.update(body.attributes.model_dump(exclude_none=True))
+        try:
+            next_attributes = SessionAttributes.model_validate(merged_attributes)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         unattended_changed = next_attributes.unattended != state.attributes.unattended
         if unattended_changed:
@@ -1215,6 +1244,8 @@ async def fork_session(
             channel_type=body.channel_type,
             channel_ref=body.channel_ref,
             unattended=body.unattended,
+            ask_mode=body.ask_mode,
+            yolo_mode=body.yolo_mode,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

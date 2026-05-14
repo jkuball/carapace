@@ -63,6 +63,8 @@ export interface SessionAttributes {
   pinned: boolean;
   favorite: boolean;
   unattended: boolean;
+  ask_mode: boolean;
+  yolo_mode: boolean;
 }
 
 export interface SessionAttributesPatch {
@@ -71,6 +73,8 @@ export interface SessionAttributesPatch {
   pinned?: boolean;
   favorite?: boolean;
   unattended?: boolean;
+  ask_mode?: boolean;
+  yolo_mode?: boolean;
 }
 
 export interface SessionInfo {

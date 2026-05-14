@@ -541,12 +541,15 @@ class SessionEngine(SessionTurnMixin):
             max_sentinel_calls_per_tool_call=self._config.agent.max_sentinel_calls_per_tool_call,
             sentinel_domain_batch_window_ms=self._config.agent.sentinel_domain_batch_window_ms,
             unattended=state.attributes.unattended,
+            ask_mode=state.attributes.ask_mode,
+            yolo_mode=state.attributes.yolo_mode,
         )
         sentinel = Sentinel(
             model=self._config.agent.sentinel_model,
             knowledge_dir=self._knowledge_dir,
             skills_dir=self._knowledge_dir / "skills",
             unattended=state.attributes.unattended,
+            ask_mode=state.attributes.ask_mode,
             timeout=timedelta(seconds=self._config.agent.sentinel_timeout_seconds),
             model_factory=self._model_factory,
             model_settings_resolver=self._resolve_model_settings,
@@ -659,6 +662,16 @@ class SessionEngine(SessionTurnMixin):
         """Return the ``ActiveSession`` if loaded, else ``None``."""
         return self._active.get(session_id)
 
+    def _sync_active_session_policy(self, active: ActiveSession) -> None:
+        if active.security is not None:
+            active.security.set_policy(
+                unattended=active.state.attributes.unattended,
+                ask_mode=active.state.attributes.ask_mode,
+                yolo_mode=active.state.attributes.yolo_mode,
+            )
+        if active.sentinel is not None:
+            active.sentinel.set_policy(ask_mode=active.state.attributes.ask_mode)
+
     def update_active_state(self, session_id: str, **changes: Any) -> None:
         """Apply explicit field updates to the in-memory state for a loaded session."""
         active = self._active.get(session_id)
@@ -669,6 +682,8 @@ class SessionEngine(SessionTurnMixin):
                 if hasattr(value, "model_copy"):
                     value = value.model_copy(deep=True)
                 setattr(active.state, field_name, value)
+            if "attributes" in changes:
+                self._sync_active_session_policy(active)
 
     def update_session_model_overrides(
         self,
@@ -904,6 +919,8 @@ class SessionEngine(SessionTurnMixin):
         channel_type: str,
         channel_ref: str = "",
         unattended: bool | None = None,
+        ask_mode: bool | None = None,
+        yolo_mode: bool | None = None,
     ) -> SessionState:
         active = self._ensure_active(session_id)
         if active.agent_task and not active.agent_task.done():
@@ -923,6 +940,8 @@ class SessionEngine(SessionTurnMixin):
         history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
         forked_history = self._history_for_completed_turn_count(history, turn_count)
         target_unattended = source_state.attributes.unattended if unattended is None else unattended
+        target_ask_mode = source_state.attributes.ask_mode if ask_mode is None else ask_mode
+        target_yolo_mode = source_state.attributes.yolo_mode if yolo_mode is None else yolo_mode
         if source_state.attributes.unattended and not target_unattended:
             forked_history = self._normalize_unattended_output_history(forked_history)
 
@@ -940,6 +959,8 @@ class SessionEngine(SessionTurnMixin):
                 "attributes": SessionAttributes(
                     private=source_state.attributes.private,
                     unattended=target_unattended,
+                    ask_mode=target_ask_mode,
+                    yolo_mode=target_yolo_mode,
                 ),
                 "knowledge_last_committed_at": None,
                 "knowledge_last_archive_path": None,

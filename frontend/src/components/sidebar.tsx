@@ -6,7 +6,7 @@ import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, Messag
 import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
-import { NewSessionButton } from "@/components/new-session-button";
+import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
 import { VersionBadge } from "@/components/version-badge";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
 import {
@@ -27,7 +27,7 @@ interface SidebarProps {
   frontendVersion?: string | null;
   backendVersion?: string | null;
   onSelect: (sessionId: string) => void;
-  onNew: (unattended?: boolean) => void;
+  onNew: (options?: NewSessionOptions) => void;
   onGoHome: () => void;
   onOpenSettings: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;

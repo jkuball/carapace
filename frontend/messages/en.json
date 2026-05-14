@@ -104,14 +104,30 @@
     },
     "newSessionButton": {
         "label": "New session",
-        "chooseMode": "Choose session mode",
-        "attended": {
-            "title": "Attended",
-            "description": "Chat normally and approve escalations in place."
+        "chooseOptions": "Choose session options",
+        "private": {
+            "enabledTitle": "Private",
+            "enabledDescription": "Exclude this session from knowledge commits.",
+            "disabledTitle": "Saved",
+            "disabledDescription": "Can be included in knowledge commits."
+        },
+        "ask": {
+            "enabledTitle": "Read-Only Mode",
+            "enabledDescription": "Read-only outside sandbox. External writes are blocked.",
+            "disabledTitle": "Read and Write Access",
+            "disabledDescription": "Normal permissions. External writes are allowed."
+        },
+        "yolo": {
+            "enabledTitle": "YOLO",
+            "enabledDescription": "Disable sentinel review and allow operations immediately.",
+            "disabledTitle": "Reviewed",
+            "disabledDescription": "Keep actions gated by safe-list and sentinel review."
         },
         "unattended": {
-            "title": "Unattended",
-            "description": "Runs on its own with no user approval path."
+            "enabledTitle": "Unattended",
+            "enabledDescription": "Runs on its own with no user approval path.",
+            "disabledTitle": "With Approval",
+            "disabledDescription": "Stays interactive with a user approval path."
         }
     },
     "chatInput": {
@@ -392,6 +408,8 @@
             "private": "Private",
             "pinned": "Pinned",
             "favorite": "Favorite",
+            "askMode": "Read-Only Mode",
+            "yoloMode": "YOLO",
             "unattended": "Unattended",
             "interactive": "Interactive"
         },
@@ -411,7 +429,14 @@
             "messages": "Messages",
             "totalCost": "Cost",
             "job": "Job",
-            "reference": "Reference"
+            "reference": "Reference",
+            "modes": "Modes",
+            "askMode": "Read-Only Mode",
+            "askModeHelp": "Only read-only work outside the sandbox. External writes are denied.",
+            "yoloMode": "YOLO Mode",
+            "yoloModeHelp": "Bypass sentinel approval and allow actions immediately.",
+            "savingPrivate": "Saving…",
+            "updatingMode": "Updating mode…"
         },
         "source": {
             "unknown": "Unknown",

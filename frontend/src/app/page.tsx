@@ -6,7 +6,7 @@ import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ConnectForm } from "@/components/connect-form";
 import { JobsView, type SettingsTab } from "@/components/jobs-view";
-import { NewSessionButton } from "@/components/new-session-button";
+import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
@@ -398,10 +398,10 @@ function HomeContent() {
     setActiveView("chat");
   }
 
-  async function handleNewSession(unattended = false) {
+  async function handleNewSession(options: NewSessionOptions = {}) {
     setCreatingSession(true);
     try {
-      const session = await createSession(server, token, { unattended });
+      const session = await createSession(server, token, options);
       setSessions((prev) => sortSessions([session, ...prev]));
       setRequestedJobId(null);
       setActiveSessionId(session.session_id);

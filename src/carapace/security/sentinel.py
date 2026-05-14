@@ -63,14 +63,23 @@ Always respond using the requested structured output schema.
 _RESET_THRESHOLD_DEFAULT = 20
 
 
-def _build_system_prompt(security_md: str, *, unattended: bool) -> str:
+def _build_system_prompt(security_md: str, *, unattended: bool, ask_mode: bool) -> str:
     mode_text = (
         "This session is unattended. No user approval path is available. "
         + "You must make a final allow-or-deny decision yourself. Never choose escalation.\n\n"
         if unattended
         else ""
     )
-    return _SENTINEL_SYSTEM_PREFIX + mode_text + security_md
+    ask_mode_text = (
+        "This session is in ASK mode. The agent may only perform read-only operations outside the sandbox. "
+        + "Sandbox-local file writes and sandbox-local command execution are allowed as long as they do not cause "
+        + "writes outside the sandbox. Any operation that would modify external systems, remote services, git remotes, "
+        + "or non-sandbox files must be denied, not escalated. Read-only use of skills, credentials, and external "
+        + "services may still be allowed when necessary for the user's request.\n\n"
+        if ask_mode
+        else ""
+    )
+    return _SENTINEL_SYSTEM_PREFIX + mode_text + ask_mode_text + security_md
 
 
 type _SentinelOutput = SentinelVerdict | UnattendedSentinelVerdict
@@ -148,6 +157,7 @@ class Sentinel:
         knowledge_dir: Path,
         skills_dir: Path,
         unattended: bool = False,
+        ask_mode: bool = False,
         timeout: timedelta = timedelta(seconds=60),
         reset_threshold: int = _RESET_THRESHOLD_DEFAULT,
         model_factory: Callable[[str], Model] | None = None,
@@ -157,6 +167,7 @@ class Sentinel:
         self._knowledge_dir = knowledge_dir
         self._skills_dir = skills_dir
         self._unattended = unattended
+        self._ask_mode = ask_mode
         self._timeout = timeout
         self._reset_threshold = reset_threshold
         self._model_factory = model_factory
@@ -178,8 +189,19 @@ class Sentinel:
         self._model = model
         self._agent = self._create_agent()
 
+    def set_policy(self, *, ask_mode: bool) -> None:
+        """Update live mutable policy flags without discarding sentinel conversation state."""
+        if self._ask_mode == ask_mode:
+            return
+        self._ask_mode = ask_mode
+        self._agent = self._create_agent()
+
     def _load_system_prompt(self, _ctx: RunContext[Path]) -> str:
-        return _build_system_prompt(self._load_security_md(), unattended=self._unattended)
+        return _build_system_prompt(
+            self._load_security_md(),
+            unattended=self._unattended,
+            ask_mode=self._ask_mode,
+        )
 
     def _load_security_md(self) -> str:
         path = self._knowledge_dir / "SECURITY.md"

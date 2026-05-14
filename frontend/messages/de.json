@@ -104,14 +104,30 @@
     },
     "newSessionButton": {
         "label": "Neue Sitzung",
-        "chooseMode": "Sitzungsmodus auswählen",
-        "attended": {
-            "title": "Begleitet",
-            "description": "Normal chatten und Eskalationen direkt bestätigen."
+        "chooseOptions": "Sitzungsoptionen auswählen",
+        "private": {
+            "enabledTitle": "Privat",
+            "enabledDescription": "Nicht ins Wissens-Repository aufnehmen.",
+            "disabledTitle": "Speichern",
+            "disabledDescription": "Wird im Wissens-Repository gespeichert."
+        },
+        "ask": {
+            "enabledTitle": "Nur Lesend",
+            "enabledDescription": "Außerhalb der Sandbox nur lesen.",
+            "disabledTitle": "Schreibzugriff",
+            "disabledDescription": "Außerhalb der Sandbox schreiben erlaubt."
+        },
+        "yolo": {
+            "enabledTitle": "YOLO",
+            "enabledDescription": "Alle Tool-Calls sofort erlauben.",
+            "disabledTitle": "Mit Prüfung",
+            "disabledDescription": "Aktionen weiter durch Safe-List und Sentinel prüfen."
         },
         "unattended": {
-            "title": "Unbeaufsichtigt",
-            "description": "Läuft eigenständig ohne Freigabepfad durch dich."
+            "enabledTitle": "Unbeaufsichtigt",
+            "enabledDescription": "Läuft eigenständig ohne Freigabepfad durch dich.",
+            "disabledTitle": "Interaktiv",
+            "disabledDescription": "Bleibt im interaktiven Modus mit Freigabepfad."
         }
     },
     "chatInput": {
@@ -374,7 +390,7 @@
             "deleteSession": "Diese Sitzung löschen? Chatverlauf und Sandbox-Status werden entfernt.",
             "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten.",
             "unarchiveSession": "Diese Sitzung aus dem Archiv holen? Sie kehrt in die aktive Sitzungsliste zurück.",
-            "makePrivate": "Diese Sitzung als privat markieren? Bereits vorhandene Wissens-Commits bleiben in der Git-Historie bestehen."
+            "makePrivate": "Diese Sitzung als privat markieren? Bereits vorhandene Commits im Wissens-Repository bleiben in der Git-Historie bestehen."
         },
         "actions": {
             "pin": "Sitzung anheften",
@@ -392,6 +408,8 @@
             "private": "Privat",
             "pinned": "Angeheftet",
             "favorite": "Favorit",
+            "askMode": "Lese-Modus",
+            "yoloMode": "YOLO",
             "unattended": "Unbeaufsichtigt",
             "interactive": "Interaktiv"
         },
@@ -411,7 +429,14 @@
             "messages": "Nachrichten",
             "totalCost": "Kosten",
             "job": "Job",
-            "reference": "Referenz"
+            "reference": "Referenz",
+            "modes": "Modi",
+            "askMode": "Lese-Modus",
+            "askModeHelp": "Außerhalb der Sandbox nur lesend arbeiten. Externe Schreibzugriffe werden verweigert.",
+            "yoloMode": "YOLO-Modus",
+            "yoloModeHelp": "Sentinel-Freigaben umgehen und Aktionen sofort erlauben.",
+            "savingPrivate": "Wird gespeichert…",
+            "updatingMode": "Modus wird aktualisiert…"
         },
         "source": {
             "unknown": "Unbekannt",
@@ -466,9 +491,9 @@
             "savedAt": "Gespeichert {timestamp}",
             "commitDisabledNoHistory": "Diese Sitzung hat noch keinen Gesprächsverlauf.",
             "noNewChanges": "{status}. Keine neuen Änderungen zum Committen.",
-            "privateExistingCommits": "Sitzung ist privat. Bereits vorhandene Wissens-Commits bleiben unverändert.",
-            "privateExcluded": "Sitzung ist privat und wird nicht in das Wissens-Repository committed.",
-            "includedInRepo": "Sitzung wird in Wissens-Commits in dein Repository aufgenommen.",
+            "privateExistingCommits": "Sitzung ist privat. Bereits vorhandene Commits im Wissens-Repository bleiben unverändert.",
+            "privateExcluded": "Sitzung ist privat und wird nicht ins Wissens-Repository committed.",
+            "includedInRepo": "Sitzung wird ins Wissens-Repository aufgenommen.",
             "badges": {
                 "excluded": "Ausgeschlossen",
                 "missing": "Fehlt",
@@ -621,7 +646,7 @@
         "messageCount": "{count, plural, one {# Nachricht} other {# Nachrichten}}",
         "unattendedSession": "Unbeaufsichtigte Sitzung",
         "privateSession": "Private Sitzung",
-        "knowledgeCommitted": "Alle Änderungen in das Wissens-Repository übernommen",
+        "knowledgeCommitted": "Alle Änderungen ins Wissens-Repository übernommen",
         "actions": {
             "pin": "Sitzung anheften",
             "unpin": "Sitzung lösen",

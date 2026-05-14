@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { Archive, ArchiveRestore, BookOpen, Bot, Check, Copy, ExternalLink, Eye, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, PencilLine, Pin, Play, RotateCcw, Save, Settings2, ShieldCheck, Square, Star, Terminal, Trash2, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { useAppLocale } from "@/components/locale-provider";
 import { useSessionPresence } from "@/hooks/use-session-presence";
@@ -28,6 +29,7 @@ import type {
   EscalationDecision,
   HistoryMessage,
   LlmActivity,
+  SessionAttributesPatch,
   ServerMessage,
   SessionInfo,
   SessionSandboxSnapshot,
@@ -58,7 +60,7 @@ interface ChatViewProps {
   onSandboxUpdate?: (sandbox: SessionSandboxSnapshot) => void;
   onForkSession?: (session: SessionInfo) => void;
   onOpenJobSettings?: (jobId: string) => void;
-  onUpdateSessionAttributes?: (sessionId: string, attributes: { private?: boolean; archived?: boolean; pinned?: boolean; favorite?: boolean }) => Promise<SessionInfo>;
+  onUpdateSessionAttributes?: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDeleteSession?: () => Promise<void>;
 }
 
@@ -814,6 +816,7 @@ export function ChatView({
   onDeleteSession,
 }: ChatViewProps) {
   const t = useTranslations("chatView");
+  const tSessionOption = useTranslations("newSessionButton");
   const tRoot = useTranslations();
   const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -836,7 +839,8 @@ export function ChatView({
   const [savingKnowledge, setSavingKnowledge] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
-  const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | null>(null);
+  const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | "mode" | null>(null);
+  const [showDelayedSessionAttributeStatus, setShowDelayedSessionAttributeStatus] = useState(false);
   const [updatingSessionModel, setUpdatingSessionModel] = useState<"agent" | "sentinel" | null>(null);
   const [modelsUnlocked, setModelsUnlocked] = useState(false);
   const [modelUpdateError, setModelUpdateError] = useState<string | null>(null);
@@ -855,6 +859,22 @@ export function ChatView({
   const sendRef = useRef<(msg: ClientMessage) => void>(() => {});
   const onSandboxUpdateRef = useRef(onSandboxUpdate);
   const sandboxRef = useRef(sandbox);
+
+  useEffect(() => {
+    if (updatingSessionAttribute == null) {
+      setShowDelayedSessionAttributeStatus(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowDelayedSessionAttributeStatus(true);
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      setShowDelayedSessionAttributeStatus(false);
+    };
+  }, [updatingSessionAttribute]);
   const sandboxRefreshParamsRef = useRef({ server, token, sessionId });
   const sandboxRefreshPendingRef = useRef(false);
   const sandboxRefreshRunningRef = useRef(false);
@@ -1673,6 +1693,126 @@ export function ChatView({
     }
   }
 
+  async function handleToggleSessionMode(mode: "ask" | "yolo") {
+    if (!session || updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes) return;
+
+    const nextAskMode = mode === "ask"
+      ? !session.attributes.ask_mode
+      : false;
+    const nextYoloMode = mode === "yolo"
+      ? !session.attributes.yolo_mode
+      : false;
+    const nextAttributes: SessionAttributesPatch = {
+      ask_mode: nextAskMode,
+      yolo_mode: nextYoloMode,
+    };
+    if (
+      session.attributes.ask_mode === nextAttributes.ask_mode
+      && session.attributes.yolo_mode === nextAttributes.yolo_mode
+    ) {
+      return;
+    }
+
+    setUpdatingSessionAttribute("mode");
+    try {
+      const updated = await onUpdateSessionAttributes(sessionId, nextAttributes);
+      onSessionUpdate?.(updated);
+    } finally {
+      setUpdatingSessionAttribute(null);
+    }
+  }
+
+  function getSessionOptionCopy(key: "private" | "ask_mode" | "yolo_mode" | "unattended", active: boolean): {
+    title: string;
+    description: string;
+  } {
+    switch (key) {
+      case "private":
+        return active
+          ? {
+              title: tSessionOption("private.enabledTitle"),
+              description: tSessionOption("private.enabledDescription"),
+            }
+          : {
+              title: tSessionOption("private.disabledTitle"),
+              description: tSessionOption("private.disabledDescription"),
+            };
+      case "ask_mode":
+        return active
+          ? {
+              title: tSessionOption("ask.enabledTitle"),
+              description: tSessionOption("ask.enabledDescription"),
+            }
+          : {
+              title: tSessionOption("ask.disabledTitle"),
+              description: tSessionOption("ask.disabledDescription"),
+            };
+      case "yolo_mode":
+        return active
+          ? {
+              title: tSessionOption("yolo.enabledTitle"),
+              description: tSessionOption("yolo.enabledDescription"),
+            }
+          : {
+              title: tSessionOption("yolo.disabledTitle"),
+              description: tSessionOption("yolo.disabledDescription"),
+            };
+      case "unattended":
+        return active
+          ? {
+              title: tSessionOption("unattended.enabledTitle"),
+              description: tSessionOption("unattended.enabledDescription"),
+            }
+          : {
+              title: tSessionOption("unattended.disabledTitle"),
+              description: tSessionOption("unattended.disabledDescription"),
+            };
+    }
+  }
+
+  function getSessionOptionIcon(
+    key: "private" | "ask_mode" | "yolo_mode" | "unattended",
+    active: boolean,
+  ): LucideIcon {
+    switch (key) {
+      case "private":
+        return active ? Lock : BookOpen;
+      case "ask_mode":
+        return active ? Eye : PencilLine;
+      case "yolo_mode":
+        return active ? Zap : ShieldCheck;
+      case "unattended":
+        return active ? Bot : MessageSquare;
+    }
+  }
+
+  function getSessionOptionClasses(
+    key: "private" | "ask_mode" | "yolo_mode" | "unattended",
+    active: boolean,
+    disabled: boolean,
+  ): string {
+    if (disabled) {
+      return active
+        ? "border-border/70 bg-muted/60 text-foreground/70"
+        : "border-border/60 bg-background/70 text-muted-foreground";
+    }
+
+    if (!active) {
+      return "border-border/70 bg-background text-foreground hover:bg-muted/60 dark:hover:bg-muted/80";
+    }
+
+    switch (key) {
+      case "private":
+        return "border-slate-300 bg-slate-100 text-slate-900 hover:bg-slate-200/80 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100 dark:hover:bg-slate-800/80";
+      case "ask_mode":
+        return "border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/70";
+      case "yolo_mode":
+        return "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/70";
+      case "unattended":
+        return "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/70";
+    }
+  }
+
   async function handleUpdateSessionModel(modelType: "agent" | "sentinel", value: string | null) {
     if (!session || updatingSessionModel || waiting || deletingSession || sessionArchived) {
       return;
@@ -1808,6 +1948,8 @@ export function ChatView({
   const hasKnowledgeChanges = sessionHasKnowledgeChanges(session);
   const sessionArchived = session?.attributes.archived ?? false;
   const sessionUnattended = session?.attributes.unattended ?? false;
+  const sessionAskMode = session?.attributes.ask_mode ?? false;
+  const sessionYoloMode = session?.attributes.yolo_mode ?? false;
   const hasSubmittedUserMessage = messages.some(
     (message) => message.kind === "user" && !message.content.startsWith("/"),
   );
@@ -1895,9 +2037,6 @@ export function ChatView({
     sessionArchived
       ? { label: t("badges.archived"), icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
       : null,
-    sessionPrivate
-      ? { label: t("badges.private"), icon: Lock, className: "border-zinc-300 bg-zinc-100 text-zinc-700" }
-      : null,
     sessionPinned
       ? { label: t("badges.pinned"), icon: Pin, className: "border-sky-200 bg-sky-50 text-sky-800" }
       : null,
@@ -1954,20 +2093,6 @@ export function ChatView({
               )}
             </button>
           ) : null}
-          <button
-            onClick={() => void handleTogglePrivacy()}
-            disabled={!session || !!updatingSessionAttribute || deletingSession}
-            title={sessionPrivate ? t("actions.includeInRepo") : t("actions.keepPrivate")}
-            className="rounded-md p-1.5 text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {updatingSessionAttribute === "private" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : sessionPrivate ? (
-              <Unlock className="h-3.5 w-3.5" />
-            ) : (
-              <Lock className="h-3.5 w-3.5" />
-            )}
-          </button>
           <button
             onClick={() => void handleDeleteSession()}
             disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession}
@@ -2048,20 +2173,87 @@ export function ChatView({
               </dd>
             </>
           ) : null}
+
         </dl>
 
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              {
+                key: "private",
+                active: sessionPrivate,
+                disabled: !session || deletingSession || updatingSessionAttribute !== null,
+                onClick: () => void handleTogglePrivacy(),
+              },
+              {
+                key: "ask_mode",
+                active: sessionAskMode,
+                disabled: !session || deletingSession || !onUpdateSessionAttributes || updatingSessionAttribute !== null,
+                onClick: () => void handleToggleSessionMode("ask"),
+              },
+              {
+                key: "yolo_mode",
+                active: sessionYoloMode,
+                disabled: !session || deletingSession || !onUpdateSessionAttributes || updatingSessionAttribute !== null,
+                onClick: () => void handleToggleSessionMode("yolo"),
+              },
+              {
+                key: "unattended",
+                active: sessionUnattended,
+                disabled: true,
+                onClick: undefined,
+              },
+            ] as const).map((option) => {
+              const copy = getSessionOptionCopy(option.key, option.active);
+              const Icon = getSessionOptionIcon(option.key, option.active);
+
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={option.active}
+                  disabled={option.disabled}
+                  onClick={option.onClick}
+                  className={cn(
+                    "flex min-h-[7rem] w-full flex-col items-start justify-start rounded-xl border px-3 py-3 text-left transition-colors",
+                    option.disabled && "cursor-not-allowed",
+                    getSessionOptionClasses(option.key, option.active, option.disabled),
+                  )}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{copy.title}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 block min-h-[2.5rem] overflow-hidden text-xs leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]",
+                      option.active ? "text-current/80" : "text-muted-foreground",
+                      option.disabled && "text-current/70",
+                    )}
+                  >
+                    {copy.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {showDelayedSessionAttributeStatus && updatingSessionAttribute === "private" ? (
+            <div className="inline-flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>{t("session.savingPrivate")}</span>
+            </div>
+          ) : null}
+
+          {showDelayedSessionAttributeStatus && updatingSessionAttribute === "mode" ? (
+            <div className="inline-flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>{t("session.updatingMode")}</span>
+            </div>
+          ) : null}
+        </div>
+
         <div className="mt-3 flex flex-wrap gap-2">
-          {sessionUnattended ? (
-            <span className={cn(inspectorBadgeClass, "gap-1 border-emerald-200 bg-emerald-50 text-emerald-800")}>
-              <Bot className="h-3 w-3 shrink-0" />
-              <span>{t("badges.unattended")}</span>
-            </span>
-          ) : (
-            <span className={cn(inspectorBadgeClass, "gap-1 border-border bg-muted text-muted-foreground")}>
-              <MessageSquare className="h-3 w-3 shrink-0" />
-              {t("badges.interactive")}
-            </span>
-          )}
           {sessionDetailBadges.map((badge) => (
             <span
               key={badge.label}
