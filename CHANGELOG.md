@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.118.8 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: add archived chat visibility preference and related functionality
+  ([`c2f986d`](https://github.com/thiesgerken/carapace/commit/c2f986de91b46cc81effcd746677f996536a58b1))
+
+- 💄 ui: add model linking functionality in ChatView component
+  ([`eac4e6e`](https://github.com/thiesgerken/carapace/commit/eac4e6e5a1f6cbc77cdbb6e57b6966b583e751eb))
+
+- 💄 ui: adjust font styles and sizes in ThinkingBadge and ToolCallBadge components
+  ([`2d54fd9`](https://github.com/thiesgerken/carapace/commit/2d54fd9434daf001ec2c49a8a92799d50072f7d0))
+
 ## v0.118.7 (2026-05-14)
 
 
