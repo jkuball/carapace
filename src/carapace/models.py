@@ -629,7 +629,14 @@ class ServerConfig(BaseSettings):
     port: int = 8321
     sandbox_port: int = 8322
     internal_port: int = 8320
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+    ]
 
 
 class CarapaceConfig(BaseModel):
