@@ -367,6 +367,25 @@ export async function updateNotificationSubscriptionPreferences(
   return res.json();
 }
 
+export async function sendTestNotification(
+  server: string,
+  token: string,
+  subscriptionId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/notifications/subscriptions/${subscriptionId}/test`,
+    {
+      method: "POST",
+      headers: headers(token),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to send test notification"),
+    );
+  }
+}
+
 export async function deleteNotificationSubscription(
   server: string,
   token: string,

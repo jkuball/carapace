@@ -27,6 +27,8 @@ const messages = {
         enableFailed: "Failed to enable notifications.",
         disableFailed: "Failed to disable notifications.",
         preferencesFailed: "Failed to update notification preferences.",
+        testFailed: "Failed to send test notification.",
+        testSent: "Test notification sent.",
       },
       deviceName: {
         label: "Device name",
@@ -38,6 +40,8 @@ const messages = {
         enabling: "Enabling…",
         disable: "Disable notifications",
         disabling: "Disabling…",
+        test: "Send test notification",
+        testing: "Sending test notification…",
       },
       preferences: {
         label: "Send notifications for",
@@ -222,6 +226,88 @@ test("NotificationSubscription hydrates an active subscription and renders enabl
     assert.equal(localStorage.getItem("carapace_notification_device_name"), "Android device (Chrome)");
     assert.equal(view.container.querySelectorAll('input[type="checkbox"]').length, 4);
     assert.match(view.container.textContent ?? "", /Notifications are enabled for this browser/);
+
+    await view.unmount();
+  } finally {
+    restoreDom();
+  }
+});
+
+
+test("NotificationSubscription sends a test notification for the active browser subscription", async () => {
+  const restoreDom = installDom();
+  const fetchCalls: FetchCall[] = [];
+  const savedSubscription = {
+    subscription_id: "sub-1",
+    device_name: "Android device (Chrome)",
+    endpoint: "https://push.example.test/sub-1",
+    subscribed_at: "2026-05-12T10:00:00Z",
+    expires_at: "2026-06-11T10:00:00Z",
+    last_heartbeat: "2026-05-12T10:00:00Z",
+    preferences: {
+      escalation_pending: true,
+      attended_turn_completed: true,
+      unattended_turn_completed: false,
+      unattended_turn_failed: true,
+    },
+  };
+
+  try {
+    localStorage.setItem("carapace_notification_subscription_id", "sub-1");
+    mountNotification("granted");
+    installPushSupport({
+      pushManager: {
+        getSubscription: async () => ({
+          endpoint: savedSubscription.endpoint,
+          expirationTime: null,
+          options: { applicationServerKey: null, userVisibleOnly: true },
+          getKey: () => null,
+          toJSON: () => ({ keys: { p256dh: "key-1", auth: "auth-1" } }),
+          unsubscribe: async () => true,
+        }),
+        subscribe: async () => {
+          throw new Error("subscribe should not run during test notification");
+        },
+      },
+    } as unknown as ServiceWorkerRegistration);
+
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      writable: true,
+      value: async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        fetchCalls.push({ url, init });
+        if (url.endsWith("/api/notifications/subscriptions") && !init?.method) {
+          return jsonResponse([savedSubscription]);
+        }
+        if (url.endsWith("/api/notifications/subscriptions/sub-1/test") && init?.method === "POST") {
+          return jsonResponse({ delivered: true });
+        }
+        throw new Error(`Unhandled fetch ${url}`);
+      },
+    });
+
+    const view = await renderSubscription();
+    await flushReact();
+    await flushReact();
+
+    const testButton = Array.from(view.container.querySelectorAll("button")).find((button) =>
+      (button.textContent ?? "").includes("Send test notification"),
+    );
+    assert.ok(testButton);
+
+    testButton.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await flushReact();
+    await flushReact();
+
+    assert.equal(
+      fetchCalls.some(
+        ({ url, init }) =>
+          url.endsWith("/api/notifications/subscriptions/sub-1/test") && init?.method === "POST",
+      ),
+      true,
+    );
+    assert.match(view.container.textContent ?? "", /Test notification sent\./);
 
     await view.unmount();
   } finally {

@@ -59,7 +59,9 @@
                 "loadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
                 "enableFailed": "Benachrichtigungen konnten nicht aktiviert werden.",
                 "disableFailed": "Benachrichtigungen konnten nicht deaktiviert werden.",
-                "preferencesFailed": "Benachrichtigungseinstellungen konnten nicht aktualisiert werden."
+                "preferencesFailed": "Benachrichtigungseinstellungen konnten nicht aktualisiert werden.",
+                "testFailed": "Testbenachrichtigung konnte nicht gesendet werden.",
+                "testSent": "Testbenachrichtigung gesendet."
             },
             "deviceName": {
                 "label": "Gerätename",
@@ -70,7 +72,9 @@
                 "enable": "Benachrichtigungen aktivieren",
                 "enabling": "Aktiviere…",
                 "disable": "Benachrichtigungen deaktivieren",
-                "disabling": "Deaktiviere…"
+                "disabling": "Deaktiviere…",
+                "test": "Testbenachrichtigung senden",
+                "testing": "Sende Testbenachrichtigung…"
             },
             "preferences": {
                 "label": "Benachrichtigungen senden für",

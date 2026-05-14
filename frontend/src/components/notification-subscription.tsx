@@ -7,6 +7,7 @@ import {
   deleteNotificationSubscription,
   getVapidPublicKey,
   listNotificationSubscriptions,
+  sendTestNotification,
   updateNotificationSubscriptionPreferences,
   upsertNotificationSubscription,
 } from "@/lib/api";
@@ -176,9 +177,11 @@ function NotificationSubscriptionContent({
   const [subscription, setSubscription] = useState<NotificationSubscriptionRecord | null>(null);
   const [deviceName, setDeviceName] = useState(() => getNotificationDeviceName() || buildNotificationDeviceName());
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState<"enable" | "disable" | "preferences" | "test" | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const loadFailedMessageRef = useRef(t("status.loadFailed"));
+  const saving = busyAction !== null;
 
   useEffect(() => {
     loadFailedMessageRef.current = t("status.loadFailed");
@@ -270,8 +273,9 @@ function NotificationSubscriptionContent({
   async function handleEnableNotifications() {
     if (!server || !token) return;
 
-    setSaving(true);
+    setBusyAction("enable");
     setError("");
+    setNotice("");
     try {
       const registration = await registerNotificationServiceWorker();
       if (!registration) {
@@ -319,15 +323,16 @@ function NotificationSubscriptionContent({
     } catch (nextError) {
       setError(resolveErrorMessage(nextError, t("status.enableFailed")));
     } finally {
-      setSaving(false);
+      setBusyAction(null);
     }
   }
 
   async function handleDisableNotifications() {
     if (!server || !token) return;
 
-    setSaving(true);
+    setBusyAction("disable");
     setError("");
+    setNotice("");
     try {
       const registration = await registerNotificationServiceWorker();
       const pushSubscription = await registration?.pushManager.getSubscription() ?? null;
@@ -345,7 +350,7 @@ function NotificationSubscriptionContent({
     } catch (nextError) {
       setError(resolveErrorMessage(nextError, t("status.disableFailed")));
     } finally {
-      setSaving(false);
+      setBusyAction(null);
     }
   }
 
@@ -355,8 +360,9 @@ function NotificationSubscriptionContent({
   ) {
     if (!subscription) return;
 
-    setSaving(true);
+    setBusyAction("preferences");
     setError("");
+    setNotice("");
     try {
       const updated = await updateNotificationSubscriptionPreferences(
         server,
@@ -368,7 +374,23 @@ function NotificationSubscriptionContent({
     } catch (nextError) {
       setError(resolveErrorMessage(nextError, t("status.preferencesFailed")));
     } finally {
-      setSaving(false);
+      setBusyAction(null);
+    }
+  }
+
+  async function handleTestNotification() {
+    if (!subscription) return;
+
+    setBusyAction("test");
+    setError("");
+    setNotice("");
+    try {
+      await sendTestNotification(server, token, subscription.subscription_id);
+      setNotice(t("status.testSent"));
+    } catch (nextError) {
+      setError(resolveErrorMessage(nextError, t("status.testFailed")));
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -455,6 +477,11 @@ function NotificationSubscriptionContent({
               {error}
             </p>
           ) : null}
+          {notice ? (
+            <p className="mt-3 text-sm text-emerald-700">
+              {notice}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -470,8 +497,22 @@ function NotificationSubscriptionContent({
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
-            {saving ? t(subscription ? "actions.disabling" : "actions.enabling") : t(subscription ? "actions.disable" : "actions.enable")}
+            {busyAction === "disable"
+              ? t("actions.disabling")
+              : busyAction === "enable"
+              ? t("actions.enabling")
+              : t(subscription ? "actions.disable" : "actions.enable")}
           </button>
+          {subscription ? (
+            <button
+              type="button"
+              onClick={handleTestNotification}
+              disabled={loading || saving}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busyAction === "test" ? t("actions.testing") : t("actions.test")}
+            </button>
+          ) : null}
         </div>
 
         {subscription ? (

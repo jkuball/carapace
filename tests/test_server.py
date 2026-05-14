@@ -221,6 +221,56 @@ def test_notification_preferences_patch_persists(client, auth_headers):
     assert stored[0].notification_prefs.attended_turn_completed is False
 
 
+def test_notification_test_endpoint_dispatches_owned_subscription(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+    srv._notification_router = AsyncMock()
+    srv._notification_router.dispatch_test = AsyncMock(return_value=True)
+
+    resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/test",
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"delivered": True}
+    dispatched = srv._notification_router.dispatch_test.await_args.kwargs["subscription"]
+    assert dispatched.id == subscription_id
+
+
+def test_notification_test_endpoint_returns_502_when_delivery_fails(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+    srv._notification_router = AsyncMock()
+    srv._notification_router.dispatch_test = AsyncMock(return_value=False)
+
+    resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/test",
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "Failed to deliver test notification"
+
+
 def test_notification_presence_updates_registry(client, auth_headers):
     create_resp = client.post(
         "/api/notifications/subscriptions",

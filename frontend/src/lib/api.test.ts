@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deleteNotificationSubscription, getVapidPublicKey } from "./api";
+import {
+  deleteNotificationSubscription,
+  getVapidPublicKey,
+  sendTestNotification,
+} from "./api";
 import {
   listNotificationSubscriptions,
   postNotificationSubscriptionPresence,
@@ -109,5 +113,29 @@ test("postNotificationSubscriptionPresence rejects failed heartbeats", async () 
         },
       ),
     /Failed to update notification subscription presence: 500/,
+  );
+});
+
+
+test("sendTestNotification surfaces backend detail messages on failure", async () => {
+  setFetch(
+    async () =>
+      new Response(
+        JSON.stringify({ detail: "Failed to deliver test notification" }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+  );
+
+  await assert.rejects(
+    () =>
+      sendTestNotification(
+        "https://carapace.example.test",
+        "token-1",
+        "sub-1",
+      ),
+    /Failed to deliver test notification/,
   );
 });

@@ -208,6 +208,45 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
     sender.send_batch.assert_not_awaited()
 
 
+async def test_notification_router_dispatch_test_targets_single_subscription(tmp_path) -> None:
+    store = NotificationStore(tmp_path)
+    sender = AsyncMock()
+    owner_key = derive_owner_key("token-1")
+    now = datetime.now(tz=UTC)
+    subscription = store.upsert_subscription(
+        owner_key=owner_key,
+        endpoint="https://push.example.test/sub-1",
+        p256dh="key-1",
+        auth="auth-1",
+        device_name="Phone",
+        notification_prefs=NotificationPreferences(
+            escalation_pending=False,
+            attended_turn_completed=False,
+            unattended_turn_completed=False,
+            unattended_turn_failed=False,
+        ),
+        ttl=timedelta(days=30),
+        now=now,
+    )
+    sender.send_batch = AsyncMock(return_value={subscription.id: True})
+    presence = NotificationPresenceRegistry(ttl=timedelta(seconds=60))
+    router = NotificationRouter(
+        store=store,
+        presence=presence,
+        sender=sender,
+        owner_key=owner_key,
+    )
+
+    delivered = await router.dispatch_test(subscription=subscription)
+
+    assert delivered is True
+    sender.send_batch.assert_awaited_once()
+    payload = sender.send_batch.await_args.args[1]
+    assert isinstance(payload, NotificationPayload)
+    assert payload.kind == "notification_test"
+    assert payload.notif_id == f"test:{subscription.id}"
+
+
 async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime.now(tz=UTC)

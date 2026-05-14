@@ -584,6 +584,10 @@ class NotificationSubscriptionResponse(BaseModel):
     preferences: NotificationPreferences
 
 
+class NotificationTestResponse(BaseModel):
+    delivered: bool
+
+
 class NotificationPresenceRequest(BaseModel):
     session_id: str
     client_type: NotificationClientType
@@ -710,6 +714,22 @@ async def patch_notification_subscription_preferences(
     updated = subscription.model_copy(update={"notification_prefs": request.apply(subscription.notification_prefs)})
     _notification_store.save_subscription(updated)
     return _notification_response(updated)
+
+
+@router.post(
+    "/notifications/subscriptions/{subscription_id}/test",
+    response_model=NotificationTestResponse,
+)
+async def test_notification_subscription(
+    subscription_id: str,
+    _token: str = Depends(_verify_token),
+) -> NotificationTestResponse:
+    _notification_store.cleanup_expired()
+    subscription = _owned_notification_subscription(subscription_id, _token)
+    delivered = await _notification_router.dispatch_test(subscription=subscription)
+    if not delivered:
+        raise HTTPException(status_code=502, detail="Failed to deliver test notification")
+    return NotificationTestResponse(delivered=True)
 
 
 @router.post("/notifications/subscriptions/{subscription_id}/presence")

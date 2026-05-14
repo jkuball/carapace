@@ -59,7 +59,9 @@
                 "loadFailed": "Failed to load notification settings.",
                 "enableFailed": "Failed to enable notifications.",
                 "disableFailed": "Failed to disable notifications.",
-                "preferencesFailed": "Failed to update notification preferences."
+                "preferencesFailed": "Failed to update notification preferences.",
+                "testFailed": "Failed to send test notification.",
+                "testSent": "Test notification sent."
             },
             "deviceName": {
                 "label": "Device name",
@@ -70,7 +72,9 @@
                 "enable": "Enable notifications",
                 "enabling": "Enabling…",
                 "disable": "Disable notifications",
-                "disabling": "Disabling…"
+                "disabling": "Disabling…",
+                "test": "Send test notification",
+                "testing": "Sending test notification…"
             },
             "preferences": {
                 "label": "Send notifications for",

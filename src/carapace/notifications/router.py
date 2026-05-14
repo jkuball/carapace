@@ -14,6 +14,7 @@ NotificationKind = Literal[
     "attended_turn_completed",
     "unattended_turn_completed",
     "unattended_turn_failed",
+    "notification_test",
     "notification_clear",
 ]
 
@@ -158,6 +159,21 @@ class NotificationRouter:
             + f" subscriptions={len(delivery.attempted_subscription_ids)}"
         )
         return delivery
+
+    async def dispatch_test(self, *, subscription: NotificationSubscription) -> bool:
+        device_name = subscription.device_name or "this browser"
+        payload = NotificationPayload(
+            kind="notification_test",
+            notif_id=f"test:{subscription.id}",
+            title="Test notification",
+            body=f"Push notifications are configured for {device_name}.",
+            session_id="",
+            actions=[{"action": "open", "title": "Open app"}],
+        )
+        results = await self._sender.send_batch([subscription], payload)
+        delivered = results.get(subscription.id, False)
+        logger.info(f"Notification test subscription={subscription.id} delivered={delivered}")
+        return delivered
 
     async def _dispatch(
         self,
