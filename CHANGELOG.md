@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.2 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 style: refine chat detail typography
+  ([`e31b011`](https://github.com/thiesgerken/carapace/commit/e31b0110c1dc39ae04dac64a3ae8aeffa59a3f02))
+
 ## v0.118.1 (2026-05-14)
 
 
