@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.0 (2026-05-14)
+
+
+### ✨ Features
+
+
+- ✨ feat: inject artificial tool responses upon interrupt
+  ([`d684e03`](https://github.com/thiesgerken/carapace/commit/d684e03460e9e634651db0c41c107deaeda2dbe5))
+
 ## v0.117.9 (2026-05-14)
 
 
