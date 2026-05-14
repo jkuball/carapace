@@ -324,7 +324,7 @@ export function Message({
         <div className="flex justify-end">
           <div
             className={cn(
-              "chat-copy-serif max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm",
+              "chat-copy-serif max-w-full rounded-2xl rounded-br-md px-3.5 py-2 text-sm md:max-w-[85%]",
               "bg-user-bubble text-user-bubble-fg",
             )}
           >
