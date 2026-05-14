@@ -143,22 +143,22 @@ function ThinkingBadge({
           )}
         />
         {streaming ? (
-          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-foreground/65 dark:text-foreground/70" />
         ) : (
-          <Brain className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <Brain className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
         )}
-        <span className="shrink-0 font-mono font-medium text-foreground/80">
+        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
           {streaming ? t("thinking.streaming") : t("thinking.complete")}
         </span>
         {meta.length > 0 && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-foreground/65 dark:text-foreground/70">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/75 dark:text-foreground/80">
             {meta.join(", ")}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="chat-copy-serif ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+        <div className="thinking-details tool-row-details ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
           <MarkdownContent content={content} />
         </div>
       )}

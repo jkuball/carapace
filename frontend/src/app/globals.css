@@ -74,6 +74,15 @@ body {
     font-size: 1.05rem;
   }
 
+  .session-chat-content .tool-row-details .prose {
+    font-size: 0.98rem;
+  }
+
+  .session-chat-content .thinking-details .prose {
+    font-size: inherit;
+    line-height: inherit;
+  }
+
   .session-chat-content .text-sm {
     font-size: 1rem;
     line-height: 1.6rem;

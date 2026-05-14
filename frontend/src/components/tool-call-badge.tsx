@@ -719,7 +719,7 @@ export function ToolCallBadge({
       </button>
 
       {open && (
-        <div className="ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-xs">
+        <div className="tool-row-details ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-xs">
           {isUseSkillTool && (
             <div className="text-muted-foreground">
               {t("details.activateSkillPromptPrefix")}{" "}
