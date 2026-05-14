@@ -63,6 +63,16 @@ body {
   font-family: var(--font-source-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .session-row-actions .session-row-action-button {
+    display: none;
+  }
+
+  .session-row-actions .session-row-action-active {
+    display: inline-flex;
+  }
+}
+
 /* Markdown prose styling */
 .prose {
   max-width: none;

@@ -321,7 +321,7 @@ export function Sidebar({
               </div>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-1 self-start">
+          <div className="session-row-actions flex shrink-0 items-center gap-1 self-start">
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -329,7 +329,8 @@ export function Sidebar({
             }}
             title={session.attributes.pinned ? tSidebar("actions.unpin") : tSidebar("actions.pin")}
             className={cn(
-              "rounded-md p-1.5 transition-colors",
+              "session-row-action-button rounded-md p-1.5 transition-colors",
+              session.attributes.pinned && "session-row-action-active",
               session.attributes.pinned
                 ? "text-sky-700 hover:bg-sky-100"
                 : "text-muted-foreground/0 group-hover:text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -344,7 +345,8 @@ export function Sidebar({
             }}
             title={session.attributes.favorite ? tSidebar("actions.unfavorite") : tSidebar("actions.favorite")}
             className={cn(
-              "rounded-md p-1.5 transition-colors",
+              "session-row-action-button rounded-md p-1.5 transition-colors",
+              session.attributes.favorite && "session-row-action-active",
               session.attributes.favorite
                 ? "text-amber-700 hover:bg-amber-100"
                 : "text-muted-foreground/0 group-hover:text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -371,7 +373,8 @@ export function Sidebar({
               }}
               title={session.attributes.archived ? tSidebar("actions.unarchive") : [tSidebar("actions.archive"), tSidebar("actions.shiftSkip")].join("\n")}
               className={cn(
-                "rounded-md p-1.5 transition-colors",
+                "session-row-action-button rounded-md p-1.5 transition-colors",
+                session.attributes.archived && "session-row-action-active",
                 session.attributes.archived
                   ? "text-violet-700 group-hover:text-emerald-900 hover:bg-emerald-100"
                   : "text-muted-foreground/0 group-hover:text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -397,7 +400,7 @@ export function Sidebar({
               ? tSidebar("actions.deleteEmpty")
               : [tSidebar("actions.delete"), tSidebar("actions.shiftSkip")].join("\n")}
             className={cn(
-              "rounded-md p-1.5 transition-colors",
+              "session-row-action-button rounded-md p-1.5 transition-colors",
               "text-muted-foreground/0 group-hover:text-muted-foreground",
               "hover:!text-destructive hover:bg-destructive/10",
             )}
