@@ -39,6 +39,13 @@ interface SidebarProps {
   onLoadMore?: () => void;
 }
 
+type SessionGroup = {
+  key: string;
+  label: string;
+  sessions: SessionInfo[];
+  sortValue: number;
+};
+
 function sandboxSummary(session: SessionInfo): SessionSandboxSnapshot | null {
   const sandbox = session.sandbox;
   if (!sandbox || sandbox.status === "missing") return null;
@@ -99,7 +106,7 @@ export function Sidebar({
   const { locale } = useAppLocale();
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const [referenceTime, setReferenceTime] = useState<number | null>(null);
+  const [referenceTime, setReferenceTime] = useState<number>(() => Date.now());
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
   const archivedSessions = sessions.filter((session) => session.attributes.archived);
 
@@ -115,18 +122,113 @@ export function Sidebar({
     };
   }, []);
 
+  function calendarDayNumber(date: Date): number {
+    return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+  }
+
+  function groupSessionsByAge(sectionSessions: SessionInfo[]): SessionGroup[] {
+    const groupedSessions = {
+      today: [] as SessionInfo[],
+      yesterday: [] as SessionInfo[],
+      last7Days: [] as SessionInfo[],
+      last30Days: [] as SessionInfo[],
+      unknown: [] as SessionInfo[],
+    };
+    const monthGroups = new Map<string, SessionGroup>();
+    const now = new Date(referenceTime);
+    const todayDayNumber = calendarDayNumber(now);
+    const currentYear = now.getFullYear();
+    const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
+    const monthYearFormatter = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" });
+
+    for (const session of sectionSessions) {
+      const parsed = Date.parse(session.last_active);
+      if (Number.isNaN(parsed)) {
+        groupedSessions.unknown.push(session);
+        continue;
+      }
+
+      const sessionDate = new Date(parsed);
+      const dayDiff = todayDayNumber - calendarDayNumber(sessionDate);
+
+      if (dayDiff <= 0) {
+        groupedSessions.today.push(session);
+        continue;
+      }
+
+      if (dayDiff === 1) {
+        groupedSessions.yesterday.push(session);
+        continue;
+      }
+
+      if (dayDiff <= 7) {
+        groupedSessions.last7Days.push(session);
+        continue;
+      }
+
+      if (dayDiff <= 30) {
+        groupedSessions.last30Days.push(session);
+        continue;
+      }
+
+      const year = sessionDate.getFullYear();
+      const month = sessionDate.getMonth();
+      const key = `${year}-${month}`;
+      const existingGroup = monthGroups.get(key);
+      if (existingGroup) {
+        existingGroup.sessions.push(session);
+        continue;
+      }
+
+      monthGroups.set(key, {
+        key,
+        label: year === currentYear ? monthFormatter.format(sessionDate) : monthYearFormatter.format(sessionDate),
+        sessions: [session],
+        sortValue: year * 12 + month,
+      });
+    }
+
+    const groups: SessionGroup[] = [
+      {
+        key: "today",
+        label: tSidebar("sections.today"),
+        sessions: groupedSessions.today,
+        sortValue: Number.MAX_SAFE_INTEGER,
+      },
+      {
+        key: "yesterday",
+        label: tSidebar("sections.yesterday"),
+        sessions: groupedSessions.yesterday,
+        sortValue: Number.MAX_SAFE_INTEGER - 1,
+      },
+      {
+        key: "last7Days",
+        label: tSidebar("sections.last7Days"),
+        sessions: groupedSessions.last7Days,
+        sortValue: Number.MAX_SAFE_INTEGER - 2,
+      },
+      {
+        key: "last30Days",
+        label: tSidebar("sections.last30Days"),
+        sessions: groupedSessions.last30Days,
+        sortValue: Number.MAX_SAFE_INTEGER - 3,
+      },
+      ...[...monthGroups.values()].sort((left, right) => right.sortValue - left.sortValue),
+      {
+        key: "unknown",
+        label: tSidebar("sections.unknownDate"),
+        sessions: groupedSessions.unknown,
+        sortValue: Number.MIN_SAFE_INTEGER,
+      },
+    ];
+
+    return groups.filter((group) => group.sessions.length > 0);
+  }
+
   function formatTime(iso: string): string {
     const parsed = Date.parse(iso);
     if (Number.isNaN(parsed)) {
       return iso;
-    }
-
-    if (referenceTime === null) {
-      return new Intl.DateTimeFormat(locale, {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(parsed);
     }
 
     const diff = referenceTime - parsed;
@@ -190,6 +292,17 @@ export function Sidebar({
         {unpinnedSessions.map(renderSessionRow)}
       </div>
     );
+  }
+
+  function renderSessionGroups(sectionSessions: SessionInfo[]) {
+    return groupSessionsByAge(sectionSessions).map((group) => (
+      <div key={group.key}>
+        <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          {group.label}
+        </div>
+        {renderSessionSection(group.sessions)}
+      </div>
+    ));
   }
 
   function renderSessionRow(session: SessionInfo) {
@@ -482,13 +595,13 @@ export function Sidebar({
       {/* Session list */}
       <div ref={scrollRootRef} className="flex-1 overflow-y-auto px-3 py-2">
         <div className="space-y-4">
-          {renderSessionSection(activeSessions)}
+          {renderSessionGroups(activeSessions)}
           {archivedSessions.length > 0 ? (
-            <div>
+            <div className="space-y-4">
               <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 {tSidebar("sections.archived")}
               </div>
-              {renderSessionSection(archivedSessions)}
+              {renderSessionGroups(archivedSessions)}
             </div>
           ) : null}
           {sessions.length === 0 && !loading && (

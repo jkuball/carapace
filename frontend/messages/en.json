@@ -627,7 +627,12 @@
             "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
         },
         "sections": {
-            "archived": "Archived"
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "last7Days": "Last 7 Days",
+            "last30Days": "Last 30 Days",
+            "archived": "Archived",
+            "unknownDate": "Unknown Date"
         },
         "empty": "No sessions yet",
         "loadingMore": "Loading more sessions"

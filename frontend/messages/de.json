@@ -627,7 +627,12 @@
             "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten."
         },
         "sections": {
-            "archived": "Archiviert"
+            "today": "Heute",
+            "yesterday": "Gestern",
+            "last7Days": "Letzte 7 Tage",
+            "last30Days": "Letzte 30 Tage",
+            "archived": "Archiviert",
+            "unknownDate": "Unbekanntes Datum"
         },
         "empty": "Noch keine Sitzungen",
         "loadingMore": "Weitere Sitzungen werden geladen"
