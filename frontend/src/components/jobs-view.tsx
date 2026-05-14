@@ -907,91 +907,89 @@ export function JobsView({
                   </div>
                 ) : null}
 
-                <div className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
-                  <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.persistentSession")}</span>
-                  <div className="relative">
-                    <input
-                      list="jobs-session-options"
-                      value={selectedSessionValue}
-                      onChange={(event) => {
-                        const persistentSessionId = event.target.value;
-                        updateDraft({
-                          persistent_session_id: persistentSessionId,
-                          unattended: persistentSessionId.trim() ? false : draft.unattended,
-                          private: persistentSessionId.trim() ? false : draft.private,
-                          ask_mode: persistentSessionId.trim() ? false : draft.ask_mode,
-                          yolo_mode: persistentSessionId.trim() ? false : draft.yolo_mode,
-                          agent_model_name: persistentSessionId.trim() ? null : draft.agent_model_name,
-                          sentinel_model_name: persistentSessionId.trim() ? null : draft.sentinel_model_name,
-                          title_model_name: persistentSessionId.trim() ? null : draft.title_model_name,
-                        });
-                      }}
-                      placeholder={draft.unattended ? t("fields.persistentSessionDisabled") : t("placeholders.persistentSession")}
-                      disabled={saving || running || draft.unattended || !usePersistentSession}
-                      className="w-full rounded-xl border border-border bg-background px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
-                    />
-                    {selectedSessionValue ? (
-                      <button
-                        type="button"
-                        onClick={() => {
+                {usePersistentSession ? (
+                  <div className="space-y-1.5 rounded-2xl border border-border bg-muted/35 p-4">
+                    <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.persistentSession")}</span>
+                    <div className="relative">
+                      <input
+                        list="jobs-session-options"
+                        value={selectedSessionValue}
+                        onChange={(event) => {
+                          const persistentSessionId = event.target.value;
                           updateDraft({
-                            persistent_session_id: "",
+                            persistent_session_id: persistentSessionId,
+                            unattended: persistentSessionId.trim() ? false : draft.unattended,
+                            private: persistentSessionId.trim() ? false : draft.private,
+                            ask_mode: persistentSessionId.trim() ? false : draft.ask_mode,
+                            yolo_mode: persistentSessionId.trim() ? false : draft.yolo_mode,
+                            agent_model_name: persistentSessionId.trim() ? null : draft.agent_model_name,
+                            sentinel_model_name: persistentSessionId.trim() ? null : draft.sentinel_model_name,
+                            title_model_name: persistentSessionId.trim() ? null : draft.title_model_name,
                           });
                         }}
-                        aria-label={t("actions.clearPersistentSession")}
-                        disabled={saving || running || draft.unattended || !usePersistentSession}
-                        className="absolute top-1/2 right-2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                  <datalist id="jobs-session-options">
-                    {selectableSessions.map((session) => (
-                      <option key={session.session_id} value={session.session_id} label={formatSessionOption(session)} />
-                    ))}
-                  </datalist>
-                  <p className="text-xs text-muted-foreground">
-                    {draft.unattended
-                      ? t("fields.persistentSessionDisabled")
-                      : !usePersistentSession
-                        ? t("fields.persistentSessionUncheckedHelp")
+                        placeholder={draft.unattended ? t("fields.persistentSessionDisabled") : t("placeholders.persistentSession")}
+                        disabled={saving || running || draft.unattended}
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 pr-10 font-mono text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      {selectedSessionValue ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateDraft({
+                              persistent_session_id: "",
+                            });
+                          }}
+                          aria-label={t("actions.clearPersistentSession")}
+                          disabled={saving || running || draft.unattended}
+                          className="absolute top-1/2 right-2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <datalist id="jobs-session-options">
+                      {selectableSessions.map((session) => (
+                        <option key={session.session_id} value={session.session_id} label={formatSessionOption(session)} />
+                      ))}
+                    </datalist>
+                    <p className="text-xs text-muted-foreground">
+                      {draft.unattended
+                        ? t("fields.persistentSessionDisabled")
                         : hasPersistentSessionId
                           ? t("fields.persistentSessionActiveHelp")
                           : t("fields.persistentSessionMissingIdHelp")}
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
-                  <div>
-                    <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.models")}</span>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {usePersistentSession ? t("fields.modelsDisabled") : t("fields.modelsHelp")}
                     </p>
                   </div>
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.agentModel")}</span>
-                      <ModelPicker
-                        value={draft.agent_model_name}
-                        entries={agentModelOptions}
-                        onChange={(value) => updateDraft({ agent_model_name: value })}
-                        disabled={saving || running || usePersistentSession}
-                        defaultLabel={defaultModelLabel}
-                      />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.sentinelModel")}</span>
-                      <ModelPicker
-                        value={draft.sentinel_model_name}
-                        entries={sentinelModelOptions}
-                        onChange={(value) => updateDraft({ sentinel_model_name: value })}
-                        disabled={saving || running || usePersistentSession}
-                        defaultLabel={defaultModelLabel}
-                      />
-                    </label>
+                ) : (
+                  <div className="space-y-3 rounded-2xl border border-border bg-muted/35 p-4">
+                    <div>
+                      <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.models")}</span>
+                      <p className="mt-1 text-xs text-muted-foreground">{t("fields.modelsHelp")}</p>
+                    </div>
+                    <div className="grid gap-3 xl:grid-cols-2">
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.agentModel")}</span>
+                        <ModelPicker
+                          value={draft.agent_model_name}
+                          entries={agentModelOptions}
+                          onChange={(value) => updateDraft({ agent_model_name: value })}
+                          disabled={saving || running}
+                          defaultLabel={defaultModelLabel}
+                        />
+                      </label>
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("fields.sentinelModel")}</span>
+                        <ModelPicker
+                          value={draft.sentinel_model_name}
+                          entries={sentinelModelOptions}
+                          onChange={(value) => updateDraft({ sentinel_model_name: value })}
+                          disabled={saving || running}
+                          defaultLabel={defaultModelLabel}
+                        />
+                      </label>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="mt-4">
