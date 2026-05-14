@@ -66,6 +66,7 @@ from carapace.notifications import (
     NotificationStore,
     WebPushSender,
     derive_owner_key,
+    derive_vapid_public_key,
     ensure_vapid_config,
 )
 from carapace.sandbox.manager import SandboxManager
@@ -1554,7 +1555,9 @@ async def get_meta(_token: str = Depends(_verify_token)) -> ServerMeta:
 
 @router.get("/config/vapid-public-key", response_model=VapidPublicKeyResponse)
 async def get_vapid_public_key() -> VapidPublicKeyResponse:
-    vapid_public_key = _config.notifications.vapid_public_key
+    vapid_private_key = _config.notifications.vapid_private_key
+    assert vapid_private_key is not None
+    vapid_public_key = derive_vapid_public_key(vapid_private_key)
     return VapidPublicKeyResponse(vapid_public_key=vapid_public_key)
 
 

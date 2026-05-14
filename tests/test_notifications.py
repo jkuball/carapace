@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+from py_vapid import Vapid01
 from pywebpush import WebPushException
 
 from carapace.models import NotificationPreferences, NotificationsConfig, NotificationSubscription
 from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
 from carapace.notifications.router import NotificationDeliveryResult, NotificationPayload, NotificationRouter
 from carapace.notifications.sender import WebPushSender
-from carapace.notifications.vapid import ensure_vapid_config
+from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 
 
 def test_notification_subscription_defaults_last_heartbeat() -> None:
@@ -338,22 +339,22 @@ def test_ensure_vapid_config_generates_and_reuses_persisted_keys(tmp_path) -> No
     generated = ensure_vapid_config(config, tmp_path)
     reused = ensure_vapid_config(NotificationsConfig(), tmp_path)
 
-    assert generated.vapid_public_key
     assert generated.vapid_private_key is not None
     assert generated.vapid_subject == "mailto:carapace@localhost"
     assert (tmp_path / "notifications" / "vapid_private_key.pem").exists()
-    assert reused.vapid_public_key == generated.vapid_public_key
     assert reused.vapid_private_key == generated.vapid_private_key
+    assert derive_vapid_public_key(reused.vapid_private_key) == derive_vapid_public_key(generated.vapid_private_key)
 
 
-def test_ensure_vapid_config_keeps_explicit_keys_and_defaults_subject(tmp_path) -> None:
-    config = NotificationsConfig(
-        vapid_public_key="public-key",
-        vapid_private_key="private-key",
-    )
+def test_ensure_vapid_config_keeps_explicit_private_key_and_defaults_subject(tmp_path) -> None:
+    vapid = Vapid01()
+    vapid.generate_keys()
+    private_key = vapid.private_pem().decode("utf-8")
+
+    config = NotificationsConfig(vapid_private_key=private_key)
 
     resolved = ensure_vapid_config(config, tmp_path)
 
-    assert resolved.vapid_public_key == "public-key"
-    assert resolved.vapid_private_key == "private-key"
+    assert resolved.vapid_private_key == private_key.strip()
     assert resolved.vapid_subject == "mailto:carapace@localhost"
+    assert derive_vapid_public_key(resolved.vapid_private_key) == derive_vapid_public_key(private_key)

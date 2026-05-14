@@ -22,6 +22,7 @@ from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
 from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
+from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import CredentialAccessEntry
@@ -149,21 +150,25 @@ def test_meta_returns_version(client, auth_headers, monkeypatch):
 
 
 def test_vapid_public_key_is_public_when_configured(client):
-    srv._config.notifications.vapid_public_key = "test-vapid-public-key"
+    configured = ensure_vapid_config(srv._config.notifications, srv._data_dir)
+    assert configured.vapid_private_key is not None
+    srv._config.notifications = configured
 
     resp = client.get("/api/config/vapid-public-key")
 
     assert resp.status_code == 200
-    assert resp.json() == {"vapid_public_key": "test-vapid-public-key"}
+    assert resp.json() == {"vapid_public_key": derive_vapid_public_key(configured.vapid_private_key)}
 
 
 def test_vapid_public_key_is_public_when_generated(client):
-    srv._config.notifications.vapid_public_key = "generated-vapid-public-key"
+    generated = ensure_vapid_config(srv._config.notifications, srv._data_dir)
+    assert generated.vapid_private_key is not None
+    srv._config.notifications = generated
 
     resp = client.get("/api/config/vapid-public-key")
 
     assert resp.status_code == 200
-    assert resp.json() == {"vapid_public_key": "generated-vapid-public-key"}
+    assert resp.json() == {"vapid_public_key": derive_vapid_public_key(generated.vapid_private_key)}
 
 
 def test_notification_subscription_roundtrip(client, auth_headers):

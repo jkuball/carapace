@@ -17,19 +17,14 @@ def ensure_vapid_config(config: NotificationsConfig, data_dir: Path) -> Notifica
 
     vapid_subject = config.vapid_subject or _DEFAULT_VAPID_SUBJECT
     vapid_private_key = config.vapid_private_key
-    vapid_public_key = config.vapid_public_key
 
-    if vapid_private_key and vapid_public_key:
+    if vapid_private_key:
         return config.model_copy(
             update={
                 "vapid_private_key": vapid_private_key,
-                "vapid_public_key": vapid_public_key,
                 "vapid_subject": vapid_subject,
             }
         )
-
-    if vapid_private_key or vapid_public_key:
-        raise ValueError("notifications.vapid_public_key and notifications.vapid_private_key must be set together")
 
     private_key_path = notifications_dir / "vapid_private_key.pem"
     if private_key_path.exists():
@@ -39,14 +34,17 @@ def ensure_vapid_config(config: NotificationsConfig, data_dir: Path) -> Notifica
         vapid.generate_keys()
         private_key_path.write_bytes(vapid.private_pem())
 
-    generated_public_key = _encode_public_key(vapid)
     return config.model_copy(
         update={
             "vapid_private_key": private_key_path.read_text(encoding="utf-8"),
-            "vapid_public_key": generated_public_key,
             "vapid_subject": vapid_subject,
         }
     )
+
+
+def derive_vapid_public_key(vapid_private_key: str) -> str:
+    vapid = Vapid01.from_pem(vapid_private_key.strip().encode("utf-8"))
+    return _encode_public_key(vapid)
 
 
 def _encode_public_key(vapid: Vapid01) -> str:

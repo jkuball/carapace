@@ -374,7 +374,6 @@ class NotificationsConfig(BaseModel):
     presence_ttl_seconds: int = 60
     subscription_ttl_days: int = 30
     default_preferences: NotificationPreferences = Field(default_factory=NotificationPreferences)
-    vapid_public_key: str | None = None
     vapid_private_key: str | None = None
     vapid_subject: str | None = None
     send_timeout_seconds: int = 10
@@ -389,8 +388,6 @@ class NotificationsConfig(BaseModel):
             raise ValueError("notifications.presence_ttl_seconds must be > 0")
         if self.subscription_ttl_days <= 0:
             raise ValueError("notifications.subscription_ttl_days must be > 0")
-        if self.vapid_public_key is not None:
-            self.vapid_public_key = self.vapid_public_key.strip() or None
         if self.vapid_private_key is not None:
             self.vapid_private_key = self.vapid_private_key.strip() or None
         if self.vapid_subject is not None:

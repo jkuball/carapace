@@ -100,9 +100,8 @@ notifications:
   enabled: true
   presence_ttl_seconds: 60
   subscription_ttl_days: 30
-  # Optional. If omitted, carapace generates and persists a keypair automatically.
-  # vapid_public_key: "<public-key>"
-  # vapid_private_key: "<private-key-or-pem-path>"
+  # Optional. If omitted, carapace generates and persists a private key automatically.
+  # vapid_private_key: "<private-key-pem>"
   # Optional. Defaults to "mailto:carapace@localhost".
   # vapid_subject: "mailto:you@example.com"
   send_timeout_seconds: 10
@@ -119,9 +118,9 @@ notifications:
 
 Notes:
 
-- If `vapid_public_key` and `vapid_private_key` are omitted, carapace generates a keypair on startup and reuses it from `data/notifications/vapid_private_key.pem` on later restarts.
+- If `vapid_private_key` is omitted, carapace generates one on startup and reuses it from `data/notifications/vapid_private_key.pem` on later restarts.
 - If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
-- If you set VAPID keys explicitly, set both `vapid_public_key` and `vapid_private_key`.
+- The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
 - Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
 - Notification subscriptions are grouped by an `owner_key` derived from the current `CARAPACE_TOKEN`. If you rotate that token, existing notification subscriptions no longer match and clients must subscribe again.
 

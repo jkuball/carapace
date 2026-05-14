@@ -129,9 +129,8 @@ notifications:
   enabled: true
   presence_ttl_seconds: 60
   subscription_ttl_days: 30
-  # Optional. If omitted, carapace generates and persists a keypair automatically.
-  # vapid_public_key: "<public-key>"
-  # vapid_private_key: "<private-key-or-pem-path>"
+  # Optional. If omitted, carapace generates and persists a private key automatically.
+  # vapid_private_key: "<private-key-pem>"
   # Optional. Defaults to "mailto:carapace@localhost".
   # vapid_subject: "mailto:you@example.com"
   send_timeout_seconds: 10
@@ -148,10 +147,10 @@ notifications:
 
 VAPID behavior:
 
-- If `vapid_public_key` and `vapid_private_key` are omitted, carapace generates a keypair on startup.
-- Generated keys are persisted at `$CARAPACE_DATA_DIR/notifications/vapid_private_key.pem` and reused on later restarts.
+- If `vapid_private_key` is omitted, carapace generates one on startup.
+- Generated private keys are persisted at `$CARAPACE_DATA_DIR/notifications/vapid_private_key.pem` and reused on later restarts.
 - If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
-- If you set VAPID keys explicitly, set both `vapid_public_key` and `vapid_private_key`.
+- The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
 
 ## API
 
