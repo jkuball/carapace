@@ -146,7 +146,7 @@ test("push payload falls back to text parsing and default assets", async () => {
   assert.equal(options.icon, "/pwa-192x192.png");
   assert.equal(options.badge, "/pwa-192x192.png");
   assert.equal(options.requireInteraction, false);
-  assert.equal(options.renotify, false);
+  assert.equal("renotify" in options, false);
 });
 
 test("push test payload uses an attention-grabbing notification style", async () => {
@@ -171,7 +171,7 @@ test("push test payload uses an attention-grabbing notification style", async ()
   assert.equal(title, "Test notification");
   assert.equal(options.tag, undefined);
   assert.equal(options.requireInteraction, true);
-  assert.equal(options.renotify, false);
+  assert.equal("renotify" in options, false);
 });
 
 test("notificationclick focuses existing client and navigates to session", async () => {

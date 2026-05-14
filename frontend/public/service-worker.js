@@ -90,7 +90,6 @@ self.addEventListener("push", (event) => {
       const requireInteraction =
         payload.kind === "escalation_pending" ||
         payload.kind === "notification_test";
-      const renotify = payload.kind === "notification_test" && Boolean(tag);
       if (payload.kind === "notification_clear") {
         console.debug("[carapace-sw] clear notification", {
           tag: tag || null,
@@ -106,7 +105,6 @@ self.addEventListener("push", (event) => {
         tag: tag || null,
         sessionId: payload.session_id || null,
         requireInteraction,
-        renotify,
       });
       await self.registration.showNotification(payload.title || "carapace", {
         body: payload.body || "",
@@ -118,7 +116,6 @@ self.addEventListener("push", (event) => {
             : "/pwa-192x192.png",
         actions: Array.isArray(payload.actions) ? payload.actions : [],
         requireInteraction,
-        renotify,
         data: {
           sessionId: payload.session_id || null,
           notifId: payload.notif_id || null,
