@@ -9,7 +9,11 @@ from carapace.notifications.router import (
 )
 from carapace.notifications.sender import WebPushSender
 from carapace.notifications.store import NotificationStore, derive_owner_key
-from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
+from carapace.notifications.vapid import (
+    derive_vapid_public_key,
+    ensure_vapid_config,
+    load_vapid_private_key,
+)
 
 __all__ = [
     "NotificationPayload",
@@ -23,4 +27,5 @@ __all__ = [
     "derive_owner_key",
     "derive_vapid_public_key",
     "ensure_vapid_config",
+    "load_vapid_private_key",
 ]

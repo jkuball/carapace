@@ -44,7 +44,7 @@
         },
         "notifications": {
             "title": "Push-Benachrichtigungen",
-            "description": "Liefert Eskalationen und Turn-Ergebnisse an diesen Browser oder die installierte PWA.",
+            "description": "Liefert Eskalationen und Zug-Ergebnisse an diesen Browser oder die installierte PWA.",
             "status": {
                 "loading": "Benachrichtigungsunterstützung wird geprüft…",
                 "loadingShort": "Prüfung",
@@ -79,7 +79,7 @@
             "preferences": {
                 "label": "Benachrichtigungen senden für",
                 "escalation_pending": "Eskalationen, die Freigabe brauchen",
-                "attended_turn_completed": "Begleitete Sitzungen, wenn ein Turn endet",
+                "attended_turn_completed": "Begleitete Sitzungen, wenn ein Zug endet",
                 "unattended_turn_completed": "Unbeaufsichtigte Jobs mit erfolgreichem Abschluss",
                 "unattended_turn_failed": "Unbeaufsichtigte Jobs mit Fehler"
             },

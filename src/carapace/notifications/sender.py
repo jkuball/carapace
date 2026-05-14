@@ -5,12 +5,14 @@ import json
 from collections.abc import Callable
 
 from loguru import logger
+from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 from requests import RequestException
 
 from carapace.models import NotificationSubscription
 from carapace.notifications.router import NotificationPayload
 from carapace.notifications.store import NotificationStore
+from carapace.notifications.vapid import load_vapid_private_key
 
 
 class WebPushSender:
@@ -28,7 +30,9 @@ class WebPushSender:
         push_func: Callable[..., object] = webpush,
     ) -> None:
         self._store = store
-        self._vapid_private_key = vapid_private_key
+        self._vapid_private_key: Vapid01 | None = (
+            load_vapid_private_key(vapid_private_key) if vapid_private_key else None
+        )
         self._vapid_subject = vapid_subject
         self._timeout_seconds = timeout_seconds
         self._retry_attempts = retry_attempts

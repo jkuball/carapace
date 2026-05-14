@@ -19,9 +19,10 @@ def ensure_vapid_config(config: NotificationsConfig, data_dir: Path) -> Notifica
     vapid_private_key = config.vapid_private_key
 
     if vapid_private_key:
+        vapid = load_vapid_private_key(vapid_private_key)
         return config.model_copy(
             update={
-                "vapid_private_key": vapid_private_key,
+                "vapid_private_key": _private_key_pem(vapid),
                 "vapid_subject": vapid_subject,
             }
         )
@@ -36,15 +37,29 @@ def ensure_vapid_config(config: NotificationsConfig, data_dir: Path) -> Notifica
 
     return config.model_copy(
         update={
-            "vapid_private_key": private_key_path.read_text(encoding="utf-8"),
+            "vapid_private_key": _private_key_pem(vapid),
             "vapid_subject": vapid_subject,
         }
     )
 
 
 def derive_vapid_public_key(vapid_private_key: str) -> str:
-    vapid = Vapid01.from_pem(vapid_private_key.strip().encode("utf-8"))
+    vapid = load_vapid_private_key(vapid_private_key)
     return _encode_public_key(vapid)
+
+
+def load_vapid_private_key(vapid_private_key: str) -> Vapid01:
+    normalized = vapid_private_key.strip()
+    private_key_path = Path(normalized).expanduser()
+    if private_key_path.is_file():
+        return Vapid01.from_file(str(private_key_path))
+    if "BEGIN PRIVATE KEY" in normalized:
+        return Vapid01.from_pem(normalized.encode("utf-8"))
+    return Vapid01.from_string(normalized)
+
+
+def _private_key_pem(vapid: Vapid01) -> str:
+    return vapid.private_pem().decode("utf-8").strip()
 
 
 def _encode_public_key(vapid: Vapid01) -> str:

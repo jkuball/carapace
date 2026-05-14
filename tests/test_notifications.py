@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,6 +12,12 @@ from carapace.notifications import NotificationPresenceRegistry, NotificationSto
 from carapace.notifications.router import NotificationDeliveryResult, NotificationPayload, NotificationRouter
 from carapace.notifications.sender import WebPushSender
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
+
+
+def _generated_private_key_pem() -> str:
+    vapid = Vapid01()
+    vapid.generate_keys()
+    return vapid.private_pem().decode("utf-8").strip()
 
 
 def test_notification_subscription_defaults_last_heartbeat() -> None:
@@ -269,7 +276,7 @@ async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
 
     sender = WebPushSender(
         store=store,
-        vapid_private_key="private-key",
+        vapid_private_key=_generated_private_key_pem(),
         vapid_subject="mailto:test@example.com",
         timeout_seconds=10,
         retry_attempts=0,
@@ -309,7 +316,7 @@ async def test_web_push_sender_skips_oversized_payload(tmp_path) -> None:
 
     sender = WebPushSender(
         store=store,
-        vapid_private_key="private-key",
+        vapid_private_key=_generated_private_key_pem(),
         vapid_subject="mailto:test@example.com",
         timeout_seconds=10,
         retry_attempts=0,
@@ -358,3 +365,61 @@ def test_ensure_vapid_config_keeps_explicit_private_key_and_defaults_subject(tmp
     assert resolved.vapid_private_key == private_key.strip()
     assert resolved.vapid_subject == "mailto:carapace@localhost"
     assert derive_vapid_public_key(resolved.vapid_private_key) == derive_vapid_public_key(private_key)
+
+
+def test_ensure_vapid_config_accepts_legacy_raw_private_key(tmp_path) -> None:
+    vapid = Vapid01()
+    vapid.generate_keys()
+    raw_private_key = vapid.private_key.private_numbers().private_value.to_bytes(32, "big")
+    encoded_private_key = base64.urlsafe_b64encode(raw_private_key).rstrip(b"=").decode("ascii")
+
+    resolved = ensure_vapid_config(NotificationsConfig(vapid_private_key=encoded_private_key), tmp_path)
+
+    assert resolved.vapid_private_key.startswith("-----BEGIN PRIVATE KEY-----")
+    assert derive_vapid_public_key(resolved.vapid_private_key) == derive_vapid_public_key(encoded_private_key)
+
+
+async def test_web_push_sender_passes_parsed_vapid_key_to_pywebpush(tmp_path) -> None:
+    store = NotificationStore(tmp_path)
+    subscription = store.upsert_subscription(
+        owner_key=derive_owner_key("token-1"),
+        endpoint="https://push.example.test/sub-1",
+        p256dh="key-1",
+        auth="auth-1",
+        device_name="Phone",
+        notification_prefs=NotificationPreferences(),
+        ttl=timedelta(days=30),
+        now=datetime.now(tz=UTC),
+    )
+    captured_private_key: object | None = None
+
+    def _capture_push(**kwargs: object) -> object:
+        nonlocal captured_private_key
+        captured_private_key = kwargs["vapid_private_key"]
+        return object()
+
+    sender = WebPushSender(
+        store=store,
+        vapid_private_key=_generated_private_key_pem(),
+        vapid_subject="mailto:test@example.com",
+        timeout_seconds=10,
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+        max_payload_bytes=4096,
+        delivery_ttl_seconds=600,
+        push_func=_capture_push,
+    )
+
+    sent = await sender.send(
+        subscription,
+        NotificationPayload(
+            kind="attended_turn_completed",
+            notif_id="done:session-1:1:attended_turn_completed",
+            title="Done",
+            body="Completed",
+            session_id="session-1",
+        ),
+    )
+
+    assert sent is True
+    assert isinstance(captured_private_key, Vapid01)
