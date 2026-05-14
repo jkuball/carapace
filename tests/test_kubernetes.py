@@ -422,6 +422,37 @@ async def test_resume_sandbox():
 
 
 @pytest.mark.asyncio
+async def test_exec_with_env_uses_non_login_shell() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock()
+
+    completed = MagicMock(stdout=b"ok", stderr=b"", returncode=0)
+    pod = MagicMock()
+    pod.exec = AsyncMock(return_value=completed)
+
+    with patch("carapace.sandbox.kubernetes.Pod.get", AsyncMock(return_value=pod)):
+        result = await rt.exec(
+            "carapace-sandbox-abc-0",
+            "weather --daily",
+            env={"HA_ACCESS_TOKEN": "secret"},
+            workdir="/workspace",
+        )
+
+    assert result.exit_code == 0
+    assert result.output == "ok"
+    pod.exec.assert_awaited_once_with(
+        [
+            "bash",
+            "-c",
+            "env HA_ACCESS_TOKEN=secret bash -c 'cd /workspace && weather --daily'",
+        ],
+        container="sandbox",
+        check=False,
+        capture_output=True,
+    )
+
+
+@pytest.mark.asyncio
 async def test_destroy_sandbox():
     rt = _make_runtime()
     rt._delete_sts_if_exists = AsyncMock()
