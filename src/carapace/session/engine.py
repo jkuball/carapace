@@ -204,12 +204,27 @@ class SessionEngine(SessionTurnMixin):
 
     async def clear_pending_notifications(self, session_id: str) -> None:
         active = self._active.get(session_id)
-        if active is None or self._notification_router is None or not active.pending_notification_ids:
+        if active is None or self._notification_router is None or not active.pending_notifications:
             return
-        pending_notification_ids = sorted(active.pending_notification_ids)
-        active.pending_notification_ids.clear()
-        for notif_id in pending_notification_ids:
-            await self._notification_router.clear_notifications(session_id=session_id, notif_id=notif_id)
+        for notif_id in sorted(active.pending_notifications):
+            await self._clear_pending_notification(active, session_id, notif_id)
+
+    async def _clear_pending_notification(self, active: ActiveSession, session_id: str, notif_id: str) -> None:
+        if self._notification_router is None:
+            return
+        pending_subscription_ids = active.pending_notifications.get(notif_id)
+        if not pending_subscription_ids:
+            return
+        cleared = await self._notification_router.clear_notifications(
+            session_id=session_id,
+            notif_id=notif_id,
+            subscription_ids=set(pending_subscription_ids),
+        )
+        remaining_subscription_ids = pending_subscription_ids - cleared.delivered_subscription_ids
+        if remaining_subscription_ids:
+            active.pending_notifications[notif_id] = remaining_subscription_ids
+            return
+        active.pending_notifications.pop(notif_id, None)
 
     @property
     def data_dir(self) -> Path:
@@ -1630,15 +1645,13 @@ class SessionEngine(SessionTurnMixin):
                     title="Action Required",
                     body=_escalation_notification_body(subject, kind),
                 )
-                if delivered > 0:
-                    active.pending_notification_ids.add(notif_id)
+                if delivered.delivered_subscription_ids:
+                    active.pending_notifications[notif_id] = delivered.delivered_subscription_ids
             # Block until a subscriber responds
             while True:
                 msg = await active.escalation_queue.get()
                 if msg is None:
-                    if self._notification_router is not None and notif_id in active.pending_notification_ids:
-                        await self._notification_router.clear_notifications(session_id=session_id, notif_id=notif_id)
-                        active.pending_notification_ids.discard(notif_id)
+                    await self._clear_pending_notification(active, session_id, notif_id)
                     active.pending_escalations.clear()
                     return UserEscalationDecision(allowed=False)
                 if msg.request_id == request_id:
@@ -1673,9 +1686,7 @@ class SessionEngine(SessionTurnMixin):
                     active.pending_escalations = [
                         p for p in active.pending_escalations if p["request_id"] != request_id
                     ]
-                    if self._notification_router is not None and notif_id in active.pending_notification_ids:
-                        await self._notification_router.clear_notifications(session_id=session_id, notif_id=notif_id)
-                        active.pending_notification_ids.discard(notif_id)
+                    await self._clear_pending_notification(active, session_id, notif_id)
                     return UserEscalationDecision(allowed=decision != "deny", message=message)
 
         return _escalate

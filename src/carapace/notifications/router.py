@@ -54,6 +54,12 @@ class NotificationPayload:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class NotificationDeliveryResult:
+    attempted_subscription_ids: set[str]
+    delivered_subscription_ids: set[str]
+
+
 class NotificationSender(Protocol):
     async def send_batch(
         self,
@@ -83,7 +89,7 @@ class NotificationRouter:
         request_id: str,
         title: str,
         body: str,
-    ) -> int:
+    ) -> NotificationDeliveryResult:
         notif_id = build_escalation_notification_id(session_id, request_id)
         return await self._dispatch(
             session_id=session_id,
@@ -107,7 +113,7 @@ class NotificationRouter:
         kind: TurnOutcomeKind,
         title: str,
         body: str,
-    ) -> int:
+    ) -> NotificationDeliveryResult:
         notif_id = build_turn_outcome_notification_id(session_id, assistant_event_index, kind)
         return await self._dispatch(
             session_id=session_id,
@@ -123,10 +129,18 @@ class NotificationRouter:
             suppress_when_active=True,
         )
 
-    async def clear_notifications(self, *, session_id: str, notif_id: str) -> int:
+    async def clear_notifications(
+        self,
+        *,
+        session_id: str,
+        notif_id: str,
+        subscription_ids: set[str] | None = None,
+    ) -> NotificationDeliveryResult:
         subscriptions = self._store.list_subscriptions(owner_key=self._owner_key)
+        if subscription_ids is not None:
+            subscriptions = [subscription for subscription in subscriptions if subscription.id in subscription_ids]
         if not subscriptions:
-            return 0
+            return NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
         results = await self._sender.send_batch(
             subscriptions,
             NotificationPayload(
@@ -137,9 +151,13 @@ class NotificationRouter:
                 session_id=session_id,
             ),
         )
-        delivered = sum(1 for sent in results.values() if sent)
-        logger.info(f"Notification clear session={session_id} notif_id={notif_id} delivered={delivered}")
-        return delivered
+        delivery = _delivery_result(subscriptions, results)
+        logger.info(
+            f"Notification clear session={session_id} notif_id={notif_id}"
+            + f" delivered={len(delivery.delivered_subscription_ids)}"
+            + f" subscriptions={len(delivery.attempted_subscription_ids)}"
+        )
+        return delivery
 
     async def _dispatch(
         self,
@@ -153,14 +171,14 @@ class NotificationRouter:
         ],
         payload: NotificationPayload,
         suppress_when_active: bool,
-    ) -> int:
+    ) -> NotificationDeliveryResult:
         self._store.cleanup_expired()
         if suppress_when_active and self._presence.is_session_actively_handled(session_id):
             logger.info(
                 f"Notification suppressed session={session_id} kind={kind}"
                 + f" reason=active_presence notif_id={payload.notif_id}"
             )
-            return 0
+            return NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
 
         subscriptions = [
             subscription
@@ -168,15 +186,32 @@ class NotificationRouter:
             if _preferences_allow(subscription.notification_prefs, kind)
         ]
         if not subscriptions:
-            return 0
+            return NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
 
         results = await self._sender.send_batch(subscriptions, payload)
-        delivered = sum(1 for sent in results.values() if sent)
+        delivery = _delivery_result(subscriptions, results)
         logger.info(
             f"Notification dispatch session={session_id} kind={kind}"
-            + f" notif_id={payload.notif_id} delivered={delivered} subscriptions={len(subscriptions)}"
+            + f" notif_id={payload.notif_id} delivered={len(delivery.delivered_subscription_ids)}"
+            + f" subscriptions={len(delivery.attempted_subscription_ids)}"
         )
-        return delivered
+        return delivery
+
+
+def _delivery_result(
+    subscriptions: list[NotificationSubscription],
+    results: dict[str, bool],
+) -> NotificationDeliveryResult:
+    attempted_subscription_ids = {subscription.id for subscription in subscriptions}
+    delivered_subscription_ids = {
+        subscription_id
+        for subscription_id, sent in results.items()
+        if sent and subscription_id in attempted_subscription_ids
+    }
+    return NotificationDeliveryResult(
+        attempted_subscription_ids=attempted_subscription_ids,
+        delivered_subscription_ids=delivered_subscription_ids,
+    )
 
 
 def _preferences_allow(

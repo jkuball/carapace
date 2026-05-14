@@ -297,9 +297,11 @@ def test_interactive_presence_clears_pending_notifications(client, auth_headers)
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
     active = srv._engine.get_or_activate(sid)
-    active.pending_notification_ids = {f"done:{sid}:1:attended_turn_completed"}
+    active.pending_notifications = {f"done:{sid}:1:attended_turn_completed": {"sub-1"}}
     srv._engine._notification_router = AsyncMock()
-    srv._engine._notification_router.clear_notifications = AsyncMock(return_value=1)
+    srv._engine._notification_router.clear_notifications = AsyncMock(
+        return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+    )
 
     resp = client.post(
         "/api/notifications/presence",
@@ -316,8 +318,9 @@ def test_interactive_presence_clears_pending_notifications(client, auth_headers)
     srv._engine._notification_router.clear_notifications.assert_awaited_once_with(
         session_id=sid,
         notif_id=f"done:{sid}:1:attended_turn_completed",
+        subscription_ids={"sub-1"},
     )
-    assert active.pending_notification_ids == set()
+    assert active.pending_notifications == {}
 
 
 # --- Sessions REST ---

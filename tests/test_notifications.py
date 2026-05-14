@@ -7,7 +7,7 @@ from pywebpush import WebPushException
 
 from carapace.models import NotificationPreferences, NotificationSubscription
 from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
-from carapace.notifications.router import NotificationPayload, NotificationRouter
+from carapace.notifications.router import NotificationDeliveryResult, NotificationPayload, NotificationRouter
 from carapace.notifications.sender import WebPushSender
 
 
@@ -139,10 +139,9 @@ def test_presence_registry_cli_entry_is_active_until_stale() -> None:
 async def test_notification_router_dispatch_turn_outcome_filters_by_preference_and_presence(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     sender = AsyncMock()
-    sender.send_batch = AsyncMock(return_value={"sub-1": True})
     owner_key = derive_owner_key("token-1")
     now = datetime.now(tz=UTC)
-    store.upsert_subscription(
+    matching_subscription = store.upsert_subscription(
         owner_key=owner_key,
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
@@ -162,6 +161,7 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         ttl=timedelta(days=30),
         now=now,
     )
+    sender.send_batch = AsyncMock(return_value={matching_subscription.id: True})
     presence = NotificationPresenceRegistry(ttl=timedelta(seconds=60))
     router = NotificationRouter(
         store=store,
@@ -170,7 +170,7 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         owner_key=owner_key,
     )
 
-    count = await router.dispatch_turn_outcome(
+    delivery = await router.dispatch_turn_outcome(
         session_id="session-1",
         assistant_event_index=3,
         kind="attended_turn_completed",
@@ -178,7 +178,10 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         body="Assistant turn completed",
     )
 
-    assert count == 1
+    assert delivery == NotificationDeliveryResult(
+        attempted_subscription_ids={matching_subscription.id},
+        delivered_subscription_ids={matching_subscription.id},
+    )
     payload = sender.send_batch.await_args.args[1]
     assert isinstance(payload, NotificationPayload)
     assert payload.notif_id == "done:session-1:3:attended_turn_completed"
@@ -200,7 +203,7 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         body="Assistant turn completed",
     )
 
-    assert suppressed == 0
+    assert suppressed == NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
     sender.send_batch.assert_not_awaited()
 
 

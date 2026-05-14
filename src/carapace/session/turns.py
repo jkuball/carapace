@@ -547,10 +547,9 @@ class SessionTurnMixin(SessionTurnHost):
                 title="Job Completed" if active.state.attributes.unattended else "Session Update",
                 body=_truncate_for_log(output, 160),
             )
-            if delivered > 0:
-                active.pending_notification_ids.add(
-                    build_turn_outcome_notification_id(session_id, assistant_event_index, notification_kind)
-                )
+            if delivered.delivered_subscription_ids:
+                notif_id = build_turn_outcome_notification_id(session_id, assistant_event_index, notification_kind)
+                active.pending_notifications[notif_id] = delivered.delivered_subscription_ids
 
         if output.startswith("Unexpected agent output type:"):
             await self._broadcast(active, "on_error", output, turn_terminal=True)
@@ -605,14 +604,13 @@ class SessionTurnMixin(SessionTurnHost):
                 title="Job Failed",
                 body=_truncate_for_log(terminal_message, 160),
             )
-            if delivered > 0:
-                active.pending_notification_ids.add(
-                    build_turn_outcome_notification_id(
-                        session_id,
-                        assistant_event_index,
-                        "unattended_turn_failed",
-                    )
+            if delivered.delivered_subscription_ids:
+                notif_id = build_turn_outcome_notification_id(
+                    session_id,
+                    assistant_event_index,
+                    "unattended_turn_failed",
                 )
+                active.pending_notifications[notif_id] = delivered.delivered_subscription_ids
 
     def _save_user_message_on_failure(
         self,
