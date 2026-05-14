@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.6 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: disable hover buttons on mobile
+  ([`4a3f262`](https://github.com/thiesgerken/carapace/commit/4a3f262b65ab66ad99876663f2f6101828cfb9bc))
+
 ## v0.118.5 (2026-05-14)
 
 
