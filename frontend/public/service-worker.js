@@ -83,32 +83,34 @@ self.addEventListener("push", (event) => {
         return;
       }
 
-      const tag = payload.tag || payload.notif_id;
-      const requireInteraction = payload.kind === "escalation_pending";
+      const tag =
+        payload.kind === "notification_test"
+          ? undefined
+          : payload.tag || payload.notif_id;
+      const requireInteraction =
+        payload.kind === "escalation_pending" ||
+        payload.kind === "notification_test";
       const renotify = payload.kind === "notification_test";
-      console.debug("[carapace-sw] push received", {
-        kind: payload.kind || null,
-        notifId: payload.notif_id || null,
-        tag: tag || null,
-        sessionId: payload.session_id || null,
-      });
       if (payload.kind === "notification_clear") {
-        console.debug("[carapace-sw] clearing notifications", {
+        console.debug("[carapace-sw] clear notification", {
           tag: tag || null,
         });
         await closeNotificationsByTag(tag);
         return;
       }
 
-      console.debug("[carapace-sw] showing notification", {
+      console.debug("[carapace-sw] show notification", {
+        kind: payload.kind || null,
+        notifId: payload.notif_id || null,
         title: payload.title || "carapace",
         tag: tag || null,
+        sessionId: payload.session_id || null,
         requireInteraction,
         renotify,
       });
       await self.registration.showNotification(payload.title || "carapace", {
         body: payload.body || "",
-        tag: tag || undefined,
+        tag,
         icon: payload.icon || "/pwa-192x192.png",
         badge:
           payload.badge && payload.badge !== "/badge-icon.png"
@@ -127,7 +129,7 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
-  console.debug("[carapace-sw] notification clicked", {
+  console.debug("[carapace-sw] click notification", {
     sessionId: event.notification.data?.sessionId || null,
     notifId: event.notification.data?.notifId || null,
   });

@@ -149,7 +149,7 @@ test("push payload falls back to text parsing and default assets", async () => {
   assert.equal(options.renotify, false);
 });
 
-test("push test payload renotifies when reusing the same tag", async () => {
+test("push test payload uses an attention-grabbing notification style", async () => {
   const harness = await loadServiceWorkerHarness();
   const event = waitableEvent({
     data: {
@@ -169,8 +169,8 @@ test("push test payload renotifies when reusing the same tag", async () => {
   assert.equal(harness.showNotificationCalls.length, 1);
   const [title, options] = harness.showNotificationCalls[0];
   assert.equal(title, "Test notification");
-  assert.equal(options.tag, "test:sub-1");
-  assert.equal(options.requireInteraction, false);
+  assert.equal(options.tag, undefined);
+  assert.equal(options.requireInteraction, true);
   assert.equal(options.renotify, true);
 });
 

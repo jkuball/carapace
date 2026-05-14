@@ -54,15 +54,18 @@ class WebPushSender:
             return False
 
         attempts = self._retry_attempts + 1
+        endpoint = subscription.endpoint
+        endpoint_origin = _endpoint_origin(endpoint)
         for attempt in range(attempts):
             try:
                 logger.debug(
                     (
-                        "Web push request subscription={} endpoint_origin={} kind={} "
+                        "Web push request subscription={} url={} endpoint_origin={} kind={} "
                         "notif_id={} attempt={}/{} timeout={} ttl={} bytes={}"
                     ),
                     subscription.id,
-                    _endpoint_origin(subscription.endpoint),
+                    endpoint,
+                    endpoint_origin,
                     payload.kind,
                     payload.notif_id,
                     attempt + 1,
@@ -84,9 +87,13 @@ class WebPushSender:
                     timeout=self._timeout_seconds,
                 )
                 logger.debug(
-                    "Web push response subscription={} endpoint_origin={} kind={} notif_id={} status={} reason={}",
+                    (
+                        "Web push response subscription={} url={} endpoint_origin={} "
+                        "kind={} notif_id={} status={} reason={}"
+                    ),
                     subscription.id,
-                    _endpoint_origin(subscription.endpoint),
+                    endpoint,
+                    endpoint_origin,
                     payload.kind,
                     payload.notif_id,
                     getattr(response, "status_code", None),
