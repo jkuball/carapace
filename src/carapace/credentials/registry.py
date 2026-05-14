@@ -46,6 +46,10 @@ class CredentialRegistry:
         backend, identifier = self._resolve(vault_path)
         return await backend.fetch_metadata(identifier)
 
+    @property
+    def backend_names(self) -> list[str]:
+        return list(self._backends)
+
     async def list(self, query: str = "") -> list[CredentialMetadata]:
         results: list[CredentialMetadata] = []
         for backend in self._backends.values():
@@ -56,10 +60,6 @@ class CredentialRegistry:
         """Close all managed credential backends."""
         for backend in self._backends.values():
             await backend.close()
-
-    @property
-    def backend_names(self) -> list[str]:
-        return list(self._backends)
 
 
 async def build_credential_registry(config: CredentialsConfig, data_dir: Path) -> CredentialRegistry:

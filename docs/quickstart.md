@@ -89,6 +89,41 @@ Session histories always live primarily under `data/sessions/<session_id>/`. The
 
 In the web UI, public sessions expose a "Commit to knowledge" action. Private sessions do not. Autosave uses the same privacy rule: only public, inactive sessions are eligible.
 
+### Optional: enable notification delivery backend
+
+Full backend behavior and API details live in [notifications.md](notifications.md).
+
+carapace can auto-generate a VAPID keypair on startup and reuse it from `data/notifications/vapid_private_key.pem` if you do not configure one explicitly.
+
+```yaml
+notifications:
+  enabled: true
+  presence_ttl_seconds: 60
+  subscription_ttl_days: 30
+  # Optional. If omitted, carapace generates and persists a private key automatically.
+  # vapid_private_key: "<private-key-pem>"
+  # Optional. Defaults to "mailto:carapace@localhost".
+  # vapid_subject: "mailto:you@example.com"
+  send_timeout_seconds: 10
+  retry_attempts: 2
+  retry_backoff_seconds: 1.0
+  max_payload_bytes: 4096
+  delivery_ttl_seconds: 600
+  default_preferences:
+    escalation_pending: true
+    attended_turn_completed: true
+    unattended_turn_completed: false
+    unattended_turn_failed: true
+```
+
+Notes:
+
+- If `vapid_private_key` is omitted, carapace generates one on startup and reuses it from `data/notifications/vapid_private_key.pem` on later restarts.
+- If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
+- The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
+- Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
+- Notification subscriptions are grouped by an `owner_key` derived from the current `CARAPACE_TOKEN`. If you rotate that token, existing notification subscriptions no longer match and clients must subscribe again.
+
 ## 5. Connect Matrix (optional)
 
 Create a Matrix account for carapace on your homeserver, then add to `data/config.yaml`:

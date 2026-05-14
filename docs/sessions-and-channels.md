@@ -87,6 +87,19 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 - **Privacy**: Sessions start public by default, unless `sessions.default_private` is set to `true`
 - **Deletion**: Sessions can be deleted via the REST API (`DELETE /api/sessions/{id}`), which also cleans up any running sandbox container and may remove the committed `conversation.json` from the knowledge repo
 
+## Notifications and presence
+
+carapace also keeps a separate notification state for each session. This state is not part of `SessionState`; it lives in a dedicated notification store plus a runtime presence registry.
+
+See [notifications.md](notifications.md) for the full backend model, config, delivery, and API details.
+
+Short version:
+
+- subscriptions live under `$CARAPACE_DATA_DIR/notifications/subscriptions/`
+- delivery is filtered by per-device preferences and suppressed while a session is actively handled
+- active handling is driven by shared web, CLI, and Matrix presence
+- pending notifications are cleared again when the user returns to the session
+
 ---
 
 ## Channel system
@@ -109,11 +122,24 @@ The primary interactive channel. A Next.js web app connects to the carapace serv
 | `/api/sessions/{id}/knowledge/commit` | `POST`   | Commit the session snapshot into the knowledge repo |
 | `/api/sessions/{id}/history`          | `GET`    | Get chat history (optional `limit` param)           |
 
+**Notification API:**
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/api/notifications/subscriptions` | `GET` | List current subscriptions for the authenticated owner key |
+| `/api/notifications/subscriptions` | `POST` | Create or update a push subscription |
+| `/api/notifications/subscriptions/{id}` | `DELETE` | Remove a push subscription |
+| `/api/notifications/subscriptions/{id}/preferences` | `PATCH` | Update per-device notification preferences |
+| `/api/notifications/subscriptions/{id}/presence` | `POST` | Update presence for a subscription-backed client and refresh expiry |
+| `/api/notifications/presence` | `POST` | Update interactive presence for clients that are not tied to a push subscription |
+
 **WebSocket protocol** (`/api/chat/{session_id}`):
 
 Message `type` values, JSON fields, authentication, and what the server sends on a **fresh connect** (including replay of pending approvals and escalations) are documented in **[websocket-session.md](websocket-session.md)**.
 
 Authentication uses a bearer token (`CARAPACE_TOKEN` env var) passed as a query parameter or `Authorization: Bearer` header.
+
+For presence tracking, the frontend also posts REST heartbeats and may attach a stable `client_id` query parameter to the WebSocket so reconnects map back to the same interactive client.
 
 ### Matrix Channel
 
@@ -125,6 +151,7 @@ Features:
 - Slash commands for session control (including `/reset`)
 - Per-room session mapping
 - Configurable allowed rooms and users
+- Matrix activity feeds the same active-session presence registry used for notification suppression and clearing
 
 Configuration in `config.yaml`:
 

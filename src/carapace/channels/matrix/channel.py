@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 import nio
 from loguru import logger
@@ -27,9 +28,56 @@ from carapace.channels.matrix.formatting import (
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.models import Config, MatrixChannelConfig, MatrixTokenFile, SkillInfo
+from carapace.notifications import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
 from carapace.session import SessionEngine, SessionManager
 from carapace.ws_models import ApprovalResponse, CommandResult, EscalationResponse
+
+
+# Pyrefly widens matrix-nio's decorated async methods to
+# `AsyncGenerator | Coroutine`, so we pin the subset we use here.
+class MatrixClientProtocol(Protocol):
+    async def close(self) -> None: ...
+
+    async def join(self, room_id: str) -> nio.JoinResponse | nio.JoinError: ...
+
+    async def login(
+        self, password: str | None = None, device_name: str | None = "", token: str | None = None
+    ) -> nio.LoginResponse | nio.LoginError: ...
+
+    async def room_redact(
+        self, room_id: str, event_id: str, reason: str | None = None, tx_id: str | None = None
+    ) -> nio.RoomRedactResponse | nio.RoomRedactError: ...
+
+    async def room_send(
+        self,
+        room_id: str,
+        message_type: str,
+        content: dict[Any, Any],
+        tx_id: str | None = None,
+        ignore_unverified_devices: bool = False,
+    ) -> nio.RoomSendResponse | nio.RoomSendError: ...
+
+    async def room_typing(
+        self, room_id: str, typing_state: bool = True, timeout: int = 30000
+    ) -> nio.RoomTypingResponse | nio.RoomTypingError: ...
+
+    async def sync(
+        self,
+        timeout: int | None = 0,
+        sync_filter: str | dict[Any, Any] | None = None,
+        since: str | None = None,
+        full_state: bool | None = None,
+        set_presence: str | None = None,
+    ) -> nio.SyncResponse | nio.SyncError: ...
+
+    def add_event_callback(
+        self,
+        callback: Callable[..., Awaitable[None]],
+        filter: type[Any] | tuple[type[Any], ...] | None = None,
+    ) -> None: ...
+
+    def restore_login(self, user_id: str, device_id: str, access_token: str) -> None: ...
 
 
 class MatrixChannel:
@@ -47,6 +95,7 @@ class MatrixChannel:
         agent_model: Any,
         sandbox_mgr: SandboxManager,
         engine: SessionEngine,
+        presence_registry: NotificationPresenceRegistry | None = None,
     ) -> None:
         self._config = config
         self._full_config = full_config
@@ -55,8 +104,9 @@ class MatrixChannel:
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._engine = engine
+        self._presence_registry = presence_registry
 
-        self._client = nio.AsyncClient(config.homeserver, config.user_id)
+        self._client = cast(MatrixClientProtocol, nio.AsyncClient(config.homeserver, config.user_id))
 
         # room_id -> session_id
         self._room_sessions: dict[str, str] = {}
@@ -139,6 +189,12 @@ class MatrixChannel:
             self._sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, TimeoutError):
                 await asyncio.wait_for(asyncio.shield(self._sync_task), timeout=5)
+        if self._presence_registry is not None:
+            for room_id, session_id in self._room_sessions.items():
+                self._presence_registry.remove_presence(
+                    session_id=session_id,
+                    source_id=f"matrix:{room_id}",
+                )
         await self._client.close()
         logger.info("Matrix channel stopped")
 
@@ -262,6 +318,17 @@ class MatrixChannel:
             return False
         return True
 
+    async def _note_presence(self, room_id: str, session_id: str) -> None:
+        if self._presence_registry is None:
+            return
+        self._presence_registry.update_presence(
+            session_id=session_id,
+            source_id=f"matrix:{room_id}",
+            client_type="matrix",
+            focus_state="visible",
+        )
+        await self._engine.clear_pending_notifications(session_id)
+
     async def _send_text(self, room_id: str, text: str) -> str | None:
         """Send a markdown message; returns the sent event_id or None on error."""
         content = {
@@ -349,6 +416,8 @@ class MatrixChannel:
 
         room_id = room.room_id
         session_id = self._room_sessions.get(room_id)
+        if session_id:
+            await self._note_presence(room_id, session_id)
 
         # Tool approval
         if event.reacts_to in self._pending_approvals:
@@ -421,6 +490,7 @@ class MatrixChannel:
 
         room_id = room.room_id
         session_id = self._get_or_create_session(room_id)
+        await self._note_presence(room_id, session_id)
 
         logger.info(f"Matrix [{room_id}] <{event.sender}>: {body[:80]}")
 
@@ -509,6 +579,8 @@ class MatrixChannel:
         sub = self._room_subscribers.pop(room_id, None)
         if sub:
             self._engine.unsubscribe(old_session_id, sub)
+        if self._presence_registry is not None:
+            self._presence_registry.remove_presence(session_id=old_session_id, source_id=f"matrix:{room_id}")
         await self._sandbox_mgr.cleanup_session(old_session_id)
         new_state = self._session_mgr.create_session(
             "matrix",
@@ -517,6 +589,7 @@ class MatrixChannel:
             private=self._engine.config.sessions.default_private,
         )
         self._room_sessions[room_id] = new_state.session_id
+        await self._note_presence(room_id, new_state.session_id)
         # Clear any stale room-level pending approval
         self._room_pending.pop(room_id, None)
         logger.info(f"Matrix: reset session for {room_id} → {new_state.session_id}")

@@ -45,7 +45,7 @@ id = "destroyed-symlinks"
 
 [[repos.hooks]]
 id = "detect-private-key"
-exclude = "^docs/plans/credentials\\.md$"
+exclude = "^(docs/plans/credentials\\.md|src/carapace/notifications/vapid\\.py|tests/test_notifications\\.py)$"
 
 [[repos]]
 repo = "https://github.com/igorshubovych/markdownlint-cli"

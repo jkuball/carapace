@@ -25,6 +25,7 @@ dependencies = [
     "kr8s>=0.20,<1",
     "tiktoken>=0.8,<1",
     "redis>=7.4,<8",
+    "pywebpush>=2,<3",
 ]
 
 [project.scripts]
@@ -32,7 +33,14 @@ carapace = "carapace.cli:app"
 carapace-server = "carapace.server:main"
 
 [dependency-groups]
-dev = ["pyright>=1.1.403", "pytest", "pytest-asyncio", "ruff>=0.15.10"]
+dev = [
+    "pyrefly>=1.0.0",
+    "pyright>=1.1.403",
+    "pytest",
+    "pytest-asyncio",
+    "ruff>=0.15.10",
+    "types-croniter>=6.2.2.20260508",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -102,3 +110,15 @@ exclude = [
     "**/.*",
     ".venv",
 ]
+
+[tool.pyrefly]
+project-includes = ["src"]
+project-excludes = [
+    "tests",
+    "src/carapace/assets",
+    "**/node_modules/**/*",
+    "**/__pycache__",
+    "**/.*",
+    ".venv",
+]
+infer-with-first-use = false

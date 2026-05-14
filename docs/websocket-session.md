@@ -2,9 +2,12 @@
 
 This document describes JSON messages on the session chat WebSocket. The canonical Pydantic definitions live in [`src/carapace/ws_models.py`](../src/carapace/ws_models.py).
 
+For the broader notification backend, including presence, suppression, and push delivery, see [notifications.md](notifications.md).
+
 ## Endpoint and authentication
 
 - **URL:** `ws://<host>/api/chat/{session_id}` or `wss://…` for HTTPS deployments.
+- Optional query parameter: `client_id=<stable-client-id>` to let reconnects map to the same interactive presence source.
 - **Auth** (either works):
   - Query: `?token=<server bearer token>`
   - Header: `Authorization: Bearer <server bearer token>`
@@ -16,6 +19,14 @@ If `session_id` does not exist on disk, the server closes with code **4004** and
 ## What the web UI does besides WebSocket
 
 The Next.js client loads transcript rows from **REST** (`GET /api/sessions/{session_id}/history`) when opening a session. The WebSocket does **not** replay full history on connect; it only delivers live updates and the handshake described below.
+
+For notification suppression and clearing, the web client also updates the shared presence registry:
+
+- `POST /api/notifications/presence` with `session_id`, `source_id`, `client_type`, and `focus_state`
+- periodic keepalive heartbeats while the session stays open
+- websocket connect and disconnect also mark presence active/inactive using the same `client_id` when provided
+
+There is currently no separate WebSocket `presence_update` message type. Presence is tracked out-of-band through the notification REST API plus websocket lifecycle hooks.
 
 ## Fresh connect (server → client, in order)
 
@@ -103,6 +114,7 @@ When present:
 
 - Pending **tool** approvals and **escalations** are **re-sent** on every new subscription so a refreshed browser can answer them.
 - Ongoing streaming and tool events only arrive while connected; there is no backfill of missed `token` chunks over the socket (rely on history API for past transcript).
+- A reconnect with the same `client_id` marks the session active again in the presence registry, which can clear any pending push notifications for that session.
 
 ## Related code
 

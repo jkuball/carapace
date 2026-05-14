@@ -597,3 +597,127 @@ def test_user_message_no_origin(tmp_path: Path):
 
     with _patch_sentinel():
         asyncio.run(_run())
+
+
+def test_submit_message_clears_pending_turn_notifications(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        engine._notification_router = AsyncMock()
+        engine._notification_router.clear_notifications = AsyncMock(
+            return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+        )
+        state = engine.session_mgr.create_session()
+        sid = state.session_id
+        active = engine.get_or_activate(sid)
+        active.pending_notifications = {"done:test:1:attended_turn_completed": {"sub-1"}}
+
+        async def _noop_run_turn(*_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        engine._run_turn = _noop_run_turn  # type: ignore[method-assign]
+
+        await engine.submit_message(sid, "hello")
+        await asyncio.sleep(0)
+
+        engine._notification_router.clear_notifications.assert_awaited_once_with(
+            session_id=sid,
+            notif_id="done:test:1:attended_turn_completed",
+            subscription_ids={"sub-1"},
+        )
+        assert active.pending_notifications == {}
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
+def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        engine._notification_router = AsyncMock()
+        engine._notification_router.dispatch_escalation = AsyncMock(
+            return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+        )
+        engine._notification_router.clear_notifications = AsyncMock(
+            return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+        )
+        sid = engine.session_mgr.create_session().session_id
+        active = engine.get_or_activate(sid)
+        callback = engine._make_escalation_cb(active)
+
+        task = asyncio.create_task(callback(sid, "example.com", {"kind": "domain_access", "command": "curl"}))
+        await asyncio.sleep(0)
+
+        engine._notification_router.dispatch_escalation.assert_awaited_once()
+        pending = active.pending_escalations[0]
+        await engine.submit_approval(
+            sid, type("Resp", (), {"request_id": pending["request_id"], "decision": "allow", "message": None})()
+        )
+        result = await task
+
+        assert result.allowed is True
+        engine._notification_router.clear_notifications.assert_awaited_once_with(
+            session_id=sid,
+            notif_id=f"esc:{sid}:{pending['request_id']}",
+            subscription_ids={"sub-1"},
+        )
+        assert active.pending_notifications == {}
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
+def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        engine._notification_router = AsyncMock()
+        engine._notification_router.dispatch_turn_outcome = AsyncMock(
+            return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+        )
+        sid = engine.session_mgr.create_session().session_id
+        active = engine.get_or_activate(sid)
+        engine.session_mgr.append_events(sid, [{"role": "user", "content": "hello"}])
+
+        await engine._finalize_successful_turn(active, sid, [], "done", "thinking")
+
+        engine._notification_router.dispatch_turn_outcome.assert_awaited_once_with(
+            session_id=sid,
+            assistant_event_index=1,
+            kind="attended_turn_completed",
+            title="Session Update",
+            body="done",
+        )
+        assert active.pending_notifications == {f"done:{sid}:1:attended_turn_completed": {"sub-1"}}
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
+def test_finalize_failed_turn_dispatches_unattended_failure_notification(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        engine._notification_router = AsyncMock()
+        engine._notification_router.dispatch_turn_outcome = AsyncMock(
+            return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+        )
+        sid = engine.session_mgr.create_session(unattended=True).session_id
+        active = engine.get_or_activate(sid)
+        engine.session_mgr.append_events(sid, [{"role": "user", "content": "run"}])
+
+        await engine._finalize_failed_turn(
+            active,
+            sid,
+            "run",
+            terminal_message="The previous turn failed before completion.",
+        )
+
+        engine._notification_router.dispatch_turn_outcome.assert_awaited_once_with(
+            session_id=sid,
+            assistant_event_index=1,
+            kind="unattended_turn_failed",
+            title="Job Failed",
+            body="The previous turn failed before completion.",
+        )
+        assert active.pending_notifications == {f"done:{sid}:1:unattended_turn_failed": {"sub-1"}}
+
+    with _patch_sentinel():
+        asyncio.run(_run())

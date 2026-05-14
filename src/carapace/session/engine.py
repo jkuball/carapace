@@ -54,6 +54,7 @@ from carapace.models import (
     agent_available_model_entries,
     context_grants_session_summary,
 )
+from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.runtime import SkillActivationInputs, SkillFileCredential
 from carapace.security.context import (
@@ -132,6 +133,16 @@ class CompletedEventTurn:
     user_content: str
 
 
+def _escalation_notification_body(subject: str, kind: str) -> str:
+    match kind:
+        case "git_push":
+            return f"Approval needed to push changes to {subject}."
+        case "credential_access":
+            return f"Approval needed to access credential {subject}."
+        case _:
+            return f"Approval needed to access {subject}."
+
+
 class SessionEngine(SessionTurnMixin):
     """Central session lifecycle manager.
 
@@ -160,6 +171,7 @@ class SessionEngine(SessionTurnMixin):
         sandbox_mgr: SandboxManager,
         credential_registry: CredentialRegistryProtocol,
         model_factory: Callable[[str], Model] | None = None,
+        notification_router: NotificationRouter | None = None,
     ) -> None:
         self._config = config
         self._data_dir = data_dir
@@ -171,6 +183,7 @@ class SessionEngine(SessionTurnMixin):
         self._sandbox_mgr = sandbox_mgr
         self._model_factory = model_factory
         self._credential_registry = credential_registry
+        self._notification_router = notification_router
         self._active: dict[str, ActiveSession] = {}
         self._llm_semaphore = asyncio.Semaphore(config.agent.max_parallel_llm)
 
@@ -188,6 +201,30 @@ class SessionEngine(SessionTurnMixin):
     @property
     def config(self) -> Config:
         return self._config
+
+    async def clear_pending_notifications(self, session_id: str) -> None:
+        active = self._active.get(session_id)
+        if active is None or self._notification_router is None or not active.pending_notifications:
+            return
+        for notif_id in sorted(active.pending_notifications):
+            await self._clear_pending_notification(active, session_id, notif_id)
+
+    async def _clear_pending_notification(self, active: ActiveSession, session_id: str, notif_id: str) -> None:
+        if self._notification_router is None:
+            return
+        pending_subscription_ids = active.pending_notifications.get(notif_id)
+        if not pending_subscription_ids:
+            return
+        cleared = await self._notification_router.clear_notifications(
+            session_id=session_id,
+            notif_id=notif_id,
+            subscription_ids=set(pending_subscription_ids),
+        )
+        remaining_subscription_ids = pending_subscription_ids - cleared.delivered_subscription_ids
+        if remaining_subscription_ids:
+            active.pending_notifications[notif_id] = remaining_subscription_ids
+            return
+        active.pending_notifications.pop(notif_id, None)
 
     @property
     def data_dir(self) -> Path:
@@ -427,7 +464,7 @@ class SessionEngine(SessionTurnMixin):
             suffix = "call" if budget.tool_calls == 1 else "calls"
             return f"Set tool call budget to {budget.tool_calls:,} tool {suffix}."
         budget.cost_usd = Decimal(value)
-        if budget.cost_usd == 0:
+        if budget.cost_usd == Decimal(0):
             budget.cost_usd = None
         active.state.budget = budget
         self._session_mgr.save_state(active.state)
@@ -814,6 +851,8 @@ class SessionEngine(SessionTurnMixin):
             active.tool_approval_queue.get_nowait()
         while not active.escalation_queue.empty():
             active.escalation_queue.get_nowait()
+
+        await self.clear_pending_notifications(session_id)
 
         active.agent_task = asyncio.create_task(
             self._run_turn(active, content, origin=origin),
@@ -1506,6 +1545,7 @@ class SessionEngine(SessionTurnMixin):
 
         async def _escalate(session_id: str, subject: str, context: dict[str, Any]) -> UserEscalationDecision:
             request_id = secrets.token_hex(8)
+            notif_id = build_escalation_notification_id(session_id, request_id)
             cmd = context.get("command", "")
             kind = context.get("kind", "domain_access")
 
@@ -1597,10 +1637,21 @@ class SessionEngine(SessionTurnMixin):
                     {"request_id": request_id, "kind": "domain_access", "domain": subject, "command": cmd}
                 )
                 await self._broadcast(active, "on_domain_access_approval_request", request_id, subject, cmd)
+
+            if self._notification_router is not None:
+                delivered = await self._notification_router.dispatch_escalation(
+                    session_id=session_id,
+                    request_id=request_id,
+                    title="Action Required",
+                    body=_escalation_notification_body(subject, kind),
+                )
+                if delivered.delivered_subscription_ids:
+                    active.pending_notifications[notif_id] = delivered.delivered_subscription_ids
             # Block until a subscriber responds
             while True:
                 msg = await active.escalation_queue.get()
                 if msg is None:
+                    await self._clear_pending_notification(active, session_id, notif_id)
                     active.pending_escalations.clear()
                     return UserEscalationDecision(allowed=False)
                 if msg.request_id == request_id:
@@ -1635,6 +1686,7 @@ class SessionEngine(SessionTurnMixin):
                     active.pending_escalations = [
                         p for p in active.pending_escalations if p["request_id"] != request_id
                     ]
+                    await self._clear_pending_notification(active, session_id, notif_id)
                     return UserEscalationDecision(allowed=decision != "deny", message=message)
 
         return _escalate

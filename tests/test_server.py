@@ -21,6 +21,8 @@ from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models import CredentialMetadata, SessionBudget
+from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
+from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import CredentialAccessEntry
@@ -99,6 +101,10 @@ def _setup_server(tmp_path, monkeypatch):
     )
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
+    srv._notification_store = NotificationStore(tmp_path)
+    srv._notification_presence = NotificationPresenceRegistry(
+        ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
+    )
 
 
 @pytest.fixture()
@@ -141,6 +147,235 @@ def test_meta_returns_version(client, auth_headers, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json() == {"version": "test-version"}
+
+
+def test_vapid_public_key_is_public_when_configured(client):
+    configured = ensure_vapid_config(srv._config.notifications, srv._data_dir)
+    assert configured.vapid_private_key is not None
+    srv._config.notifications = configured
+
+    resp = client.get("/api/config/vapid-public-key")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"vapid_public_key": derive_vapid_public_key(configured.vapid_private_key)}
+
+
+def test_vapid_public_key_is_public_when_generated(client):
+    generated = ensure_vapid_config(srv._config.notifications, srv._data_dir)
+    assert generated.vapid_private_key is not None
+    srv._config.notifications = generated
+
+    resp = client.get("/api/config/vapid-public-key")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"vapid_public_key": derive_vapid_public_key(generated.vapid_private_key)}
+
+
+def test_notification_subscription_roundtrip(client, auth_headers):
+    resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Phone",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["device_name"] == "Phone"
+    assert data["endpoint"] == "https://push.example.test/sub-1"
+    assert data["subscribed_at"]
+    assert data["preferences"]["escalation_pending"] is True
+
+    list_resp = client.get("/api/notifications/subscriptions", headers=auth_headers)
+
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) == 1
+    assert list_resp.json()[0]["subscription_id"] == data["subscription_id"]
+    assert list_resp.json()[0]["endpoint"] == data["endpoint"]
+    assert list_resp.json()[0]["subscribed_at"] == data["subscribed_at"]
+
+
+def test_notification_preferences_patch_persists(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+
+    patch_resp = client.patch(
+        f"/api/notifications/subscriptions/{subscription_id}/preferences",
+        headers=auth_headers,
+        json={"attended_turn_completed": False},
+    )
+
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["preferences"]["attended_turn_completed"] is False
+
+    owner_key = derive_owner_key(_TEST_TOKEN)
+    stored = srv._notification_store.list_subscriptions(owner_key=owner_key)
+    assert stored[0].notification_prefs.attended_turn_completed is False
+
+
+def test_notification_test_endpoint_dispatches_owned_subscription(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+    srv._notification_router = AsyncMock()
+    srv._notification_router.dispatch_test = AsyncMock(return_value=True)
+
+    resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/test",
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"delivered": True}
+    dispatched = srv._notification_router.dispatch_test.await_args.kwargs["subscription"]
+    assert dispatched.id == subscription_id
+
+
+def test_notification_test_endpoint_returns_502_when_delivery_fails(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Desktop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+    srv._notification_router = AsyncMock()
+    srv._notification_router.dispatch_test = AsyncMock(return_value=False)
+
+    resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/test",
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "Failed to deliver test notification"
+
+
+def test_notification_presence_updates_registry(client, auth_headers):
+    create_resp = client.post(
+        "/api/notifications/subscriptions",
+        headers=auth_headers,
+        json={
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key-1",
+            "auth": "auth-1",
+            "device_name": "Laptop",
+        },
+    )
+    subscription_id = create_resp.json()["subscription_id"]
+
+    presence_resp = client.post(
+        f"/api/notifications/subscriptions/{subscription_id}/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert presence_resp.status_code == 200
+    assert presence_resp.json() == {"heartbeat_received": True}
+    assert srv._notification_presence.is_session_actively_handled("session-1") is True
+
+
+def test_interactive_presence_endpoint_updates_registry(client, auth_headers):
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"heartbeat_received": True}
+    assert srv._notification_presence.is_session_actively_handled("session-1") is True
+
+
+def test_interactive_presence_inactive_removes_registry_entry(client, auth_headers):
+    client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": "session-1",
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "inactive",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert srv._notification_presence.is_session_actively_handled("session-1") is False
+
+
+def test_interactive_presence_clears_pending_notifications(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+    active = srv._engine.get_or_activate(sid)
+    active.pending_notifications = {f"done:{sid}:1:attended_turn_completed": {"sub-1"}}
+    srv._engine._notification_router = AsyncMock()
+    srv._engine._notification_router.clear_notifications = AsyncMock(
+        return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
+    )
+
+    resp = client.post(
+        "/api/notifications/presence",
+        headers=auth_headers,
+        json={
+            "session_id": sid,
+            "source_id": "web-tab-1",
+            "client_type": "web",
+            "focus_state": "visible",
+        },
+    )
+
+    assert resp.status_code == 200
+    srv._engine._notification_router.clear_notifications.assert_awaited_once_with(
+        session_id=sid,
+        notif_id=f"done:{sid}:1:attended_turn_completed",
+        subscription_ids={"sub-1"},
+    )
+    assert active.pending_notifications == {}
 
 
 # --- Sessions REST ---
@@ -1373,6 +1608,31 @@ def test_ws_help_command(client, auth_headers, bearer):
         assert "/security" not in commands
         assert "/approve-context" not in commands
         assert "/memory" not in commands
+
+
+def test_ws_connection_updates_presence_registry(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=web-tab-1") as ws:
+        _consume_status(ws)
+        assert srv._notification_presence.is_session_actively_handled(sid) is True
+
+    assert srv._notification_presence.is_session_actively_handled(sid) is False
+
+
+def test_ws_blank_client_id_falls_back_to_generated_source_id(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=%20%20%20") as ws:
+        _consume_status(ws)
+        entries = srv._notification_presence.list_presence(session_id=sid)
+        assert len(entries) == 1
+        assert entries[0].source_id.startswith("ws:")
+        assert entries[0].source_id != ""
+
+    assert srv._notification_presence.is_session_actively_handled(sid) is False
 
 
 def test_list_commands_excludes_removed_commands(client, auth_headers):

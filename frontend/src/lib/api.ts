@@ -3,6 +3,9 @@ import type {
   JobDefinition,
   JobRunResult,
   JobsFile,
+  NotificationPreferencesPatch,
+  NotificationSubscriptionCreateRequest,
+  NotificationSubscriptionRecord,
   SessionArchiveCommitResponse,
   SessionAttributesPatch,
   SessionInfo,
@@ -16,6 +19,22 @@ function headers(token: string): HeadersInit {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
+}
+
+async function readErrorMessage(
+  res: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = await res.json();
+    if (isRecord(body)) {
+      const detail = readString(body, "detail");
+      if (detail) return detail;
+    }
+  } catch {
+    // Ignore parse errors and fall back to the generic status message below.
+  }
+  return `${fallback}: ${res.status}`;
 }
 
 export interface ServerMeta {
@@ -226,6 +245,166 @@ export async function fetchHistory(
   return res.json();
 }
 
+export async function postInteractivePresence(
+  server: string,
+  token: string,
+  body: {
+    session_id: string;
+    source_id: string;
+    client_type: "web" | "matrix" | "cli";
+    focus_state: "visible" | "hidden" | "inactive";
+  },
+  options?: { keepalive?: boolean },
+): Promise<void> {
+  const res = await fetch(`${server}/api/notifications/presence`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(body),
+    keepalive: options?.keepalive,
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update presence: ${res.status}`);
+  }
+}
+
+export async function postNotificationSubscriptionPresence(
+  server: string,
+  token: string,
+  subscriptionId: string,
+  body: {
+    session_id: string;
+    client_type: "web" | "matrix" | "cli";
+    focus_state: "visible" | "hidden" | "inactive";
+  },
+  options?: { keepalive?: boolean },
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/notifications/subscriptions/${subscriptionId}/presence`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify(body),
+      keepalive: options?.keepalive,
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to update notification subscription presence: ${res.status}`,
+    );
+  }
+}
+
+export async function getVapidPublicKey(server: string): Promise<string> {
+  const res = await fetch(`${server}/api/config/vapid-public-key`);
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to fetch VAPID public key"),
+    );
+  }
+  const body = await res.json();
+  if (!isRecord(body)) {
+    throw new Error("Invalid VAPID public key response");
+  }
+  const vapidPublicKey = readString(body, "vapid_public_key");
+  if (!vapidPublicKey) {
+    throw new Error("Missing VAPID public key in response");
+  }
+  return vapidPublicKey;
+}
+
+export async function listNotificationSubscriptions(
+  server: string,
+  token: string,
+): Promise<NotificationSubscriptionRecord[]> {
+  const res = await fetch(`${server}/api/notifications/subscriptions`, {
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to list notification subscriptions"),
+    );
+  }
+  return res.json();
+}
+
+export async function upsertNotificationSubscription(
+  server: string,
+  token: string,
+  body: NotificationSubscriptionCreateRequest,
+): Promise<NotificationSubscriptionRecord> {
+  const res = await fetch(`${server}/api/notifications/subscriptions`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to save notification subscription"),
+    );
+  }
+  return res.json();
+}
+
+export async function updateNotificationSubscriptionPreferences(
+  server: string,
+  token: string,
+  subscriptionId: string,
+  body: NotificationPreferencesPatch,
+): Promise<NotificationSubscriptionRecord> {
+  const res = await fetch(
+    `${server}/api/notifications/subscriptions/${subscriptionId}/preferences`,
+    {
+      method: "PATCH",
+      headers: headers(token),
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to update notification preferences"),
+    );
+  }
+  return res.json();
+}
+
+export async function sendTestNotification(
+  server: string,
+  token: string,
+  subscriptionId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/notifications/subscriptions/${subscriptionId}/test`,
+    {
+      method: "POST",
+      headers: headers(token),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to send test notification"),
+    );
+  }
+}
+
+export async function deleteNotificationSubscription(
+  server: string,
+  token: string,
+  subscriptionId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/notifications/subscriptions/${subscriptionId}`,
+    {
+      method: "DELETE",
+      headers: headers(token),
+    },
+  );
+  if (!res.ok && res.status !== 404) {
+    throw new Error(
+      await readErrorMessage(res, "Failed to delete notification subscription"),
+    );
+  }
+}
+
 export interface SlashCommand {
   command: string;
   description: string;
@@ -389,7 +568,12 @@ export function wsUrl(
   server: string,
   sessionId: string,
   token: string,
+  clientId?: string,
 ): string {
   const base = server.replace("http://", "ws://").replace("https://", "wss://");
-  return `${base}/api/chat/${sessionId}?token=${token}`;
+  const params = new URLSearchParams({ token });
+  if (clientId) {
+    params.set("client_id", clientId);
+  }
+  return `${base}/api/chat/${sessionId}?${params.toString()}`;
 }

@@ -52,6 +52,11 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
   const rootRef = useRef<HTMLDivElement | null>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
 
+  function closePicker(): void {
+    setOpen(false);
+    setQuery("");
+  }
+
   useEffect(() => {
     if (!open) {
       return;
@@ -59,7 +64,7 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
 
     function handlePointerDown(event: MouseEvent): void {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+        closePicker();
       }
     }
 
@@ -70,8 +75,24 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
   }, [open]);
 
   useEffect(() => {
+    if (open || !query) {
+      return;
+    }
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setQuery("");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, query]);
+
+  useEffect(() => {
     if (!open) {
-      setQuery("");
       return;
     }
 
@@ -100,7 +121,13 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) {
+            closePicker();
+            return;
+          }
+          setOpen(true);
+        }}
         disabled={disabled}
         title={triggerLabel}
         className={cn(
@@ -126,7 +153,7 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  setOpen(false);
+                  closePicker();
                 }
               }}
               placeholder={tModels("filterPlaceholder")}
@@ -141,7 +168,7 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
               onMouseDown={(event) => {
                 event.preventDefault();
                 onChange(null);
-                setOpen(false);
+                closePicker();
               }}
               className={cn(
                 "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
@@ -170,7 +197,7 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
                     onMouseDown={(event) => {
                       event.preventDefault();
                       onChange(entry.id);
-                      setOpen(false);
+                      closePicker();
                     }}
                     className={cn(
                       "mt-1 flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",

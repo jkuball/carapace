@@ -1,3 +1,37 @@
+// Notifications
+
+export interface NotificationPreferences {
+  escalation_pending: boolean;
+  attended_turn_completed: boolean;
+  unattended_turn_completed: boolean;
+  unattended_turn_failed: boolean;
+}
+
+export interface NotificationPreferencesPatch {
+  escalation_pending?: boolean;
+  attended_turn_completed?: boolean;
+  unattended_turn_completed?: boolean;
+  unattended_turn_failed?: boolean;
+}
+
+export interface NotificationSubscriptionCreateRequest {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  device_name: string;
+  preferences?: NotificationPreferencesPatch;
+}
+
+export interface NotificationSubscriptionRecord {
+  subscription_id: string;
+  device_name: string;
+  endpoint: string;
+  subscribed_at: string;
+  expires_at: string;
+  last_heartbeat?: string | null;
+  preferences: NotificationPreferences;
+}
+
 // Session
 
 export type SandboxRuntimeKind = "docker" | "kubernetes";

@@ -15,6 +15,8 @@ from carapace.models import (
     JobCronTrigger,
     JobDefinition,
     JobsFile,
+    NotificationsConfig,
+    NotificationSubscription,
     SessionBudget,
     SessionState,
     agent_available_model_entries,
@@ -34,9 +36,33 @@ def test_config_defaults():
     assert cfg.agent.default_session_budget.has_any_limit is False
     assert cfg.agent.sentinel_timeout_seconds == 60
     assert cfg.agent.tool_output_max_chars == 16_000
+    assert cfg.notifications.enabled is True
+    assert cfg.notifications.presence_ttl_seconds == 60
     assert cfg.sandbox.network_name == "carapace-sandbox"
     ids = {e.model_id for e in cfg.agent.available_models}
     assert ids == {"anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5"}
+
+
+def test_notification_subscription_rejects_empty_owner_key() -> None:
+    with pytest.raises(ValidationError, match="owner_key must not be empty"):
+        NotificationSubscription.model_validate(
+            {
+                "id": "sub-1",
+                "owner_key": " ",
+                "endpoint": "https://push.example.test/sub-1",
+                "p256dh": "key",
+                "auth": "auth",
+                "subscribed_at": "2026-05-12T00:00:00Z",
+                "expires_at": "2026-06-12T00:00:00Z",
+            }
+        )
+
+
+def test_notifications_config_allows_missing_vapid_fields() -> None:
+    config = NotificationsConfig.model_validate({})
+
+    assert config.vapid_private_key is None
+    assert config.vapid_subject is None
 
 
 def test_job_cron_trigger_accepts_valid_expression_and_timezone() -> None:

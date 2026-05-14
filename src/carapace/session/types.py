@@ -123,6 +123,7 @@ class ActiveSession:
     title_model_name: str | None = None
     pending_approval_requests: list[dict[str, Any]] = field(default_factory=list)
     pending_escalations: list[dict[str, Any]] = field(default_factory=list)
+    pending_notifications: dict[str, set[str]] = field(default_factory=dict)
     _pending_sends: set[asyncio.Task[Any]] = field(default_factory=set)
 
 

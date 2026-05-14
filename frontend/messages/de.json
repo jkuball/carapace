@@ -41,6 +41,58 @@
                 "en": "English",
                 "de": "Deutsch"
             }
+        },
+        "notifications": {
+            "title": "Push-Benachrichtigungen",
+            "description": "Liefert Eskalationen und Zug-Ergebnisse an diesen Browser oder die installierte PWA.",
+            "status": {
+                "loading": "Benachrichtigungsunterstützung wird geprüft…",
+                "loadingShort": "Prüfung",
+                "enabled": "Benachrichtigungen sind für diesen Browser aktiviert.",
+                "enabledShort": "Aktiv",
+                "disabled": "Benachrichtigungen sind für diesen Browser deaktiviert.",
+                "disabledShort": "Aus",
+                "unsupported": "Dieser Browser kann im aktuellen Kontext keine Web-Push-Benachrichtigungen empfangen.",
+                "permissionDenied": "Die Browser-Benachrichtigungsfreigabe ist blockiert. Aktiviere sie in Browser- oder Geräteeinstellungen erneut.",
+                "permissionRequired": "Die Benachrichtigungsfreigabe wurde nicht erteilt.",
+                "invalidSubscription": "Der Browser hat eine unvollständige Push-Subscription zurückgegeben.",
+                "loadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
+                "enableFailed": "Benachrichtigungen konnten nicht aktiviert werden.",
+                "disableFailed": "Benachrichtigungen konnten nicht deaktiviert werden.",
+                "preferencesFailed": "Benachrichtigungseinstellungen konnten nicht aktualisiert werden.",
+                "testFailed": "Testbenachrichtigung konnte nicht gesendet werden.",
+                "testSent": "Testbenachrichtigung gesendet."
+            },
+            "deviceName": {
+                "label": "Gerätename",
+                "placeholder": "Android-Telefon",
+                "hint": "Wird in den serverseitigen Benachrichtigungs-Subscriptions für diesen Browser angezeigt."
+            },
+            "actions": {
+                "enable": "Benachrichtigungen aktivieren",
+                "enabling": "Aktiviere…",
+                "disable": "Benachrichtigungen deaktivieren",
+                "disabling": "Deaktiviere…",
+                "test": "Testbenachrichtigung senden",
+                "testing": "Sende Testbenachrichtigung…"
+            },
+            "preferences": {
+                "label": "Benachrichtigungen senden für",
+                "escalation_pending": "Eskalationen, die Freigabe brauchen",
+                "attended_turn_completed": "Begleitete Sitzungen, wenn ein Zug endet",
+                "unattended_turn_completed": "Unbeaufsichtigte Jobs mit erfolgreichem Abschluss",
+                "unattended_turn_failed": "Unbeaufsichtigte Jobs mit Fehler"
+            },
+            "meta": {
+                "permission": "Browser-Freigabe: {permission}",
+                "heartbeat": "Letzter Heartbeat: {timestamp}",
+                "expires": "Subscription läuft ab: {timestamp}"
+            },
+            "permission": {
+                "default": "nicht angefragt",
+                "granted": "erteilt",
+                "denied": "blockiert"
+            }
         }
     },
     "newSessionButton": {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -22,6 +23,7 @@ from carapace.channels.matrix import (
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.config import load_config
 from carapace.models import MatrixChannelConfig, MatrixTokenFile, Secret, SessionBudget
+from carapace.notifications import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
 from carapace.session import SessionEngine, SessionManager
 from carapace.ws_models import ApprovalRequest, CommandResult
@@ -73,6 +75,7 @@ def _make_channel(tmp_path: Path, **config_kwargs: Any) -> Any:
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         engine=_make_engine_mock(),
+        presence_registry=NotificationPresenceRegistry(ttl=timedelta(seconds=60)),
     )
     # Replace the nio client with a mock
     channel._client = AsyncMock(spec=nio.AsyncClient)
@@ -160,6 +163,20 @@ def test_get_or_create_session_resumes_existing(tmp_path: Path):
     ch = _make_channel(tmp_path)
     sid = ch._get_or_create_session("!room:example.com")
     assert sid == existing.session_id
+
+
+@pytest.mark.anyio
+async def test_on_message_updates_presence_registry(tmp_path: Path):
+    ch = _make_channel(tmp_path)
+    room = _make_room()
+    event = _make_text_event("hello")
+    event.server_timestamp = ch._started_at_ms + 1
+
+    await ch._on_message(room, event)
+
+    session_id = ch._room_sessions[room.room_id]
+    assert ch._presence_registry is not None
+    assert ch._presence_registry.is_session_actively_handled(session_id) is True
 
 
 # ---------------------------------------------------------------------------
