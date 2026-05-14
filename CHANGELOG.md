@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.6 (2026-05-14)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: skip archive warning without sandbox state
+  ([`ac00cbb`](https://github.com/thiesgerken/carapace/commit/ac00cbb44df5953bccddd6134b400afc879de021))
+
 ## v0.117.5 (2026-05-14)
 
 
