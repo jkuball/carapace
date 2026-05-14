@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.118.3 (2026-05-14)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: aliases in k8s
+  ([`7f41922`](https://github.com/thiesgerken/carapace/commit/7f4192253054895ed5cba5838ae71d2171b4de84))
+
+### Other
+
+
+- idea for ask mode
+  ([`3395903`](https://github.com/thiesgerken/carapace/commit/33959031decbf552c4d0603776d1ef6ffb934e99))
+
+- 🌐 fix(i18n): german thinking
+  ([`53a8729`](https://github.com/thiesgerken/carapace/commit/53a8729bfa47aaae7fb737ded24dcd5abe1d0abc))
+
 ## v0.118.2 (2026-05-14)
 
 
