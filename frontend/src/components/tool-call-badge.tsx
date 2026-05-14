@@ -72,6 +72,7 @@ const OMIT_ARG_LABEL: Record<string, ReadonlySet<string>> = {
 };
 
 const MAX_SUMMARY_VALUE_CHARS = 4096;
+const MULTILINE_SUMMARY_THRESHOLD = 96;
 
 type TranslateFn = (
   key: string,
@@ -597,6 +598,7 @@ export function ToolCallBadge({
             t,
           )
         : formatArgsSummary(tool, args, t);
+  const shouldClampSummary = argsSummary.length > MULTILINE_SUMMARY_THRESHOLD;
   const contextCount = contexts?.length ?? 0;
   const contextTooltip = contexts?.join("\n") ?? "";
   const writeLang = isWriteTool ? languageFromFilePath(writePath) : "text";
@@ -622,7 +624,8 @@ export function ToolCallBadge({
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
+          "flex w-full min-w-0 gap-1.5 rounded-md px-2 py-1 text-xs text-left",
+          shouldClampSummary ? "items-start" : "items-center",
           "bg-muted/60 text-muted-foreground",
           "hover:bg-accent transition-colors",
         )}
@@ -644,13 +647,18 @@ export function ToolCallBadge({
         </span>
         {argsSummary ? (
           <span
-            className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/65 dark:text-foreground/70"
+            className={cn(
+              "min-w-0 flex-1 font-mono text-[11px] text-foreground/65 dark:text-foreground/70",
+              shouldClampSummary
+                ? "overflow-hidden whitespace-normal break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
+                : "truncate",
+            )}
             title={argsSummary}
           >
             {argsSummary}
           </span>
         ) : null}
-        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5">
+        <span className={cn("ml-auto inline-flex shrink-0 items-center gap-1.5", shouldClampSummary && "pt-0.5")}>
           {(() => {
             // Count credentials: from use_skill declared_creds + child credential_access events
             const declaredCredCount = isUseSkillTool && Array.isArray(args.declared_creds)
