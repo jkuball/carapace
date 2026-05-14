@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.7 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: enhance session grouping by adding date sections and improving sidebar rendering
+  ([`6d47437`](https://github.com/thiesgerken/carapace/commit/6d4743713e1f1e90e6a54f53c812c2e5086013e5))
+
 ## v0.118.6 (2026-05-14)
 
 
