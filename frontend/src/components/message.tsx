@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ChatMessage, EscalationDecision, LlmActivity } from "@/lib/types";
+import { useAppLocale } from "@/components/locale-provider";
 import { MarkdownContent } from "./markdown-content";
 import { ToolCallBadge } from "./tool-call-badge";
 import { ApprovalCard } from "./approval-card";
@@ -14,9 +15,15 @@ import { GitPushApprovalCard } from "./git-push-approval-card";
 import { CommandResultView } from "./command-result";
 import { cn } from "@/lib/utils";
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, locale: string): string {
   if (ms < 1_000) return `${ms}ms`;
-  if (ms < 10_000) return `${(ms / 1_000).toFixed(1)}s`;
+  if (ms < 10_000) {
+    const seconds = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(ms / 1_000);
+    return `${seconds}s`;
+  }
   return `${Math.round(ms / 1_000)}s`;
 }
 
@@ -75,6 +82,7 @@ function ThinkingBadge({
   activeLlmActivity?: LlmActivity | null;
 }) {
   const t = useTranslations("message");
+  const { locale } = useAppLocale();
   const [manualOpen, setManualOpen] = useState(false);
   const [liveReasoningDuration, setLiveReasoningDuration] = useState<{
     startedAt: string;
@@ -124,7 +132,7 @@ function ThinkingBadge({
         streaming
           ? "thinkingMeta.durationStreaming"
           : "thinkingMeta.durationComplete",
-        { duration: formatDuration(shownDurationMs) },
+        { duration: formatDuration(shownDurationMs, locale) },
       ),
     );
   }
@@ -154,11 +162,11 @@ function ThinkingBadge({
         ) : (
           <Brain className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
         )}
-        <span className="shrink-0 font-mono font-normal text-foreground/85 dark:text-foreground/90">
+        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
           {streaming ? t("thinking.streaming") : t("thinking.complete")}
         </span>
         {meta.length > 0 && (
-          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/60 dark:text-foreground/65">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/60 dark:text-foreground/65">
             {meta.join(", ")}
           </span>
         )}

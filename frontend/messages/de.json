@@ -220,25 +220,25 @@
             "credential": "Zugangsdaten"
         },
         "labels": {
-            "read": "gelesen",
-            "wrote": "geschrieben",
-            "replaced": "ersetzt",
+            "read": "Las",
+            "wrote": "Geschrieben",
+            "replaced": "Ersetzt",
             "activatedSkill": "Skill aktiviert",
-            "executed": "ausgeführt",
+            "executed": "Ausgeführt",
             "listedCredentials": "Zugangsdaten aufgelistet",
             "credentialDenied": "Zugangsdaten abgelehnt",
             "accessedCredential": "Zugangsdaten verwendet",
             "domainDenied": "Domain abgelehnt",
             "accessedDomain": "Domain angefragt",
-            "gitPush": "git push",
-            "readAction": "lese",
-            "write": "schreibe",
-            "activateSkill": "aktiviere Skill",
-            "execute": "führe aus",
-            "listCredentials": "liste Zugangsdaten auf",
+            "gitPush": "Git Push",
+            "readAction": "Lese",
+            "write": "Schreibe",
+            "activateSkill": "Aktiviere Skill",
+            "execute": "Führe aus",
+            "listCredentials": "Liste Zugangsdaten auf",
             "accessCredential": "Zugangsdaten verwenden",
             "accessDomain": "Domain verwenden",
-            "replace": "ersetze"
+            "replace": "Ersetze"
         },
         "summaries": {
             "readFirstLines": "erste {count} Zeilen von {path}",
@@ -489,8 +489,8 @@
             "copied": "Kopiert"
         },
         "thinking": {
-            "streaming": "denkt",
-            "complete": "nachgedacht"
+            "streaming": "Denkt",
+            "complete": "Überlegte"
         },
         "thinkingMeta": {
             "durationStreaming": "seit {duration}",

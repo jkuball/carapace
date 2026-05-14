@@ -315,7 +315,7 @@ function buildUnifiedDiff(oldText: string, newText: string): string {
 
 interface ToolLabelOptions {
   tool: string;
-  isSuccessful: boolean;
+  isCompleted: boolean;
   isReadTool: boolean;
   isWriteTool: boolean;
   isStrReplaceTool: boolean;
@@ -334,7 +334,7 @@ function resolveToolLabel(
 ): string {
   const {
     tool,
-    isSuccessful,
+    isCompleted,
     isReadTool,
     isWriteTool,
     isStrReplaceTool,
@@ -347,7 +347,7 @@ function resolveToolLabel(
     verdict,
   } = options;
 
-  if (isSuccessful) {
+  if (isCompleted) {
     if (isReadTool) return t("labels.read");
     if (isWriteTool) return t("labels.wrote");
     if (isStrReplaceTool) return t("labels.replaced");
@@ -569,11 +569,10 @@ export function ToolCallBadge({
     (credentialAccessPath.length === 0 || credentialAccessPath === "<list>");
   const isCompleted =
     !loading && (result != null || exitCode != null || isAuxiliaryTool);
-  const isSuccessful = isCompleted && !isError;
   const toolLabel = resolveToolLabel(
     {
       tool,
-      isSuccessful,
+      isCompleted,
       isReadTool,
       isWriteTool,
       isStrReplaceTool,
@@ -642,13 +641,13 @@ export function ToolCallBadge({
             <ToolIcon className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
           ) : null;
         })()}
-        <span className="shrink-0 font-mono font-normal text-foreground/85 dark:text-foreground/90">
+        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
           {toolLabel}
         </span>
         {argsSummary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 font-mono text-[10px] text-foreground/60 dark:text-foreground/65",
+              "min-w-0 flex-1 font-mono text-xs text-foreground/60 dark:text-foreground/65",
               shouldClampSummary
                 ? "overflow-hidden [white-space:break-spaces] break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
                 : "overflow-hidden text-ellipsis whitespace-pre",

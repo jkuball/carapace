@@ -361,7 +361,7 @@ export function Sidebar({
       >
         <div className="flex w-full min-w-0 items-start gap-2.5 px-3 pt-2 pb-1 text-left">
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1 truncate text-sm" title={session.title || session.session_id}>
+          <div className="min-w-0 flex-1 truncate text-sm font-medium" title={session.title || session.session_id}>
               {session.title ? (
                 <EmojiText text={session.title} />
               ) : (
