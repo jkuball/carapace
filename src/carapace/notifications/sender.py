@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
+from urllib.parse import urlparse
 
 from loguru import logger
 from py_vapid import Vapid01
@@ -55,7 +56,22 @@ class WebPushSender:
         attempts = self._retry_attempts + 1
         for attempt in range(attempts):
             try:
-                await asyncio.to_thread(
+                logger.debug(
+                    (
+                        "Web push request subscription={} endpoint_origin={} kind={} "
+                        "notif_id={} attempt={}/{} timeout={} ttl={} bytes={}"
+                    ),
+                    subscription.id,
+                    _endpoint_origin(subscription.endpoint),
+                    payload.kind,
+                    payload.notif_id,
+                    attempt + 1,
+                    attempts,
+                    self._timeout_seconds,
+                    self._delivery_ttl_seconds,
+                    len(encoded_payload.encode("utf-8")),
+                )
+                response = await asyncio.to_thread(
                     self._push_func,
                     subscription_info={
                         "endpoint": subscription.endpoint,
@@ -66,6 +82,15 @@ class WebPushSender:
                     vapid_claims={"sub": self._vapid_subject},
                     ttl=self._delivery_ttl_seconds,
                     timeout=self._timeout_seconds,
+                )
+                logger.debug(
+                    "Web push response subscription={} endpoint_origin={} kind={} notif_id={} status={} reason={}",
+                    subscription.id,
+                    _endpoint_origin(subscription.endpoint),
+                    payload.kind,
+                    payload.notif_id,
+                    getattr(response, "status_code", None),
+                    getattr(response, "reason", None),
                 )
                 return True
             except WebPushException as exc:
@@ -119,3 +144,10 @@ class WebPushSender:
             )
             return None
         return encoded
+
+
+def _endpoint_origin(endpoint: str) -> str:
+    parsed = urlparse(endpoint)
+    if not parsed.scheme or not parsed.netloc:
+        return endpoint
+    return f"{parsed.scheme}://{parsed.netloc}"

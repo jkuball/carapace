@@ -78,14 +78,29 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       const payload = parsePushPayload(event);
-      if (!payload || typeof payload !== "object") return;
+      if (!payload || typeof payload !== "object") {
+        console.debug("[carapace-sw] push ignored: invalid payload");
+        return;
+      }
 
       const tag = payload.tag || payload.notif_id;
+      console.debug("[carapace-sw] push received", {
+        kind: payload.kind || null,
+        notifId: payload.notif_id || null,
+        tag: tag || null,
+        sessionId: payload.session_id || null,
+      });
       if (payload.kind === "notification_clear") {
+        console.debug("[carapace-sw] clearing notifications", { tag: tag || null });
         await closeNotificationsByTag(tag);
         return;
       }
 
+      console.debug("[carapace-sw] showing notification", {
+        title: payload.title || "carapace",
+        tag: tag || null,
+        requireInteraction: payload.kind === "escalation_pending",
+      });
       await self.registration.showNotification(payload.title || "carapace", {
         body: payload.body || "",
         tag: tag || undefined,
@@ -106,6 +121,10 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("notificationclick", (event) => {
+  console.debug("[carapace-sw] notification clicked", {
+    sessionId: event.notification.data?.sessionId || null,
+    notifId: event.notification.data?.notifId || null,
+  });
   event.notification.close();
   event.waitUntil(
     focusOrOpenSession(event.notification.data?.sessionId || null),
