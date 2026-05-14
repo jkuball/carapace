@@ -359,7 +359,7 @@ class SandboxManager:
             self._save_transient_sandbox_snapshot(session_id, "pending")
 
         try:
-            ensured_sc, was_created = await self._session_lifecycle.ensure_session(session_id)
+            ensured_sc, needs_runtime_setup = await self._session_lifecycle.ensure_session(session_id)
         except BaseException as exc:
             if needs_startup:
                 try:
@@ -376,7 +376,7 @@ class SandboxManager:
                 await self.refresh_sandbox_snapshot(session_id, container_id=ensured_sc.container_id)
             except Exception:
                 logger.exception(f"Failed to refresh sandbox snapshot after startup for session {session_id}")
-        return ensured_sc, was_created
+        return ensured_sc, needs_runtime_setup
 
     def _sandbox_name(self, session_id: str) -> str:
         return self._session_lifecycle.sandbox_name(session_id)

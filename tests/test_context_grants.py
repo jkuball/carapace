@@ -289,6 +289,25 @@ class TestSandboxManagerCredentialCache:
         assert snapshot is not None
         assert snapshot.status == "missing"
 
+    @pytest.mark.anyio
+    async def test_ensure_session_flags_resumed_runtime_for_setup_rerun(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.is_running = AsyncMock(return_value=False)
+        runtime.logs = AsyncMock(return_value="carapace sandbox ready")
+        mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr._sessions["sess-1"] = SessionContainer(
+            container_id="container-1",
+            session_id="sess-1",
+            ip_address="172.18.0.22",
+            created_at=1.0,
+            last_used=1.0,
+        )
+
+        _container, needs_runtime_setup = await mgr.ensure_session("sess-1")
+
+        assert needs_runtime_setup is True
+        runtime.resume_sandbox.assert_awaited_once_with("carapace-sandbox-sess-1")
+
 
 # ── SandboxManager context tracking ─────────────────────────────────
 

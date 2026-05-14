@@ -143,7 +143,12 @@ class SandboxSessionLifecycle:
         }
 
     async def ensure_session(self, session_id: str) -> tuple[SessionContainer, bool]:
-        """Return ``(container, was_created)`` — *was_created* is True when a new container was spun up."""
+        """Return ``(container, needs_runtime_setup)``.
+
+        ``needs_runtime_setup`` is True when the sandbox runtime was newly created or
+        resumed after being stopped. In those cases, skill setup must rerun because
+        runtime-only state like generated command shims is lost.
+        """
         sandbox_name = self.sandbox_name(session_id)
 
         if session_id in self._state.sessions:
@@ -157,7 +162,7 @@ class SandboxSessionLifecycle:
                 sc.last_used = time.time()
                 await self.wait_for_ready(sc.container_id, session_id)
                 logger.info(f"Resumed sandbox {sandbox_name} for session {session_id}")
-                return sc, False
+                return sc, True
             except Exception:
                 logger.opt(exception=True).debug(f"Resume failed for {sandbox_name}, will recreate")
             await self.log_container_tail(sc.container_id, session_id)
@@ -168,10 +173,12 @@ class SandboxSessionLifecycle:
                 try:
                     if await self._runtime.is_running(existing_id):
                         logger.info(f"Re-attached to running sandbox {sandbox_name} for session {session_id}")
+                        needs_runtime_setup = False
                     else:
                         await self._runtime.resume_sandbox(sandbox_name)
                         await self.wait_for_ready(existing_id, session_id)
                         logger.info(f"Resumed orphaned sandbox {sandbox_name} for session {session_id}")
+                        needs_runtime_setup = True
                     ip = await self._runtime.get_ip(existing_id, self._network_name)
                     sc = SessionContainer(
                         container_id=existing_id,
@@ -181,7 +188,7 @@ class SandboxSessionLifecycle:
                         last_used=time.time(),
                     )
                     self._state.sessions[session_id] = sc
-                    return sc, False
+                    return sc, needs_runtime_setup
                 except Exception:
                     logger.opt(exception=True).debug(
                         f"Failed to re-attach/resume orphaned sandbox {sandbox_name}, will recreate"

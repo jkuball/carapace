@@ -121,8 +121,8 @@ class SandboxExecCoordinator:
                 self._state.proxy_bypass_sessions.add(session_id)
                 logger.info(f"Proxy bypass ENABLED for session {session_id}")
             try:
-                sc, was_created = await ensure_session(session_id)
-                if was_created:
+                sc, needs_runtime_setup = await ensure_session(session_id)
+                if needs_runtime_setup:
                     await rerun_skill_setup(session_id)
                 sc.last_used = time.time()
                 logger.debug(f"Exec in session {session_id}: {command}")
