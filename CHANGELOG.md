@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.117.5 (2026-05-14)
+
+
+### Other
+
+
+- roadmap
+  ([`82589db`](https://github.com/thiesgerken/carapace/commit/82589db39bb0d43a9b2639b00559bd740d05007c))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: drop dead renotify path
+  ([`adb2f10`](https://github.com/thiesgerken/carapace/commit/adb2f102c440a9f2ff073b67cfeb9bb582faa28d))
+
 ## v0.117.4 (2026-05-14)
 
 
