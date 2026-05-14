@@ -464,7 +464,7 @@ class SessionEngine(SessionTurnMixin):
             suffix = "call" if budget.tool_calls == 1 else "calls"
             return f"Set tool call budget to {budget.tool_calls:,} tool {suffix}."
         budget.cost_usd = Decimal(value)
-        if budget.cost_usd == 0:
+        if budget.cost_usd == Decimal(0):
             budget.cost_usd = None
         active.state.budget = budget
         self._session_mgr.save_state(active.state)
