@@ -14,8 +14,7 @@ function defaultServer(): string {
   if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
     return `${url.protocol}//${url.hostname}:8321`;
   }
-  const origin = window.location.origin;
-  return origin;
+  return window.location.origin;
 }
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {

@@ -90,7 +90,7 @@ self.addEventListener("push", (event) => {
       const requireInteraction =
         payload.kind === "escalation_pending" ||
         payload.kind === "notification_test";
-      const renotify = payload.kind === "notification_test";
+      const renotify = payload.kind === "notification_test" && Boolean(tag);
       if (payload.kind === "notification_clear") {
         console.debug("[carapace-sw] clear notification", {
           tag: tag || null,

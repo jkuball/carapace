@@ -171,7 +171,7 @@ test("push test payload uses an attention-grabbing notification style", async ()
   assert.equal(title, "Test notification");
   assert.equal(options.tag, undefined);
   assert.equal(options.requireInteraction, true);
-  assert.equal(options.renotify, true);
+  assert.equal(options.renotify, false);
 });
 
 test("notificationclick focuses existing client and navigates to session", async () => {
