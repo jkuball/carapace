@@ -1,11 +1,26 @@
 # CHANGELOG
 
 
+## v0.118.11 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: adjust user bubble colors in globals.css
+  ([`5938c72`](https://github.com/thiesgerken/carapace/commit/5938c7275defc3e85d1e7a4a3c42d8f4db68aa2f))
+
+- 💄 ui: update German translation for 'thinking' status
+  ([`ca9bddf`](https://github.com/thiesgerken/carapace/commit/ca9bddfae218ef7876360659b30a983490851d01))
+
 ## v0.118.10 (2026-05-14)
 
 
 ### 💄 UI/UX
 
+
+- 💄 ui: update German translation for 'thinking' status
+  ([`fff79d7`](https://github.com/thiesgerken/carapace/commit/fff79d7954291695a0c06759bfed1c2dc70d4324))
 
 - 💄 ui: even more tweaking
   ([`16d7185`](https://github.com/thiesgerken/carapace/commit/16d7185b5781b42f4109153efb12f7b3b17a0b9d))
