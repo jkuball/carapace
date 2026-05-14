@@ -26,12 +26,17 @@ export function useSessionPresence(
       const subscriptionId = getNotificationSubscriptionId();
 
       const operations: Array<Promise<void>> = [
-        postInteractivePresence(server, token, {
-          session_id: sessionId,
-          source_id: sourceId,
-          client_type: "web",
-          focus_state: focusState,
-        }, options),
+        postInteractivePresence(
+          server,
+          token,
+          {
+            session_id: sessionId,
+            source_id: sourceId,
+            client_type: "web",
+            focus_state: focusState,
+          },
+          options,
+        ),
       ];
       if (subscriptionId) {
         operations.push(

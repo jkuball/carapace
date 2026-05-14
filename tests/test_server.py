@@ -157,13 +157,13 @@ def test_vapid_public_key_is_public_when_configured(client):
     assert resp.json() == {"vapid_public_key": "test-vapid-public-key"}
 
 
-def test_vapid_public_key_returns_404_when_missing(client):
-    srv._config.notifications.vapid_public_key = None
+def test_vapid_public_key_is_public_when_generated(client):
+    srv._config.notifications.vapid_public_key = "generated-vapid-public-key"
 
     resp = client.get("/api/config/vapid-public-key")
 
-    assert resp.status_code == 404
-    assert resp.json()["detail"] == "VAPID public key is not configured"
+    assert resp.status_code == 200
+    assert resp.json() == {"vapid_public_key": "generated-vapid-public-key"}
 
 
 def test_notification_subscription_roundtrip(client, auth_headers):

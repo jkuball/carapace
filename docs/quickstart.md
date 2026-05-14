@@ -93,16 +93,18 @@ In the web UI, public sessions expose a "Commit to knowledge" action. Private se
 
 Full backend behavior and API details live in [notifications.md](notifications.md).
 
-Phase 2 adds server-side notification routing and Web Push delivery. Delivery is only active when all three VAPID settings are configured together.
+carapace can auto-generate a VAPID keypair on startup and reuse it from `data/notifications/vapid_private_key.pem` if you do not configure one explicitly.
 
 ```yaml
 notifications:
   enabled: true
   presence_ttl_seconds: 60
   subscription_ttl_days: 30
-  vapid_public_key: "<public-key>"
-  vapid_private_key: "<private-key-or-pem-path>"
-  vapid_subject: "mailto:you@example.com"
+  # Optional. If omitted, carapace generates and persists a keypair automatically.
+  # vapid_public_key: "<public-key>"
+  # vapid_private_key: "<private-key-or-pem-path>"
+  # Optional. Defaults to "mailto:carapace@localhost".
+  # vapid_subject: "mailto:you@example.com"
   send_timeout_seconds: 10
   retry_attempts: 2
   retry_backoff_seconds: 1.0
@@ -117,8 +119,9 @@ notifications:
 
 Notes:
 
-- `vapid_public_key`, `vapid_private_key`, and `vapid_subject` are validated as an all-or-nothing group.
-- Without VAPID config, carapace still tracks presence and notification preferences, but actual push sends are skipped.
+- If `vapid_public_key` and `vapid_private_key` are omitted, carapace generates a keypair on startup and reuses it from `data/notifications/vapid_private_key.pem` on later restarts.
+- If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
+- If you set VAPID keys explicitly, set both `vapid_public_key` and `vapid_private_key`.
 - Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
 - Notification subscriptions are grouped by an `owner_key` derived from the current `CARAPACE_TOKEN`. If you rotate that token, existing notification subscriptions no longer match and clients must subscribe again.
 

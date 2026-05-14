@@ -100,7 +100,7 @@ The Web Push sender uses `pywebpush` with VAPID configuration from `config.yaml`
 
 Behavior:
 
-- skips delivery entirely when VAPID configuration is missing
+- auto-generates and persists a VAPID keypair when none is configured
 - deletes subscriptions on `404` or `410`
 - retries `429` and transient transport errors with exponential backoff
 - rejects payloads larger than `notifications.max_payload_bytes`
@@ -129,9 +129,11 @@ notifications:
   enabled: true
   presence_ttl_seconds: 60
   subscription_ttl_days: 30
-  vapid_public_key: "<public-key>"
-  vapid_private_key: "<private-key-or-pem-path>"
-  vapid_subject: "mailto:you@example.com"
+  # Optional. If omitted, carapace generates and persists a keypair automatically.
+  # vapid_public_key: "<public-key>"
+  # vapid_private_key: "<private-key-or-pem-path>"
+  # Optional. Defaults to "mailto:carapace@localhost".
+  # vapid_subject: "mailto:you@example.com"
   send_timeout_seconds: 10
   retry_attempts: 2
   retry_backoff_seconds: 1.0
@@ -144,13 +146,12 @@ notifications:
     unattended_turn_failed: true
 ```
 
-VAPID settings are validated as an all-or-nothing group:
+VAPID behavior:
 
-- `vapid_public_key`
-- `vapid_private_key`
-- `vapid_subject`
-
-If only some of them are set, config loading fails.
+- If `vapid_public_key` and `vapid_private_key` are omitted, carapace generates a keypair on startup.
+- Generated keys are persisted at `$CARAPACE_DATA_DIR/notifications/vapid_private_key.pem` and reused on later restarts.
+- If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
+- If you set VAPID keys explicitly, set both `vapid_public_key` and `vapid_private_key`.
 
 ## API
 

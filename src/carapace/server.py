@@ -66,6 +66,7 @@ from carapace.notifications import (
     NotificationStore,
     WebPushSender,
     derive_owner_key,
+    ensure_vapid_config,
 )
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
@@ -362,6 +363,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     _credential_registry = await build_credential_registry(_config.credentials, _data_dir)
     if _credential_registry.backend_names:
         logger.info(f"Credential backends: {', '.join(_credential_registry.backend_names)}")
+
+    _config.notifications = ensure_vapid_config(_config.notifications, _data_dir)
 
     token = get_token()
     _notification_store = NotificationStore(_data_dir)
@@ -1532,8 +1535,6 @@ async def get_meta(_token: str = Depends(_verify_token)) -> ServerMeta:
 @router.get("/config/vapid-public-key", response_model=VapidPublicKeyResponse)
 async def get_vapid_public_key() -> VapidPublicKeyResponse:
     vapid_public_key = _config.notifications.vapid_public_key
-    if not vapid_public_key:
-        raise HTTPException(status_code=404, detail="VAPID public key is not configured")
     return VapidPublicKeyResponse(vapid_public_key=vapid_public_key)
 
 

@@ -395,12 +395,6 @@ class NotificationsConfig(BaseModel):
             self.vapid_private_key = self.vapid_private_key.strip() or None
         if self.vapid_subject is not None:
             self.vapid_subject = self.vapid_subject.strip() or None
-        vapid_values = (self.vapid_public_key, self.vapid_private_key, self.vapid_subject)
-        if any(vapid_values) and not all(vapid_values):
-            raise ValueError(
-                "notifications.vapid_public_key, notifications.vapid_private_key, "
-                + "and notifications.vapid_subject must be set together"
-            )
         if self.send_timeout_seconds <= 0:
             raise ValueError("notifications.send_timeout_seconds must be > 0")
         if self.retry_attempts < 0:

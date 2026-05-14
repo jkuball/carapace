@@ -15,6 +15,7 @@ from carapace.models import (
     JobCronTrigger,
     JobDefinition,
     JobsFile,
+    NotificationsConfig,
     NotificationSubscription,
     SessionBudget,
     SessionState,
@@ -55,6 +56,14 @@ def test_notification_subscription_rejects_empty_owner_key() -> None:
                 "expires_at": "2026-06-12T00:00:00Z",
             }
         )
+
+
+def test_notifications_config_allows_missing_vapid_fields() -> None:
+    config = NotificationsConfig.model_validate({})
+
+    assert config.vapid_public_key is None
+    assert config.vapid_private_key is None
+    assert config.vapid_subject is None
 
 
 def test_job_cron_trigger_accepts_valid_expression_and_timezone() -> None:
