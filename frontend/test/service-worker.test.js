@@ -146,6 +146,32 @@ test("push payload falls back to text parsing and default assets", async () => {
   assert.equal(options.icon, "/pwa-192x192.png");
   assert.equal(options.badge, "/pwa-192x192.png");
   assert.equal(options.requireInteraction, false);
+  assert.equal(options.renotify, false);
+});
+
+test("push test payload renotifies when reusing the same tag", async () => {
+  const harness = await loadServiceWorkerHarness();
+  const event = waitableEvent({
+    data: {
+      json: () => ({
+        kind: "notification_test",
+        notif_id: "test:sub-1",
+        title: "Test notification",
+        body: "Push notifications are configured.",
+        session_id: null,
+      }),
+    },
+  });
+
+  harness.listeners.get("push")(event);
+  await event.promise;
+
+  assert.equal(harness.showNotificationCalls.length, 1);
+  const [title, options] = harness.showNotificationCalls[0];
+  assert.equal(title, "Test notification");
+  assert.equal(options.tag, "test:sub-1");
+  assert.equal(options.requireInteraction, false);
+  assert.equal(options.renotify, true);
 });
 
 test("notificationclick focuses existing client and navigates to session", async () => {
