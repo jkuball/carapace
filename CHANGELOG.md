@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.10 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: even more tweaking
+  ([`16d7185`](https://github.com/thiesgerken/carapace/commit/16d7185b5781b42f4109153efb12f7b3b17a0b9d))
+
 ## v0.118.9 (2026-05-14)
 
 
