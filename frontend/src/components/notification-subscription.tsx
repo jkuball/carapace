@@ -97,6 +97,30 @@ export function pushServerKeysMatch(
   return true;
 }
 
+export async function ensureCurrentPushSubscription(
+  registration: ServiceWorkerRegistration,
+  applicationServerKey: ArrayBuffer,
+): Promise<PushSubscription> {
+  let pushSubscription = await registration.pushManager.getSubscription();
+  if (
+    pushSubscription &&
+    !pushServerKeysMatch(
+      pushSubscription.options.applicationServerKey,
+      applicationServerKey,
+    )
+  ) {
+    await pushSubscription.unsubscribe();
+    pushSubscription = null;
+  }
+  if (!pushSubscription) {
+    pushSubscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
+  }
+  return pushSubscription;
+}
+
 export function NotificationSubscription({
   server,
   token,
@@ -269,23 +293,10 @@ function NotificationSubscriptionContent({
 
       const vapidPublicKey = await getVapidPublicKey(server);
       const applicationServerKey = decodeVapidPublicKey(vapidPublicKey);
-      let pushSubscription = await registration.pushManager.getSubscription();
-      if (
-        pushSubscription &&
-        !pushServerKeysMatch(
-          pushSubscription.options.applicationServerKey,
-          applicationServerKey,
-        )
-      ) {
-        await pushSubscription.unsubscribe();
-        pushSubscription = null;
-      }
-      if (!pushSubscription) {
-        pushSubscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey,
-        });
-      }
+      const pushSubscription = await ensureCurrentPushSubscription(
+        registration,
+        applicationServerKey,
+      );
 
       const pushKeys = readPushKeys(pushSubscription);
       if (!pushKeys) {

@@ -315,6 +315,48 @@ test("NotificationSubscription refreshes displayed permission when the window re
   }
 });
 
+test("ensureCurrentPushSubscription replaces stale browser subscriptions after VAPID key rotation", async () => {
+  const { ensureCurrentPushSubscription } = await import("./notification-subscription");
+  const currentVapidKey = Uint8Array.from([1, 2, 3, 4, 5, 6]);
+  const previousVapidKey = Uint8Array.from([6, 5, 4, 3, 2, 1]);
+  let unsubscribed = false;
+  let subscribedWithKey: Uint8Array | null = null;
+
+  const nextSubscription = await ensureCurrentPushSubscription(
+    {
+      pushManager: {
+        getSubscription: async () => ({
+          endpoint: "https://push.example.test/sub-stale",
+          expirationTime: null,
+          options: { applicationServerKey: previousVapidKey.buffer, userVisibleOnly: true },
+          getKey: () => null,
+          toJSON: () => ({ keys: { p256dh: "stale-key", auth: "stale-auth" } }),
+          unsubscribe: async () => {
+            unsubscribed = true;
+            return true;
+          },
+        }),
+        subscribe: async ({ applicationServerKey }: PushSubscriptionOptionsInit) => {
+          subscribedWithKey = new Uint8Array(applicationServerKey as ArrayBuffer);
+          return {
+            endpoint: "https://push.example.test/sub-new",
+            expirationTime: null,
+            options: { applicationServerKey, userVisibleOnly: true },
+            getKey: () => null,
+            toJSON: () => ({ keys: { p256dh: "new-key", auth: "new-auth" } }),
+            unsubscribe: async () => true,
+          } as PushSubscription;
+        },
+      },
+    } as unknown as ServiceWorkerRegistration,
+    currentVapidKey.buffer,
+  );
+
+  assert.equal(unsubscribed, true);
+  assert.deepEqual(Array.from(subscribedWithKey ?? []), Array.from(currentVapidKey));
+  assert.equal(nextSubscription.endpoint, "https://push.example.test/sub-new");
+});
+
 test("pushServerKeysMatch detects stale VAPID-bound browser subscriptions", async () => {
   const { pushServerKeysMatch } = await import("./notification-subscription");
   const currentVapidKey = Uint8Array.from([1, 2, 3, 4, 5, 6]).buffer;
