@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.7 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: two line tool calls
+  ([`51340bb`](https://github.com/thiesgerken/carapace/commit/51340bb599af1abf5cb9f01e992fb9e9b5ae1387))
+
 ## v0.117.6 (2026-05-14)
 
 
