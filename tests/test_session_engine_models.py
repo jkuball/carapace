@@ -511,3 +511,102 @@ def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path) -> 
 
         assert len(truncated) == 4
         assert truncated[-1]["role"] == "assistant"
+
+
+def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    sid = engine.session_mgr.create_session().session_id
+    latest_messages = [
+        ModelRequest(parts=[UserPromptPart(content="hello")]),
+        ModelResponse(
+            parts=[
+                ToolCallPart(tool_name="shell", args={"command": "sleep 10"}, tool_call_id="call-1"),
+                ToolCallPart(tool_name="shell", args={"command": "sleep 20"}, tool_call_id="call-2"),
+            ]
+        ),
+    ]
+
+    engine._save_user_message_on_failure(
+        sid,
+        "hello",
+        latest_messages=latest_messages,
+        terminal_message="The previous turn was interrupted before completion.",
+    )
+
+    history = engine.session_mgr.load_history(sid)
+
+    assert len(history) == 4
+    assert isinstance(history[1], ModelResponse)
+    assert isinstance(history[2], ModelRequest)
+    assert isinstance(history[3], ModelResponse)
+
+    synthetic_request = history[-2]
+    assert isinstance(synthetic_request, ModelRequest)
+    assert len(synthetic_request.parts) == 2
+    assert all(isinstance(part, ToolReturnPart) for part in synthetic_request.parts)
+    assert [part.tool_call_id for part in synthetic_request.parts] == ["call-1", "call-2"]
+    assert [part.outcome for part in synthetic_request.parts] == ["failed", "failed"]
+    assert all(
+        part.content == "Tool call was canceled because the turn ended before it completed."
+        for part in synthetic_request.parts
+    )
+
+    terminal = history[-1]
+    assert any(
+        isinstance(part, TextPart) and part.content == "The previous turn was interrupted before completion."
+        for part in terminal.parts
+    )
+
+
+def test_save_user_message_on_failure_appends_cancelled_parallel_tool_results(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    sid = engine.session_mgr.create_session().session_id
+    engine.session_mgr.save_events(
+        sid,
+        [
+            {"role": "user", "content": "hello"},
+            {
+                "role": "tool_call",
+                "tool": "shell",
+                "args": {"command": "sleep 10"},
+                "detail": "run",
+                "tool_id": "tool-1",
+            },
+            {
+                "role": "tool_call",
+                "tool": "shell",
+                "args": {"command": "sleep 20"},
+                "detail": "run",
+                "tool_id": "tool-2",
+            },
+        ],
+    )
+
+    engine._save_user_message_on_failure(
+        sid,
+        "hello",
+        latest_messages=[ModelRequest(parts=[UserPromptPart(content="hello")])],
+        terminal_message="The previous turn was interrupted before completion.",
+    )
+
+    events = engine.session_mgr.load_events(sid)
+
+    assert [event["role"] for event in events] == [
+        "user",
+        "tool_call",
+        "tool_call",
+        "tool_result",
+        "tool_result",
+        "assistant",
+    ]
+    assert [event.get("tool_id") for event in events[3:5]] == ["tool-1", "tool-2"]
+    assert all(event.get("exit_code") == 130 for event in events[3:5])
+    assert all(
+        event.get("result") == "Tool call was canceled because the turn ended before it completed."
+        for event in events[3:5]
+    )
+    assert events[-1]["content"] == "The previous turn was interrupted before completion."
