@@ -15,6 +15,7 @@ import {
   formatBytes,
   sandboxStatusIndicatorClass,
   sandboxStatusKey,
+  shouldConfirmArchiveSession,
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 
@@ -358,6 +359,7 @@ export function Sidebar({
                 const nextArchived = !session.attributes.archived;
                 if (
                   nextArchived
+                  && shouldConfirmArchiveSession(session)
                   && !shouldConfirmDestructiveAction(
                     event,
                     tSidebar("confirm.archiveSession"),

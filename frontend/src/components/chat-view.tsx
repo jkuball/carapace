@@ -41,6 +41,7 @@ import {
   formatBytes,
   sandboxStatusIndicatorClass,
   sandboxStatusKey,
+  shouldConfirmArchiveSession,
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 import { Message } from "./message";
@@ -1571,10 +1572,11 @@ export function ChatView({
     if (nextArchived && !canArchiveSession(session)) {
       return;
     }
-    const confirmation = nextArchived
-      ? t("confirm.archiveSession")
-      : t("confirm.unarchiveSession");
-    if (!window.confirm(confirmation)) {
+    if (nextArchived) {
+      if (shouldConfirmArchiveSession(session) && !window.confirm(t("confirm.archiveSession"))) {
+        return;
+      }
+    } else if (!window.confirm(t("confirm.unarchiveSession"))) {
       return;
     }
 
