@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.9 (2026-05-14)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(ui): pinning+grouping
+  ([`41a31a8`](https://github.com/thiesgerken/carapace/commit/41a31a8da148d5d916284d3a087323d7b7ef12b3))
+
 ## v0.118.8 (2026-05-14)
 
 
