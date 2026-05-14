@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.9 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: tune font size and use serif font for text body
+  ([`c49d729`](https://github.com/thiesgerken/carapace/commit/c49d72923620fb88322c011262362f483e50c067))
+
 ## v0.117.8 (2026-05-14)
 
 
