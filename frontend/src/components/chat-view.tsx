@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { useAppLocale } from "@/components/locale-provider";
 import { useSessionPresence } from "@/hooks/use-session-presence";
@@ -838,6 +838,7 @@ export function ChatView({
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
   const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | null>(null);
   const [updatingSessionModel, setUpdatingSessionModel] = useState<"agent" | "sentinel" | null>(null);
+  const [modelsUnlocked, setModelsUnlocked] = useState(false);
   const [modelUpdateError, setModelUpdateError] = useState<string | null>(null);
   const [turnActionBusyIndex, setTurnActionBusyIndex] = useState<number | null>(null);
   const [knowledgeNotice, setKnowledgeNotice] = useState<{
@@ -887,6 +888,10 @@ export function ChatView({
 
   useEffect(() => {
     setModelUpdateError(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    setModelsUnlocked(false);
   }, [sessionId]);
 
   const handleMobileInspectorTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
@@ -1673,18 +1678,26 @@ export function ChatView({
       return;
     }
 
-    const fieldName = modelType === "agent" ? "agent_model_name" : "sentinel_model_name";
-    const currentValue = modelType === "agent"
-      ? session.agent_model_name ?? null
-      : session.sentinel_model_name ?? null;
-    if (currentValue === value) {
+    const currentAgentValue = session.agent_model_name ?? null;
+    const currentSentinelValue = session.sentinel_model_name ?? null;
+    const nextAgentValue = !modelsUnlocked || modelType === "agent" ? value : currentAgentValue;
+    const nextSentinelValue = !modelsUnlocked || modelType === "sentinel" ? value : currentSentinelValue;
+    const patch: { agent_model_name?: string | null; sentinel_model_name?: string | null } = {};
+
+    if (nextAgentValue !== currentAgentValue) {
+      patch.agent_model_name = nextAgentValue;
+    }
+    if (nextSentinelValue !== currentSentinelValue) {
+      patch.sentinel_model_name = nextSentinelValue;
+    }
+    if (Object.keys(patch).length === 0) {
       return;
     }
 
     setUpdatingSessionModel(modelType);
     setModelUpdateError(null);
     try {
-      const updated = await updateSession(server, token, sessionId, { [fieldName]: value });
+      const updated = await updateSession(server, token, sessionId, patch);
       onSessionUpdate?.(updated);
     } catch (error) {
       setModelUpdateError(errorDetail(error, t));
@@ -2062,8 +2075,23 @@ export function ChatView({
       </section>
 
       <section className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          {tRoot("jobs.fields.models")}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            {tRoot("jobs.fields.models")}
+          </div>
+          <button
+            type="button"
+            onClick={() => setModelsUnlocked((current) => !current)}
+            aria-pressed={modelsUnlocked}
+            aria-label={modelsUnlocked ? tRoot("jobs.fields.modelsUnlinked") : tRoot("jobs.fields.modelsLinked")}
+            title={modelsUnlocked ? tRoot("jobs.fields.modelsUnlinkedHelp") : tRoot("jobs.fields.modelsLinkedHelp")}
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/70 text-muted-foreground transition-colors",
+              modelsUnlocked ? "hover:bg-muted" : "bg-accent/60 text-accent-foreground hover:bg-accent",
+            )}
+          >
+            {modelsUnlocked ? <Link2Off className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+          </button>
         </div>
 
         <div className="mt-3 space-y-3">
