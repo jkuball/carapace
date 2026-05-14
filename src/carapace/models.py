@@ -67,7 +67,7 @@ class SessionBudget(BaseModel):
         if self.cost_usd is not None:
             if self.cost_usd < 0:
                 raise ValueError("budget.cost_usd must be >= 0")
-            if self.cost_usd == 0:
+            if self.cost_usd == Decimal(0):
                 self.cost_usd = None
         if self.tool_calls is not None:
             if self.tool_calls < 0:
