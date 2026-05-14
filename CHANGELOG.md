@@ -1,6 +1,120 @@
 # CHANGELOG
 
 
+## v0.117.4 (2026-05-14)
+
+
+### Other
+
+
+- more linting
+  ([`f326581`](https://github.com/thiesgerken/carapace/commit/f326581c1cbf778bede7d29bc17412a984e669ae))
+
+- remove some logs again
+  ([`d74558a`](https://github.com/thiesgerken/carapace/commit/d74558a46a03fc6286ca9f1320b8c3ca4d20a02e))
+
+- renotify
+  ([`402b726`](https://github.com/thiesgerken/carapace/commit/402b72605734e8f3a343ca80bd55142166cf4632))
+
+- add debug logs
+  ([`efa57aa`](https://github.com/thiesgerken/carapace/commit/efa57aa55dc1d884586b1a5534ff561d4ddd5cf3))
+
+- cors
+  ([`bfe6c8e`](https://github.com/thiesgerken/carapace/commit/bfe6c8edd16fcd635c3530a7afe85abe79118900))
+
+- scrollable settings container
+  ([`f88f4a3`](https://github.com/thiesgerken/carapace/commit/f88f4a38ffc94700c0defc9d27ea73d0063b3ef7))
+
+- crc
+  ([`21c9615`](https://github.com/thiesgerken/carapace/commit/21c9615cc75cfd5f79f90422dae68dcdfc348669))
+
+- fix pem loading
+  ([`059ffd8`](https://github.com/thiesgerken/carapace/commit/059ffd89e9637dd38aae4792a0748724fca421e5))
+
+- typing
+  ([`0da88a9`](https://github.com/thiesgerken/carapace/commit/0da88a987f20892556d6fa977ad9cc434b953f92))
+
+- fix typing in channel.py
+  ([`aa55fe4`](https://github.com/thiesgerken/carapace/commit/aa55fe4ea257f07480f9202c4c940ce304c5ad79))
+
+- add pyrefly
+  ([`877e378`](https://github.com/thiesgerken/carapace/commit/877e3786f24af0eca1f874b1fa8fe1d85234fffa))
+
+- make the notifications testable
+  ([`512ac86`](https://github.com/thiesgerken/carapace/commit/512ac86b144e27e461ad2ff31570c5b9c3075870))
+
+- auto-generate vapid keys
+  ([`efbde84`](https://github.com/thiesgerken/carapace/commit/efbde842e8f5840f4ada53e1d8853da75ec46fb3))
+
+- add tests
+  ([`b77dbcb`](https://github.com/thiesgerken/carapace/commit/b77dbcbf42e99a1a5f8460b0cfbb1fd2c279ac66))
+
+- crc
+  ([`c20c3bf`](https://github.com/thiesgerken/carapace/commit/c20c3bf0d00ba4f715cdf076bf0ed356d87c5e5e))
+
+- crc
+  ([`c191ecc`](https://github.com/thiesgerken/carapace/commit/c191ecc89dccb7a2320bb050e99196f5cbfd609d))
+
+- fix lint
+  ([`ea069bb`](https://github.com/thiesgerken/carapace/commit/ea069bb3ed582dc1c695ab1176bd0230940a7a91))
+
+- crc
+  ([`372a81e`](https://github.com/thiesgerken/carapace/commit/372a81eef9e167ac31016106ed461d821abfdb1a))
+
+- fix: update esbuild configuration and enhance notification subscription component
+  ([`8e7b99e`](https://github.com/thiesgerken/carapace/commit/8e7b99ed4eb885b9256e96759cbbca2051a9d08d))
+
+- remove plans
+  ([`96640c6`](https://github.com/thiesgerken/carapace/commit/96640c609a9be8e033b2948a61c3f59c516348b6))
+
+- more tests
+  ([`6cf0c2b`](https://github.com/thiesgerken/carapace/commit/6cf0c2bb82afd9f16d08bcd69a13a9ea70e66517))
+
+- more tests
+  ([`06abad4`](https://github.com/thiesgerken/carapace/commit/06abad485095ca62160b9f1a972a5d4a4fc01796))
+
+- add tests
+  ([`a9810c7`](https://github.com/thiesgerken/carapace/commit/a9810c7af710f5578c5ecc264c21d31006d71535))
+
+- notifications in ui
+  ([`e87b7a9`](https://github.com/thiesgerken/carapace/commit/e87b7a958757bce111607f2941b00b16d1b88a5e))
+
+- docs
+  ([`304d330`](https://github.com/thiesgerken/carapace/commit/304d3307b6c3f75901ac9a835528faddf2f396ef))
+
+- documentation
+  ([`b91b59f`](https://github.com/thiesgerken/carapace/commit/b91b59fc832728f72b9d14be29ba4163111955e1))
+
+- implement push delivery
+  ([`fc4ba4a`](https://github.com/thiesgerken/carapace/commit/fc4ba4ae8d4d249bd8644cd22a80de9eb13afef2))
+
+- wire presence to ui
+  ([`8f0ad37`](https://github.com/thiesgerken/carapace/commit/8f0ad3709c86f03653fac600c4777b15e8029c05))
+
+- notifications backend
+  ([`4f88c88`](https://github.com/thiesgerken/carapace/commit/4f88c887716543bfb9c3ae2e7c3d065627cfbe0b))
+
+- notification planning
+  ([`ae9d19c`](https://github.com/thiesgerken/carapace/commit/ae9d19c226ff8e643086258a773e0891bac06afc))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: address notification review feedback
+  ([`e65ad75`](https://github.com/thiesgerken/carapace/commit/e65ad75a050a3273cdbf5a1119bbcae88cbeecbe))
+
+- 🐛 fix: harden web presence heartbeats
+  ([`25fce02`](https://github.com/thiesgerken/carapace/commit/25fce021c24af66857a1bddc96a999f127c84017))
+
+- 🐛 fix: retain pending notification targets on clear failures
+  ([`e83c201`](https://github.com/thiesgerken/carapace/commit/e83c20182c96594edc2353398f50633d135e948f))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: derive VAPID public key from private key
+  ([`a0d77b1`](https://github.com/thiesgerken/carapace/commit/a0d77b152ef9acdd71488f18e31eb1555b79f887))
+
 ## v0.117.3 (2026-05-12)
 
 
