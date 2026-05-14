@@ -17,3 +17,4 @@
 - [ ] warn user if deleting a session that has commits not pushed
 - [ ] replace pull / push slash commands (that aren't really tied to the session anyway) with a global indicator how many commits ahead/behind the backend's global repo is compared to the remote repo
 - [ ] "query" sessions in the sense that the sentinel should deny all write ops. like "ask" mode in copilot. maybe call them "ask" instead. sentinel needs to be told this everytime.
+- [ ] speech input

@@ -650,8 +650,8 @@ export function ToolCallBadge({
             className={cn(
               "min-w-0 flex-1 font-mono text-[11px] text-foreground/75 dark:text-foreground/80",
               shouldClampSummary
-                ? "overflow-hidden whitespace-normal break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
-                : "truncate",
+                ? "overflow-hidden [white-space:break-spaces] break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
+                : "overflow-hidden text-ellipsis whitespace-pre",
             )}
             title={argsSummary}
           >

@@ -335,7 +335,7 @@ export function Message({
 
     case "assistant":
       return (
-        <div className="group max-w-[85%] text-sm">
+        <div className="group max-w-full text-sm md:max-w-[85%]">
           <div className="chat-copy-serif min-w-0 flex-1">
             <MarkdownContent content={message.content} />
             {message.finalStatus ? <FinalStatusNotice status={message.finalStatus} /> : null}
@@ -355,7 +355,7 @@ export function Message({
 
     case "streaming":
       return (
-        <div className="group flex max-w-[85%] items-start gap-1.5 text-sm">
+        <div className="group flex max-w-full items-start gap-1.5 text-sm md:max-w-[85%]">
           <div className="chat-copy-serif min-w-0 flex-1">
             <MarkdownContent content={message.content} />
           </div>
@@ -467,7 +467,7 @@ export function Message({
 
     case "error":
       return (
-        <div className="my-1 max-w-[85%] rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div className="my-1 max-w-full rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive md:max-w-[85%]">
           <pre className="whitespace-pre-wrap font-mono text-xs">{message.detail}</pre>
           <MessageActions
             copyText={message.detail}
