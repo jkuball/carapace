@@ -66,6 +66,37 @@ function readPushKeys(pushSubscription: PushSubscription): { p256dh: string; aut
   return { p256dh, auth };
 }
 
+function toUint8Array(value: BufferSource | null | undefined): Uint8Array | null {
+  if (!value) return null;
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return null;
+}
+
+export function pushServerKeysMatch(
+  existingKey: BufferSource | null | undefined,
+  nextKey: ArrayBuffer,
+): boolean {
+  const existingBytes = toUint8Array(existingKey);
+  const nextBytes = new Uint8Array(nextKey);
+  if (!existingBytes) {
+    return false;
+  }
+  if (existingBytes.byteLength !== nextBytes.byteLength) {
+    return false;
+  }
+  for (let index = 0; index < existingBytes.byteLength; index += 1) {
+    if (existingBytes[index] !== nextBytes[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function NotificationSubscription({
   server,
   token,
@@ -237,11 +268,22 @@ function NotificationSubscriptionContent({
       }
 
       const vapidPublicKey = await getVapidPublicKey(server);
+      const applicationServerKey = decodeVapidPublicKey(vapidPublicKey);
       let pushSubscription = await registration.pushManager.getSubscription();
+      if (
+        pushSubscription &&
+        !pushServerKeysMatch(
+          pushSubscription.options.applicationServerKey,
+          applicationServerKey,
+        )
+      ) {
+        await pushSubscription.unsubscribe();
+        pushSubscription = null;
+      }
       if (!pushSubscription) {
         pushSubscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: decodeVapidPublicKey(vapidPublicKey),
+          applicationServerKey,
         });
       }
 

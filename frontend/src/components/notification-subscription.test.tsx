@@ -314,3 +314,17 @@ test("NotificationSubscription refreshes displayed permission when the window re
     restoreDom();
   }
 });
+
+test("pushServerKeysMatch detects stale VAPID-bound browser subscriptions", async () => {
+  const { pushServerKeysMatch } = await import("./notification-subscription");
+  const currentVapidKey = Uint8Array.from([1, 2, 3, 4, 5, 6]).buffer;
+  const previousVapidKey = Uint8Array.from([6, 5, 4, 3, 2, 1]).buffer;
+
+  assert.equal(pushServerKeysMatch(currentVapidKey, currentVapidKey), true);
+  assert.equal(pushServerKeysMatch(previousVapidKey, currentVapidKey), false);
+  assert.equal(
+    pushServerKeysMatch(Uint8Array.from([1, 2, 3, 4, 5, 6]), currentVapidKey),
+    true,
+  );
+  assert.equal(pushServerKeysMatch(null, currentVapidKey), false);
+});
