@@ -42,6 +42,15 @@
                 "de": "Deutsch"
             }
         },
+        "theme": {
+            "label": "Darstellung",
+            "description": "Wähle, wie das Farbschema bestimmt wird.",
+            "options": {
+                "system": "System",
+                "light": "Hell",
+                "dark": "Dunkel"
+            }
+        },
         "chatList": {
             "label": "Chats",
             "showArchived": {

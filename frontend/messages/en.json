@@ -42,6 +42,15 @@
                 "de": "Deutsch"
             }
         },
+        "theme": {
+            "label": "Appearance",
+            "description": "Choose how the color theme is resolved.",
+            "options": {
+                "system": "System",
+                "light": "Light",
+                "dark": "Dark"
+            }
+        },
         "chatList": {
             "label": "Chats",
             "showArchived": {

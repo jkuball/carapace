@@ -1,11 +1,15 @@
 "use client";
 
 import { Globe2 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
+import { useEffect, useState } from "react";
 import { useAppLocale } from "@/components/locale-provider";
 import { NotificationSubscription } from "@/components/notification-subscription";
 import type { LocaleOverride } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+
+type ThemePreference = "system" | "light" | "dark";
 
 export function PreferencesView({
   embedded = false,
@@ -22,6 +26,12 @@ export function PreferencesView({
 }) {
   const t = useTranslations("preferences");
   const { localeOverride, setLocaleOverride, systemLocale } = useAppLocale();
+  const { theme, setTheme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const localeLabels: Record<LocaleOverride, string> = {
     de: t("language.options.de"),
@@ -29,6 +39,19 @@ export function PreferencesView({
     system: t("language.options.system"),
   };
   const systemOptionLabel = `${localeLabels.system} (${localeLabels[systemLocale]})`;
+  const themeLabels: Record<ThemePreference, string> = {
+    dark: t("theme.options.dark"),
+    light: t("theme.options.light"),
+    system: t("theme.options.system"),
+  };
+  const themePreference: ThemePreference =
+    theme === "light" || theme === "dark" ? theme : "system";
+  const currentSystemTheme: Exclude<ThemePreference, "system"> | null =
+    systemTheme === "light" || systemTheme === "dark" ? systemTheme : null;
+  const systemThemeOptionLabel =
+    mounted && currentSystemTheme
+      ? `${themeLabels.system} (${themeLabels[currentSystemTheme]})`
+      : themeLabels.system;
 
   return (
     <div className={cn(
@@ -77,6 +100,26 @@ export function PreferencesView({
                 <option value="system">{systemOptionLabel}</option>
                 <option value="en">{localeLabels.en}</option>
                 <option value="de">{localeLabels.de}</option>
+              </select>
+            </label>
+          </div>
+
+          <div className={cn(
+            "rounded-2xl border border-border p-4",
+            embedded ? "mt-4 bg-background/88 shadow-sm" : "mt-4 bg-muted/25",
+          )}>
+            <label className="block space-y-1.5">
+              <span className="block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {t("theme.label")}
+              </span>
+              <select
+                value={themePreference}
+                onChange={(event) => setTheme(event.target.value as ThemePreference)}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
+              >
+                <option value="system">{systemThemeOptionLabel}</option>
+                <option value="light">{themeLabels.light}</option>
+                <option value="dark">{themeLabels.dark}</option>
               </select>
             </label>
           </div>
