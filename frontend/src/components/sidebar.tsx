@@ -284,29 +284,37 @@ export function Sidebar({
   }, [hasMore, onLoadMore, sessions.length]);
 
   function renderSessionSection(sectionSessions: SessionInfo[]) {
-    const pinnedSessions = sectionSessions.filter((session) => session.attributes.pinned);
-    const unpinnedSessions = sectionSessions.filter((session) => !session.attributes.pinned);
-
     return (
       <div className="space-y-0.5">
-        {pinnedSessions.map(renderSessionRow)}
-        {pinnedSessions.length > 0 && unpinnedSessions.length > 0 ? (
-          <div className="mx-3 my-1 border-t border-border/50" aria-hidden="true" />
-        ) : null}
-        {unpinnedSessions.map(renderSessionRow)}
+        {sectionSessions.map(renderSessionRow)}
       </div>
     );
   }
 
   function renderSessionGroups(sectionSessions: SessionInfo[]) {
-    return groupSessionsByAge(sectionSessions).map((group) => (
+    const pinnedSessions = sectionSessions.filter((session) => session.attributes.pinned);
+    const unpinnedSessions = sectionSessions.filter((session) => !session.attributes.pinned);
+
+    return [
+      pinnedSessions.length > 0 ? (
+        <div key="pinned">{renderSessionSection(pinnedSessions)}</div>
+      ) : null,
+      pinnedSessions.length > 0 && unpinnedSessions.length > 0 ? (
+        <div
+          key="pinned-separator"
+          className="mx-3 my-2 h-px bg-gradient-to-r from-transparent via-border to-transparent"
+          aria-hidden="true"
+        />
+      ) : null,
+      ...groupSessionsByAge(unpinnedSessions).map((group) => (
       <div key={group.key}>
         <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           {group.label}
         </div>
         {renderSessionSection(group.sessions)}
       </div>
-    ));
+      )),
+    ];
   }
 
   function renderSessionRow(session: SessionInfo) {
