@@ -58,7 +58,7 @@ web_search 'pancake recipes'
 web_search -n 3 'python async tutorial'
 
 # Filter by country and language
-web_search --country DE --language de 'Wetter Bremen'
+web_search --country DE --language de 'Nachrichten Bremen'
 
 # Recent results only
 web_search --freshness week 'AI news'
