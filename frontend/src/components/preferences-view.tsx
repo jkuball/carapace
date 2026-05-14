@@ -11,10 +11,14 @@ export function PreferencesView({
   embedded = false,
   server,
   token,
+  showArchivedSessions,
+  onShowArchivedSessionsChange,
 }: {
   embedded?: boolean;
   server: string;
   token: string;
+  showArchivedSessions: boolean;
+  onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
 }) {
   const t = useTranslations("preferences");
   const { localeOverride, setLocaleOverride, systemLocale } = useAppLocale();
@@ -75,6 +79,47 @@ export function PreferencesView({
                 <option value="de">{localeLabels.de}</option>
               </select>
             </label>
+          </div>
+
+          <div className={cn(
+            "rounded-2xl border border-border p-4",
+            embedded ? "mt-4 bg-background/88 shadow-sm" : "mt-4 bg-muted/25",
+          )}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {t("chatList.label")}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {t("chatList.showArchived.label")}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("chatList.showArchived.description")}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showArchivedSessions}
+                aria-label={t("chatList.showArchived.label")}
+                onClick={() => onShowArchivedSessionsChange(!showArchivedSessions)}
+                className={cn(
+                  "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2",
+                  showArchivedSessions
+                    ? "border-emerald-600 bg-emerald-600"
+                    : "border-border bg-muted",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
+                    showArchivedSessions ? "translate-x-6" : "translate-x-1",
+                  )}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="mt-4">

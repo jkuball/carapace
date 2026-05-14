@@ -42,6 +42,13 @@
                 "de": "Deutsch"
             }
         },
+        "chatList": {
+            "label": "Chats",
+            "showArchived": {
+                "label": "Archivierte Chats anzeigen",
+                "description": "Wenn deaktiviert, werden archivierte Chats ausgeblendet und bei Session-Listen direkt nicht vom Server angefragt."
+            }
+        },
         "notifications": {
             "title": "Push-Benachrichtigungen",
             "description": "Liefert Eskalationen und Zug-Ergebnisse an diesen Browser oder die installierte PWA.",

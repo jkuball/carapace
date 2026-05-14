@@ -13,10 +13,12 @@ import { VersionBadge } from "@/components/version-badge";
 import { createSession, deleteSession, getServerMeta, getSession, listSessions, updateSession } from "@/lib/api";
 import {
   clearConnection,
+  getShowArchivedSessionsPreference,
   getServer,
   getToken,
   hasConnection,
   saveConnection,
+  saveShowArchivedSessionsPreference,
 } from "@/lib/storage";
 import type { SessionInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -145,6 +147,7 @@ function HomeContent() {
     initialView,
   );
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab);
+  const [showArchivedSessions, setShowArchivedSessionsState] = useState(false);
   const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -191,6 +194,7 @@ function HomeContent() {
     // Defer to avoid synchronous setState in effect body.
     const timer = setTimeout(() => {
       const nextConnection = loadStoredConnection();
+      const nextShowArchivedSessions = getShowArchivedSessionsPreference();
       setConnection((current) => {
         if (
           current.connected === nextConnection.connected
@@ -202,6 +206,9 @@ function HomeContent() {
 
         return nextConnection;
       });
+      setShowArchivedSessionsState((current) =>
+        current === nextShowArchivedSessions ? current : nextShowArchivedSessions,
+      );
     }, 0);
 
     return () => {
@@ -210,7 +217,11 @@ function HomeContent() {
   }, []);
 
   // Fetch sessions when connected
-  const loadInitialSessions = useCallback(async (srv: string, tok: string) => {
+  const loadInitialSessions = useCallback(async (
+    srv: string,
+    tok: string,
+    includeArchived: boolean,
+  ) => {
     if (!srv || !tok) return;
 
     const requestId = ++refreshRequestIdRef.current;
@@ -222,14 +233,14 @@ function HomeContent() {
 
     try {
       const page = await listSessions(srv, tok, {
-        includeArchived: true,
+        includeArchived,
         includeMessageCount: true,
         limit: SESSION_PAGE_SIZE,
       });
 
       if (requestId !== refreshRequestIdRef.current) return;
 
-      setSessions((current) => mergeSessions(current, page.items, pendingSandboxUpdatesRef.current));
+      setSessions(mergeSessions([], page.items, pendingSandboxUpdatesRef.current));
       setSessionListCursor(page.next_cursor ?? null);
       setSessionListHasMore(page.has_more);
       failedLoadMoreCursorRef.current = null;
@@ -248,13 +259,13 @@ function HomeContent() {
 
     // Defer to avoid synchronous setState in effect body.
     const timer = setTimeout(() => {
-      void loadInitialSessions(server, token);
+      void loadInitialSessions(server, token, showArchivedSessions);
     }, 0);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [connected, loadInitialSessions, server, token]);
+  }, [connected, loadInitialSessions, server, showArchivedSessions, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,7 +315,7 @@ function HomeContent() {
 
     try {
       const page = await listSessions(server, token, {
-        includeArchived: true,
+        includeArchived: showArchivedSessions,
         includeMessageCount: true,
         limit: SESSION_PAGE_SIZE,
         cursor: sessionListCursor,
@@ -324,7 +335,12 @@ function HomeContent() {
         setLoadingMoreSessions(false);
       }
     }
-  }, [refreshingSessions, server, sessionListCursor, sessionListHasMore, token]);
+  }, [refreshingSessions, server, sessionListCursor, sessionListHasMore, showArchivedSessions, token]);
+
+  const handleShowArchivedSessionsChange = useCallback((nextShowArchivedSessions: boolean) => {
+    saveShowArchivedSessionsPreference(nextShowArchivedSessions);
+    setShowArchivedSessionsState(nextShowArchivedSessions);
+  }, []);
 
   useEffect(() => {
     if (!connected || !activeSessionId || !sessionListInitialized || hasActiveSessionLoaded) return;
@@ -550,6 +566,7 @@ function HomeContent() {
       >
         <Sidebar
           sessions={sessions}
+          showArchivedSessions={showArchivedSessions}
           activeSessionId={activeSessionId}
           activeView={activeView}
           frontendVersion={BUILD_APP_VERSION}
@@ -599,6 +616,8 @@ function HomeContent() {
             server={server}
             token={token}
             sessions={sessions}
+            showArchivedSessions={showArchivedSessions}
+            onShowArchivedSessionsChange={handleShowArchivedSessionsChange}
             onSessionActivated={handleForkSession}
             requestedJobId={requestedJobId}
             activeTab={settingsTab}

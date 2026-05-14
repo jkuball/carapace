@@ -24,6 +24,8 @@ interface JobsViewProps {
   server: string;
   token: string;
   sessions: SessionInfo[];
+  showArchivedSessions: boolean;
+  onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
   onSessionActivated: (session: SessionInfo) => void;
   requestedJobId?: string | null;
   activeTab: SettingsTab;
@@ -127,6 +129,8 @@ export function JobsView({
   server,
   token,
   sessions,
+  showArchivedSessions,
+  onShowArchivedSessionsChange,
   onSessionActivated,
   requestedJobId,
   activeTab,
@@ -1160,7 +1164,13 @@ export function JobsView({
           aria-labelledby="settings-tab-preferences"
           className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
         >
-          <PreferencesView embedded server={server} token={token} />
+          <PreferencesView
+            embedded
+            server={server}
+            token={token}
+            showArchivedSessions={showArchivedSessions}
+            onShowArchivedSessionsChange={onShowArchivedSessionsChange}
+          />
         </div>
       )}
     </div>

@@ -6,12 +6,14 @@ import {
   getNotificationDeviceName,
   getNotificationSubscriptionId,
   getPresenceClientId,
+  getShowArchivedSessionsPreference,
   getServer,
   getToken,
   hasConnection,
   saveConnection,
   saveNotificationDeviceName,
   saveNotificationSubscriptionId,
+  saveShowArchivedSessionsPreference,
 } from "./storage";
 
 type StorageLike = {
@@ -147,4 +149,14 @@ test("notification subscription helpers persist and clear local state", () => {
 
   assert.equal(getNotificationSubscriptionId(), "");
   assert.equal(getNotificationDeviceName(), "Android Phone");
+});
+
+test("archived chat visibility preference defaults to hidden and persists", () => {
+  assert.equal(getShowArchivedSessionsPreference(), false);
+
+  saveShowArchivedSessionsPreference(true);
+  assert.equal(getShowArchivedSessionsPreference(), true);
+
+  saveShowArchivedSessionsPreference(false);
+  assert.equal(getShowArchivedSessionsPreference(), false);
 });

@@ -1,6 +1,7 @@
 const SERVER_KEY = "carapace_server";
 const TOKEN_KEY = "carapace_token";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
+const SHOW_ARCHIVED_SESSIONS_KEY = "carapace_show_archived_sessions";
 const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
 const NOTIFICATION_SUBSCRIPTION_ID_KEY =
   "carapace_notification_subscription_id";
@@ -43,6 +44,20 @@ export function getLocaleOverride(): LocaleOverride {
 
 export function saveLocaleOverride(localeOverride: LocaleOverride): void {
   localStorage.setItem(LOCALE_OVERRIDE_KEY, localeOverride);
+}
+
+export function getShowArchivedSessionsPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(SHOW_ARCHIVED_SESSIONS_KEY) === "true";
+}
+
+export function saveShowArchivedSessionsPreference(
+  showArchivedSessions: boolean,
+): void {
+  localStorage.setItem(
+    SHOW_ARCHIVED_SESSIONS_KEY,
+    showArchivedSessions ? "true" : "false",
+  );
 }
 
 export function getPresenceClientId(): string {

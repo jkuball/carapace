@@ -21,6 +21,7 @@ import {
 
 interface SidebarProps {
   sessions: SessionInfo[];
+  showArchivedSessions?: boolean;
   activeSessionId: string | null;
   activeView?: "chat" | "settings";
   frontendVersion?: string | null;
@@ -84,6 +85,7 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export function Sidebar({
   sessions,
+  showArchivedSessions = true,
   activeSessionId,
   activeView = "chat",
   frontendVersion = null,
@@ -108,7 +110,9 @@ export function Sidebar({
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [referenceTime, setReferenceTime] = useState<number>(() => Date.now());
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
-  const archivedSessions = sessions.filter((session) => session.attributes.archived);
+  const archivedSessions = showArchivedSessions
+    ? sessions.filter((session) => session.attributes.archived)
+    : [];
 
   useEffect(() => {
     const updateReferenceTime = (): void => {

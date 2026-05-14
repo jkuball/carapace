@@ -42,6 +42,13 @@
                 "de": "Deutsch"
             }
         },
+        "chatList": {
+            "label": "Chats",
+            "showArchived": {
+                "label": "Show archived chats",
+                "description": "When disabled, archived chats are hidden and session list requests exclude them."
+            }
+        },
         "notifications": {
             "title": "Push notifications",
             "description": "Deliver escalations and turn outcomes to this browser or installed PWA.",
