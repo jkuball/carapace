@@ -154,11 +154,11 @@ function ThinkingBadge({
         ) : (
           <Brain className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
         )}
-        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
+        <span className="shrink-0 font-mono font-normal text-foreground/85 dark:text-foreground/90">
           {streaming ? t("thinking.streaming") : t("thinking.complete")}
         </span>
         {meta.length > 0 && (
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/75 dark:text-foreground/80">
+          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/60 dark:text-foreground/65">
             {meta.join(", ")}
           </span>
         )}
