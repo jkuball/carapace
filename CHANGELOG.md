@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.118.12 (2026-05-14)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: remove user bubble colors and update message component styling
+  ([`ff13f99`](https://github.com/thiesgerken/carapace/commit/ff13f99dc737df3e40a40f6ceabf505af5ce80d4))
+
 ## v0.118.11 (2026-05-14)
 
 
