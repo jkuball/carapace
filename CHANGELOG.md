@@ -1,8 +1,17 @@
 # CHANGELOG
 
 
+## v0.118.1 (2026-05-14)
+
+
 ## v0.118.0 (2026-05-14)
 
+
+### 🐛 Bug Fixes
+
+
+- 🐛 remove weather mention from web skill
+  ([`7bde63a`](https://github.com/thiesgerken/carapace/commit/7bde63ac7ee5564eede00e0daae89776b0027c36))
 
 ### ✨ Features
 
