@@ -158,7 +158,7 @@ function ThinkingBadge({
       </button>
 
       {open && (
-        <div className="ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+        <div className="chat-copy-serif ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
           <MarkdownContent content={content} />
         </div>
       )}
@@ -317,7 +317,7 @@ export function Message({
         <div className="flex justify-end">
           <div
             className={cn(
-              "max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm",
+              "chat-copy-serif max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm",
               "bg-user-bubble text-user-bubble-fg",
             )}
           >
@@ -329,7 +329,7 @@ export function Message({
     case "assistant":
       return (
         <div className="group max-w-[85%] text-sm">
-          <div className="min-w-0 flex-1">
+          <div className="chat-copy-serif min-w-0 flex-1">
             <MarkdownContent content={message.content} />
             {message.finalStatus ? <FinalStatusNotice status={message.finalStatus} /> : null}
           </div>
@@ -349,7 +349,7 @@ export function Message({
     case "streaming":
       return (
         <div className="group flex max-w-[85%] items-start gap-1.5 text-sm">
-          <div className="min-w-0 flex-1">
+          <div className="chat-copy-serif min-w-0 flex-1">
             <MarkdownContent content={message.content} />
           </div>
         </div>

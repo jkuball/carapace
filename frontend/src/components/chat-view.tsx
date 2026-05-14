@@ -2286,7 +2286,7 @@ export function ChatView({
             onScroll={handleScroll}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
           >
-            <div className="mx-auto max-w-3xl space-y-3">
+            <div className="session-chat-content mx-auto max-w-3xl space-y-3">
               {loadingHistory && (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

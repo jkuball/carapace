@@ -639,16 +639,16 @@ export function ToolCallBadge({
         {(() => {
           const ToolIcon = TOOL_ICONS[tool];
           return ToolIcon ? (
-            <ToolIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <ToolIcon className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
           ) : null;
         })()}
-        <span className="shrink-0 font-mono font-medium text-foreground/80">
+        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
           {toolLabel}
         </span>
         {argsSummary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 font-mono text-[11px] text-foreground/65 dark:text-foreground/70",
+              "min-w-0 flex-1 font-mono text-[11px] text-foreground/75 dark:text-foreground/80",
               shouldClampSummary
                 ? "overflow-hidden whitespace-normal break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
                 : "truncate",

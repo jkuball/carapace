@@ -59,11 +59,42 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+.chat-copy-serif {
+  font-family: var(--font-source-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
 /* Markdown prose styling */
 .prose {
   max-width: none;
   line-height: 1.65;
 }
+
+@media (min-width: 1024px) {
+  .session-chat-content .prose {
+    font-size: 1.05rem;
+  }
+
+  .session-chat-content .text-sm {
+    font-size: 1rem;
+    line-height: 1.6rem;
+  }
+
+  .session-chat-content .text-xs {
+    font-size: 0.875rem;
+    line-height: 1.35rem;
+  }
+
+  .session-chat-content .text-\[11px\] {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+
+  .session-chat-content .text-\[10px\] {
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+  }
+}
+
 .emoji-inline {
   display: inline-block;
   height: 1.2em;
