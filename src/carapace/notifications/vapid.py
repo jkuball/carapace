@@ -50,6 +50,7 @@ def ensure_vapid_config(config: NotificationsConfig, data_dir: Path) -> Notifica
 
 
 def _encode_public_key(vapid: Vapid01) -> str:
+    assert vapid.public_key is not None
     public_bytes = vapid.public_key.public_bytes(
         encoding=serialization.Encoding.X962,
         format=serialization.PublicFormat.UncompressedPoint,
