@@ -21,6 +21,7 @@ export function useSessionPresence(
 
     const sendPresence = async (
       focusState: "visible" | "hidden" | "inactive",
+      options?: { keepalive?: boolean },
     ) => {
       const subscriptionId = getNotificationSubscriptionId();
 
@@ -30,7 +31,7 @@ export function useSessionPresence(
           source_id: sourceId,
           client_type: "web",
           focus_state: focusState,
-        }),
+        }, options),
       ];
       if (subscriptionId) {
         operations.push(
@@ -43,6 +44,7 @@ export function useSessionPresence(
               client_type: "web",
               focus_state: focusState,
             },
+            options,
           ),
         );
       }
@@ -50,22 +52,27 @@ export function useSessionPresence(
       await Promise.allSettled(operations);
     };
 
-    const syncPresence = () => {
-      void sendPresence(document.hidden ? "hidden" : "visible");
+    const syncPresence = (
+      focusState: "visible" | "hidden" = document.hidden ? "hidden" : "visible",
+    ) => {
+      void sendPresence(focusState);
     };
+    const handleVisibilityChange = () => syncPresence();
+    const handleWindowFocus = () => syncPresence("visible");
+    const handleWindowBlur = () => syncPresence("hidden");
 
     syncPresence();
     const interval = window.setInterval(syncPresence, 30000);
-    document.addEventListener("visibilitychange", syncPresence);
-    window.addEventListener("focus", syncPresence);
-    window.addEventListener("blur", syncPresence);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener("blur", handleWindowBlur);
 
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", syncPresence);
-      window.removeEventListener("focus", syncPresence);
-      window.removeEventListener("blur", syncPresence);
-      void sendPresence("inactive");
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener("blur", handleWindowBlur);
+      void sendPresence("inactive", { keepalive: true });
     };
   }, [server, token, sessionId, status, sourceId]);
 }

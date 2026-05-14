@@ -254,11 +254,13 @@ export async function postInteractivePresence(
     client_type: "web" | "matrix" | "cli";
     focus_state: "visible" | "hidden" | "inactive";
   },
+  options?: { keepalive?: boolean },
 ): Promise<void> {
   const res = await fetch(`${server}/api/notifications/presence`, {
     method: "POST",
     headers: headers(token),
     body: JSON.stringify(body),
+    keepalive: options?.keepalive,
   });
   if (!res.ok) {
     throw new Error(`Failed to update presence: ${res.status}`);
@@ -274,6 +276,7 @@ export async function postNotificationSubscriptionPresence(
     client_type: "web" | "matrix" | "cli";
     focus_state: "visible" | "hidden" | "inactive";
   },
+  options?: { keepalive?: boolean },
 ): Promise<void> {
   const res = await fetch(
     `${server}/api/notifications/subscriptions/${subscriptionId}/presence`,
@@ -281,6 +284,7 @@ export async function postNotificationSubscriptionPresence(
       method: "POST",
       headers: headers(token),
       body: JSON.stringify(body),
+      keepalive: options?.keepalive,
     },
   );
   if (!res.ok) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { useSessionPresence } from "./use-session-presence";
 import {
+  dispatchWindowEvent,
   flushReact,
   installDom,
   renderReact,
@@ -43,7 +44,11 @@ test.afterEach(() => {
 
 test("useSessionPresence sends visible, hidden, and inactive heartbeats including subscription-backed presence", async () => {
   const restoreDom = installDom();
-  const fetchCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const fetchCalls: Array<{
+    url: string;
+    body: Record<string, unknown>;
+    keepalive: boolean | undefined;
+  }> = [];
 
   try {
     localStorage.setItem("carapace_notification_subscription_id", "sub-1");
@@ -55,6 +60,7 @@ test("useSessionPresence sends visible, hidden, and inactive heartbeats includin
         fetchCalls.push({
           url: String(input),
           body: JSON.parse(String(init?.body ?? "{}")),
+          keepalive: init?.keepalive,
         });
         return new Response(null, { status: 200 });
       },
@@ -98,12 +104,25 @@ test("useSessionPresence sends visible, hidden, and inactive heartbeats includin
       "hidden",
     ]);
 
-    await view.unmount();
+    setDocumentHidden(false);
+    await dispatchWindowEvent(new window.Event("blur"));
     await flushReact();
 
     assert.deepEqual(fetchCalls.slice(4, 6).map((call) => call.body.focus_state), [
+      "hidden",
+      "hidden",
+    ]);
+
+    await view.unmount();
+    await flushReact();
+
+    assert.deepEqual(fetchCalls.slice(6, 8).map((call) => call.body.focus_state), [
       "inactive",
       "inactive",
+    ]);
+    assert.deepEqual(fetchCalls.slice(6, 8).map((call) => call.keepalive), [
+      true,
+      true,
     ]);
   } finally {
     restoreDom();
