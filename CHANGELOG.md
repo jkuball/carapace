@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.117.8 (2026-05-14)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: rerun skill setup after sandbox resume
+  ([`5eda3a1`](https://github.com/thiesgerken/carapace/commit/5eda3a1b37ae073633374e323b664424a789c1fe))
+
 ## v0.117.7 (2026-05-14)
 
 
