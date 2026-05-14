@@ -1158,7 +1158,7 @@ export function JobsView({
           id="settings-panel-preferences"
           role="tabpanel"
           aria-labelledby="settings-tab-preferences"
-          className="min-h-0 flex-1 bg-background/65"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
         >
           <PreferencesView embedded server={server} token={token} />
         </div>
