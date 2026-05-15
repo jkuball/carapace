@@ -2,14 +2,26 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:best-practices",
-    ":preserveSemverRanges",
-    "group:allNonMajor"
+    ":preserveSemverRanges"
   ],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": false
   },
   "packageRules": [
+    {
+      "description": "Group patch, pin, and digest updates into a single PR",
+      "matchPackageNames": [
+        "*"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "groupName": "all routine dependency updates",
+      "groupSlug": "all-routine-dependencies"
+    },
     {
       "description": "Disable digest pinning for the Helm chart values file",
       "matchManagers": [
