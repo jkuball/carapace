@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.119.2 (2026-05-15)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: uv sync -U
+  ([`7e593ad`](https://github.com/thiesgerken/carapace/commit/7e593ad61776b13ba281a1d3939c872dcf1c299a))
+
 ## v0.119.1 (2026-05-15)
 
 
