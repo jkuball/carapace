@@ -170,18 +170,19 @@ function NotificationSubscriptionContent({
   token: string;
   translate: NotificationTranslator;
 }) {
-  const [pushSupported, setPushSupported] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission>(
-    typeof Notification === "undefined" ? "default" : Notification.permission,
-  );
+  const [pushSupported] = useState(() => supportsPushNotifications());
+  const [permission, setPermission] = useState<NotificationPermission>(() => (
+    typeof Notification === "undefined" ? "default" : Notification.permission
+  ));
   const [subscription, setSubscription] = useState<NotificationSubscriptionRecord | null>(null);
   const [deviceName, setDeviceName] = useState(() => getNotificationDeviceName() || buildNotificationDeviceName());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(server && token && pushSupported));
   const [busyAction, setBusyAction] = useState<"enable" | "disable" | "preferences" | "test" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const loadFailedMessageRef = useRef(t("status.loadFailed"));
   const saving = busyAction !== null;
+  const canManageNotifications = Boolean(server && token && pushSupported);
 
   useEffect(() => {
     loadFailedMessageRef.current = t("status.loadFailed");
@@ -190,72 +191,62 @@ function NotificationSubscriptionContent({
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
+    const fallbackDeviceName = getNotificationDeviceName() || buildNotificationDeviceName();
 
-      const supported = supportsPushNotifications();
-      const fallbackDeviceName = getNotificationDeviceName() || buildNotificationDeviceName();
+    if (!canManageNotifications) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
-      setPushSupported(supported);
-      setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
-      setDeviceName((current) => current || fallbackDeviceName);
-
-      if (!server || !token || !supported) {
-        setSubscription(null);
-        setError("");
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      void (async () => {
-        try {
-          const registration = await registerNotificationServiceWorker();
-          const browserSubscription = await registration?.pushManager.getSubscription() ?? null;
-          const subscriptions = await listNotificationSubscriptions(server, token);
-          const storedSubscriptionId = getNotificationSubscriptionId();
-          let activeSubscription = subscriptions.find(
-            (candidate) => candidate.subscription_id === storedSubscriptionId,
+    async function loadSubscription(): Promise<void> {
+      try {
+        setLoading(true);
+        const registration = await registerNotificationServiceWorker();
+        const browserSubscription = await registration?.pushManager.getSubscription() ?? null;
+        const subscriptions = await listNotificationSubscriptions(server, token);
+        const storedSubscriptionId = getNotificationSubscriptionId();
+        let activeSubscription = subscriptions.find(
+          (candidate) => candidate.subscription_id === storedSubscriptionId,
+        ) ?? null;
+        if (!activeSubscription && browserSubscription) {
+          activeSubscription = subscriptions.find(
+            (candidate) => candidate.endpoint === browserSubscription.endpoint,
           ) ?? null;
-          if (!activeSubscription && browserSubscription) {
-            activeSubscription = subscriptions.find(
-              (candidate) => candidate.endpoint === browserSubscription.endpoint,
-            ) ?? null;
-          }
-
-          if (cancelled) {
-            return;
-          }
-
-          if (activeSubscription) {
-            saveNotificationSubscriptionId(activeSubscription.subscription_id);
-            saveNotificationDeviceName(activeSubscription.device_name);
-            setDeviceName(activeSubscription.device_name || fallbackDeviceName);
-          } else {
-            clearNotificationSubscriptionId();
-          }
-
-          setSubscription(activeSubscription);
-          setError("");
-        } catch (nextError) {
-          if (cancelled) {
-            return;
-          }
-          setError(resolveErrorMessage(nextError, loadFailedMessageRef.current));
-        } finally {
-          if (!cancelled) {
-            setLoading(false);
-          }
         }
-      })();
-    });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (activeSubscription) {
+          saveNotificationSubscriptionId(activeSubscription.subscription_id);
+          saveNotificationDeviceName(activeSubscription.device_name);
+          setDeviceName(activeSubscription.device_name || fallbackDeviceName);
+        } else {
+          clearNotificationSubscriptionId();
+        }
+
+        setSubscription(activeSubscription);
+        setError("");
+      } catch (nextError) {
+        if (cancelled) {
+          return;
+        }
+        setError(resolveErrorMessage(nextError, loadFailedMessageRef.current));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadSubscription();
 
     return () => {
       cancelled = true;
     };
-  }, [server, token]);
+  }, [canManageNotifications, pushSupported, server, token]);
 
   useEffect(() => {
     const refreshPermission = () => {
@@ -395,15 +386,18 @@ function NotificationSubscriptionContent({
   }
 
   const permissionLabel = t(`permission.${permission}`);
-  const lastHeartbeat = formatTimestamp(subscription?.last_heartbeat);
-  const expiresAt = formatTimestamp(subscription?.expires_at);
-  const notificationsEnabled = Boolean(subscription);
+  const activeSubscription = canManageNotifications ? subscription : null;
+  const visibleError = canManageNotifications ? error : "";
+  const visibleLoading = canManageNotifications ? loading : false;
+  const lastHeartbeat = formatTimestamp(activeSubscription?.last_heartbeat);
+  const expiresAt = formatTimestamp(activeSubscription?.expires_at);
+  const notificationsEnabled = Boolean(activeSubscription);
   const notificationsDiagnosticLabel =
     busyAction === "enable"
       ? t("actions.enabling")
       : busyAction === "disable"
       ? t("actions.disabling")
-      : loading
+      : visibleLoading
       ? t("status.loading")
       : !pushSupported
       ? t("status.unsupported")
@@ -412,7 +406,7 @@ function NotificationSubscriptionContent({
       : null;
   const notificationsHeaderDescription =
     !notificationsEnabled
-      ? error || notificationsDiagnosticLabel || t("description")
+      ? visibleError || notificationsDiagnosticLabel || t("description")
       : t("description");
 
   return (
@@ -421,7 +415,7 @@ function NotificationSubscriptionContent({
         checked={notificationsEnabled}
         label={t("title")}
         description={notificationsHeaderDescription}
-        disabled={loading || saving || (!notificationsEnabled && !pushSupported) || (!notificationsEnabled && permission === "denied")}
+        disabled={visibleLoading || saving || (!notificationsEnabled && !pushSupported) || (!notificationsEnabled && permission === "denied")}
         onCheckedChange={(checked) => {
           if (checked) {
             void handleEnableNotifications();
@@ -472,9 +466,9 @@ function NotificationSubscriptionContent({
               {t("meta.expires", { timestamp: expiresAt })}
             </p>
           ) : null}
-          {error ? (
+          {visibleError ? (
             <p className="text-sm text-destructive">
-              {error}
+              {visibleError}
             </p>
           ) : null}
           {notice ? (
@@ -483,11 +477,11 @@ function NotificationSubscriptionContent({
             </p>
           ) : null}
 
-          {subscription ? (
+          {activeSubscription ? (
             <button
               type="button"
               onClick={handleTestNotification}
-              disabled={loading || saving}
+              disabled={visibleLoading || saving}
               className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busyAction === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
@@ -496,7 +490,7 @@ function NotificationSubscriptionContent({
           ) : null}
         </div>
 
-        {subscription ? (
+        {activeSubscription ? (
           <fieldset className="space-y-3 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
             <legend className="px-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {t("preferences.label")}
@@ -504,7 +498,7 @@ function NotificationSubscriptionContent({
             {PREFERENCE_KEYS.map((key) => (
               <SwitchRow
                 key={key}
-                checked={subscription.preferences[key]}
+                checked={activeSubscription.preferences[key]}
                 label={t(`preferences.${key}`)}
                 disabled={saving}
                 onCheckedChange={(checked) => handlePreferenceChange(key, checked)}
