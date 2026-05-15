@@ -544,14 +544,13 @@ export function JobsView({
   }
 
   async function handleSave(): Promise<void> {
-    const validationError = validateJobDraft(draft);
+    const normalizedDraft = normalizeJobDraft(draft);
+    const validationError = validateJobDraft(normalizedDraft);
     if (validationError) {
       setError(validationError);
       setNotice(null);
       return;
     }
-
-    const normalizedDraft = normalizeJobDraft(draft);
 
     setSaving(true);
     setError(null);
