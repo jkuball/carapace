@@ -5,6 +5,7 @@ import {
   flushReact,
   installDom,
   renderReact,
+  runInAct,
 } from "../../test/react-test-utils";
 
 const messages = {
@@ -142,13 +143,27 @@ function installPushSupport(registration: ServiceWorkerRegistration): void {
 
 async function renderSubscription(): Promise<Awaited<ReturnType<typeof renderReact>>> {
   const { NotificationSubscription } = await import("./notification-subscription");
-  return renderReact(
+  const view = await renderReact(
     <NotificationSubscription
       server="https://carapace.example.test"
       token="token-1"
       translate={(key, values) => translate(`preferences.notifications.${key}`, values)}
     />,
   );
+  await runInAct(async () => {
+    await Promise.resolve();
+  });
+  return view;
+}
+
+async function settleSubscriptionView(): Promise<void> {
+  await flushReact();
+  await runInAct(async () => {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
+  });
+  await flushReact();
 }
 
 test.afterEach(() => {
@@ -215,17 +230,17 @@ test("NotificationSubscription hydrates an active subscription and renders enabl
     });
 
     const view = await renderSubscription();
-    await flushReact();
-    await flushReact();
+    await settleSubscriptionView();
 
-    const button = view.container.querySelector("button");
-    assert.ok(button);
-    assert.match(button.textContent ?? "", /Disable notifications/);
+    const notificationSwitch = view.container.querySelector('button[role="switch"]');
+    assert.ok(notificationSwitch);
+    assert.equal(notificationSwitch.getAttribute("aria-checked"), "true");
 
     assert.equal(localStorage.getItem("carapace_notification_subscription_id"), "sub-1");
     assert.equal(localStorage.getItem("carapace_notification_device_name"), "Android device (Chrome)");
-    assert.equal(view.container.querySelectorAll('input[type="checkbox"]').length, 4);
-    assert.match(view.container.textContent ?? "", /Notifications are enabled for this browser/);
+    assert.equal(view.container.querySelectorAll('button[role="switch"]').length, 5);
+    assert.match(view.container.textContent ?? "", /Browser permission: granted/);
+    assert.match(view.container.textContent ?? "", /Send test notification/);
 
     await view.unmount();
   } finally {
@@ -383,17 +398,19 @@ test("NotificationSubscription refreshes displayed permission when the window re
     });
 
     const view = await renderSubscription();
-    await flushReact();
-    await flushReact();
+    await settleSubscriptionView();
 
-    assert.match(view.container.textContent ?? "", /Browser permission: not requested/);
+    const notificationSwitch = view.container.querySelector('button[role="switch"]');
+    assert.ok(notificationSwitch);
+    assert.equal(notificationSwitch.getAttribute("aria-checked"), "false");
+    assert.match(view.container.textContent ?? "", /Deliver escalations and turn outcomes/);
 
     mountNotification("denied");
     await dispatchWindowEvent(new window.Event("focus"));
-    await flushReact();
+    await settleSubscriptionView();
 
-    assert.match(view.container.textContent ?? "", /Browser permission: denied/);
     assert.match(view.container.textContent ?? "", /Browser notification permission is blocked/);
+    assert.equal(notificationSwitch.hasAttribute("disabled"), true);
 
     await view.unmount();
   } finally {
