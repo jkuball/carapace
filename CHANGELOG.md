@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.119.1 (2026-05-15)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: ValidationError during conflicting options during fork()
+  ([`240190f`](https://github.com/thiesgerken/carapace/commit/240190f8f91e4ae9a7809d456b270935532a29ed))
+
 ## v0.119.0 (2026-05-15)
 
 
