@@ -1186,6 +1186,27 @@ def test_fork_session_creates_new_session_from_turn(client, auth_headers):
     assert srv._engine.session_mgr.load_events(sid)[-1]["content"] == "next"
 
 
+def test_fork_session_rejects_conflicting_inherited_modes(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"ask_mode": True})
+    sid = create_resp.json()["session_id"]
+    srv._engine.session_mgr.append_events(
+        sid,
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"},
+        ],
+    )
+
+    resp = client.post(
+        f"/api/sessions/{sid}/fork",
+        headers=auth_headers,
+        json={"event_index": 1, "channel_type": "web", "yolo_mode": True},
+    )
+
+    assert resp.status_code == 400
+    assert "ask_mode and yolo_mode are mutually exclusive" in resp.json()["detail"]
+
+
 def test_commit_session_knowledge_writes_archive(client, auth_headers, tmp_path):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
