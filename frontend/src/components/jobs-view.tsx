@@ -18,6 +18,7 @@ import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { PreferencesView } from "@/components/preferences-view";
 import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
+import { SwitchRow } from "@/components/switch-row";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -335,6 +336,7 @@ export function JobsView({
     () => (selectedJobId === "new" ? null : jobs.find((job) => job.id === selectedJobId) ?? null),
     [jobs, selectedJobId],
   );
+
   const selectedJobInvocations = useMemo(
     () => {
       if (!selectedJob) {
@@ -861,35 +863,23 @@ export function JobsView({
 
               <div className="mt-4 space-y-3">
                 <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/35 px-4 py-3">
-                  <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={draft.enabled}
-                      onChange={(event) => updateDraft({ enabled: event.target.checked })}
-                      disabled={saving || running}
-                      className="mt-0.5 h-4 w-4 rounded border-border"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{t("fields.enabled")}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{t("fields.enabledHelp")}</span>
-                    </span>
-                  </label>
+                  <SwitchRow
+                    checked={draft.enabled}
+                    label={t("fields.enabled")}
+                    description={t("fields.enabledHelp")}
+                    disabled={saving || running}
+                    onCheckedChange={(enabled) => updateDraft({ enabled })}
+                    className="rounded-xl border border-border/70 bg-background px-3 py-3"
+                  />
 
-                  <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={usePersistentSession}
-                      onChange={(event) => updateDraft({ persistent_session_id: event.target.checked ? "" : null })}
-                      disabled={saving || running || draft.unattended}
-                      className="mt-0.5 h-4 w-4 rounded border-border"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{t("fields.persistentSession")}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {draft.unattended ? t("fields.persistentSessionDisabled") : t("fields.persistentSessionToggleHelp")}
-                      </span>
-                    </span>
-                  </label>
+                  <SwitchRow
+                    checked={usePersistentSession}
+                    label={t("fields.persistentSession")}
+                    description={draft.unattended ? t("fields.persistentSessionDisabled") : t("fields.persistentSessionToggleHelp")}
+                    disabled={saving || running || draft.unattended}
+                    onCheckedChange={(enabled) => updateDraft({ persistent_session_id: enabled ? "" : null })}
+                    className="rounded-xl border border-border/70 bg-background px-3 py-3"
+                  />
                 </div>
 
                 {!usePersistentSession ? (
@@ -899,7 +889,7 @@ export function JobsView({
                     <SessionOptionTiles
                       items={SESSION_OPTION_ORDER.map((key) => ({
                         key,
-                        active: draft[key],
+                        active: Boolean(draft[key]),
                         disabled: saving || running,
                         onClick: () => toggleJobSessionOption(key),
                       }))}

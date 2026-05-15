@@ -84,6 +84,9 @@
                 "placeholder": "Android phone",
                 "hint": "Shown in server-side notification subscriptions for this browser."
             },
+            "toggle": {
+                "label": "Notifications"
+            },
             "actions": {
                 "enable": "Enable notifications",
                 "enabling": "Enabling…",
@@ -615,7 +618,7 @@
             "jobId": "Job ID",
             "enabled": "Enabled",
             "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
-            "newSession": "New Session",
+            "newSession": "Options",
             "newSessionHelp": "These options only apply to fresh sessions created by this job.",
             "unattended": "Run unattended",
             "unattendedHelp": "Tool calls will not be escalated to you.",

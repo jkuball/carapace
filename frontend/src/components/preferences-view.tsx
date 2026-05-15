@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useAppLocale } from "@/components/locale-provider";
 import { NotificationSubscription } from "@/components/notification-subscription";
+import { SwitchRow } from "@/components/switch-row";
 import type { LocaleOverride } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -128,40 +129,16 @@ export function PreferencesView({
             "rounded-2xl border border-border p-4",
             embedded ? "mt-4 bg-background/88 shadow-sm" : "mt-4 bg-muted/25",
           )}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  {t("chatList.label")}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {t("chatList.showArchived.label")}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {t("chatList.showArchived.description")}
-                  </p>
-                </div>
+            <div className="space-y-3">
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {t("chatList.label")}
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={showArchivedSessions}
-                aria-label={t("chatList.showArchived.label")}
-                onClick={() => onShowArchivedSessionsChange(!showArchivedSessions)}
-                className={cn(
-                  "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2",
-                  showArchivedSessions
-                    ? "border-emerald-600 bg-emerald-600"
-                    : "border-border bg-muted",
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
-                    showArchivedSessions ? "translate-x-6" : "translate-x-1",
-                  )}
-                />
-              </button>
+              <SwitchRow
+                checked={showArchivedSessions}
+                label={t("chatList.showArchived.label")}
+                description={t("chatList.showArchived.description")}
+                onCheckedChange={onShowArchivedSessionsChange}
+              />
             </div>
           </div>
 

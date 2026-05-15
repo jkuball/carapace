@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, BellRing, Loader2, Smartphone } from "lucide-react";
+import { FlaskConical, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -28,7 +28,7 @@ import type {
   NotificationPreferences,
   NotificationSubscriptionRecord,
 } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { SwitchRow } from "@/components/switch-row";
 
 type NotificationPreferenceKey = keyof NotificationPreferences;
 type NotificationTranslator = (
@@ -397,34 +397,42 @@ function NotificationSubscriptionContent({
   const permissionLabel = t(`permission.${permission}`);
   const lastHeartbeat = formatTimestamp(subscription?.last_heartbeat);
   const expiresAt = formatTimestamp(subscription?.expires_at);
+  const notificationsEnabled = Boolean(subscription);
+  const notificationsDiagnosticLabel =
+    busyAction === "enable"
+      ? t("actions.enabling")
+      : busyAction === "disable"
+      ? t("actions.disabling")
+      : loading
+      ? t("status.loading")
+      : !pushSupported
+      ? t("status.unsupported")
+      : permission === "denied"
+      ? t("status.permissionDenied")
+      : null;
+  const notificationsHeaderDescription =
+    !notificationsEnabled
+      ? error || notificationsDiagnosticLabel || t("description")
+      : t("description");
 
   return (
     <div className="rounded-2xl border border-border bg-muted/25 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-2xl border border-border bg-background/85 p-2.5 text-muted-foreground shadow-sm">
-            <Smartphone className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">
-              {t("title")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("description")}
-            </p>
-          </div>
-        </div>
-        <span className={cn(
-          "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.12em]",
-          subscription
-            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
-            : "border-border bg-background/75 text-muted-foreground",
-        )}>
-          {loading ? t("status.loadingShort") : subscription ? t("status.enabledShort") : t("status.disabledShort")}
-        </span>
-      </div>
+      <SwitchRow
+        checked={notificationsEnabled}
+        label={t("title")}
+        description={notificationsHeaderDescription}
+        disabled={loading || saving || (!notificationsEnabled && !pushSupported) || (!notificationsEnabled && permission === "denied")}
+        onCheckedChange={(checked) => {
+          if (checked) {
+            void handleEnableNotifications();
+            return;
+          }
+          void handleDisableNotifications();
+        }}
+      />
 
-      <div className="mt-4 space-y-4">
+      {notificationsEnabled ? (
+        <div className="mt-4 space-y-4">
         <div className="space-y-1.5">
           <label className="block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {t("deviceName.label")}
@@ -444,72 +452,45 @@ function NotificationSubscriptionContent({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background/80 px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : subscription ? <BellRing className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-            <span>
-              {loading
-                ? t("status.loading")
-                : !pushSupported
-                ? t("status.unsupported")
-                : permission === "denied"
-                ? t("status.permissionDenied")
-                : subscription
-                ? t("status.enabled")
-                : t("status.disabled")}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
+        <div className="space-y-3 rounded-2xl border border-border bg-background/80 px-4 py-3 shadow-sm">
+          {notificationsDiagnosticLabel ? (
+            <p className="text-xs text-muted-foreground">
+              {notificationsDiagnosticLabel}
+            </p>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
             {t("meta.permission", { permission: permissionLabel })}
           </p>
           {lastHeartbeat ? (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {t("meta.heartbeat", { timestamp: lastHeartbeat })}
             </p>
           ) : null}
           {expiresAt ? (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {t("meta.expires", { timestamp: expiresAt })}
             </p>
           ) : null}
           {error ? (
-            <p className="mt-3 text-sm text-destructive">
+            <p className="text-sm text-destructive">
               {error}
             </p>
           ) : null}
           {notice ? (
-            <p className="mt-3 text-sm text-emerald-700">
+            <p className="text-sm text-emerald-700">
               {notice}
             </p>
           ) : null}
-        </div>
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={subscription ? handleDisableNotifications : handleEnableNotifications}
-            disabled={loading || saving || (!subscription && !pushSupported) || (!subscription && permission === "denied")}
-            className={cn(
-              "inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
-              subscription
-                ? "border border-border bg-background text-foreground hover:bg-muted"
-                : "bg-foreground text-background hover:bg-foreground/90",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-            )}
-          >
-            {busyAction === "disable"
-              ? t("actions.disabling")
-              : busyAction === "enable"
-              ? t("actions.enabling")
-              : t(subscription ? "actions.disable" : "actions.enable")}
-          </button>
           {subscription ? (
             <button
               type="button"
               onClick={handleTestNotification}
               disabled={loading || saving}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {busyAction === "test" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
               {busyAction === "test" ? t("actions.testing") : t("actions.test")}
             </button>
           ) : null}
@@ -521,20 +502,18 @@ function NotificationSubscriptionContent({
               {t("preferences.label")}
             </legend>
             {PREFERENCE_KEYS.map((key) => (
-              <label key={key} className="flex items-start gap-3 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={subscription.preferences[key]}
-                  onChange={(event) => handlePreferenceChange(key, event.target.checked)}
-                  disabled={saving}
-                  className="mt-0.5 h-4 w-4 rounded border-border text-foreground focus:ring-ring/40"
-                />
-                <span>{t(`preferences.${key}`)}</span>
-              </label>
+              <SwitchRow
+                key={key}
+                checked={subscription.preferences[key]}
+                label={t(`preferences.${key}`)}
+                disabled={saving}
+                onCheckedChange={(checked) => handlePreferenceChange(key, checked)}
+              />
             ))}
           </fieldset>
         ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

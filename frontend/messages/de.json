@@ -84,6 +84,9 @@
                 "placeholder": "Android-Telefon",
                 "hint": "Wird in den serverseitigen Benachrichtigungs-Subscriptions für diesen Browser angezeigt."
             },
+            "toggle": {
+                "label": "Benachrichtigungen"
+            },
             "actions": {
                 "enable": "Benachrichtigungen aktivieren",
                 "enabling": "Aktiviere…",
@@ -615,7 +618,7 @@
             "jobId": "Job-ID",
             "enabled": "Aktiviert",
             "enabledHelp": "Pausierte Jobs bleiben in jobs.yaml, werden aber nie per Cron ausgeführt.",
-            "newSession": "Neue Sitzung",
+            "newSession": "Optionen",
             "newSessionHelp": "Diese Optionen gelten nur für neue Sitzungen, die der Job selbst erstellt.",
             "unattended": "Unbeaufsichtigt ausführen",
             "unattendedHelp": "Tool-Aufrufe werden nicht an dich eskaliert.",
