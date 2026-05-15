@@ -1,6 +1,54 @@
 # CHANGELOG
 
 
+## v0.119.0 (2026-05-15)
+
+
+### Other
+
+
+- fix review comments
+  ([`2d6955e`](https://github.com/thiesgerken/carapace/commit/2d6955e1bc7201922720ef7f229d5c5407e0f663))
+
+- more aggressive grouping for renovate
+  ([`2f8075e`](https://github.com/thiesgerken/carapace/commit/2f8075e93528fb8c9aef6135b5cb6e5087046925))
+
+- fix test warnings
+  ([`ce7023f`](https://github.com/thiesgerken/carapace/commit/ce7023f0bb20fb9827e3bb70cec69ae14387ef78))
+
+- fix tests
+  ([`8caa775`](https://github.com/thiesgerken/carapace/commit/8caa775772c19f00baa10b6753f528c0fd8ea6be))
+
+- fix linter issues
+  ([`fb07e7e`](https://github.com/thiesgerken/carapace/commit/fb07e7e8037dba0fd04d1abc72bab4b1cc6f21e8))
+
+- remove default_private flag
+  ([`d454078`](https://github.com/thiesgerken/carapace/commit/d454078af2d76d0a4ec8a28724717d7b31db5d41))
+
+- improve persistent session handling in JobsView component
+  ([`802cc21`](https://github.com/thiesgerken/carapace/commit/802cc212afa294bdfba59fb53fc9db75f880501c))
+
+- augment jobs with new flags, refactor
+  ([`1524d78`](https://github.com/thiesgerken/carapace/commit/1524d78ba4123a41c341ddca3f9257905f0c3b79))
+
+### 💄 UI/UX
+
+
+- 💄 styling for preferences
+  ([`8fb4216`](https://github.com/thiesgerken/carapace/commit/8fb42166db220eef9fa6c96ee800561cf1e1eadc))
+
+- 💄 ui: add theme picker
+  ([`224f3d6`](https://github.com/thiesgerken/carapace/commit/224f3d68bb3d08d36f8fa709e1bc7b6a1bfdf1df))
+
+- 💄 i18n: simplify model labels in English and German translations
+  ([`31e88ec`](https://github.com/thiesgerken/carapace/commit/31e88eca5321a4205bec2e1e1a2089ba4d8b6051))
+
+### ✨ Features
+
+
+- ✨ feat: yolo and read-only modes for sessions
+  ([`5f2dbc5`](https://github.com/thiesgerken/carapace/commit/5f2dbc557dd24928c11f82078fa9504fb03a9ee7))
+
 ## v0.118.13 (2026-05-15)
 
 
