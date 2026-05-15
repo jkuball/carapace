@@ -269,7 +269,7 @@ export function JobsView({
     return null;
   }, [describeCronExpression, t]);
 
-  const toggleJobSessionOption = useCallback((key: SessionOptionKey) => {
+  function toggleJobSessionOption(key: SessionOptionKey): void {
     const nextValue = !draft[key];
     if (key === "unattended") {
       updateDraft({
@@ -290,7 +290,7 @@ export function JobsView({
     }
 
     updateDraft({ private: nextValue });
-  }, [draft, updateDraft]);
+  }
 
   const formatTriggerKindLabel = useCallback((triggerKind: SessionLatestJobRun["trigger_kind"]): string => {
     switch (triggerKind) {

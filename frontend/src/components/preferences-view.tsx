@@ -3,7 +3,7 @@
 import { Globe2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useAppLocale } from "@/components/locale-provider";
 import { NotificationSubscription } from "@/components/notification-subscription";
 import { SwitchRow } from "@/components/switch-row";
@@ -28,11 +28,11 @@ export function PreferencesView({
   const t = useTranslations("preferences");
   const { localeOverride, setLocaleOverride, systemLocale } = useAppLocale();
   const { theme, setTheme, systemTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const localeLabels: Record<LocaleOverride, string> = {
     de: t("language.options.de"),
