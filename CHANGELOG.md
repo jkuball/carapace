@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.119.3 (2026-05-15)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: tell the agent that it's in readonly mode
+  ([`d03be44`](https://github.com/thiesgerken/carapace/commit/d03be4434af5b03aa87abcde0d901a2610ea7561))
+
 ## v0.119.2 (2026-05-15)
 
 
