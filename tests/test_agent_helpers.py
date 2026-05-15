@@ -90,3 +90,27 @@ def test_build_system_prompt_unattended_mentions_task_outputs(tmp_path: Path):
     assert "This session is unattended" in prompt
     assert "task_done" in prompt
     assert "task_failed" in prompt
+
+
+def test_build_system_prompt_ask_mode_mentions_read_only_limits(tmp_path: Path):
+    state = SessionState.now(session_id="s1", ask_mode=True)
+    deps = Deps(
+        config=Config(),
+        data_dir=tmp_path,
+        knowledge_dir=tmp_path,
+        session_state=state,
+        sandbox=MagicMock(spec=SandboxManager),
+        security=SessionSecurity("s1", ask_mode=True),
+        sentinel=MagicMock(spec=Sentinel),
+        git_store=MagicMock(spec=GitStore),
+        agent_model=MagicMock(spec=Model),
+        agent_model_id="anthropic:claude-sonnet-4-6",
+        usage_tracker=UsageTracker(),
+        credential_registry=CredentialRegistry(),
+    )
+
+    prompt = build_system_prompt(deps)
+
+    assert "This session is in ASK mode" in prompt
+    assert "Treat it as read-only outside the sandbox" in prompt
+    assert "The security sentinel will enforce this policy" in prompt

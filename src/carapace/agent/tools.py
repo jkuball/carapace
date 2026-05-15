@@ -444,6 +444,16 @@ def build_system_prompt(deps: Deps) -> str:
             + "and do not ask the user to confirm or continue within this session."
         )
 
+    if deps.session_state.attributes.ask_mode:
+        parts.append(
+            "# Read-Only Session\n"
+            "This session is in ASK mode. Treat it as read-only outside the sandbox.\n"
+            "You may read files, inspect code, search, and use other read-only operations.\n"
+            "You may also make sandbox-local changes and run commands when they do not write outside the sandbox.\n"
+            "Do not attempt pushes, external writes, or other changes to systems outside the sandbox. "
+            + "The security sentinel will enforce this policy, but you must plan around it yourself."
+        )
+
     today = date.today()
     parts.append(
         f"# Session Info\nToday's date: {today:%A}, {today:%Y-%m-%d}\nSession ID: {deps.session_state.session_id}"
