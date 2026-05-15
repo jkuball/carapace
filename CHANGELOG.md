@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.119.4 (2026-05-15)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: remove title=null
+  ([`65398fc`](https://github.com/thiesgerken/carapace/commit/65398fca7709b7c6a8e872206ba1fbfec9720a98))
+
 ## v0.119.3 (2026-05-15)
 
 
