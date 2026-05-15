@@ -24,6 +24,7 @@ from carapace.models import (
     TaskDone,
     TaskFailed,
     ToolResult,
+    normalize_tool_call_args,
 )
 from carapace.sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
 from carapace.sandbox.runtime import SkillActivationError
@@ -774,9 +775,13 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         if invalid:
             return f"Unknown contexts: {', '.join(invalid)}. If these are skills, please activate them first."
 
-        args: dict[str, Any] = {"command": command}
-        if title is not None:
-            args["title"] = title
+        args = normalize_tool_call_args(
+            "exec",
+            {
+                "command": command,
+                "title": title,
+            },
+        )
         if contexts:
             args["contexts"] = contexts
         if not ctx.tool_call_approved:

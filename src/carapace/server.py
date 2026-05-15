@@ -59,6 +59,7 @@ from carapace.models import (
     SessionJobRunContext,
     SessionState,
     ToolResult,
+    normalize_tool_call_args,
 )
 from carapace.notifications import (
     NotificationPresenceRegistry,
@@ -1510,7 +1511,18 @@ async def get_session_history(
 
     events = _engine.session_mgr.load_events(session_id)
     result = (
-        [HistoryMessage.model_validate({**event, "event_index": index}) for index, event in enumerate(events)]
+        [
+            HistoryMessage.model_validate(
+                {
+                    **event,
+                    "args": normalize_tool_call_args(event.get("tool", ""), event["args"])
+                    if isinstance(event.get("args"), dict)
+                    else event.get("args"),
+                    "event_index": index,
+                }
+            )
+            for index, event in enumerate(events)
+        ]
         if events
         else [
             HistoryMessage.model_validate({**message.model_dump(mode="python"), "event_index": index})
@@ -1537,7 +1549,7 @@ def _history_from_messages(session_id: str) -> list[HistoryMessage]:
         elif isinstance(msg, ModelResponse):
             for part in msg.parts:
                 if isinstance(part, ToolCallPart):
-                    args = part.args if isinstance(part.args, dict) else {}
+                    args = normalize_tool_call_args(part.tool_name, part.args) if isinstance(part.args, dict) else {}
                     ctx_raw = args.get("contexts")
                     contexts = list(ctx_raw) if isinstance(ctx_raw, list) else None
                     result.append(
@@ -1627,12 +1639,13 @@ class WebSocketSubscriber:
         tool_id: str | None = None,
         parent_tool_id: str | None = None,
     ) -> None:
-        contexts_raw = args.get("contexts")
+        normalized_args = normalize_tool_call_args(tool, args)
+        contexts_raw = normalized_args.get("contexts")
         contexts = list(contexts_raw) if isinstance(contexts_raw, list) else []
         await self._safe_send(
             ToolCallInfo(
                 tool=tool,
-                args=args,
+                args=normalized_args,
                 detail=detail,
                 contexts=contexts,
                 approval_source=approval_source,

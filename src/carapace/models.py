@@ -43,6 +43,26 @@ class CredentialRegistryProtocol(Protocol):
     async def list(self, query: str = "") -> list[CredentialMetadata]: ...
 
 
+def normalize_optional_tool_label(value: Any) -> str | None:
+    """Return a cleaned tool label string, or ``None`` when the value is not meaningful."""
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    if trimmed.lower() in {"null", "none"}:
+        return None
+    return trimmed
+
+
+def normalize_tool_call_args(tool: str, args: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize serialized tool-call args for transport and persistence."""
+    normalized = dict(args)
+    if tool == "exec":
+        normalized["title"] = normalize_optional_tool_label(normalized.get("title"))
+    return normalized
+
+
 # --- Session State ---
 
 

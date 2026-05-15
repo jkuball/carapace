@@ -53,6 +53,7 @@ from carapace.models import (
     ToolResult,
     agent_available_model_entries,
     context_grants_session_summary,
+    normalize_tool_call_args,
 )
 from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
 from carapace.sandbox.manager import SandboxManager
@@ -1347,12 +1348,13 @@ class SessionEngine(SessionTurnMixin):
         parent_tool_id: str | None = None,
         match_args: dict[str, Any] | None = None,
     ) -> str:
-        contexts_raw = args.get("contexts")
-        matching_args = match_args if match_args is not None else args
+        normalized_args = normalize_tool_call_args(tool, args)
+        contexts_raw = normalized_args.get("contexts")
+        matching_args = normalize_tool_call_args(tool, match_args) if match_args is not None else normalized_args
         event: dict[str, Any] = {
             "role": "tool_call",
             "tool": tool,
-            "args": args,
+            "args": normalized_args,
             "detail": detail,
             "approval_source": approval_source,
             "approval_verdict": approval_verdict,

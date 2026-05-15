@@ -587,8 +587,8 @@ export function ToolCallBadge({
     t,
   );
   const argsSummary =
-    isExecTool && execTitle
-      ? execTitle
+    isExecTool
+      ? execTitle || execCommand || t("fallbacks.missingCommand")
       : isReadTool
         ? formatReadSummaryFromSplit(
             args,

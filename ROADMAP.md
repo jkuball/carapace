@@ -16,6 +16,5 @@
 - [ ] indicator how many commits ahead/behind the session's knowledge repo is + the ability to pull/push inside the sandbox without telling the agent
 - [ ] warn user if deleting a session that has commits not pushed
 - [ ] replace pull / push slash commands (that aren't really tied to the session anyway) with a global indicator how many commits ahead/behind the backend's global repo is compared to the remote repo
-- [ ] "query" sessions in the sense that the sentinel should deny all write ops. like "ask" mode in copilot. maybe call them "ask" instead. sentinel needs to be told this everytime.
 - [ ] speech input
-- [ ] ui: lock-button to set both models at once
+- [ ] alias setup must be written to the pod. right now an sts restart (externally) bricks aliases.
