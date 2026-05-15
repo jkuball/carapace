@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.119.5 (2026-05-15)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: fix ligatures for "--"
+  ([`ab024fa`](https://github.com/thiesgerken/carapace/commit/ab024fa6ff9bcf4eb150202f674b4b03e7f5276d))
+
 ## v0.119.4 (2026-05-15)
 
 
