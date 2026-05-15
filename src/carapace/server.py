@@ -1099,7 +1099,7 @@ async def create_session(
         body.channel_type,
         body.channel_ref,
         budget=_engine.config.agent.default_session_budget,
-        private=_engine.config.sessions.default_private if body.private is None else body.private,
+        private=False if body.private is None else body.private,
         unattended=False if body.unattended is None else body.unattended,
         ask_mode=False if body.ask_mode is None else body.ask_mode,
         yolo_mode=False if body.yolo_mode is None else body.yolo_mode,

@@ -68,9 +68,6 @@ agent:
   #   cost_usd: 5.00
 
 sessions:
-  # New sessions start public by default. Set to true if you want explicit
-  # opt-in before histories can be committed into the knowledge repo.
-  default_private: false
   commit:
     enabled: true
     # Histories are written to data/knowledge/sessions/YYYY/MM/<session_id>/conversation.json

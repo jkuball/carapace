@@ -255,7 +255,6 @@ channels:
       - "@me:example.com"
 
 sessions:
-  default_private: false
   commit:
     enabled: true
     path_prefix: sessions
@@ -281,7 +280,6 @@ sandbox:
 
 Session commit settings control how conversation histories are copied into the knowledge repo:
 
-- `sessions.default_private`: whether new sessions start private and therefore ineligible for knowledge commits
 - `sessions.commit.enabled`: master switch for the feature
 - `sessions.commit.path_prefix`: subtree inside the knowledge repo where `conversation.json` files are written
 - `sessions.commit.autosave_enabled`: enable the background inactivity-based commit sweep

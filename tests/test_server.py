@@ -410,13 +410,11 @@ def test_create_session_rejects_conflicting_modes(client, auth_headers):
     assert resp.status_code == 422
 
 
-def test_create_session_uses_configured_default_privacy(client, auth_headers):
-    srv._config.sessions.default_private = True
-
+def test_create_session_defaults_to_public(client, auth_headers):
     resp = client.post("/api/sessions", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.json()["attributes"]["private"] is True
+    assert resp.json()["attributes"]["private"] is False
 
 
 def test_list_sessions(client, auth_headers):

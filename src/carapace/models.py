@@ -637,7 +637,6 @@ class SessionCommitConfig(BaseModel):
 
 
 class SessionsConfig(BaseModel):
-    default_private: bool = False
     commit: SessionCommitConfig = SessionCommitConfig()
 
 

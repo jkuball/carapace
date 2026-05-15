@@ -69,7 +69,7 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 ### Privacy model
 
 - Every session has an `attributes.private` flag in `SessionState`
-- New sessions inherit `sessions.default_private` from `config.yaml`
+- New sessions start public unless the caller explicitly sets them private
 - Private sessions are excluded from manual commits to knowledge and from autosave commits
 - Switching a session from public to private does **not** rewrite Git history; already-committed snapshots remain in the knowledge repo history
 
@@ -84,7 +84,7 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 - Sessions are **persistent** — they survive carapace restarts
 - **Containers** are ephemeral: destroyed after an idle timeout (configurable, default 15 min). When the user sends a new message after containers expire, they are recreated. See [sandbox.md](sandbox.md).
 - **Title generation**: After the 1st and 3rd user messages, a title is auto-generated using a lightweight LLM model
-- **Privacy**: Sessions start public by default, unless `sessions.default_private` is set to `true`
+- **Privacy**: Sessions start public by default unless the creator explicitly marks them private
 - **Deletion**: Sessions can be deleted via the REST API (`DELETE /api/sessions/{id}`), which also cleans up any running sandbox container and may remove the committed `conversation.json` from the knowledge repo
 
 ## Notifications and presence
@@ -124,14 +124,14 @@ The primary interactive channel. A Next.js web app connects to the carapace serv
 
 **Notification API:**
 
-| Endpoint | Method | Description |
-| -------- | ------ | ----------- |
-| `/api/notifications/subscriptions` | `GET` | List current subscriptions for the authenticated owner key |
-| `/api/notifications/subscriptions` | `POST` | Create or update a push subscription |
-| `/api/notifications/subscriptions/{id}` | `DELETE` | Remove a push subscription |
-| `/api/notifications/subscriptions/{id}/preferences` | `PATCH` | Update per-device notification preferences |
-| `/api/notifications/subscriptions/{id}/presence` | `POST` | Update presence for a subscription-backed client and refresh expiry |
-| `/api/notifications/presence` | `POST` | Update interactive presence for clients that are not tied to a push subscription |
+| Endpoint                                            | Method   | Description                                                                      |
+| --------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `/api/notifications/subscriptions`                  | `GET`    | List current subscriptions for the authenticated owner key                       |
+| `/api/notifications/subscriptions`                  | `POST`   | Create or update a push subscription                                             |
+| `/api/notifications/subscriptions/{id}`             | `DELETE` | Remove a push subscription                                                       |
+| `/api/notifications/subscriptions/{id}/preferences` | `PATCH`  | Update per-device notification preferences                                       |
+| `/api/notifications/subscriptions/{id}/presence`    | `POST`   | Update presence for a subscription-backed client and refresh expiry              |
+| `/api/notifications/presence`                       | `POST`   | Update interactive presence for clients that are not tied to a push subscription |
 
 **WebSocket protocol** (`/api/chat/{session_id}`):
 
