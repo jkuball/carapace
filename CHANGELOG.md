@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.118.13 (2026-05-15)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv:python3.14-trixie-slim Docker digest to 8090f78
+  ([`4a22bb8`](https://github.com/thiesgerken/carapace/commit/4a22bb87c6f87ce119e55f527488f9672c31b1f7))
+
+- ⬆️ chore: upgrade nginx:alpine Docker digest to feb6f75
+  ([`cafb5d8`](https://github.com/thiesgerken/carapace/commit/cafb5d8dcf6306abdaa1b115322e0301fb0fa3c1))
+
+- ⬆️ chore: upgrade ghcr.io/astral-sh/uv Docker digest to 1025398
+  ([`526cfa5`](https://github.com/thiesgerken/carapace/commit/526cfa55197807a9593c61b9f1ea38636e427449))
+
+- ⬆️ chore: upgrade j178/prek-action digest to bdca6f1
+  ([`cadb0f6`](https://github.com/thiesgerken/carapace/commit/cadb0f6af626e1c7249d551843453335e1d713af))
+
+- ⬆️ chore: upgrade pnpm/action-setup digest to 0e279bb
+  ([`0b90802`](https://github.com/thiesgerken/carapace/commit/0b9080228a905e262c5263c7c88624f14b83ed01))
+
+- ⬆️ chore: upgrade pnpm to 11.1.0
+  ([`c3f51eb`](https://github.com/thiesgerken/carapace/commit/c3f51ebb18d1032a4904810710913542e36f79a6))
+
 ## v0.118.12 (2026-05-14)
 
 
