@@ -465,7 +465,7 @@ function ApprovalBadge({
 
   if (source === "bypass") {
     return (
-      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-gray-500/10 text-gray-500 dark:text-gray-400">
+      <span className="inline-flex items-center gap-0.5 rounded border border-amber-300/60 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-400/30 dark:text-amber-300">
         <Zap className="h-2.5 w-2.5" />
         {t("bypass")}
       </span>

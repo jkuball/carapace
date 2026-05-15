@@ -161,31 +161,9 @@ uv run carapace
 
 Additional prerequisites: Python 3.12+, `uv`, Node.js 24+, and `pnpm`.
 
-## Status
-
-carapace is in active development, but the core system is already usable.
-
-Shipped today:
-
-- Sentinel-gated tool execution
-- Web UI, CLI, and Matrix channels
-- Docker and Kubernetes sandbox runtimes
-- Git-backed knowledge repo with session archiving and upstream push support
-- Context-scoped skill domains, credentials, and exec-scoped tunnels
-- Credential broker with file and Bitwarden backends
-- Session fork, sidebar controls, session attributes, and approval-source UI badges
-- Token usage reporting, budgets, and runtime model switching
-
-Planned next:
-
-- [Vector search for memory](docs/plans/memory.md)
-- [Scheduled tasks and cron-like channels](docs/plans/channels.md)
-- [Further Kubernetes enhancements](docs/plans/kubernetes.md)
-
 ## Contributing
 
 Issues and pull requests are welcome. Before opening a PR, run the backend tests, frontend lint, and chart linting where relevant. The repo uses `prek` hooks and CI also covers tests, frontend lint, and Helm lint.
-I guess before accepting the first PR I have to think about a Contributor Policy and who owns the contributed code.
 
 ## License
 

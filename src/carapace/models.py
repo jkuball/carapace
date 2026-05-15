@@ -84,11 +84,30 @@ class SessionBudget(BaseModel):
 
 
 class SessionAttributes(BaseModel):
-    private: bool = False
-    archived: bool = False
-    pinned: bool = False
-    favorite: bool = False
-    unattended: bool = False
+    private: bool = Field(default=False, description="Exclude this session from knowledge commits.")
+    archived: bool = Field(default=False, description="Hide this session from the default active session list.")
+    pinned: bool = Field(default=False, description="Keep this session pinned to the top of session lists.")
+    favorite: bool = Field(default=False, description="Mark this session as a favorite in the UI.")
+    unattended: bool = Field(
+        default=False,
+        description="Run without a user approval path. This is set on creation or fork and cannot be changed in place.",
+    )
+    ask_mode: bool = Field(
+        default=False,
+        description=(
+            "Restrict the agent to read-only operations outside the sandbox while " + "keeping sentinel review enabled."
+        ),
+    )
+    yolo_mode: bool = Field(
+        default=False,
+        description="Bypass sentinel review and allow operations immediately.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_modes(self) -> SessionAttributes:
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("session attributes ask_mode and yolo_mode are mutually exclusive")
+        return self
 
 
 class SessionJobRunContext(BaseModel):
@@ -130,6 +149,8 @@ class SessionState(BaseModel):
         title: str | None = None,
         private: bool = False,
         unattended: bool = False,
+        ask_mode: bool = False,
+        yolo_mode: bool = False,
         approved_operations: list[str] | None = None,
     ) -> SessionState:
         ts = datetime.now(tz=UTC)
@@ -138,7 +159,12 @@ class SessionState(BaseModel):
             channel_type=channel_type,
             channel_ref=channel_ref,
             title=title,
-            attributes=SessionAttributes(private=private, unattended=unattended),
+            attributes=SessionAttributes(
+                private=private,
+                unattended=unattended,
+                ask_mode=ask_mode,
+                yolo_mode=yolo_mode,
+            ),
             approved_operations=approved_operations or [],
             activated_skills=[],
             context_grants={},
@@ -264,7 +290,10 @@ class JobDefinition(BaseModel):
     enabled: bool = True
     triggers: Annotated[list[JobCronTrigger], Field(default_factory=list)]
     prompt: str
+    private: bool = False
     unattended: bool = True
+    ask_mode: bool = False
+    yolo_mode: bool = False
     persistent_session_id: str | None = None
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None
@@ -294,6 +323,9 @@ class JobDefinition(BaseModel):
         self.sentinel_model_name = normalize_optional_model_name(self.sentinel_model_name)
         self.title_model_name = normalize_optional_model_name(self.title_model_name)
 
+        if self.ask_mode and self.yolo_mode:
+            raise ValueError("job ask_mode and yolo_mode are mutually exclusive")
+
         if self.persistent_session_id is None:
             return self
 
@@ -302,6 +334,8 @@ class JobDefinition(BaseModel):
             raise ValueError("job persistent_session_id must not be empty when set")
         if self.unattended:
             raise ValueError("job unattended must be false when persistent_session_id is set")
+        if any((self.private, self.ask_mode, self.yolo_mode)):
+            raise ValueError("job session mode overrides cannot be used with persistent_session_id")
         if any((self.agent_model_name, self.sentinel_model_name, self.title_model_name)):
             raise ValueError("job model overrides cannot be used with persistent_session_id")
         self.persistent_session_id = persistent_session_id
@@ -603,7 +637,6 @@ class SessionCommitConfig(BaseModel):
 
 
 class SessionsConfig(BaseModel):
-    default_private: bool = False
     commit: SessionCommitConfig = SessionCommitConfig()
 
 

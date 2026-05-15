@@ -42,6 +42,15 @@
                 "de": "Deutsch"
             }
         },
+        "theme": {
+            "label": "Appearance",
+            "description": "Choose how the color theme is resolved.",
+            "options": {
+                "system": "System",
+                "light": "Light",
+                "dark": "Dark"
+            }
+        },
         "chatList": {
             "label": "Chats",
             "showArchived": {
@@ -75,6 +84,9 @@
                 "placeholder": "Android phone",
                 "hint": "Shown in server-side notification subscriptions for this browser."
             },
+            "toggle": {
+                "label": "Notifications"
+            },
             "actions": {
                 "enable": "Enable notifications",
                 "enabling": "Enabling…",
@@ -104,14 +116,30 @@
     },
     "newSessionButton": {
         "label": "New session",
-        "chooseMode": "Choose session mode",
-        "attended": {
-            "title": "Attended",
-            "description": "Chat normally and approve escalations in place."
+        "chooseOptions": "Choose session options",
+        "private": {
+            "enabledTitle": "Private",
+            "enabledDescription": "Exclude this session from knowledge commits.",
+            "disabledTitle": "Saved",
+            "disabledDescription": "Can be included in knowledge commits."
+        },
+        "ask": {
+            "enabledTitle": "Read-Only Mode",
+            "enabledDescription": "Read-only outside sandbox. External writes are blocked.",
+            "disabledTitle": "Read and Write Access",
+            "disabledDescription": "Normal permissions. External writes are allowed."
+        },
+        "yolo": {
+            "enabledTitle": "YOLO",
+            "enabledDescription": "Disable sentinel review and allow operations immediately.",
+            "disabledTitle": "Reviewed",
+            "disabledDescription": "Keep actions gated by safe-list and sentinel review."
         },
         "unattended": {
-            "title": "Unattended",
-            "description": "Runs on its own with no user approval path."
+            "enabledTitle": "Unattended",
+            "enabledDescription": "Runs on its own with no user approval path.",
+            "disabledTitle": "With Approval",
+            "disabledDescription": "Stays interactive with a user approval path."
         }
     },
     "chatInput": {
@@ -392,6 +420,8 @@
             "private": "Private",
             "pinned": "Pinned",
             "favorite": "Favorite",
+            "askMode": "Read-Only Mode",
+            "yoloMode": "YOLO",
             "unattended": "Unattended",
             "interactive": "Interactive"
         },
@@ -411,7 +441,14 @@
             "messages": "Messages",
             "totalCost": "Cost",
             "job": "Job",
-            "reference": "Reference"
+            "reference": "Reference",
+            "modes": "Modes",
+            "askMode": "Read-Only Mode",
+            "askModeHelp": "Only read-only work outside the sandbox. External writes are denied.",
+            "yoloMode": "YOLO Mode",
+            "yoloModeHelp": "Bypass sentinel approval and allow actions immediately.",
+            "savingPrivate": "Saving…",
+            "updatingMode": "Updating mode…"
         },
         "source": {
             "unknown": "Unknown",
@@ -525,7 +562,11 @@
             "idRequired": "Job ID is required.",
             "nameRequired": "Job name is required.",
             "promptRequired": "Prompt is required.",
+            "persistentSessionIdRequired": "Select a persistent session ID or disable the option.",
             "persistentSessionMustBeAttended": "Persistent-session jobs must be attended.",
+            "sessionModesRequireFreshSession": "Session modes require a fresh session.",
+            "modelOverridesRequireFreshSession": "Model overrides require a fresh session.",
+            "askAndYoloMutuallyExclusive": "Read-only mode and YOLO are mutually exclusive.",
             "cronEmpty": "Cron expressions must not be empty.",
             "cronInvalid": "Cron expression is invalid: {expression}."
         },
@@ -557,6 +598,7 @@
             "refresh": "Refresh jobs",
             "new": "New job",
             "clear": "Clear",
+            "clearPersistentSession": "Clear persistent session",
             "delete": "Delete",
             "save": "Save",
             "addTrigger": "Add trigger",
@@ -576,11 +618,17 @@
             "jobId": "Job ID",
             "enabled": "Enabled",
             "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
+            "newSession": "Options",
+            "newSessionHelp": "These options only apply to fresh sessions created by this job.",
             "unattended": "Run unattended",
             "unattendedHelp": "Tool calls will not be escalated to you.",
             "persistentSession": "Persistent Session",
+            "persistentSessionToggleHelp": "Reuse an existing session instead of starting a fresh one each run.",
             "persistentSessionDisabled": "Can't be used in unattended mode",
+            "persistentSessionUncheckedHelp": "Enable this option to choose an existing session ID below.",
+            "persistentSessionMissingIdHelp": "Enabled, but no session ID selected yet. Choose an existing session below.",
             "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
+            "persistentSessionActiveHelp": "Active: this session ID overrides the fresh-session options above.",
             "models": "Models",
             "modelsHelp": "Optional per-job overrides for fresh sessions created by this job.",
             "modelsDisabled": "Persistent sessions keep their own model selection.",
@@ -588,8 +636,8 @@
             "modelsLinkedHelp": "Linked: changing either model updates both.",
             "modelsUnlinked": "Models unlinked",
             "modelsUnlinkedHelp": "Unlinked: agent and sentinel models can be changed independently.",
-            "agentModel": "Agent Model",
-            "sentinelModel": "Sentinel Model",
+            "agentModel": "Agent",
+            "sentinelModel": "Sentinel",
             "titleModel": "Title Model",
             "prompt": "Prompt",
             "expression": "Expression",
@@ -599,6 +647,7 @@
         "placeholders": {
             "name": "Nightly inbox review",
             "jobId": "nightly-inbox-review",
+            "persistentSession": "select session ID",
             "prompt": "Summarize new tasks, triage urgent items, then propose next actions.",
             "model": "Leave empty for default"
         },

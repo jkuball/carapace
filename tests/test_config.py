@@ -11,7 +11,6 @@ def test_load_config_defaults(tmp_path: Path):
     assert cfg.cache.ttl_seconds == 1800
     assert cfg.cache.redis_url == "redis://localhost:6379/0"
     assert cfg.agent.model == "anthropic:claude-sonnet-4-6"
-    assert cfg.sessions.default_private is False
     assert cfg.sessions.commit.enabled is True
     assert cfg.sessions.commit.autosave_inactivity_hours == 4
     assert cfg.sandbox.k8s_session_pvc_size == "1Gi"

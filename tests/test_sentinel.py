@@ -72,6 +72,23 @@ def test_reset_clears_skill_file_cache(tmp_path: Path) -> None:
     assert sentinel._read_skill_file_cached(skills_dir, "moneydb", "SKILL.md") == "# MoneyDB\n"
 
 
+def test_set_policy_preserves_shadow_history_and_skill_cache(tmp_path: Path) -> None:
+    sentinel, skills_dir = _make_sentinel(tmp_path)
+    skill_dir = skills_dir / "moneydb"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("# MoneyDB\n")
+
+    history_marker = object()
+    sentinel._message_history = [history_marker]
+    sentinel._read_skill_file_cached(skills_dir, "moneydb", "SKILL.md")
+
+    sentinel.set_policy(ask_mode=True)
+
+    assert sentinel._message_history == [history_marker]
+    cached = sentinel._read_skill_file_cached(skills_dir, "moneydb", "SKILL.md")
+    assert "already provided earlier in this sentinel conversation" in cached
+
+
 def test_eval_tool_logging_includes_context(tmp_path: Path, monkeypatch) -> None:
     sentinel, _skills_dir = _make_sentinel(tmp_path)
     messages: list[str] = []

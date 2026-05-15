@@ -63,6 +63,30 @@ async def evaluate_with(
 
     Raises ApprovalRequired if the sentinel escalates, or SecurityDeniedError if denied.
     """
+    if session.yolo_mode:
+        explanation = "YOLO mode bypassed sentinel."
+        entry = ToolCallEntry(tool=tool_name, args=args, decision="allowed", explanation=explanation)
+        session.append(entry)
+        session.write_audit(
+            AuditEntry.now(
+                kind="tool_call",
+                tool=tool_name,
+                args_summary=args,
+                final_decision="allowed",
+                explanation=explanation,
+            )
+        )
+        _log_tool_call(
+            tool_name,
+            args,
+            "[bypass] yolo mode auto-allowed",
+            tool_call_callback,
+            approval_source="bypass",
+            approval_verdict="allow",
+            approval_explanation=explanation,
+        )
+        return
+
     if tool_name in SAFE_TOOLS:
         entry = ToolCallEntry(tool=tool_name, args=args, decision="auto_allowed")
         session.append(entry)
@@ -214,6 +238,25 @@ async def evaluate_domain_with(
 
     If the sentinel escalates, delegates to the session's user escalation callback.
     """
+
+    if session.yolo_mode:
+        explanation = "YOLO mode bypassed sentinel."
+        session.notify_domain_decision(
+            domain,
+            "[bypass] yolo mode auto-allowed",
+            approval_source="bypass",
+            approval_verdict="allow",
+            approval_explanation=explanation,
+        )
+        session.write_audit(
+            AuditEntry.now(
+                kind="proxy_domain",
+                domain=domain,
+                final_decision="allowed",
+                explanation=explanation,
+            )
+        )
+        return True
 
     if _exec_command_mentions_domain(command, domain):
         explanation = "Auto-allowed because the exact domain appears in the exec command."
@@ -591,6 +634,48 @@ async def evaluate_push_with(
 
     If the sentinel escalates, delegates to the session's user escalation callback.
     """
+    if session.yolo_mode:
+        explanation = "YOLO mode bypassed sentinel."
+        entry = GitPushEntry(ref=ref, decision="allowed", explanation=explanation)
+        session.append(entry)
+        await session.notify_push_decision(
+            ref,
+            "allowed",
+            "[bypass] yolo mode auto-allowed",
+            approval_source="bypass",
+            approval_verdict="allow",
+            approval_explanation=explanation,
+        )
+        session.write_audit(
+            AuditEntry.now(
+                kind="git_push",
+                final_decision="allowed",
+                explanation=explanation,
+            )
+        )
+        return True
+
+    if session.ask_mode:
+        explanation = "Ask mode blocks git push because it writes outside the sandbox."
+        entry = GitPushEntry(ref=ref, decision="denied", explanation=explanation)
+        session.append(entry)
+        await session.notify_push_decision(
+            ref,
+            "denied",
+            f"[sentinel: deny] {explanation}",
+            approval_source="sentinel",
+            approval_verdict="deny",
+            approval_explanation=explanation,
+        )
+        session.write_audit(
+            AuditEntry.now(
+                kind="git_push",
+                final_decision="denied",
+                explanation=explanation,
+            )
+        )
+        return False
+
     await session.notify_push_decision(ref, "reviewing", "[sentinel] reviewing", approval_source="sentinel")
 
     verdict = await sentinel.evaluate_push(
@@ -701,6 +786,26 @@ async def evaluate_credential_with(
     ``user_was_prompted`` is False when the sentinel allowed or denied without escalation
     (the engine's escalation callback already persists UI events when escalation runs).
     """
+    if session.yolo_mode:
+        explanation = "YOLO mode bypassed sentinel."
+        session.record_credential_access(
+            vault_paths=[vault_path],
+            names=[name],
+            decision="approved",
+            explanation=explanation,
+            ui_label="[bypass] yolo mode auto-allowed",
+            approval_source="bypass",
+            approval_verdict="allow",
+            ui_explanation=explanation,
+            audit_final="allowed",
+            sentinel_verdict=None,
+        )
+        return CredentialAccessEvaluation(
+            allowed=True,
+            user_was_prompted=False,
+            explanation=explanation,
+        )
+
     session.notify_credential_review(vault_path, "[sentinel] reviewing", name=name, approval_source="sentinel")
 
     verdict = await sentinel.evaluate_credential_access(

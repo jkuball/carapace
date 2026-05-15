@@ -48,6 +48,16 @@ def test_create_session_persists_private_attribute(tmp_path: Path):
     assert resumed.attributes.private is True
 
 
+def test_create_session_persists_access_modes(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    state = mgr.create_session(ask_mode=True)
+
+    resumed = mgr.resume_session(state.session_id)
+    assert resumed is not None
+    assert resumed.attributes.ask_mode is True
+    assert resumed.attributes.yolo_mode is False
+
+
 def test_resume_session(tmp_path: Path):
     mgr = SessionManager(tmp_path)
     state = mgr.create_session()

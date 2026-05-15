@@ -42,6 +42,15 @@
                 "de": "Deutsch"
             }
         },
+        "theme": {
+            "label": "Darstellung",
+            "description": "Wähle, wie das Farbschema bestimmt wird.",
+            "options": {
+                "system": "System",
+                "light": "Hell",
+                "dark": "Dunkel"
+            }
+        },
         "chatList": {
             "label": "Chats",
             "showArchived": {
@@ -75,6 +84,9 @@
                 "placeholder": "Android-Telefon",
                 "hint": "Wird in den serverseitigen Benachrichtigungs-Subscriptions für diesen Browser angezeigt."
             },
+            "toggle": {
+                "label": "Benachrichtigungen"
+            },
             "actions": {
                 "enable": "Benachrichtigungen aktivieren",
                 "enabling": "Aktiviere…",
@@ -104,14 +116,30 @@
     },
     "newSessionButton": {
         "label": "Neue Sitzung",
-        "chooseMode": "Sitzungsmodus auswählen",
-        "attended": {
-            "title": "Begleitet",
-            "description": "Normal chatten und Eskalationen direkt bestätigen."
+        "chooseOptions": "Sitzungsoptionen auswählen",
+        "private": {
+            "enabledTitle": "Privat",
+            "enabledDescription": "Nicht ins Wissens-Repository aufnehmen.",
+            "disabledTitle": "Speichern",
+            "disabledDescription": "Wird im Wissens-Repository gespeichert."
+        },
+        "ask": {
+            "enabledTitle": "Nur Lesend",
+            "enabledDescription": "Außerhalb der Sandbox nur lesen.",
+            "disabledTitle": "Schreibzugriff",
+            "disabledDescription": "Außerhalb der Sandbox schreiben erlaubt."
+        },
+        "yolo": {
+            "enabledTitle": "YOLO",
+            "enabledDescription": "Alle Tool-Calls sofort erlauben.",
+            "disabledTitle": "Mit Prüfung",
+            "disabledDescription": "Aktionen weiter durch Safe-List und Sentinel prüfen."
         },
         "unattended": {
-            "title": "Unbeaufsichtigt",
-            "description": "Läuft eigenständig ohne Freigabepfad durch dich."
+            "enabledTitle": "Unbeaufsichtigt",
+            "enabledDescription": "Läuft eigenständig ohne Freigabepfad durch dich.",
+            "disabledTitle": "Interaktiv",
+            "disabledDescription": "Bleibt im interaktiven Modus mit Freigabepfad."
         }
     },
     "chatInput": {
@@ -374,7 +402,7 @@
             "deleteSession": "Diese Sitzung löschen? Chatverlauf und Sandbox-Status werden entfernt.",
             "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten.",
             "unarchiveSession": "Diese Sitzung aus dem Archiv holen? Sie kehrt in die aktive Sitzungsliste zurück.",
-            "makePrivate": "Diese Sitzung als privat markieren? Bereits vorhandene Wissens-Commits bleiben in der Git-Historie bestehen."
+            "makePrivate": "Diese Sitzung als privat markieren? Bereits vorhandene Commits im Wissens-Repository bleiben in der Git-Historie bestehen."
         },
         "actions": {
             "pin": "Sitzung anheften",
@@ -392,6 +420,8 @@
             "private": "Privat",
             "pinned": "Angeheftet",
             "favorite": "Favorit",
+            "askMode": "Lese-Modus",
+            "yoloMode": "YOLO",
             "unattended": "Unbeaufsichtigt",
             "interactive": "Interaktiv"
         },
@@ -411,7 +441,14 @@
             "messages": "Nachrichten",
             "totalCost": "Kosten",
             "job": "Job",
-            "reference": "Referenz"
+            "reference": "Referenz",
+            "modes": "Modi",
+            "askMode": "Lese-Modus",
+            "askModeHelp": "Außerhalb der Sandbox nur lesend arbeiten. Externe Schreibzugriffe werden verweigert.",
+            "yoloMode": "YOLO-Modus",
+            "yoloModeHelp": "Sentinel-Freigaben umgehen und Aktionen sofort erlauben.",
+            "savingPrivate": "Wird gespeichert…",
+            "updatingMode": "Modus wird aktualisiert…"
         },
         "source": {
             "unknown": "Unbekannt",
@@ -466,9 +503,9 @@
             "savedAt": "Gespeichert {timestamp}",
             "commitDisabledNoHistory": "Diese Sitzung hat noch keinen Gesprächsverlauf.",
             "noNewChanges": "{status}. Keine neuen Änderungen zum Committen.",
-            "privateExistingCommits": "Sitzung ist privat. Bereits vorhandene Wissens-Commits bleiben unverändert.",
-            "privateExcluded": "Sitzung ist privat und wird nicht in das Wissens-Repository committed.",
-            "includedInRepo": "Sitzung wird in Wissens-Commits in dein Repository aufgenommen.",
+            "privateExistingCommits": "Sitzung ist privat. Bereits vorhandene Commits im Wissens-Repository bleiben unverändert.",
+            "privateExcluded": "Sitzung ist privat und wird nicht ins Wissens-Repository committed.",
+            "includedInRepo": "Sitzung wird ins Wissens-Repository aufgenommen.",
             "badges": {
                 "excluded": "Ausgeschlossen",
                 "missing": "Fehlt",
@@ -525,7 +562,11 @@
             "idRequired": "Job-ID ist erforderlich.",
             "nameRequired": "Job-Name ist erforderlich.",
             "promptRequired": "Prompt ist erforderlich.",
+            "persistentSessionIdRequired": "Wähle eine persistente Session-ID oder deaktiviere die Option.",
             "persistentSessionMustBeAttended": "Jobs mit persistenter Sitzung müssen beaufsichtigt sein.",
+            "sessionModesRequireFreshSession": "Session-Modi brauchen eine neue Sitzung.",
+            "modelOverridesRequireFreshSession": "Modell-Overrides brauchen eine neue Sitzung.",
+            "askAndYoloMutuallyExclusive": "Lese-Modus und YOLO sind gegenseitig ausschließend.",
             "cronEmpty": "Cron-Ausdrücke dürfen nicht leer sein.",
             "cronInvalid": "Cron-Ausdruck ist ungültig: {expression}."
         },
@@ -557,6 +598,7 @@
             "refresh": "Jobs aktualisieren",
             "new": "Neuer Job",
             "clear": "Leeren",
+            "clearPersistentSession": "Persistente Sitzung entfernen",
             "delete": "Löschen",
             "save": "Speichern",
             "addTrigger": "Trigger hinzufügen",
@@ -576,11 +618,17 @@
             "jobId": "Job-ID",
             "enabled": "Aktiviert",
             "enabledHelp": "Pausierte Jobs bleiben in jobs.yaml, werden aber nie per Cron ausgeführt.",
+            "newSession": "Optionen",
+            "newSessionHelp": "Diese Optionen gelten nur für neue Sitzungen, die der Job selbst erstellt.",
             "unattended": "Unbeaufsichtigt ausführen",
             "unattendedHelp": "Tool-Aufrufe werden nicht an dich eskaliert.",
             "persistentSession": "Persistente Sitzung",
+            "persistentSessionToggleHelp": "Verwende eine bestehende Sitzung statt bei jedem Lauf eine neue zu starten.",
             "persistentSessionDisabled": "Kann im unbeaufsichtigten Modus nicht verwendet werden",
+            "persistentSessionUncheckedHelp": "Aktiviere die Option, um unten eine bestehende Session-ID auszuwählen.",
+            "persistentSessionMissingIdHelp": "Aktiv, aber noch ohne Session-ID. Wähle unten eine bestehende Sitzung aus.",
             "persistentSessionHelp": "Verwende eine bestehende Sitzung, statt bei jedem Joblauf eine neue zu erstellen.",
+            "persistentSessionActiveHelp": "Aktiv: Diese Session-ID überschreibt die Optionen für neue Sitzungen oben.",
             "models": "Modelle",
             "modelsHelp": "Optionale job-spezifische Overrides für neue Sitzungen, die dieser Job erstellt.",
             "modelsDisabled": "Persistente Sitzungen behalten ihre eigene Modellauswahl.",
@@ -588,8 +636,8 @@
             "modelsLinkedHelp": "Verknüpft: Änderungen an einem Modell setzen beide Modelle.",
             "modelsUnlinked": "Modelle getrennt",
             "modelsUnlinkedHelp": "Getrennt: Agent- und Sentinel-Modell lassen sich unabhängig ändern.",
-            "agentModel": "Agent-Modell",
-            "sentinelModel": "Sentinel-Modell",
+            "agentModel": "Agent",
+            "sentinelModel": "Sentinel",
             "titleModel": "Titel-Modell",
             "prompt": "Prompt",
             "expression": "Ausdruck",
@@ -599,6 +647,7 @@
         "placeholders": {
             "name": "Nächtliche Inbox-Prüfung",
             "jobId": "naechtliche-inbox-pruefung",
+            "persistentSession": "session-id auswählen",
             "prompt": "Fasse neue Aufgaben zusammen, priorisiere Dringendes und schlage dann nächste Schritte vor.",
             "model": "Leer lassen für Standardmodell"
         },
@@ -621,7 +670,7 @@
         "messageCount": "{count, plural, one {# Nachricht} other {# Nachrichten}}",
         "unattendedSession": "Unbeaufsichtigte Sitzung",
         "privateSession": "Private Sitzung",
-        "knowledgeCommitted": "Alle Änderungen in das Wissens-Repository übernommen",
+        "knowledgeCommitted": "Alle Änderungen ins Wissens-Repository übernommen",
         "actions": {
             "pin": "Sitzung anheften",
             "unpin": "Sitzung lösen",

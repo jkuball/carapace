@@ -76,6 +76,8 @@ class SessionManager:
         *,
         private: bool = False,
         unattended: bool = False,
+        ask_mode: bool = False,
+        yolo_mode: bool = False,
     ) -> SessionState:
         now = datetime.now(tz=UTC)
         session_id = f"{now:%Y-%m-%d-%H-%M}-{secrets.token_hex(4)}"
@@ -83,7 +85,12 @@ class SessionManager:
             session_id=session_id,
             channel_type=channel_type,
             channel_ref=channel_ref or None,
-            attributes=SessionAttributes(private=private, unattended=unattended),
+            attributes=SessionAttributes(
+                private=private,
+                unattended=unattended,
+                ask_mode=ask_mode,
+                yolo_mode=yolo_mode,
+            ),
             approved_operations=[],
             activated_skills=[],
             context_grants={},

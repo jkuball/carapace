@@ -2,8 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2, Unlock } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
+import { SessionOptionTiles } from "@/components/session-option-tiles";
 import { useAppLocale } from "@/components/locale-provider";
 import { useSessionPresence } from "@/hooks/use-session-presence";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -28,6 +29,7 @@ import type {
   EscalationDecision,
   HistoryMessage,
   LlmActivity,
+  SessionAttributesPatch,
   ServerMessage,
   SessionInfo,
   SessionSandboxSnapshot,
@@ -58,7 +60,7 @@ interface ChatViewProps {
   onSandboxUpdate?: (sandbox: SessionSandboxSnapshot) => void;
   onForkSession?: (session: SessionInfo) => void;
   onOpenJobSettings?: (jobId: string) => void;
-  onUpdateSessionAttributes?: (sessionId: string, attributes: { private?: boolean; archived?: boolean; pinned?: boolean; favorite?: boolean }) => Promise<SessionInfo>;
+  onUpdateSessionAttributes?: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
   onDeleteSession?: () => Promise<void>;
 }
 
@@ -836,7 +838,8 @@ export function ChatView({
   const [savingKnowledge, setSavingKnowledge] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [sessionIdCopied, setSessionIdCopied] = useState(false);
-  const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | null>(null);
+  const [updatingSessionAttribute, setUpdatingSessionAttribute] = useState<"archived" | "private" | "pinned" | "favorite" | "mode" | null>(null);
+  const [showDelayedSessionAttributeStatus, setShowDelayedSessionAttributeStatus] = useState(false);
   const [updatingSessionModel, setUpdatingSessionModel] = useState<"agent" | "sentinel" | null>(null);
   const [modelsUnlocked, setModelsUnlocked] = useState(false);
   const [modelUpdateError, setModelUpdateError] = useState<string | null>(null);
@@ -855,6 +858,22 @@ export function ChatView({
   const sendRef = useRef<(msg: ClientMessage) => void>(() => {});
   const onSandboxUpdateRef = useRef(onSandboxUpdate);
   const sandboxRef = useRef(sandbox);
+
+  useEffect(() => {
+    if (updatingSessionAttribute == null) {
+      setShowDelayedSessionAttributeStatus(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowDelayedSessionAttributeStatus(true);
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      setShowDelayedSessionAttributeStatus(false);
+    };
+  }, [updatingSessionAttribute]);
   const sandboxRefreshParamsRef = useRef({ server, token, sessionId });
   const sandboxRefreshPendingRef = useRef(false);
   const sandboxRefreshRunningRef = useRef(false);
@@ -1673,6 +1692,30 @@ export function ChatView({
     }
   }
 
+  async function handleToggleSessionMode(mode: "ask" | "yolo") {
+    if (!session || updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes) return;
+
+    const nextAttributes: SessionAttributesPatch = mode === "ask"
+      ? session.attributes.ask_mode
+        ? { ask_mode: false }
+        : { ask_mode: true, yolo_mode: false }
+      : session.attributes.yolo_mode
+        ? { yolo_mode: false }
+        : { yolo_mode: true, ask_mode: false };
+
+    if (Object.entries(nextAttributes).every(([key, value]) => session.attributes[key as keyof SessionAttributesPatch] === value)) {
+      return;
+    }
+
+    setUpdatingSessionAttribute("mode");
+    try {
+      const updated = await onUpdateSessionAttributes(sessionId, nextAttributes);
+      onSessionUpdate?.(updated);
+    } finally {
+      setUpdatingSessionAttribute(null);
+    }
+  }
+
   async function handleUpdateSessionModel(modelType: "agent" | "sentinel", value: string | null) {
     if (!session || updatingSessionModel || waiting || deletingSession || sessionArchived) {
       return;
@@ -1808,6 +1851,8 @@ export function ChatView({
   const hasKnowledgeChanges = sessionHasKnowledgeChanges(session);
   const sessionArchived = session?.attributes.archived ?? false;
   const sessionUnattended = session?.attributes.unattended ?? false;
+  const sessionAskMode = session?.attributes.ask_mode ?? false;
+  const sessionYoloMode = session?.attributes.yolo_mode ?? false;
   const hasSubmittedUserMessage = messages.some(
     (message) => message.kind === "user" && !message.content.startsWith("/"),
   );
@@ -1895,9 +1940,6 @@ export function ChatView({
     sessionArchived
       ? { label: t("badges.archived"), icon: Archive, className: "border-violet-200 bg-violet-50 text-violet-800" }
       : null,
-    sessionPrivate
-      ? { label: t("badges.private"), icon: Lock, className: "border-zinc-300 bg-zinc-100 text-zinc-700" }
-      : null,
     sessionPinned
       ? { label: t("badges.pinned"), icon: Pin, className: "border-sky-200 bg-sky-50 text-sky-800" }
       : null,
@@ -1954,20 +1996,6 @@ export function ChatView({
               )}
             </button>
           ) : null}
-          <button
-            onClick={() => void handleTogglePrivacy()}
-            disabled={!session || !!updatingSessionAttribute || deletingSession}
-            title={sessionPrivate ? t("actions.includeInRepo") : t("actions.keepPrivate")}
-            className="rounded-md p-1.5 text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {updatingSessionAttribute === "private" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : sessionPrivate ? (
-              <Unlock className="h-3.5 w-3.5" />
-            ) : (
-              <Lock className="h-3.5 w-3.5" />
-            )}
-          </button>
           <button
             onClick={() => void handleDeleteSession()}
             disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession || !onDeleteSession}
@@ -2048,20 +2076,54 @@ export function ChatView({
               </dd>
             </>
           ) : null}
+
         </dl>
 
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <SessionOptionTiles
+            items={[
+              {
+                key: "private",
+                active: sessionPrivate,
+                disabled: !session || deletingSession || updatingSessionAttribute !== null,
+                onClick: () => void handleTogglePrivacy(),
+              },
+              {
+                key: "ask_mode",
+                active: sessionAskMode,
+                disabled: !session || deletingSession || !onUpdateSessionAttributes || updatingSessionAttribute !== null,
+                onClick: () => void handleToggleSessionMode("ask"),
+              },
+              {
+                key: "yolo_mode",
+                active: sessionYoloMode,
+                disabled: !session || deletingSession || !onUpdateSessionAttributes || updatingSessionAttribute !== null,
+                onClick: () => void handleToggleSessionMode("yolo"),
+              },
+              {
+                key: "unattended",
+                active: sessionUnattended,
+                disabled: true,
+              },
+            ]}
+          />
+
+          {showDelayedSessionAttributeStatus && updatingSessionAttribute === "private" ? (
+            <div className="inline-flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>{t("session.savingPrivate")}</span>
+            </div>
+          ) : null}
+
+          {showDelayedSessionAttributeStatus && updatingSessionAttribute === "mode" ? (
+            <div className="inline-flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>{t("session.updatingMode")}</span>
+            </div>
+          ) : null}
+        </div>
+
         <div className="mt-3 flex flex-wrap gap-2">
-          {sessionUnattended ? (
-            <span className={cn(inspectorBadgeClass, "gap-1 border-emerald-200 bg-emerald-50 text-emerald-800")}>
-              <Bot className="h-3 w-3 shrink-0" />
-              <span>{t("badges.unattended")}</span>
-            </span>
-          ) : (
-            <span className={cn(inspectorBadgeClass, "gap-1 border-border bg-muted text-muted-foreground")}>
-              <MessageSquare className="h-3 w-3 shrink-0" />
-              {t("badges.interactive")}
-            </span>
-          )}
           {sessionDetailBadges.map((badge) => (
             <span
               key={badge.label}

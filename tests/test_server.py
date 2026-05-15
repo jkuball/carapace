@@ -391,13 +391,30 @@ def test_create_session(client, auth_headers):
     assert data["attributes"]["archived"] is False
 
 
-def test_create_session_uses_configured_default_privacy(client, auth_headers):
-    srv._config.sessions.default_private = True
+def test_create_session_accepts_ask_mode(client, auth_headers):
+    resp = client.post("/api/sessions", headers=auth_headers, json={"ask_mode": True})
 
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["attributes"]["ask_mode"] is True
+    assert data["attributes"]["yolo_mode"] is False
+
+
+def test_create_session_rejects_conflicting_modes(client, auth_headers):
+    resp = client.post(
+        "/api/sessions",
+        headers=auth_headers,
+        json={"ask_mode": True, "yolo_mode": True},
+    )
+
+    assert resp.status_code == 422
+
+
+def test_create_session_defaults_to_public(client, auth_headers):
     resp = client.post("/api/sessions", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.json()["attributes"]["private"] is True
+    assert resp.json()["attributes"]["private"] is False
 
 
 def test_list_sessions(client, auth_headers):
@@ -541,7 +558,9 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
             "id": "daily-briefing",
             "name": "Daily Briefing",
             "prompt": "Summarize the day.",
+            "private": True,
             "unattended": True,
+            "ask_mode": True,
             "agent_model_name": "openai:gpt-5.4",
             "sentinel_model_name": "openai:gpt-5.4-mini",
             "title_model_name": "openai:gpt-5.4-nano",
@@ -570,6 +589,9 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
 
     state = srv._engine.session_mgr.load_state(payload["session_id"])
     assert state is not None
+    assert state.attributes.private is True
+    assert state.attributes.ask_mode is True
+    assert state.attributes.yolo_mode is False
     assert state.agent_model_name == "openai:gpt-5.4"
     assert state.sentinel_model_name == "openai:gpt-5.4-mini"
     assert state.title_model_name == "openai:gpt-5.4-nano"
@@ -1064,6 +1086,35 @@ def test_update_session_unarchives_without_deactivating_active_session(client, a
     assert original_state.attributes.archived is False
     assert srv._engine.get_active(sid) is active
     srv._engine.sandbox_mgr.destroy_session.assert_not_awaited()
+
+
+def test_update_session_syncs_active_access_mode_policy(client, auth_headers):
+    sid = client.post("/api/sessions", headers=auth_headers).json()["session_id"]
+    active = srv._engine.get_or_activate(sid)
+
+    resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"attributes": {"ask_mode": True}},
+    )
+
+    assert resp.status_code == 200
+    assert active.state.attributes.ask_mode is True
+    assert active.security.ask_mode is True
+    assert active.security.yolo_mode is False
+    assert active.sentinel._ask_mode is True
+
+
+def test_update_session_rejects_conflicting_access_modes(client, auth_headers):
+    sid = client.post("/api/sessions", headers=auth_headers).json()["session_id"]
+
+    resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"attributes": {"ask_mode": True, "yolo_mode": True}},
+    )
+
+    assert resp.status_code == 422
 
 
 def test_archived_session_rejects_sandbox_start(client, auth_headers):

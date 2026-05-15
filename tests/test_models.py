@@ -126,6 +126,33 @@ def test_job_definition_rejects_model_overrides_for_persistent_session() -> None
         )
 
 
+def test_job_definition_rejects_session_mode_overrides_for_persistent_session() -> None:
+    with pytest.raises(ValidationError, match="session mode overrides cannot be used"):
+        JobDefinition.model_validate(
+            {
+                "id": "team-planning",
+                "name": "Team Planning",
+                "prompt": "Continue planning.",
+                "unattended": False,
+                "persistent_session_id": "2026-05-09-10-00-deadbeef",
+                "ask_mode": True,
+            }
+        )
+
+
+def test_job_definition_rejects_conflicting_session_modes() -> None:
+    with pytest.raises(ValidationError, match="ask_mode and yolo_mode are mutually exclusive"):
+        JobDefinition.model_validate(
+            {
+                "id": "daily-briefing",
+                "name": "Daily Briefing",
+                "prompt": "Summarize the day.",
+                "ask_mode": True,
+                "yolo_mode": True,
+            }
+        )
+
+
 def test_job_definition_normalizes_optional_model_overrides() -> None:
     job = JobDefinition.model_validate(
         {

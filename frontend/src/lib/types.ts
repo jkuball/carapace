@@ -63,6 +63,8 @@ export interface SessionAttributes {
   pinned: boolean;
   favorite: boolean;
   unattended: boolean;
+  ask_mode: boolean;
+  yolo_mode: boolean;
 }
 
 export interface SessionAttributesPatch {
@@ -71,6 +73,8 @@ export interface SessionAttributesPatch {
   pinned?: boolean;
   favorite?: boolean;
   unattended?: boolean;
+  ask_mode?: boolean;
+  yolo_mode?: boolean;
 }
 
 export interface SessionInfo {
@@ -131,7 +135,10 @@ export interface JobDefinition {
   enabled: boolean;
   triggers: JobCronTrigger[];
   prompt: string;
+  private: boolean;
   unattended: boolean;
+  ask_mode: boolean;
+  yolo_mode: boolean;
   persistent_session_id?: string | null;
   agent_model_name?: string | null;
   sentinel_model_name?: string | null;

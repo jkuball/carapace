@@ -3,10 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import { cn } from "@/lib/utils";
 
+export interface NewSessionOptions {
+  private?: boolean;
+  unattended?: boolean;
+  ask_mode?: boolean;
+  yolo_mode?: boolean;
+}
+
 interface NewSessionButtonProps {
-  onCreate: (unattended?: boolean) => void;
+  onCreate: (options?: NewSessionOptions) => void;
   disabled?: boolean;
   fullWidth?: boolean;
   className?: string;
@@ -20,6 +28,7 @@ export function NewSessionButton({
 }: NewSessionButtonProps) {
   const t = useTranslations("newSessionButton");
   const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<NewSessionOptions>({});
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -45,9 +54,22 @@ export function NewSessionButton({
     };
   }, [open]);
 
-  function handleCreate(unattended = false) {
+  function handleCreate(nextOptions: NewSessionOptions = {}) {
     setOpen(false);
-    onCreate(unattended);
+    onCreate(nextOptions);
+  }
+
+  function handleToggleOption(key: SessionOptionKey, checked: boolean) {
+    setOptions((current) => {
+      const next = { ...current, [key]: checked };
+      if (key === "ask_mode" && checked) {
+        next.yolo_mode = false;
+      }
+      if (key === "yolo_mode" && checked) {
+        next.ask_mode = false;
+      }
+      return next;
+    });
   }
 
   return (
@@ -57,7 +79,7 @@ export function NewSessionButton({
     >
       <div className="flex w-full items-stretch">
         <button
-          onClick={() => handleCreate(false)}
+          onClick={() => handleCreate(options)}
           disabled={disabled}
           className={cn(
             "flex items-center gap-2 rounded-l-lg border border-border px-3 py-2 text-sm transition-colors",
@@ -72,9 +94,9 @@ export function NewSessionButton({
         <button
           onClick={() => setOpen((current) => !current)}
           disabled={disabled}
-          aria-label={t("chooseMode")}
+          aria-label={t("chooseOptions")}
           aria-expanded={open}
-          aria-haspopup="menu"
+          aria-haspopup="dialog"
           className={cn(
             "rounded-r-lg border border-l-0 border-border px-2.5 transition-colors",
             "bg-background hover:bg-muted",
@@ -87,27 +109,17 @@ export function NewSessionButton({
 
       {open ? (
         <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-72 rounded-xl border border-border bg-background p-1.5 shadow-lg"
+          role="dialog"
+          aria-label={t("chooseOptions")}
+          className="absolute right-0 z-20 mt-1 min-w-80 rounded-xl border border-border bg-background p-3 shadow-lg"
         >
-          <button
-            onClick={() => handleCreate(false)}
-            className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
-          >
-            <span className="text-sm font-medium text-foreground">{t("attended.title")}</span>
-            <span className="text-xs text-muted-foreground">
-              {t("attended.description")}
-            </span>
-          </button>
-          <button
-            onClick={() => handleCreate(true)}
-            className="flex w-full flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted"
-          >
-            <span className="text-sm font-medium text-foreground">{t("unattended.title")}</span>
-            <span className="text-xs text-muted-foreground">
-              {t("unattended.description")}
-            </span>
-          </button>
+          <SessionOptionTiles
+            items={SESSION_OPTION_ORDER.map((key) => ({
+              key,
+              active: !!options[key],
+              onClick: () => handleToggleOption(key, !options[key]),
+            }))}
+          />
         </div>
       ) : null}
     </div>
