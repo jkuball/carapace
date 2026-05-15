@@ -251,9 +251,20 @@ body {
   color: var(--shiki-dark) !important;
   background-color: transparent !important;
 }
+.font-mono {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
+}
 .prose code {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 0.85em;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
+}
+.prose pre,
+.prose .md-code-block-shell code {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
 }
 .prose :not(pre) > code {
   background: var(--muted);
