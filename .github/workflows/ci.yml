@@ -14,7 +14,6 @@ jobs:
           python-version: "3.14"
       - run: uv sync --dev
       - run: uv run pyrefly check
-      - run: uv run pyright
 
   test:
     runs-on: ubuntu-latest

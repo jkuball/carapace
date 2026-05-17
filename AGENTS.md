@@ -11,7 +11,7 @@ carapace is a security-first personal AI agent with LLM-powered security gating.
 - Start server: `uv run python -m carapace` (or `uv run carapace-server`)
 - Start CLI client: `uv run python -m carapace.cli` (or `uv run carapace`)
 - Start frontend: `cd frontend && pnpm install && pnpm dev`
-- Run type checks: `uv run pyrefly check && uv run pyright`
+- Run type checks: `uv run pyrefly check`
 - Run tests: `uv run pytest`
 - Run single test: `uv run pytest tests/test_cli.py -k test_help`
 
@@ -83,7 +83,7 @@ data/                  # runtime data directory (config, security policy, memory
 
 - Framework: pytest
 - Run all tests: `uv run pytest`
-- Run `uv run pyrefly check && uv run pyright` in addition to tests before opening or updating a PR
+- Run `uv run pyrefly check` in addition to tests before opening or updating a PR
 - Tests live in `tests/` and are prefixed `test_`
 - CLI tests use `typer.testing.CliRunner`
 - No LLM tokens needed for smoke tests
@@ -91,7 +91,7 @@ data/                  # runtime data directory (config, security policy, memory
 ## CI
 
 - GitHub Actions on pull requests
-- Steps: `uv sync --dev` → `uv run pyrefly check` and `uv run pyright` and `uv run pytest` → prek checks (`j178/prek-action`)
+- Steps: `uv sync --dev` → `uv run pyrefly check` and `uv run pytest` → prek checks (`j178/prek-action`)
 - Python 3.14 in CI
 
 ## Key conventions

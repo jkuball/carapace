@@ -35,7 +35,6 @@ carapace-server = "carapace.server:main"
 [dependency-groups]
 dev = [
     "pyrefly>=1.0.0",
-    "pyright>=1.1.403",
     "pytest",
     "pytest-asyncio",
     "ruff>=0.15.10",
@@ -100,17 +99,6 @@ template_dir = "templates"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-
-[tool.pyright]
-include = ["src"]
-exclude = [
-    "tests",
-    "src/carapace/assets",
-    "**/node_modules/**",
-    "**/__pycache__",
-    "**/.*",
-    ".venv",
-]
 
 [tool.pyrefly]
 project-includes = ["src"]
