@@ -22,6 +22,7 @@ class _FakeResult:
     def __init__(self, output: Any) -> None:
         self.output = output
 
+    @property
     def usage(self) -> RunUsage:
         return RunUsage(input_tokens=3, output_tokens=5)
 

@@ -385,9 +385,9 @@ class Sentinel:
         session.sentinel_eval_count += 1
 
         if usage_tracker:
-            usage_tracker.record(self._model, "sentinel", result.usage())
+            usage_tracker.record(self._model, "sentinel", result.usage)
 
-        usage = result.usage()
+        usage = result.usage
         output = self._normalize_verdict(result.output)
 
         logger.info(
@@ -465,7 +465,7 @@ class Sentinel:
             capabilities=[LlmRequestLogCapability(source="sentinel")],
             model_settings=model_settings,
             output_retries=2,
-            retries=1,
+            tool_retries=1,
         )
 
         self._register_agent_tools(agent)

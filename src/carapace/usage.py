@@ -16,14 +16,15 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_ai.capabilities.abstract import AbstractCapability
 from pydantic_ai.messages import (
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
+    CompactionPart,
     FilePart,
     ModelMessage,
     ModelRequest,
     ModelRequestPart,
     ModelResponse,
     ModelResponsePart,
+    NativeToolCallPart,
+    NativeToolReturnPart,
     RetryPromptPart,
     SystemPromptPart,
     TextPart,
@@ -570,9 +571,12 @@ def _accumulate_request_part(part: ModelRequestPart, buckets: dict[str, str]) ->
 def _accumulate_response_part(part: ModelResponsePart, buckets: dict[str, str]) -> None:
     if isinstance(part, TextPart | ThinkingPart):
         buckets["assistant"] += part.content + "\n"
-    elif isinstance(part, ToolCallPart | BuiltinToolCallPart):
+    elif isinstance(part, CompactionPart):
+        if part.content:
+            buckets["assistant"] += part.content + "\n"
+    elif isinstance(part, ToolCallPart | NativeToolCallPart):
         buckets["tool_calls"] += f"{part.tool_name}\n{part.args_as_json_str()}\n"
-    elif isinstance(part, BuiltinToolReturnPart):
+    elif isinstance(part, NativeToolReturnPart):
         buckets["tool_returns"] += f"{part.tool_name}\n{_tool_return_blob(part.content)}\n"
     elif isinstance(part, FilePart):
         buckets["other"] += _file_part_blob(part) + "\n"
@@ -647,7 +651,7 @@ class LlmRequestLogCapability(AbstractCapability[AgentDepsT]):
         sink = _llm_request_sink.get()
         state = _current_llm_request_state.get()
         usage = response.usage
-        details = {k: int(v) for k, v in (usage.details or {}).items() if isinstance(v, int)}
+        details = {k: v for k, v in (usage.details or {}).items() if isinstance(v, int)}
         api_model_name = response.model_name or request_context.model.model_name
         shape = input_shape_ratios_from_messages(
             request_context.messages,

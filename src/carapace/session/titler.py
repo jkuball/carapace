@@ -65,7 +65,7 @@ async def generate_title(
         instructions=_SYSTEM_PROMPT,
         model_settings=model_settings,
         capabilities=[LlmRequestLogCapability(source="titler")],
-        retries=1,
+        tool_retries=1,
         output_retries=2,
     )
     try:
@@ -73,7 +73,7 @@ async def generate_title(
             before_llm_call()
         result = await agent.run(prompt, usage_limits=usage_limits)
         if usage_tracker:
-            usage_tracker.record(model, "title", result.usage())
+            usage_tracker.record(model, "title", result.usage)
         return result.output.strip()
     except Exception:
         logger.opt(exception=True).warning("Title generation failed")

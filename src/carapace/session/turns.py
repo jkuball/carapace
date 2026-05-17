@@ -21,11 +21,11 @@ from loguru import logger
 from pydantic_ai import ToolDenied
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import (
-    BuiltinToolCallPart,
-    BuiltinToolReturnPart,
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    NativeToolCallPart,
+    NativeToolReturnPart,
     TextPart,
     ToolCallPart,
     ToolReturnPart,
@@ -658,7 +658,7 @@ class SessionTurnMixin(SessionTurnHost):
         for message in completed:
             if isinstance(message, ModelResponse):
                 for part in message.parts:
-                    if not isinstance(part, ToolCallPart | BuiltinToolCallPart):
+                    if not isinstance(part, ToolCallPart | NativeToolCallPart):
                         continue
                     tool_call_id = getattr(part, "tool_call_id", None)
                     if isinstance(tool_call_id, str) and tool_call_id and tool_call_id not in pending_index_by_id:
@@ -666,7 +666,7 @@ class SessionTurnMixin(SessionTurnHost):
                         pending_parts.append(part)
             elif isinstance(message, ModelRequest):
                 for part in message.parts:
-                    if not isinstance(part, ToolReturnPart | BuiltinToolReturnPart):
+                    if not isinstance(part, ToolReturnPart | NativeToolReturnPart):
                         continue
                     tool_call_id = getattr(part, "tool_call_id", None)
                     if not isinstance(tool_call_id, str):
@@ -675,13 +675,13 @@ class SessionTurnMixin(SessionTurnHost):
                     if pending_index is not None:
                         pending_parts[pending_index] = None
 
-        synthetic_returns: list[ToolReturnPart | BuiltinToolReturnPart] = []
+        synthetic_returns: list[ToolReturnPart | NativeToolReturnPart] = []
         for pending_part in pending_parts:
             if pending_part is None:
                 continue
-            if isinstance(pending_part, BuiltinToolCallPart):
+            if isinstance(pending_part, NativeToolCallPart):
                 synthetic_returns.append(
-                    BuiltinToolReturnPart(
+                    NativeToolReturnPart(
                         tool_name=pending_part.tool_name,
                         content=_TURN_CANCELLED_TOOL_MESSAGE,
                         tool_call_id=pending_part.tool_call_id,
@@ -711,13 +711,13 @@ class SessionTurnMixin(SessionTurnHost):
         for index, message in enumerate(messages):
             if isinstance(message, ModelResponse):
                 for part in message.parts:
-                    if isinstance(part, ToolCallPart | BuiltinToolCallPart):
+                    if isinstance(part, ToolCallPart | NativeToolCallPart):
                         tool_call_id = getattr(part, "tool_call_id", None)
                         if isinstance(tool_call_id, str) and tool_call_id:
                             pending_tool_calls.add(tool_call_id)
             elif isinstance(message, ModelRequest):
                 for part in message.parts:
-                    if isinstance(part, ToolReturnPart | BuiltinToolReturnPart):
+                    if isinstance(part, ToolReturnPart | NativeToolReturnPart):
                         tool_call_id = getattr(part, "tool_call_id", None)
                         if isinstance(tool_call_id, str) and tool_call_id in pending_tool_calls:
                             pending_tool_calls.remove(tool_call_id)

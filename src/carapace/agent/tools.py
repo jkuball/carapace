@@ -483,7 +483,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         instructions=system_prompt,
         capabilities=[LlmRequestLogCapability(source="agent")],
         model_settings=model_settings_for_config(deps.config, deps.agent_model_id, default_thinking=True),
-        retries=1,
+        tool_retries=1,
         output_retries=3,
     )
 

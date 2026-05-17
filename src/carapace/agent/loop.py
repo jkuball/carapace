@@ -97,7 +97,7 @@ async def run_agent_turn(
         usage_limits=usage_limits,
     )
     last_thinking = "".join(current_thinking_parts)
-    deps.usage_tracker.record(usage_model_key, "agent", result.usage())
+    deps.usage_tracker.record(usage_model_key, "agent", result.usage)
     messages = result.all_messages()
     if on_messages_snapshot is not None:
         on_messages_snapshot(list(messages))
@@ -161,7 +161,7 @@ async def run_agent_turn(
             usage_limits=usage_limits,
         )
         last_thinking = "".join(current_thinking_parts)
-        deps.usage_tracker.record(usage_model_key, "agent", result.usage())
+        deps.usage_tracker.record(usage_model_key, "agent", result.usage)
         messages = result.all_messages()
         if on_messages_snapshot is not None:
             on_messages_snapshot(list(messages))
@@ -178,7 +178,7 @@ async def run_agent_turn(
         final_status = "warning"
 
     if output_text is not None:
-        last_usage = result.usage()
+        last_usage = result.usage
         token_count = (last_usage.output_tokens or 0) + (last_usage.input_tokens or 0)
         deps.security.append(AgentResponseEntry(token_count=token_count))
         return messages, output_text, last_thinking, final_status
