@@ -15,13 +15,14 @@ class SessionState(BaseModel):
     agent_model_name: str | None
     sentinel_model_name: str | None
     title_model_name: str | None
-    attributes: SessionAttributes  # private / archived / pinned / favourite
+  attributes: SessionAttributes  # private / archived / pinned / favorite / unattended / ask_mode / yolo_mode
     approved_operations: list[str]
     activated_skills: list[str]
     context_grants: dict[str, ContextGrant]  # per-skill domain & credential grants
     budget: SessionBudget
     created_at: datetime
     last_active: datetime
+  latest_job_run: SessionJobRunContext | None
     knowledge_last_committed_at: datetime | None
     knowledge_last_archive_path: str | None
     knowledge_last_export_hash: str | None
@@ -87,6 +88,37 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 - **Privacy**: Sessions start public by default unless the creator explicitly marks them private
 - **Deletion**: Sessions can be deleted via the REST API (`DELETE /api/sessions/{id}`), which also cleans up any running sandbox container and may remove the committed `conversation.json` from the knowledge repo
 
+## Session modes and controls
+
+`SessionAttributes` carry more than privacy state:
+
+- `private` excludes the session from knowledge commits
+- `archived` hides the session from the default active list and tears down its sandbox when archiving succeeds
+- `pinned` and `favorite` are UI-facing organization flags
+- `unattended` creates a session without a user approval path
+- `ask_mode` keeps sentinel review enabled while restricting the agent to read-only operations outside the sandbox
+- `yolo_mode` bypasses sentinel review entirely
+
+Important behavior:
+
+- `ask_mode` and `yolo_mode` are mutually exclusive
+- `unattended` cannot be changed in place; fork the session if you want a different approval mode
+- archived sessions are hidden from the default session list but can still be listed explicitly through the API and shown in the web UI
+
+The web UI also exposes turn-level controls on completed assistant turns:
+
+- **Retry latest turn** reruns the latest completed turn from its user prompt boundary
+- **Reset to turn** rewinds the session to an earlier completed turn boundary
+- **Fork** creates a new session from a chosen event boundary
+
+Retry and reset are WebSocket actions; fork is a REST action.
+
+## Jobs and job-linked sessions
+
+Jobs are now a built-in feature. They can create fresh job sessions or reuse a persistent attended session, and the resulting session records the latest job run metadata in `latest_job_run`.
+
+See [jobs.md](jobs.md) for the job definition format, scheduler behavior, and REST API.
+
 ## Notifications and presence
 
 carapace also keeps a separate notification state for each session. This state is not part of `SessionState`; it lives in a dedicated notification store plus a runtime presence registry.
@@ -112,15 +144,20 @@ The primary interactive channel. A Next.js web app connects to the carapace serv
 
 **REST API:**
 
-| Endpoint                              | Method   | Description                                         |
-| ------------------------------------- | -------- | --------------------------------------------------- |
-| `/api/sessions`                       | `POST`   | Create a new session                                |
-| `/api/sessions`                       | `GET`    | List all sessions                                   |
-| `/api/sessions/{id}`                  | `GET`    | Get session details                                 |
-| `/api/sessions/{id}`                  | `PATCH`  | Update session metadata (currently `private`)       |
-| `/api/sessions/{id}`                  | `DELETE` | Delete session + cleanup sandbox                    |
-| `/api/sessions/{id}/knowledge/commit` | `POST`   | Commit the session snapshot into the knowledge repo |
-| `/api/sessions/{id}/history`          | `GET`    | Get chat history (optional `limit` param)           |
+| Endpoint                              | Method   | Description                                                                    |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `/api/sessions`                       | `POST`   | Create a new session                                                           |
+| `/api/sessions`                       | `GET`    | List sessions (`include_archived`, `include_message_count`, `limit`, `cursor`) |
+| `/api/sessions/{id}`                  | `GET`    | Get session details                                                            |
+| `/api/sessions/{id}`                  | `PATCH`  | Update session attributes and model overrides                                  |
+| `/api/sessions/{id}/fork`             | `POST`   | Fork a session from a chosen event boundary                                    |
+| `/api/sessions/{id}`                  | `DELETE` | Delete session + cleanup sandbox                                               |
+| `/api/sessions/{id}/knowledge/commit` | `POST`   | Commit the session snapshot into the knowledge repo                            |
+| `/api/sessions/{id}/history`          | `GET`    | Get chat history (optional `limit` param)                                      |
+| `/api/sessions/{id}/sandbox`          | `GET`    | Get sandbox status and storage snapshot                                        |
+| `/api/sessions/{id}/sandbox/up`       | `POST`   | Start or warm the sandbox                                                      |
+| `/api/sessions/{id}/sandbox/down`     | `POST`   | Stop or scale down the sandbox                                                 |
+| `/api/sessions/{id}/sandbox/wipe`     | `POST`   | Destroy sandbox workspace state and start fresh later                          |
 
 **Notification API:**
 
@@ -130,8 +167,18 @@ The primary interactive channel. A Next.js web app connects to the carapace serv
 | `/api/notifications/subscriptions`                  | `POST`   | Create or update a push subscription                                             |
 | `/api/notifications/subscriptions/{id}`             | `DELETE` | Remove a push subscription                                                       |
 | `/api/notifications/subscriptions/{id}/preferences` | `PATCH`  | Update per-device notification preferences                                       |
+| `/api/notifications/subscriptions/{id}/test`        | `POST`   | Send a test notification to one subscription                                     |
 | `/api/notifications/subscriptions/{id}/presence`    | `POST`   | Update presence for a subscription-backed client and refresh expiry              |
 | `/api/notifications/presence`                       | `POST`   | Update interactive presence for clients that are not tied to a push subscription |
+
+**Other useful REST endpoints:**
+
+| Endpoint        | Method         | Description                                               |
+| --------------- | -------------- | --------------------------------------------------------- |
+| `/api/commands` | `GET`          | Return the slash-command catalog advertised by the server |
+| `/api/models`   | `GET`          | Return the configured model catalog                       |
+| `/api/meta`     | `GET`          | Return server metadata such as version                    |
+| `/api/jobs`     | `GET` / `POST` | List or create jobs                                       |
 
 **WebSocket protocol** (`/api/chat/{session_id}`):
 
@@ -169,8 +216,6 @@ channels:
 
 > **Note**: The Matrix channel currently uses plain-text messaging (no E2EE). See [plans/channels.md](plans/channels.md) for E2EE plans.
 
-> **Future plans**: Task scheduling via cron/heartbeat, with cross-channel approval routing for non-interactive sessions. See [plans/channels.md](plans/channels.md).
-
 ---
 
 ## Slash commands
@@ -179,22 +224,20 @@ Slash commands are the user's control interface for managing sessions. Interacti
 
 ### Common interactive commands
 
-| Command                         | Effect                                                         |
-| ------------------------------- | -------------------------------------------------------------- |
-| `/help`                         | Show available commands                                        |
-| `/session`                      | Show session metadata and domain allowlist                     |
-| `/skills`                       | List available skills                                          |
-| `/retitle`                      | Regenerate session title, or set it explicitly                 |
-| `/budget`                       | Show or update session budgets                                 |
-| `/usage`                        | Show token usage breakdown with cost estimates                 |
-| `/pull`                         | Pull from external Git remote (if configured)                  |
-| `/push`                         | Push to external Git remote (if configured)                    |
-| `/reload`                       | Reset sandbox — destroy container + workspace, fresh git clone |
-| `/models`                       | View all models (agent, sentinel, title) and available options |
-| `/model [NAME\|reset]`          | View or switch all models together or target one specifically  |
-| `/model-agent [NAME\|reset]`    | View or switch the agent model                                 |
-| `/model-sentinel [NAME\|reset]` | View or switch the sentinel model                              |
-| `/model-title [NAME\|reset]`    | View or switch the title model                                 |
+| Command                                         | Effect                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| `/help`                                         | Show available commands                                        |
+| `/session`                                      | Show session metadata, context grants, and domain allowlist    |
+| `/skills`                                       | List available skills                                          |
+| `/retitle`                                      | Regenerate session title, or set it explicitly                 |
+| `/budget`                                       | Show or update session budgets, including tool-call caps       |
+| `/usage`                                        | Show token usage breakdown with cost estimates                 |
+| `/pull`                                         | Pull from external Git remote (if configured)                  |
+| `/push`                                         | Push to external Git remote (if configured)                    |
+| `/reload`                                       | Reset sandbox — destroy container + workspace, fresh git clone |
+| `/models`                                       | View all models (agent, sentinel, title) and available options |
+| `/model [NAME\|reset]`                          | View or switch all models together                             |
+| `/model [agent\|sentinel\|title] [NAME\|reset]` | View or switch one model role                                  |
 
 ### WebSocket-only commands
 
@@ -203,13 +246,17 @@ Slash commands are the user's control interface for managing sessions. Interacti
 | `/quit` / `/exit` | Close WebSocket chat       |
 | `/quit` / `/exit` | Close WebSocket connection |
 
+The WebSocket protocol also supports non-slash turn controls for retry and reset. See [websocket-session.md](websocket-session.md).
+
 ### Matrix-only commands
 
-| Command    | Effect                                                                          |
-| ---------- | ------------------------------------------------------------------------------- |
-| `/reset`   | Create a new session for the room (clears history, credentials, security state) |
-| `/approve` | Approve the pending operation (alternative to ✅ reaction)                      |
-| `/deny`    | Deny the pending operation (alternative to ❌ reaction)                         |
+| Command             | Effect                                                                          |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `/reset`            | Create a new session for the room (clears history, credentials, security state) |
+| `/allow` / `/yes`   | Approve the pending operation (alternative to ✅ reaction)                      |
+| `/deny` / `/no`     | Deny the pending operation (alternative to ❌ reaction)                         |
+| `/stop` / `/cancel` | Cancel the running agent turn                                                   |
+| `/verbose`          | Toggle tool call display in the room                                            |
 
 ---
 

@@ -6,7 +6,7 @@ carapace gates every agent action through a two-layer security system: a fast **
 
 Every tool call and skill invocation passes through the security module before execution:
 
-1. **Safe-list check.** A hardcoded set of tool names (file reads/writes/replacements in the sandbox, skill listing) is auto-allowed without any LLM call.
+1. **Safe-list check.** A hardcoded set of tool names is auto-allowed without any LLM call. carapace also applies a narrow read-only `exec` heuristic and a narrow exact-domain proxy heuristic for obviously harmless cases.
 2. **Sentinel evaluation.** All other operations are sent to the sentinel agent -- an LLM that receives the action log, the tool name and arguments, and makes a contextual decision.
 3. **Verdict.** The sentinel returns one of three decisions:
    - **allow** -- proceed without interruption.
@@ -38,7 +38,7 @@ flowchart TD
 
 ## SECURITY.md -- the policy file
 
-The security policy lives in `$CARAPACE_DATA_DIR/SECURITY.md`. It is written in plain English and becomes part of the sentinel agent's system prompt. There are no rigid YAML rules to parse -- the sentinel interprets the policy with full LLM understanding.
+The security policy lives in the Git-backed knowledge repo as `SECURITY.md`. With the default config path, that file is `data/knowledge/SECURITY.md`; if you override `knowledge_dir`, the sentinel reads `<knowledge_dir>/SECURITY.md`. It is written in plain English and becomes part of the sentinel agent's system prompt. There are no rigid YAML rules to parse -- the sentinel interprets the policy with full LLM understanding.
 
 The shipped default policy (see `src/carapace/assets/SECURITY.md`) covers:
 
@@ -66,6 +66,13 @@ The following tools are auto-allowed without consulting the sentinel:
 | `list_skills` | Listing available skills is informational |
 
 `use_skill` is **not** safe-listed: activating a skill (copy into sandbox, optional venv sync, credential injection) is evaluated by the sentinel like other gated tools.
+
+Two additional fast paths are worth knowing about:
+
+- Some `exec` calls are auto-allowed by a read-only heuristic when they match known harmless command patterns.
+- Some proxy-domain checks are auto-allowed when the exact domain already appears in an approved `exec` command.
+
+Those paths still emit audit entries with `approval_source="safe-list"`; they are not silent bypasses.
 
 The safe-list is defined in `src/carapace/security/__init__.py`.
 

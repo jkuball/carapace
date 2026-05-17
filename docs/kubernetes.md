@@ -231,5 +231,3 @@ Labels and `argocd.argoproj.io/tracking-id` keep sandboxes associated with the a
 - **Resources**: sensible defaults are included; override `resources` / `frontend.resources` as needed
 - **Priority class**: set `priorityClassName` to apply to all pods (server, frontend, sandbox)
 - **PVC protection**: set `persistence.finalizers` to `["kubernetes.io/pvc-protection"]` to guard against accidental deletion
-
-> **Future plans**: Git-backed external remote sync, vector search for memory. See [plans/kubernetes.md](plans/kubernetes.md).

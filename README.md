@@ -37,6 +37,7 @@ carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for op
 - 🛡️ Sentinel-gated execution. Every non-trivial action is reviewed by a dedicated security agent that keeps session context, not a static allowlist spreadsheet.
 - ☸️ Kubernetes-ready sandboxes. Docker and Kubernetes runtimes are both supported, with StatefulSet-backed sandbox sessions, per-session PVCs, and idle-to-zero scaling already in place.
 - 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, memory, and archived sessions live in files you can inspect, diff, sync, and push upstream.
+- ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
 - 🌐 Proxy system with tunnels. HTTP traffic is mediated by the proxy, and exec-scoped tunnels cover non-HTTP protocols without leaving long-lived daemons behind.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden and Vaultwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context.
@@ -130,9 +131,11 @@ See [docs/architecture.md](docs/architecture.md) for the fuller architecture bre
 | [docs/security.md](docs/security.md)                           | Sentinel policy model, audit trail, approvals, and veto semantics          |
 | [docs/skills.md](docs/skills.md)                               | AgentSkills support, context-scoped access, providers, and command aliases |
 | [docs/credentials.md](docs/credentials.md)                     | Vault-backed credentials, approval flow, and per-exec injection            |
+| [docs/jobs.md](docs/jobs.md)                                   | Saved jobs, cron scheduling, persistent-session jobs, and job API          |
+| [docs/notifications.md](docs/notifications.md)                 | Web Push delivery, presence tracking, suppression, and notification APIs   |
 | [docs/memory.md](docs/memory.md)                               | Markdown memory model and how it is loaded and searched                    |
 | [docs/sandbox.md](docs/sandbox.md)                             | Docker/Kubernetes sandboxes, proxy behavior, and exec-scoped tunnels       |
-| [docs/sessions-and-channels.md](docs/sessions-and-channels.md) | Session lifecycle, WebSocket events, Matrix behavior, and approvals        |
+| [docs/sessions-and-channels.md](docs/sessions-and-channels.md) | Session lifecycle, session controls, Matrix behavior, and approvals        |
 | [docs/kubernetes.md](docs/kubernetes.md)                       | Kubernetes runtime, StatefulSet sandboxes, and Helm deployment             |
 
 ## Kubernetes Deployment

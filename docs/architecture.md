@@ -217,7 +217,7 @@ services:
 
 For Kubernetes deployments, the Docker socket is replaced by in-cluster Kubernetes API access — see [kubernetes.md](kubernetes.md).
 
-The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the data directory. All persistent state — config, security policy, workspace files, skills, memory, sessions — lives there.
+The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, session files, notification state, and `jobs.yaml` lives there. The Git-backed knowledge repo lives in a separate `knowledge_dir` (default `./knowledge` relative to the config file, which resolves to `data/knowledge/` in the default setup).
 
 ## Configuration
 
@@ -228,6 +228,10 @@ agent:
   model: "anthropic:claude-sonnet-4-6"
   sentinel_model: "anthropic:claude-haiku-4-5"
   title_model: "anthropic:claude-haiku-4-5"
+  default_session_budget: {}
+  available_models:
+    - "anthropic:claude-sonnet-4-6"
+    - "anthropic:claude-haiku-4-5"
   max_parallel_llm: 2
 ```
 
@@ -262,10 +266,16 @@ sessions:
     autosave_inactivity_hours: 4
     delete_from_knowledge_on_session_delete: true
 
+notifications:
+  enabled: true
+  presence_ttl_seconds: 60
+
 git:
   remote: https://gitea.example.com/user/knowledge.git
   token:
     env: CARAPACE_GIT_TOKEN
+
+knowledge_dir: ./knowledge
 
 sandbox:
   runtime: docker # "docker" or "kubernetes"
@@ -325,3 +335,5 @@ password:
 Resolution priority: `raw` > `env` > `file`. Exactly one source should be set. `resolve()` returns a `SecretStr` and raises `ValueError` if the configured source is missing.
 
 Secret fields are optional (`Secret | None`). When omitted, the feature that requires the secret is simply unavailable (e.g. no Matrix password login, no Git remote authentication).
+
+Scheduled jobs are configured separately in `$CARAPACE_DATA_DIR/jobs.yaml`; see [jobs.md](jobs.md).

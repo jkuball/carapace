@@ -35,6 +35,7 @@ After `subscribe` succeeds:
 1. **`status`** — `StatusUpdate`
    - `agent_running`: whether an agent turn task is still running (e.g. after reconnect).
    - `usage`: last **agent** LLM request stats from the session log (input/output tokens, optional breakdown %, model id, context cap), or `null` if none yet.
+   - `llm_activity`: current in-flight LLM activity metadata, if a request is active.
 
 2. **Pending tool approvals (zero or more)** — for each entry in `active.pending_approval_requests`:
    - `approval_request`
@@ -56,6 +57,8 @@ All messages are JSON objects with a `type` field. Invalid types or bodies yield
 | `approval_response`   | Answer to `approval_request`                           | `tool_call_id`, `approved` (bool)                |
 | `escalation_response` | Answer to domain / git-push / credential escalation    | `request_id`, `decision` (`"allow"` \| `"deny"`) |
 | `cancel`              | Cancel the in-flight agent turn                        | (none)                                           |
+| `retry_latest_turn`   | Rewind the latest completed turn and run it again      | (none)                                           |
+| `reset_to_turn`       | Rewind the session to a completed turn boundary        | `event_index`                                    |
 
 Empty `content` after trim is ignored. Slash commands (see below) are handled in the WebSocket handler without starting a full agent turn, except `/quit` / `/exit` which close the socket.
 
@@ -66,15 +69,17 @@ Each message is one JSON object with a `type` field.
 | `type`                           | When                                                | Main fields                                                                                      |
 | -------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `status`                         | On connect                                          | `agent_running`, `usage`                                                                         |
+| `llm_activity`                   | LLM request phase changed                           | `activity` or `null`                                                                             |
 | `token`                          | Streaming assistant text                            | `content`                                                                                        |
+| `thinking`                       | Streaming reasoning text                            | `content`                                                                                        |
 | `tool_call`                      | Tool started / security notification                | `tool`, `args`, `detail`; optional `approval_source`, `approval_verdict`, `approval_explanation` |
 | `tool_result`                    | Tool finished                                       | `tool`, `result`, `exit_code`                                                                    |
 | `approval_request`               | Sentinel escalated a **tool** to the user           | `tool_call_id`, `tool`, `args`, `explanation`, `risk_level`                                      |
 | `domain_access_approval_request` | Sentinel escalated **proxy domain** access          | `request_id`, `domain`, `command`                                                                |
 | `git_push_approval_request`      | Sentinel escalated **git push**                     | `request_id`, `ref`, `explanation`, `changed_files`                                              |
 | `credential_approval_request`    | Sentinel escalated **credential** access            | `request_id`, `vault_paths`, `names`, `descriptions`, optional `skill_name`, `explanation`       |
-| `done`                           | Agent turn finished                                 | `content` (final assistant text), optional `usage`                                               |
-| `command_result`                 | Slash command, `/verbose`, or reset ack handled     | `command`, `data` (arbitrary)                                                                    |
+| `done`                           | Agent turn finished                                 | `content` (final assistant text), optional `usage`, optional `final_status`                      |
+| `command_result`                 | Slash command or turn-control acknowledgement       | `command`, `data` (arbitrary)                                                                    |
 | `error`                          | Parse error, unknown command, busy agent, etc.      | `detail`                                                                                         |
 | `cancelled`                      | Turn cancelled after `cancel`                       | `detail` (default explains cancellation)                                                         |
 | `session_title`                  | Title changed                                       | `title`                                                                                          |
@@ -91,6 +96,8 @@ The same envelope is used for normal agent tools and for security-side notificat
 
 Exact args depend on the producer; see `WebSocketSubscriber` in [`src/carapace/server.py`](../src/carapace/server.py).
 
+`tool_call` and `tool_result` may also include stable `tool_id` values, and nested tool calls include `parent_tool_id` so the frontend can render tool trees.
+
 ### `approval_source` / `approval_verdict` (on `tool_call`)
 
 When present:
@@ -102,13 +109,23 @@ When present:
 
 **`bypass`** — the action was silently allowed without sentinel evaluation (e.g., proxy bypass during trusted automatic skill setup such as `uv sync --locked`, `pnpm install`, or `setup.sh`).
 
+## Turn-control messages
+
+Two client message types are not slash commands but explicit UI controls:
+
+- `retry_latest_turn` rewinds to the latest completed user-turn boundary and reruns it.
+- `reset_to_turn` rewinds the session to a specific completed turn boundary identified by `event_index`.
+
+Both controls operate on the normalized event log used by `/api/sessions/{session_id}/history`.
+
 ## Typical turn flow (server → client)
 
 1. Optional: `user_message` (if echoed).
-2. Many `token` chunks (streaming).
-3. Interleaved `tool_call` / `tool_result` pairs while tools run.
-4. Possible: `approval_request` or escalation requests — client must respond; turn stays blocked until then.
-5. `done` with final text and optional `usage`.
+2. `llm_activity` and optional `thinking` chunks while the model is working.
+3. Many `token` chunks (streaming).
+4. Interleaved `tool_call` / `tool_result` pairs while tools run.
+5. Possible: `approval_request` or escalation requests — client must respond; turn stays blocked until then.
+6. `done` with final text and optional `usage`.
 
 ## Reconnect behaviour
 

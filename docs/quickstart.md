@@ -52,7 +52,7 @@ uv run carapace --token "$CARAPACE_TOKEN"
 
 ## 4. Configure `data/config.yaml`
 
-The server reads its configuration from `data/config.yaml`. On first start, default files are seeded into `data/`. You can customise the config at any time — restart the server to pick up changes.
+The server reads its configuration from `data/config.yaml`. On first start, carapace seeds runtime files under `data/` and a separate Git-backed knowledge repo under `data/knowledge/` by default. You can customise the config at any time — restart the server to pick up changes.
 
 A minimal config:
 
@@ -83,6 +83,8 @@ cache:
 ```
 
 Session histories always live primarily under `data/sessions/<session_id>/`. The `sessions.commit.*` settings control a secondary commit flow into the Git-backed knowledge repo so the agent can refer back to past conversations later.
+
+The knowledge repo location is configurable via `knowledge_dir` in `config.yaml`. If you do not override it, the default path is `data/knowledge/` because `knowledge_dir` defaults to `./knowledge` relative to the config file.
 
 In the web UI, public sessions expose a "Commit to knowledge" action. Private sessions do not. Autosave uses the same privacy rule: only public, inactive sessions are eligible.
 
@@ -231,7 +233,7 @@ credentials:
 
 ## 7. Personalise
 
-Edit the files in `data/` to shape carapace's behaviour:
+Edit the workspace files in the knowledge repo to shape carapace's behaviour. With the default config, these live under `data/knowledge/`:
 
 | File          | Purpose                                                   |
 | ------------- | --------------------------------------------------------- |
@@ -242,6 +244,7 @@ Edit the files in `data/` to shape carapace's behaviour:
 
 ## Next steps
 
-- Install skills into `data/skills/` — see [docs/skills.md](skills.md)
+- Install skills into `data/knowledge/skills/` by default, or into your configured `knowledge_dir` — see [docs/skills.md](skills.md)
 - Explore the [architecture](architecture.md) and [security model](security.md)
+- Explore [jobs.md](jobs.md) for scheduled and on-demand job runs
 - Deploy to Kubernetes with the [Helm chart](../charts/carapace/README.md)

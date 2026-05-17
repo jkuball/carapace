@@ -170,6 +170,7 @@ Notification subscription and presence endpoints use the same bearer token auth 
 | `/api/notifications/subscriptions`                               | `POST`   | Create or update a push subscription         |
 | `/api/notifications/subscriptions/{subscription_id}`             | `DELETE` | Delete a subscription                        |
 | `/api/notifications/subscriptions/{subscription_id}/preferences` | `PATCH`  | Update per-device preferences                |
+| `/api/notifications/subscriptions/{subscription_id}/test`        | `POST`   | Send a test notification to one subscription |
 
 ### Presence updates
 
