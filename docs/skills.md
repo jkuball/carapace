@@ -157,7 +157,7 @@ carapace manages these tunnels itself during `exec(..., contexts=[...])`. Skills
 - `name` — the exact alias token, for example `web-search`
 - `command` — a single-line shell command to run for that alias
 
-When the skill is activated, carapace writes a generated wrapper script for each alias into `/root/.carapace/bin/`, marks it executable, and exposes that directory on `PATH`. Agents should invoke the plain alias token such as `web-search`, not the absolute shim path. The wrapper looks like this conceptually:
+When the skill is activated, carapace writes a generated wrapper script for each alias into `/workspace/.carapace/bin/`, marks it executable, and exposes that directory on `PATH`. Agents should invoke the plain alias token such as `web-search`, not the absolute shim path. The wrapper looks like this conceptually:
 
 ```sh
 #!/bin/sh

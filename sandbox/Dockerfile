@@ -14,7 +14,7 @@ RUN apt-get update \
 
 COPY --from=ghcr.io/astral-sh/uv@sha256:1025398289b62de8269e70c45b91ffa37c373f38118d7da036fb8bb8efc85d97 /uv /usr/local/bin/uv
 
-ENV PATH="/root/.carapace/bin:/root/.local/bin:${PATH}" \
+ENV PATH="/workspace/.carapace/bin:/root/.local/bin:${PATH}" \
    NODE_USE_ENV_PROXY=1
 RUN uv python install 3.14 --default --preview-features python-install-default
 RUN corepack enable
@@ -27,7 +27,7 @@ RUN chmod +x /usr/local/bin/setup-proxy.sh
 COPY ccred /usr/local/bin/ccred
 RUN chmod +x /usr/local/bin/ccred
 
-RUN mkdir -p /root/.carapace/bin /workspace \
+RUN mkdir -p /workspace \
    && git config --global --add safe.directory /workspace
 
 WORKDIR /workspace

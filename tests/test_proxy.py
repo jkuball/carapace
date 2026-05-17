@@ -534,7 +534,7 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     register_call = runtime.exec.call_args_list[3]
     shell_cmd = register_call.args[1]
     wrapper = '#!/bin/sh\nexec uv run --directory /workspace/skills/web web-search "$@"\n'
-    assert "/root/.carapace/bin/web" in shell_cmd
+    assert "/workspace/.carapace/bin/web" in shell_cmd
     assert base64.b64encode(wrapper.encode()).decode() in shell_cmd
 
 

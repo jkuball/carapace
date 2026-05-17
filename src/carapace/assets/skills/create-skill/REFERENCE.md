@@ -213,7 +213,7 @@ network:
 
 When credentials are declared there, activation handles approval and injection automatically. Keep those details out of `SKILL.md` unless the runtime behavior itself depends on them.
 
-When command aliases are declared there, activation generates executable wrappers in `/root/.carapace/bin/` and exposes that directory on `PATH`. Runtime agents should call the plain alias token, not the absolute shim path. Authors should think of `command` as the base command line for that wrapper, not as a multi-line shell script.
+When command aliases are declared there, activation generates executable wrappers in `/workspace/.carapace/bin/` and exposes that directory on `PATH`. Runtime agents should call the plain alias token, not the absolute shim path. Authors should think of `command` as the base command line for that wrapper, not as a multi-line shell script.
 
 Each command entry has:
 

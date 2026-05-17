@@ -62,6 +62,10 @@ skills/**/.venv/
 # Session scratch space
 tmp/
 tmp/**
+
+# Generated sandbox runtime state
+.carapace/
+.carapace/**
 """
 
 

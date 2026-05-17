@@ -11,7 +11,7 @@ from loguru import logger
 from carapace.sandbox.file_ops import ContextFileCredential, SessionContainerLike, WrittenContextFile
 from carapace.sandbox.runtime import ExecResult, SkillActivationError, SkillActivationInputs
 
-SKILL_COMMAND_SHIM_DIR = "/root/.carapace/bin"
+SKILL_COMMAND_SHIM_DIR = "/workspace/.carapace/bin"
 
 
 @dataclass(frozen=True)
