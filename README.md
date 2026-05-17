@@ -52,6 +52,7 @@ Who doesn't want a personal assistant? OpenClaw showed that this is achievable w
 - Batteries are not included. The point is to use the agent to build out your own skills and workflows.
 - I made this for me! And because making stuff is fun. And sharing stuff is fun. I don't care if you think < Insert other project name here > is better and / or solves the same problem.
 - carapace is pre-1.0. Expect breaking changes before `1.0.0`.
+- The matrix and CLI connectors are functional, but pretty bare-bones. My focus right now is the Web UI, but the architecture is not hard-coded to that being the only client.
 
 ## Knowledge Repo, Not Hidden State
 
