@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.120.0 (2026-05-17)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: tests
+  ([`f6f6231`](https://github.com/thiesgerken/carapace/commit/f6f6231d391d3634691e4f61f234f6cc0f6554ac))
+
+### ✨ Features
+
+
+- ✨ feat: move shims from /root/.carapace to /workspace/.carapace for persistence
+  ([`b98a1f0`](https://github.com/thiesgerken/carapace/commit/b98a1f0bd8f175e73f8258c889254a91a5351ae7))
+
 ## v0.119.5 (2026-05-15)
 
 
