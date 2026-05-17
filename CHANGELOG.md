@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.120.1 (2026-05-17)
+
+
+### Other
+
+
+- 💚 ci: only use pyrefly, remove pyright config
+  ([`ec3153f`](https://github.com/thiesgerken/carapace/commit/ec3153f919c7205e0e657a42af7d9af11ae72dce))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: deprecation warnings
+  ([`f8ab31e`](https://github.com/thiesgerken/carapace/commit/f8ab31e2cefd28734f46fd5e3014dfee9032b97d))
+
 ## v0.120.0 (2026-05-17)
 
 
