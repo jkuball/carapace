@@ -505,7 +505,7 @@ def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path:
         {
             "role": "tool_call",
             "tool": "exec",
-            "args": {"command": "ls"},
+            "args": {"command": "ls", "title": None},
             "detail": "[user approved]",
             "approval_source": "user",
             "approval_verdict": "allow",
