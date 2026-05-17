@@ -42,7 +42,11 @@ carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for op
 - 🌐 Proxy system with tunnels. HTTP traffic is mediated by the proxy, and exec-scoped tunnels cover non-HTTP protocols without leaving long-lived daemons behind.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden and Vaultwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context.
 
-## Project Notes
+## Motivation
+
+Who doesn't want a personal assistant? OpenClaw showed that this is achievable with LLMs right now. I just didn't like the whole setup — Letting my agent chat with other people is not really important for me. I want something that I can trust and that is not overloaded with features I don't need. I'm pretty sure that there will come another project that has all that stuff, but until then, I'm just going to code and use my own "personal agent harness".
+
+## Remarks
 
 - Mandatory AI-Disclaimer: Of course I use AI for coding. Everything else just doesn't make sense. The frontend is almost purely vibe-coded, and the backend is review-coded. I try to not touch any files in the backend myself, but I do look at changes to critical code. The architectural and security ideas and decisions are my own. I do have over 20 years of experience in coding without AI.
 - Batteries are not included. The point is to use the agent to build out your own skills and workflows.
