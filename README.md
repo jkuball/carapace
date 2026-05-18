@@ -6,13 +6,13 @@
   <a href="charts/carapace/README.md"><img alt="Helm chart" src="https://img.shields.io/badge/helm-chart-0F766E?logo=helm&logoColor=white"></a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/carapace-banner.png" alt="carapace logo" width="180">
-</p>
-
+<h3 align="center">
+  <img src="docs/assets/icon.svg" alt="carapace logo" width="180"><br>
+  carapace
+</h3>
 <p align="center"><strong>A secure personal AI agent for DevOps engineers.</strong></p>
 
-<p align="center">Zero trust. Git-backed knowledge. Full audit trail.</p>
+<p align="center">Zero trust. Git-backed knowledge. Kubernetes Sandboxes.</p>
 
 <p align="center">
   <a href="docs/quickstart.md">Quickstart</a>
@@ -24,33 +24,67 @@
   <a href="charts/carapace/README.md">Helm Chart</a>
 </p>
 
-carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language policy in `SECURITY.md`, executed inside a sandbox, and recorded in an audit trail. Its memory is not hidden inside an app-specific database: personality, policy, skills, memory, and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
-
-<p align="center">
-  <img src="docs/assets/screen.jpg" alt="carapace web UI showing sandbox status, knowledge state, and a sentinel-reviewed command execution" width="1000">
-</p>
-
-<p align="center"><em>The web UI surfaces sandbox state, knowledge-repo status, and sentinel-reviewed actions in one place.</em></p>
+carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its memory is not hidden inside an app-specific database: personality, policy, skills and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
 
 ## Highlights
 
 - 🛡️ Sentinel-gated execution. Every non-trivial action is reviewed by a dedicated security agent that keeps session context, not a static allowlist spreadsheet.
 - ☸️ Kubernetes-ready sandboxes. Docker and Kubernetes runtimes are both supported, with StatefulSet-backed sandbox sessions, per-session PVCs, and idle-to-zero scaling already in place.
 - 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, memory, and archived sessions live in files you can inspect, diff, sync, and push upstream.
-- ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
 - 🌐 Proxy system with tunnels. HTTP traffic is mediated by the proxy, and exec-scoped tunnels cover non-HTTP protocols without leaving long-lived daemons behind.
-- 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden and Vaultwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context.
+- 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context. Neither the agent nor the backend have a giant `.env` with all of your secrets.
+- ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
 
 ## Motivation
 
 Who doesn't want a personal assistant? OpenClaw showed that this is achievable with LLMs right now. I just didn't like the whole setup — Letting my agent chat with other people is not really important for me. I want something that I can trust and that is not overloaded with features I don't need. I'm pretty sure that there will come another project that has all that stuff, but until then, I'm just going to code and use my own "personal agent harness".
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/assets/screenshots/sandbox_info.png" width="1000">
+</p>
+
+<p align="center"><em>The web UI surfaces sandbox state, knowledge-repo status, and sentinel-reviewed actions in one place.</em></p>
+
+<br>
+
+<p align="center">
+  <img src="docs/assets/screenshots/pancake_web.png" width="1000">
+</p>
+
+<p align="center"><em>A web search skill is bundled out of the box. Tool calls and any outbound access is monitored by another agent. Credentials are provided on-demand only.</em></p>
+
+<br>
+
+<p align="center">
+  <img src="docs/assets/screenshots/pancake_skill.png" width="1000">
+</p>
+
+<p align="center"><em>The agent can improve itself and submit changes to its config via git. Git pushes are proxied + guarded as well.</em></p>
+
+<br>
+
+<p align="center">
+  <img src="docs/assets/screenshots/pancake_git.png" width="1000">
+</p>
+
+<p align="center"><em>The agent has a local copy of the repository in its sandbox. Conversation histories are automatically committed.</em></p>
+
+<br>
+
+<p align="center">
+  <img src="docs/assets/screenshots/pancake_tree.png" width="1000">
+</p>
+
+<p align="center"><em>State of the knowledge repo after some sessions and a new skill were added.</em></p>
+
 ## Remarks
 
 - Mandatory AI-Disclaimer: Of course I use AI for coding. Everything else just doesn't make sense. The frontend is almost purely vibe-coded, and the backend is review-coded. I try to not touch any files in the backend myself, but I do look at changes to critical code. The architectural and security ideas and decisions are my own. I do have over 20 years of experience in coding without AI.
 - Batteries are not included. The point is to use the agent to build out your own skills and workflows.
-- I made this for me! And because making stuff is fun. And sharing stuff is fun. I don't care if you think < Insert other project name here > is better and / or solves the same problem.
+- I made this for me! And because making stuff is fun. And sharing stuff is fun. I don't mind if `{{some cool project}}` is better or solves the same problem.
 - carapace is pre-1.0. Expect breaking changes before `1.0.0`.
 - The matrix and CLI connectors are functional, but pretty bare-bones. My focus right now is the Web UI, but the architecture is not hard-coded to that being the only client.
 
