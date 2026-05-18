@@ -6,11 +6,10 @@
   <a href="charts/carapace/README.md"><img alt="Helm chart" src="https://img.shields.io/badge/helm-chart-0F766E?logo=helm&logoColor=white"></a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/icon.svg" alt="carapace logo" width="180">
-</p>
-
-<h1 align="center">carapace</h1>
+<h3 align="center">
+  <img src="docs/assets/icon.svg" alt="carapace logo" width="180"><br>
+  carapace
+</h3>
 <p align="center"><strong>A secure personal AI agent for DevOps engineers.</strong></p>
 
 <p align="center">Zero trust. Git-backed knowledge. Kubernetes Sandboxes.</p>
@@ -49,11 +48,15 @@ Who doesn't want a personal assistant? OpenClaw showed that this is achievable w
 
 <p align="center"><em>The web UI surfaces sandbox state, knowledge-repo status, and sentinel-reviewed actions in one place.</em></p>
 
+<br>
+
 <p align="center">
   <img src="docs/assets/screenshots/pancake_web.png" width="1000">
 </p>
 
 <p align="center"><em>A web search skill is bundled out of the box. Tool calls and any outbound access is monitored by another agent. Credentials are provided on-demand only.</em></p>
+
+<br>
 
 <p align="center">
   <img src="docs/assets/screenshots/pancake_skill.png" width="1000">
@@ -61,11 +64,15 @@ Who doesn't want a personal assistant? OpenClaw showed that this is achievable w
 
 <p align="center"><em>The agent can improve itself and submit changes to its config via git. Git pushes are proxied + guarded as well.</em></p>
 
+<br>
+
 <p align="center">
   <img src="docs/assets/screenshots/pancake_git.png" width="1000">
 </p>
 
 <p align="center"><em>The agent has a local copy of the repository in its sandbox. Conversation histories are automatically committed.</em></p>
+
+<br>
 
 <p align="center">
   <img src="docs/assets/screenshots/pancake_tree.png" width="1000">
