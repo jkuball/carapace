@@ -15,13 +15,13 @@
 <p align="center">Zero trust. Git-backed knowledge. Kubernetes Sandboxes.</p>
 
 <p align="center">
-  <a href="docs/quickstart.md">Quickstart</a>
+  <a href="docs/quickstart.md">🚀 Quickstart</a>
   ·
-  <a href="docs/security.md">Security Model</a>
+  <a href="docs/security.md">🛡️ Security Model</a>
   ·
-  <a href="docs/kubernetes.md">Kubernetes</a>
+  <a href="docs/kubernetes.md">☸️ Kubernetes</a>
   ·
-  <a href="charts/carapace/README.md">Helm Chart</a>
+  <a href="charts/carapace/README.md">⚓ Helm Chart</a>
 </p>
 
 carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its memory is not hidden inside an app-specific database: personality, policy, skills and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
@@ -32,9 +32,9 @@ carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for op
 - ☸️ Kubernetes-ready sandboxes. Docker and Kubernetes runtimes are both supported, with StatefulSet-backed sandbox sessions, per-session PVCs, and idle-to-zero scaling already in place.
 - 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, memory, and archived sessions live in files you can inspect, diff, sync, and push upstream.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
-- 🌐 Proxy system with tunnels. HTTP traffic is mediated by the proxy, and exec-scoped tunnels cover non-HTTP protocols without leaving long-lived daemons behind.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context. Neither the agent nor the backend have a giant `.env` with all of your secrets.
 - ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
+- 🌐 Bring your own LLM — tested with Gemini, LMStudio and llama.cpp. Agent loop is handled by [Pydantic AI](https://github.com/pydantic/pydantic-ai)
 
 ## Motivation
 
@@ -139,28 +139,9 @@ For the full Docker Compose setup, model configuration, credential backends, Mat
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    CLI["CLI Client"] & WebUI["Web UI (Next.js)"] & Matrix["Matrix Channel"]
-    CLI & WebUI & Matrix -->|"REST + WebSocket / nio"| Server["FastAPI Server"]
-
-    Server --> Engine[Session Engine]
-    Engine --> Agent[Pydantic AI Agent]
-    Engine --> Security[Security Module]
-    Security --> SafeList["Safe-list (auto-allow)"]
-    Security --> Sentinel["Sentinel Agent (LLM)"]
-    Sentinel --> Gate["Approval Gate → subscribers"]
-
-    Agent --> Skills[Skill Registry]
-    Agent -->|"exec, file ops"| Sandbox["Sandbox Container\n(Docker or K8s pod)"]
-    Sandbox -->|"outbound traffic"| Proxy[HTTP Proxy]
-    Proxy --> Sentinel
-    Engine --> Knowledge["Git-backed knowledge repo"]
-```
-
 The server runs the agent loop, session lifecycle, and security system. The CLI, web UI, and Matrix channel are thin clients. The knowledge repo is a first-class part of the design: session output can be promoted into Git-backed knowledge, and outbound Git operations are security-reviewed instead of treated as an afterthought.
 
-See [docs/architecture.md](docs/architecture.md) for the fuller architecture breakdown.
+See [docs/architecture.md](docs/architecture.md) for the diagrams and fuller architecture breakdown.
 
 ## Core Docs
 

@@ -71,6 +71,29 @@ flowchart TB
     WorkspaceFiles -.-> Container
 ```
 
+## Compact overview
+
+This is the smaller system diagram used in the README.
+
+```mermaid
+flowchart TD
+    CLI["CLI Client"] & WebUI["Web UI (Next.js)"] & Matrix["Matrix Channel"]
+    CLI & WebUI & Matrix -->|"REST + WebSocket / nio"| Server["FastAPI Server"]
+
+    Server --> Engine[Session Engine]
+    Engine --> Agent[Pydantic AI Agent]
+    Engine --> Security[Security Module]
+    Security --> SafeList["Safe-list (auto-allow)"]
+    Security --> Sentinel["Sentinel Agent (LLM)"]
+    Sentinel --> Gate["Approval Gate → subscribers"]
+
+    Agent --> Skills[Skill Registry]
+    Agent -->|"exec, file ops"| Sandbox["Sandbox Container\n(Docker or K8s pod)"]
+    Sandbox -->|"outbound traffic"| Proxy[HTTP Proxy]
+    Proxy --> Sentinel
+    Engine --> Knowledge["Git-backed knowledge repo"]
+```
+
 ## Component responsibilities
 
 ### Session Engine
