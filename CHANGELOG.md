@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.120.4 (2026-05-18)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`0b6d8b7`](https://github.com/thiesgerken/carapace/commit/0b6d8b7a5dd1338803cded4d0aaeeec5279b12bd))
+
+### Other
+
+
+- spacing
+  ([`61c6bf3`](https://github.com/thiesgerken/carapace/commit/61c6bf30d4b30f0268b9f2fcf3f3f97b6c5dbcce))
+
+- 📋 docs: new screenshots, use cute turtle logo
+  ([`23b605f`](https://github.com/thiesgerken/carapace/commit/23b605f5d34f4499b236e341ea7dde43198ea5dc))
+
 ## v0.120.3 (2026-05-18)
 
 
