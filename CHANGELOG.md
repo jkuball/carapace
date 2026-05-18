@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.120.3 (2026-05-18)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Lock file maintenance
+  ([`fee3dfa`](https://github.com/thiesgerken/carapace/commit/fee3dfab00e53732f9a49a9be2bc7b2414909ec6))
+
+### Other
+
+
+- docs: add note about matrix and CLI connectors in README
+  ([`19fd98e`](https://github.com/thiesgerken/carapace/commit/19fd98efd39e3bcf936e75643a5974b969290859))
+
+- 📋 docs: update project notes to motivation section with personal assistant rationale
+  ([`44f9ae3`](https://github.com/thiesgerken/carapace/commit/44f9ae3bd10594b6ad5d3a6ba29cf4e40d6abf86))
+
+- 📋 docs: update stale docs
+  ([`036dc1d`](https://github.com/thiesgerken/carapace/commit/036dc1de9936a399276cbeed8183f70175576517))
+
 ## v0.120.2 (2026-05-17)
 
 
