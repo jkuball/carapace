@@ -80,6 +80,12 @@ Who doesn't want a personal assistant? OpenClaw showed that this is achievable w
 
 <p align="center"><em>State of the knowledge repo after some sessions and a new skill were added.</em></p>
 
+<p align="center">
+  <img src="docs/assets/screenshots/post_readonly.png" width="1000">
+</p>
+
+<p align="center"><em>Example of a tool call that was intercepted and blocked by the sentinel due to security policy.</em></p>
+
 ## Remarks
 
 - Mandatory AI-Disclaimer: Of course I use AI for coding. Everything else just doesn't make sense. The frontend is almost purely vibe-coded, and the backend is review-coded. I try to not touch any files in the backend myself, but I do look at changes to critical code. The architectural and security ideas and decisions are my own. I do have over 20 years of experience in coding without AI.
