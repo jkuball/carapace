@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.120.5 (2026-05-21)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: increase timeouts for sentinel
+  ([`140100f`](https://github.com/thiesgerken/carapace/commit/140100f2e39e3752c204c189c3c2823cd4dd97d9))
+
+### Other
+
+
+- 📋 docs: forgot a screenshot
+  ([`6176b17`](https://github.com/thiesgerken/carapace/commit/6176b179f8fc84be0c6331098575a6dc0cf3eba1))
+
+- typo
+  ([`48977d5`](https://github.com/thiesgerken/carapace/commit/48977d58f5af293367cb6b11b15672dd3a64deef))
+
+- 📋 docs: more readme changes
+  ([`7d8f69c`](https://github.com/thiesgerken/carapace/commit/7d8f69c3fc1cb9ce5143f4889ebed89c4dc24bc7))
+
 ## v0.120.4 (2026-05-18)
 
 
