@@ -53,10 +53,11 @@ Each session gets its own PVC via the StatefulSet's `volumeClaimTemplates`:
 | Volume                           | Container path | Mode       | Purpose                      |
 | -------------------------------- | -------------- | ---------- | ---------------------------- |
 | `session-data` (per-session PVC) | `/workspace/`  | read-write | Persistent session workspace |
+| `session-data` (per-session PVC) | `/tmp/`        | read-write | Persistent temp files        |
 
 No shared PVC access — the server's data PVC is `ReadWriteOnce`.
 
-The knowledge repo is cloned directly into `/workspace/` on first start. On container restarts the existing working tree is reused. To persist changes back to the server, the agent uses `git commit` and `git push` inside `/workspace/` — every push is evaluated by the security sentinel via a pre-receive hook.
+The knowledge repo is cloned directly into `/workspace/` on first start. On container restarts the existing working tree is reused. `/tmp/` is backed by the same per-session PVC via a separate `subPath`, so temp artifacts also survive suspend and resume without provisioning a second claim. To persist changes back to the server, the agent uses `git commit` and `git push` inside `/workspace/` — every push is evaluated by the security sentinel via a pre-receive hook.
 
 ## Network policy
 

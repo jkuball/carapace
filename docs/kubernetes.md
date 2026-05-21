@@ -145,8 +145,9 @@ The server uses a single RWO PVC (`carapace-data`) for its own data (config, ses
 | ------------------- | ------------------------------------- | ------------ | ---- |
 | Server              | `carapace-data` (RWO)                 | `/data`      | RW   |
 | Sandbox StatefulSet | `session-data` (per-session PVC, RWO) | `/workspace` | RW   |
+| Sandbox StatefulSet | `session-data` (per-session PVC, RWO) | `/tmp`       | RW   |
 
-Sandbox pods have **no access** to the server's data PVC. The workspace is populated via `git clone` from the server's Git HTTP backend on first start. Changes are persisted back via `git push`.
+Sandbox pods have **no access** to the server's data PVC. The per-session PVC is mounted twice with `subPath`s (`workspace` and `tmp`) so workspace contents and temp files survive StatefulSet scale-down without a second claim. The workspace is populated via `git clone` from the server's Git HTTP backend on first start. Changes are persisted back via `git push`.
 
 The per-session PVC size is configurable via `sandbox.sessionPvc.size` in the Helm values (default: 1Gi).
 

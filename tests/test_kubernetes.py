@@ -225,9 +225,10 @@ def test_build_statefulset_dict():
     assert templates[0]["metadata"]["name"] == "session-data"
     assert templates[0]["spec"]["accessModes"] == ["ReadWriteOnce"]
 
-    # Container mounts /workspace
+    # Container mounts /workspace and /tmp from the same PVC via subPaths
     container = sts["spec"]["template"]["spec"]["containers"][0]
-    assert any(vm["mountPath"] == "/workspace" for vm in container["volumeMounts"])
+    assert {"name": "session-data", "mountPath": "/workspace", "subPath": "workspace"} in container["volumeMounts"]
+    assert {"name": "session-data", "mountPath": "/tmp", "subPath": "tmp"} in container["volumeMounts"]
 
 
 # --- create ---

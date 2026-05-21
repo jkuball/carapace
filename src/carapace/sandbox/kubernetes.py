@@ -394,6 +394,10 @@ class KubernetesRuntime(ContainerRuntime):
         sts_name = _sanitize_pod_name(config.name)
 
         env_vars = [{"name": k, "value": v} for k, v in config.environment.items()]
+        volume_mounts = [
+            {"name": "session-data", "mountPath": "/workspace", "subPath": "workspace"},
+            {"name": "session-data", "mountPath": "/tmp", "subPath": "tmp"},
+        ]
 
         labels = _standard_labels(self._app_instance)
         labels.update(config.labels)
@@ -437,9 +441,7 @@ class KubernetesRuntime(ContainerRuntime):
                                 "image": config.image,
                                 "command": _default_command(config.command),
                                 **({"env": env_vars} if env_vars else {}),
-                                "volumeMounts": [
-                                    {"name": "session-data", "mountPath": "/workspace", "subPath": "workspace"}
-                                ],
+                                "volumeMounts": volume_mounts,
                                 "securityContext": {
                                     "allowPrivilegeEscalation": False,
                                     "capabilities": {"drop": ["ALL"]},
