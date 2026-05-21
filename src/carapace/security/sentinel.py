@@ -189,12 +189,18 @@ class Sentinel:
         self._model = model
         self._agent = self._create_agent()
 
-    def set_policy(self, *, ask_mode: bool) -> None:
+    def set_policy(self, *, ask_mode: bool | None = None, unattended: bool | None = None) -> None:
         """Update live mutable policy flags without discarding sentinel conversation state."""
-        if self._ask_mode == ask_mode:
-            return
-        self._ask_mode = ask_mode
-        self._agent = self._create_agent()
+        changed = False
+        if ask_mode is not None and self._ask_mode != ask_mode:
+            self._ask_mode = ask_mode
+            changed = True
+        if unattended is not None and self._unattended != unattended:
+            self._unattended = unattended
+            changed = True
+
+        if changed:
+            self._agent = self._create_agent()
 
     def _load_system_prompt(self, _ctx: RunContext[Path]) -> str:
         return _build_system_prompt(

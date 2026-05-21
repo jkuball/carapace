@@ -1692,16 +1692,18 @@ export function ChatView({
     }
   }
 
-  async function handleToggleSessionMode(mode: "ask" | "yolo") {
+  async function handleToggleSessionMode(mode: "ask" | "yolo" | "unattended") {
     if (!session || updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes) return;
 
     const nextAttributes: SessionAttributesPatch = mode === "ask"
       ? session.attributes.ask_mode
         ? { ask_mode: false }
         : { ask_mode: true, yolo_mode: false }
-      : session.attributes.yolo_mode
-        ? { yolo_mode: false }
-        : { yolo_mode: true, ask_mode: false };
+      : mode === "yolo"
+        ? session.attributes.yolo_mode
+          ? { yolo_mode: false }
+          : { yolo_mode: true, ask_mode: false }
+        : { unattended: !session.attributes.unattended };
 
     if (Object.entries(nextAttributes).every(([key, value]) => session.attributes[key as keyof SessionAttributesPatch] === value)) {
       return;
@@ -2103,7 +2105,8 @@ export function ChatView({
               {
                 key: "unattended",
                 active: sessionUnattended,
-                disabled: true,
+                disabled: !session || deletingSession || !onUpdateSessionAttributes || updatingSessionAttribute !== null,
+                onClick: () => void handleToggleSessionMode("unattended"),
               },
             ]}
           />

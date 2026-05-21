@@ -1164,10 +1164,16 @@ async def update_session(
 
         unattended_changed = next_attributes.unattended != state.attributes.unattended
         if unattended_changed:
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot change unattended mode in place; fork the session instead",
-            )
+            if _engine.is_agent_running(session_id):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot toggle unattended mode while an agent turn is actively running",
+                )
+            if state.attributes.unattended and not next_attributes.unattended:
+                # Transitioning unattended -> attended!
+                history = _engine.session_mgr.load_history(session_id)
+                normalized_history = _engine._normalize_unattended_output_history(history)
+                _engine.session_mgr.save_history(session_id, normalized_history)
 
         archive_changed = next_attributes.archived != state.attributes.archived
         archive_now = next_attributes.archived
