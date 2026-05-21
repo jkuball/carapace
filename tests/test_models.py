@@ -34,7 +34,7 @@ def test_config_defaults():
     assert cfg.carapace.log_level == "info"
     assert cfg.agent.model == "anthropic:claude-sonnet-4-6"
     assert cfg.agent.default_session_budget.has_any_limit is False
-    assert cfg.agent.sentinel_timeout_seconds == 60
+    assert cfg.agent.sentinel_timeout_seconds == 600
     assert cfg.agent.tool_output_max_chars == 16_000
     assert cfg.notifications.enabled is True
     assert cfg.notifications.presence_ttl_seconds == 60

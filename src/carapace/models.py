@@ -546,13 +546,13 @@ class AgentConfig(BaseModel):
 
     # Maximum number of sentinel-backed proxy domain review batches one tool call can trigger.
     # 0 disables the cap.
-    max_sentinel_calls_per_tool_call: int = 5
+    max_sentinel_calls_per_tool_call: int = 10
 
     # Debounce window for coalescing proxy domain requests within a tool call.
     sentinel_domain_batch_window_ms: int = 100
 
     # Max wall-clock time for one sentinel LLM review.
-    sentinel_timeout_seconds: int = Field(default=60, ge=1)
+    sentinel_timeout_seconds: int = Field(default=600, ge=1)
 
     # Cap string length returned to the model (and mirrored to tool_result_callback). 0 = no limit.
     tool_output_max_chars: int = 16_000

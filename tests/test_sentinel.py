@@ -11,7 +11,7 @@ from carapace.security.context import SessionSecurity
 from carapace.security.sentinel import Sentinel
 
 
-def _make_sentinel(tmp_path: Path, *, timeout: timedelta = timedelta(seconds=60)) -> tuple[Sentinel, Path]:
+def _make_sentinel(tmp_path: Path, *, timeout: timedelta | None = None) -> tuple[Sentinel, Path]:
     knowledge_dir = tmp_path / "knowledge"
     skills_dir = tmp_path / "skills"
     knowledge_dir.mkdir()

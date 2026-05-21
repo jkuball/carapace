@@ -158,7 +158,7 @@ class Sentinel:
         skills_dir: Path,
         unattended: bool = False,
         ask_mode: bool = False,
-        timeout: timedelta = timedelta(seconds=60),
+        timeout: timedelta = timedelta(seconds=600),
         reset_threshold: int = _RESET_THRESHOLD_DEFAULT,
         model_factory: Callable[[str], Model] | None = None,
         model_settings_resolver: Callable[[str], ModelSettings | None] | None = None,
