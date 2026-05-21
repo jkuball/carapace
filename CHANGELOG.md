@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.121.0 (2026-05-21)
+
+
+### ✨ Features
+
+
+- ✨ feat: mount /tmp in pvc as well
+  ([`9b49452`](https://github.com/thiesgerken/carapace/commit/9b49452c4ccb38d12e88db5628b9f5b96a5c3b2c))
+
 ## v0.120.5 (2026-05-21)
 
 
