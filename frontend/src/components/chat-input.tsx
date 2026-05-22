@@ -147,7 +147,7 @@ export function ChatInput({
     recognition.interimResults = false;
 
     recognition.onstart = () => {
-      setIsListening(true);
+      // Already set synchronously below to avoid click race conditions
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -179,6 +179,7 @@ export function ChatInput({
     };
 
     recognitionRef.current = recognition;
+    setIsListening(true);
     recognition.start();
   }, [isListening]);
 
