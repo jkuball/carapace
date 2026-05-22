@@ -114,14 +114,17 @@ export function ChatInput({
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
 
-  const isSpeechSupported = useMemo(() => {
-    if (typeof window === "undefined") return false;
+  useEffect(() => {
     const win = window as unknown as {
       SpeechRecognition?: new () => SpeechRecognitionInstance;
       webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
     };
-    return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+    const supported = !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+    setTimeout(() => {
+      setIsSpeechSupported(supported);
+    }, 0);
   }, []);
 
   const toggleListening = useCallback(() => {
