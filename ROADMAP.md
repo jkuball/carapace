@@ -17,4 +17,3 @@
 - [ ] warn user if deleting a session that has commits not pushed
 - [ ] replace pull / push slash commands (that aren't really tied to the session anyway) with a global indicator how many commits ahead/behind the backend's global repo is compared to the remote repo
 - [ ] speech input
-- [ ] alias setup must be written to the pod. right now an sts restart (externally) bricks aliases.

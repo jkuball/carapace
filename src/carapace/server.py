@@ -36,6 +36,7 @@ from genai_prices import UpdatePrices
 from loguru import logger
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from pydantic_ai.exceptions import UsageLimitExceeded
+from pydantic_ai.messages import ModelMessage
 
 from carapace import get_version
 from carapace.auth import get_token
@@ -1150,6 +1151,7 @@ async def update_session(
 
     next_attributes: SessionAttributes | None = None
     previous_attributes: SessionAttributes | None = None
+    previous_history: list[ModelMessage] | None = None
     archive_changed = False
     archive_now = False
 
@@ -1164,10 +1166,21 @@ async def update_session(
 
         unattended_changed = next_attributes.unattended != state.attributes.unattended
         if unattended_changed:
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot change unattended mode in place; fork the session instead",
-            )
+            active = _engine._active.get(session_id)
+            lock = active.lock if active else contextlib.nullcontext()
+            async with lock:
+                if _engine.is_agent_running(session_id):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Cannot toggle unattended mode while an agent turn is actively running",
+                    )
+                if state.attributes.unattended and not next_attributes.unattended:
+                    # Transitioning unattended -> attended!
+                    history = _engine.session_mgr.load_history(session_id)
+                    previous_history = history
+                    truncated_history = _engine._truncate_incomplete_model_history(history)
+                    normalized_history = _engine._normalize_unattended_output_history(truncated_history)
+                    _engine.session_mgr.save_history(session_id, normalized_history)
 
         archive_changed = next_attributes.archived != state.attributes.archived
         archive_now = next_attributes.archived
@@ -1213,6 +1226,8 @@ async def update_session(
                 state.attributes = previous_attributes
                 _engine.session_mgr.save_state(state)
                 _engine.update_active_state(session_id, attributes=previous_attributes)
+            if previous_history is not None:
+                _engine.session_mgr.save_history(session_id, previous_history)
             if model_changes:
                 state = _engine.update_session_model_overrides(session_id, **previous_models)
             raise
