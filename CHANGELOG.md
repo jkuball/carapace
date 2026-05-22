@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.123.0 (2026-05-22)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: prevent race condition on voice toggle
+  ([`e52778f`](https://github.com/thiesgerken/carapace/commit/e52778fac2b779de1f787da79efc14160929dba6))
+
+- 🐛 fix: resolve hydration mismatch on voice input check
+  ([`3ca94cc`](https://github.com/thiesgerken/carapace/commit/3ca94ccb5164d4207b7508f46db8c329c236bd85))
+
+### ✨ Features
+
+
+- ✨ feat: add voice input functionality to chat component
+  ([`9b5a49c`](https://github.com/thiesgerken/carapace/commit/9b5a49ccef8de61932a07f3b020e9d10d9b840b8))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`1995fb0`](https://github.com/thiesgerken/carapace/commit/1995fb004f5b7e5d19cfee773b1029e94177308d))
+
 ## v0.122.0 (2026-05-22)
 
 
