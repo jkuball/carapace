@@ -766,7 +766,7 @@ def test_update_session_privacy_updates_active_session_state(client, auth_header
     assert active.state.activated_skills == ["demo-skill"]
 
 
-def test_update_session_rejects_unattended_mode_change(client, auth_headers):
+def test_update_session_allows_unattended_mode_change(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
@@ -776,8 +776,17 @@ def test_update_session_rejects_unattended_mode_change(client, auth_headers):
         json={"attributes": {"unattended": True}},
     )
 
-    assert resp.status_code == 409
-    assert "fork the session instead" in resp.json()["detail"]
+    assert resp.status_code == 200
+    assert resp.json()["attributes"]["unattended"] is True
+
+    # Toggle back to False
+    resp = client.patch(
+        f"/api/sessions/{sid}",
+        headers=auth_headers,
+        json={"attributes": {"unattended": False}},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["attributes"]["unattended"] is False
 
 
 def test_update_session_models_updates_active_session_state(client, auth_headers):

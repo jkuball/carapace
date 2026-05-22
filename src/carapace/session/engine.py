@@ -671,7 +671,10 @@ class SessionEngine(SessionTurnMixin):
                 yolo_mode=active.state.attributes.yolo_mode,
             )
         if active.sentinel is not None:
-            active.sentinel.set_policy(ask_mode=active.state.attributes.ask_mode)
+            active.sentinel.set_policy(
+                ask_mode=active.state.attributes.ask_mode,
+                unattended=active.state.attributes.unattended,
+            )
 
     def update_active_state(self, session_id: str, **changes: Any) -> None:
         """Apply explicit field updates to the in-memory state for a loaded session."""
