@@ -180,7 +180,12 @@ export function ChatInput({
 
     recognitionRef.current = recognition;
     setIsListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error("Failed to start speech recognition:", error);
+      setIsListening(false);
+    }
   }, [isListening]);
 
   // Stop listening when disabled
