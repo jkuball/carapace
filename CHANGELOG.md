@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.122.0 (2026-05-22)
+
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: apply bugbot autofixes for session history concurrency & safety
+  ([`81dc80c`](https://github.com/thiesgerken/carapace/commit/81dc80cb88d847e182f2014a004ff51260d7645e))
+
+### ✨ Features
+
+
+- ✨ feat: implement in-place unattended-attended toggles
+  ([`0d91c32`](https://github.com/thiesgerken/carapace/commit/0d91c324a62f6047c42ed7c8cad5dc337820f90a))
+
 ## v0.121.0 (2026-05-21)
 
 
