@@ -148,6 +148,8 @@
         "queueInterruptStopTooltip": "Enter zum Einreihen · ⌥Enter zum Unterbrechen · Klicken zum Stoppen",
         "stopGenerationTooltip": "Generierung stoppen",
         "queued": "Warteschlange: {message}",
+        "startVoiceInput": "Spracheingabe starten",
+        "stopVoiceInput": "Spracheingabe stoppen",
         "placeholder": "Nachricht an carapace…",
         "usageBreakdown": {
             "systemLine": "System: {percent}%",

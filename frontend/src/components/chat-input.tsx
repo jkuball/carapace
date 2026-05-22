@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Clock, Square } from "lucide-react";
+import { ArrowUp, Clock, Mic, MicOff, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AvailableModelInfo, SlashCommand } from "@/lib/api";
 import type { BudgetGauge, TurnUsage, TurnUsageBreakdownPct } from "@/lib/types";
@@ -48,6 +48,33 @@ function visibleBudgetGauges(u: TurnUsage): BudgetGauge[] {
   });
 }
 
+interface SpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
 const MODEL_COMMANDS = ["/model"];
 
 const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title"]);
@@ -84,6 +111,89 @@ export function ChatInput({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  const isSpeechSupported = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const win = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionInstance;
+      webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+    };
+    return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const win = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionInstance;
+      webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+    };
+    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = document.documentElement.lang || "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) {
+        setValue((prev) => {
+          const space = prev && !prev.endsWith(" ") ? " " : "";
+          return prev + space + transcript;
+        });
+        if (textareaRef.current) {
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.style.height = "auto";
+              textareaRef.current.style.height =
+                Math.min(textareaRef.current.scrollHeight, 200) + "px";
+            }
+          }, 0);
+        }
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [isListening]);
+
+  // Stop listening when disabled
+  useEffect(() => {
+    if (disabled && isListening) {
+      recognitionRef.current?.abort();
+    }
+  }, [disabled, isListening]);
+
+  // Clean up speech recognition instance on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
 
   const availableModelIds = useMemo(
     () => availableModelEntries.map((e) => e.id),
@@ -390,6 +500,25 @@ export function ChatInput({
               disabled && "cursor-not-allowed text-muted-foreground",
             )}
           />
+          {isSpeechSupported && !disabled && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              title={isListening ? t("stopVoiceInput") : t("startVoiceInput")}
+              className={cn(
+                "shrink-0 rounded-lg p-2 transition-colors",
+                isListening
+                  ? "bg-red-500/20 text-red-500 animate-pulse hover:bg-red-500/30"
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {isListening ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
+          )}
           <button
             onClick={waiting ? onCancel : submit}
             disabled={waiting ? !onCancel : disabled || !connected || !hasText}

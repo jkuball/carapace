@@ -148,6 +148,8 @@
         "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
         "stopGenerationTooltip": "Stop generation",
         "queued": "Queued: {message}",
+        "startVoiceInput": "Start voice input",
+        "stopVoiceInput": "Stop voice input",
         "placeholder": "Message carapace…",
         "usageBreakdown": {
             "systemLine": "system: {percent}%",
