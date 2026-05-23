@@ -13,6 +13,8 @@ import pytest
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 import carapace.usage as usage_mod
+from carapace.session import SessionManager
+from carapace.session.state import SessionRuntime
 from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
@@ -296,6 +298,116 @@ def test_submit_message_records_successful_runtime_transitions(tmp_path: Path):
 
     with _patch_sentinel():
         asyncio.run(_run())
+
+
+def test_recover_stale_session_runtime_marks_cancelled_and_repairs_events(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    sid = engine.session_mgr.create_session().session_id
+    engine.session_mgr.append_events(
+        sid,
+        [
+            {"role": "user", "content": "hello"},
+            {
+                "role": "approval_request",
+                "tool_call_id": "tool-1",
+                "tool": "exec",
+                "args": {"command": "date"},
+            },
+        ],
+    )
+    runtime = engine._session_store.load_runtime(sid).model_copy(
+        update={
+            "phase": "waiting_tool_approval",
+            "current_turn_id": "turn-1",
+            "pending_approval_ids": ["tool-1"],
+        }
+    )
+    engine.session_mgr.save_session_runtime(runtime)
+
+    recovered = engine.recover_stale_session_runtimes()
+
+    assert [item.session_id for item in recovered] == [sid]
+    reloaded = engine.session_mgr.load_session_runtime(sid)
+    assert reloaded is not None
+    assert reloaded.phase == "cancelled"
+    assert reloaded.current_turn_id is None
+    assert reloaded.pending_approval_ids == []
+    assert reloaded.pending_escalation_ids == []
+    assert reloaded.last_error == "Recovered stale runtime phase: waiting_tool_approval"
+    assert engine.pending_approval_requests(sid) == []
+
+    runtime_events = engine.session_mgr.load_session_runtime_events(sid)
+    assert [event.type for event in runtime_events] == ["turn_interrupted", "turn_cancelled"]
+    assert [event.to_phase for event in runtime_events] == ["interrupted", "cancelled"]
+    assert runtime_events[0].payload == {"recovered_from_phase": "waiting_tool_approval"}
+
+    events = engine.session_mgr.load_events(sid)
+    assert events[-1]["role"] == "assistant"
+    assert events[-1]["content"] == "The previous turn was interrupted before completion."
+
+
+def test_recover_stale_session_runtime_skips_running_active_task(tmp_path: Path) -> None:
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path)
+
+        sid = engine.session_mgr.create_session().session_id
+        active = engine.get_or_activate(sid)
+        active.agent_task = asyncio.create_task(asyncio.sleep(999))
+        runtime = engine._session_store.load_runtime(sid).model_copy(
+            update={"phase": "running_llm", "current_turn_id": "turn-1"}
+        )
+        engine.session_mgr.save_session_runtime(runtime)
+
+        try:
+            assert engine.recover_stale_session_runtimes() == []
+            reloaded = engine.session_mgr.load_session_runtime(sid)
+            assert reloaded is not None
+            assert reloaded.phase == "running_llm"
+        finally:
+            active.agent_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await active.agent_task
+
+    asyncio.run(_run())
+
+
+def test_recover_stale_queued_runtime_without_transcript_does_not_add_events(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    sid = engine.session_mgr.create_session().session_id
+    runtime = engine._session_store.load_runtime(sid).model_copy(
+        update={"phase": "queued", "current_turn_id": "turn-1"}
+    )
+    engine.session_mgr.save_session_runtime(runtime)
+
+    recovered = engine.recover_stale_session_runtimes()
+
+    assert [item.session_id for item in recovered] == [sid]
+    reloaded = engine.session_mgr.load_session_runtime(sid)
+    assert reloaded is not None
+    assert reloaded.phase == "cancelled"
+    assert engine.session_mgr.load_events(sid) == []
+
+
+def test_engine_init_recovers_stale_runtime_from_disk(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    sid = mgr.create_session().session_id
+    mgr.append_events(sid, [{"role": "user", "content": "hello"}])
+    mgr.save_session_runtime(SessionRuntime(session_id=sid, phase="running_llm", current_turn_id="turn-1"))
+
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+
+    runtime = engine.session_mgr.load_session_runtime(sid)
+    assert runtime is not None
+    assert runtime.phase == "cancelled"
+    assert runtime.current_turn_id is None
+    runtime_events = engine.session_mgr.load_session_runtime_events(sid)
+    assert [event.type for event in runtime_events] == ["turn_interrupted", "turn_cancelled"]
 
 
 def test_submit_cancel_persists_interrupted_llm_request_log(tmp_path: Path):
