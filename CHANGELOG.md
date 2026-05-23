@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.123.1 (2026-05-23)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade nginx:alpine Docker digest to 7e8ff0a
+  ([`76423b8`](https://github.com/thiesgerken/carapace/commit/76423b8392ae9d66d70a00ef8f1abe4dc79683ec))
+
+### Other
+
+
+- reorganize roadmap sections and enhance clarity on planned features
+  ([`048d2ee`](https://github.com/thiesgerken/carapace/commit/048d2eefc4b9824fa943a5b4225c1fee47ff4c7e))
+
 ## v0.123.0 (2026-05-22)
 
 
