@@ -9,6 +9,7 @@ from carapace.sandbox.state import SandboxLease, SandboxRuntimeState
 from carapace.sandbox.store import SandboxStore, SandboxTransitionError, SandboxVersionConflictError
 from carapace.session.events import SessionRuntimeEvent
 from carapace.session.manager import SessionManager
+from carapace.session.runtime_controller import SessionRuntimeController
 from carapace.session.state import RuntimeLease, SessionRuntime
 from carapace.session.store import SessionStore, SessionTransitionError, SessionVersionConflictError
 
@@ -192,6 +193,60 @@ def test_session_store_rejects_unexpected_phase_and_version(tmp_path: Path) -> N
         pass
     else:
         raise AssertionError("expected version mismatch")
+
+
+def test_session_runtime_controller_records_successful_turn(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    session = mgr.create_session()
+    controller = SessionRuntimeController(SessionStore(mgr))
+
+    controller.turn_queued(session.session_id, "turn-1", source="test")
+    controller.turn_started(session.session_id, "turn-1")
+    controller.running_llm(session.session_id, "turn-1")
+    controller.finalizing(session.session_id, "turn-1")
+    controller.turn_finalized(session.session_id, "turn-1")
+
+    runtime = mgr.load_session_runtime(session.session_id)
+    assert runtime is not None
+    assert runtime.phase == "idle"
+    assert runtime.current_turn_id is None
+    assert runtime.pending_approval_ids == []
+    assert runtime.pending_escalation_ids == []
+    assert runtime.last_error is None
+
+    events = mgr.load_session_runtime_events(session.session_id)
+    assert [event.type for event in events] == [
+        "turn_queued",
+        "turn_started",
+        "turn_phase_changed",
+        "turn_phase_changed",
+        "turn_finalized",
+    ]
+    assert [event.to_phase for event in events] == ["queued", "preparing_turn", "running_llm", "finalizing", "idle"]
+
+
+def test_session_runtime_controller_records_approval_wait_and_resume(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    session = mgr.create_session()
+    controller = SessionRuntimeController(SessionStore(mgr))
+
+    controller.turn_queued(session.session_id, "turn-1", source="test")
+    controller.running_llm(session.session_id, "turn-1")
+    controller.approval_requested(session.session_id, "tool-1", "exec")
+    controller.approvals_resolved(session.session_id, {"tool-1"})
+
+    runtime = mgr.load_session_runtime(session.session_id)
+    assert runtime is not None
+    assert runtime.phase == "running_llm"
+    assert runtime.pending_approval_ids == []
+
+    events = mgr.load_session_runtime_events(session.session_id)
+    assert events[-2].type == "tool_approval_requested"
+    assert events[-2].to_phase == "waiting_tool_approval"
+    assert events[-2].payload == {"tool_call_id": "tool-1", "tool": "exec"}
+    assert events[-1].type == "tool_approval_resolved"
+    assert events[-1].to_phase == "running_llm"
+    assert events[-1].payload == {"tool_call_ids": ["tool-1"]}
 
 
 def test_sandbox_store_runtime_transition_persists_event(tmp_path: Path) -> None:

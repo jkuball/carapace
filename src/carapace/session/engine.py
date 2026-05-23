@@ -62,6 +62,7 @@ from carapace.security.sentinel import Sentinel
 from carapace.session.manager import SessionManager
 from carapace.session.pending import pending_approval_requests, pending_escalations
 from carapace.session.recovery import SessionRuntimeRecovery
+from carapace.session.runtime_controller import SessionRuntimeController
 from carapace.session.state import SessionRuntime
 from carapace.session.store import SessionStore
 from carapace.session.titler import generate_title
@@ -179,6 +180,7 @@ class SessionEngine(SessionTurnMixin):
         self._git_store = git_store
         self._session_mgr = session_mgr
         self._session_store = SessionStore(session_mgr)
+        self._runtime_controller = SessionRuntimeController(self._session_store)
         self._skill_catalog = skill_catalog
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
@@ -893,20 +895,7 @@ class SessionEngine(SessionTurnMixin):
         await self.clear_pending_notifications(session_id)
 
         turn_id = secrets.token_hex(8)
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="queued",
-            event_type="turn_queued",
-            turn_id=turn_id,
-            payload={"source": "submit_message"},
-            updates={
-                "pending_approval_ids": [],
-                "pending_escalation_ids": [],
-                "sandbox_operation_ids": [],
-                "last_error": None,
-                "lease": None,
-            },
-        )
+        self._runtime_controller.turn_queued(session_id, turn_id, source="submit_message")
 
         active.agent_task = asyncio.create_task(
             self._run_turn(active, content, origin=origin, turn_id=turn_id),
@@ -1021,14 +1010,7 @@ class SessionEngine(SessionTurnMixin):
         if not active:
             return
         if active.agent_task and not active.agent_task.done():
-            runtime = self._session_store.load_runtime(session_id)
-            self._record_session_runtime_transition(
-                session_id,
-                to_phase="cancelling",
-                event_type="turn_phase_changed",
-                turn_id=runtime.current_turn_id,
-                payload={"source": "submit_cancel"},
-            )
+            self._runtime_controller.turn_cancelling(session_id, source="submit_cancel")
             active.agent_task.cancel()
             active.tool_approval_queue.put_nowait(None)
             active.escalation_queue.put_nowait(None)

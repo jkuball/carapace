@@ -35,6 +35,7 @@ from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
 from carapace.session.events import SessionEventType
 from carapace.session.manager import SessionManager
+from carapace.session.runtime_controller import SessionRuntimeController
 from carapace.session.state import SessionRuntimePhase
 from carapace.session.store import SessionStore
 from carapace.session.transcript import (
@@ -112,6 +113,7 @@ class SessionTurnHost(Protocol):
     _llm_semaphore: asyncio.Semaphore
     _notification_router: NotificationRouter | None
     _session_store: SessionStore
+    _runtime_controller: SessionRuntimeController
 
     async def _broadcast(
         self,
@@ -264,12 +266,7 @@ class SessionTurnMixin(SessionTurnHost):
 
         try:
             async with active.lock:
-                self._record_session_runtime_transition(
-                    session_id,
-                    to_phase="preparing_turn",
-                    event_type="turn_started",
-                    turn_id=turn_id,
-                )
+                self._runtime_controller.turn_started(session_id, turn_id)
                 if active.security:
                     active.security.clear_current_parent_tool()
                 deps, message_history = await self._prepare_turn_execution(
@@ -280,12 +277,7 @@ class SessionTurnMixin(SessionTurnHost):
                     tool_call_callback=_tool_call_cb,
                     tool_result_callback=_tool_result_cb,
                 )
-                self._record_session_runtime_transition(
-                    session_id,
-                    to_phase="running_llm",
-                    event_type="turn_phase_changed",
-                    turn_id=turn_id,
-                )
+                self._runtime_controller.running_llm(session_id, turn_id)
 
                 async def _send_approval(req: ApprovalRequest) -> None:
                     await self._send_approval_request(active, session_id, req)
@@ -305,12 +297,7 @@ class SessionTurnMixin(SessionTurnHost):
                     on_messages_snapshot=_set_latest_messages,
                 )
 
-                self._record_session_runtime_transition(
-                    session_id,
-                    to_phase="finalizing",
-                    event_type="turn_phase_changed",
-                    turn_id=turn_id,
-                )
+                self._runtime_controller.finalizing(session_id, turn_id)
                 await self._finalize_successful_turn(
                     active,
                     session_id,
@@ -319,29 +306,11 @@ class SessionTurnMixin(SessionTurnHost):
                     turn_result.thinking,
                     final_status=turn_result.final_status,
                 )
-                self._record_session_runtime_transition(
-                    session_id,
-                    to_phase="idle",
-                    event_type="turn_finalized",
-                    turn_id=turn_id,
-                    updates={
-                        "current_turn_id": None,
-                        "pending_approval_ids": [],
-                        "pending_escalation_ids": [],
-                        "sandbox_operation_ids": [],
-                        "lease": None,
-                        "last_error": None,
-                    },
-                )
+                self._runtime_controller.turn_finalized(session_id, turn_id)
 
         except asyncio.CancelledError:
             logger.info(f"Agent turn cancelled for session {session_id}")
-            self._record_session_runtime_transition(
-                session_id,
-                to_phase="finalizing_cancelled",
-                event_type="turn_phase_changed",
-                turn_id=turn_id,
-            )
+            self._runtime_controller.finalizing_cancelled(session_id, turn_id)
             await self._finalize_failed_turn(
                 active,
                 session_id,
@@ -351,17 +320,7 @@ class SessionTurnMixin(SessionTurnHost):
                 save_progress=True,
             )
             await self._broadcast(active, "on_cancelled")
-            self._record_session_runtime_transition(
-                session_id,
-                to_phase="cancelled",
-                event_type="turn_cancelled",
-                turn_id=turn_id,
-                updates={
-                    "pending_approval_ids": [],
-                    "pending_escalation_ids": [],
-                    "lease": None,
-                },
-            )
+            self._runtime_controller.turn_cancelled(session_id, turn_id)
         except SessionBudgetExceededError as exc:
             logger.info(f"Session budget blocked LLM call for {session_id}: {exc}")
             self._record_failed_turn_runtime(session_id, turn_id, str(exc))
@@ -417,67 +376,24 @@ class SessionTurnMixin(SessionTurnHost):
         updates: Mapping[str, Any] | None = None,
         payload: Mapping[str, Any] | None = None,
     ) -> None:
-        try:
-            self._session_store.transition(
-                session_id,
-                to_phase=to_phase,
-                event_type=event_type,
-                turn_id=turn_id,
-                command_id=command_id,
-                updates=updates,
-                payload=payload,
-            )
-        except Exception as exc:
-            logger.warning(f"Failed to record session runtime transition for {session_id}: {exc}")
+        self._runtime_controller.transition(
+            session_id,
+            to_phase=to_phase,
+            event_type=event_type,
+            turn_id=turn_id,
+            command_id=command_id,
+            updates=updates,
+            payload=payload,
+        )
 
     def _record_failed_turn_runtime(self, session_id: str, turn_id: str | None, error: str) -> None:
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="finalizing_failed",
-            event_type="turn_phase_changed",
-            turn_id=turn_id,
-            updates={"last_error": error},
-        )
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="failed",
-            event_type="turn_failed",
-            turn_id=turn_id,
-            updates={
-                "pending_approval_ids": [],
-                "pending_escalation_ids": [],
-                "lease": None,
-                "last_error": error,
-            },
-        )
+        self._runtime_controller.turn_failed(session_id, turn_id, error)
 
     def _record_escalation_requested(self, session_id: str, request_id: str) -> None:
-        runtime = self._session_store.load_runtime(session_id)
-        pending_ids = [item for item in runtime.pending_escalation_ids if item != request_id]
-        pending_ids.append(request_id)
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="waiting_escalation",
-            event_type="escalation_requested",
-            turn_id=runtime.current_turn_id,
-            updates={"pending_escalation_ids": pending_ids},
-            payload={"request_id": request_id},
-        )
+        self._runtime_controller.escalation_requested(session_id, request_id)
 
     def _record_escalation_resolved(self, session_id: str, request_id: str, *, cancelled: bool = False) -> None:
-        runtime = self._session_store.load_runtime(session_id)
-        pending_ids = [item for item in runtime.pending_escalation_ids if item != request_id]
-        next_phase = runtime.previous_phase or "running_llm"
-        if next_phase == "waiting_escalation":
-            next_phase = "running_llm"
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase=next_phase,
-            event_type="escalation_resolved",
-            turn_id=runtime.current_turn_id,
-            updates={"pending_escalation_ids": pending_ids},
-            payload={"request_id": request_id, "cancelled": cancelled},
-        )
+        self._runtime_controller.escalation_resolved(session_id, request_id, cancelled=cancelled)
 
     def _save_turn_progress(self, session_id: str, active: ActiveSession) -> None:
         self._session_mgr.save_usage(session_id, active.usage_tracker)
@@ -535,17 +451,7 @@ class SessionTurnMixin(SessionTurnHost):
                 }
             ],
         )
-        runtime = self._session_store.load_runtime(session_id)
-        pending_ids = [item for item in runtime.pending_approval_ids if item != req.tool_call_id]
-        pending_ids.append(req.tool_call_id)
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="waiting_tool_approval",
-            event_type="tool_approval_requested",
-            turn_id=runtime.current_turn_id,
-            updates={"pending_approval_ids": pending_ids},
-            payload={"tool_call_id": req.tool_call_id, "tool": req.tool},
-        )
+        self._runtime_controller.approval_requested(session_id, req.tool_call_id, req.tool)
         await self._broadcast(active, "on_approval_request", req)
 
     def _append_approval_response_events(
@@ -592,15 +498,7 @@ class SessionTurnMixin(SessionTurnHost):
                 )
                 remaining.discard(msg.tool_call_id)
         self._append_approval_response_events(session_id, results, responses)
-        runtime = self._session_store.load_runtime(session_id)
-        self._record_session_runtime_transition(
-            session_id,
-            to_phase="running_llm",
-            event_type="tool_approval_resolved",
-            turn_id=runtime.current_turn_id,
-            updates={"pending_approval_ids": []},
-            payload={"tool_call_ids": sorted(pending)},
-        )
+        self._runtime_controller.approvals_resolved(session_id, pending)
         return results
 
     async def _refresh_sandbox_snapshot_after_turn(self, session_id: str) -> None:
