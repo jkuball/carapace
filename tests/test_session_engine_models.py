@@ -21,6 +21,7 @@ import carapace.usage as usage_mod
 from carapace.models import SessionBudget
 from carapace.security.context import SentinelVerdict, SessionSecurity, ToolCallEntry
 from carapace.security.sentinel import Sentinel
+from carapace.session.transcript import truncate_incomplete_events, truncate_incomplete_model_history
 from carapace.session.turns import _non_slash_user_message_count
 from carapace.usage import LlmRequestRecord, LlmRequestState, ModelUsage, SessionBudgetExceededError
 from tests.session_helpers import (
@@ -473,53 +474,47 @@ def test_non_slash_user_message_count_plain_users() -> None:
     assert _non_slash_user_message_count(events) == 3
 
 
-def test_truncate_incomplete_model_history_drops_dangling_tool_tail(tmp_path: Path) -> None:
-    with _patch_sentinel():
-        engine = _make_engine(tmp_path)
-        messages = [
-            ModelRequest(parts=[UserPromptPart(content="hello")]),
-            ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
-            ModelRequest(parts=[ToolReturnPart(tool_name="cmd", content="ok", tool_call_id="call-1")]),
-            ModelResponse(parts=[TextPart(content="done")]),
-            ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-2")]),
-        ]
+def test_truncate_incomplete_model_history_drops_dangling_tool_tail() -> None:
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="hello")]),
+        ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
+        ModelRequest(parts=[ToolReturnPart(tool_name="cmd", content="ok", tool_call_id="call-1")]),
+        ModelResponse(parts=[TextPart(content="done")]),
+        ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-2")]),
+    ]
 
-        truncated = engine._truncate_incomplete_model_history(messages)
+    truncated = truncate_incomplete_model_history(messages)
 
-        assert len(truncated) == 4
-        assert isinstance(truncated[-1], ModelResponse)
-        assert truncated[-1].parts[0].part_kind == "text"
+    assert len(truncated) == 4
+    assert isinstance(truncated[-1], ModelResponse)
+    assert truncated[-1].parts[0].part_kind == "text"
 
 
-def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path) -> None:
-    with _patch_sentinel():
-        engine = _make_engine(tmp_path)
-        messages = [
-            ModelRequest(parts=[UserPromptPart(content="hello")]),
-            ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
-            ModelRequest(parts=[ToolReturnPart(tool_name="cmd", content="ok", tool_call_id="call-1")]),
-            ModelResponse(parts=[TextPart(content="done")]),
-        ]
+def test_truncate_incomplete_model_history_keeps_complete_pairs() -> None:
+    messages = [
+        ModelRequest(parts=[UserPromptPart(content="hello")]),
+        ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
+        ModelRequest(parts=[ToolReturnPart(tool_name="cmd", content="ok", tool_call_id="call-1")]),
+        ModelResponse(parts=[TextPart(content="done")]),
+    ]
 
-        truncated = engine._truncate_incomplete_model_history(messages)
-        assert truncated == messages
+    truncated = truncate_incomplete_model_history(messages)
+    assert truncated == messages
 
 
-def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path) -> None:
-    with _patch_sentinel():
-        engine = _make_engine(tmp_path)
-        events: list[dict[str, Any]] = [
-            {"role": "user", "content": "hello"},
-            {"role": "tool_call", "tool": "shell", "args": {"command": "echo ok"}, "detail": "run"},
-            {"role": "tool_result", "tool": "shell", "result": "ok", "exit_code": 0},
-            {"role": "assistant", "content": "done"},
-            {"role": "tool_call", "tool": "shell", "args": {"command": "sleep 10"}, "detail": "run"},
-        ]
+def test_truncate_incomplete_events_drops_dangling_tool_tail() -> None:
+    events: list[dict[str, Any]] = [
+        {"role": "user", "content": "hello"},
+        {"role": "tool_call", "tool": "shell", "args": {"command": "echo ok"}, "detail": "run"},
+        {"role": "tool_result", "tool": "shell", "result": "ok", "exit_code": 0},
+        {"role": "assistant", "content": "done"},
+        {"role": "tool_call", "tool": "shell", "args": {"command": "sleep 10"}, "detail": "run"},
+    ]
 
-        truncated = engine._truncate_incomplete_events(events)
+    truncated = truncate_incomplete_events(events)
 
-        assert len(truncated) == 4
-        assert truncated[-1]["role"] == "assistant"
+    assert len(truncated) == 4
+    assert truncated[-1]["role"] == "assistant"
 
 
 def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path) -> None:

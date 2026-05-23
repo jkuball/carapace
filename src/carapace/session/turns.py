@@ -24,11 +24,7 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
-    NativeToolCallPart,
-    NativeToolReturnPart,
     TextPart,
-    ToolCallPart,
-    ToolReturnPart,
     UserPromptPart,
 )
 from pydantic_ai.usage import UsageLimits
@@ -41,7 +37,12 @@ from carapace.session.events import SessionEventType
 from carapace.session.manager import SessionManager
 from carapace.session.state import SessionRuntimePhase
 from carapace.session.store import SessionStore
-from carapace.session.transcript import complete_cancelled_events, complete_cancelled_model_history
+from carapace.session.transcript import (
+    complete_cancelled_events,
+    complete_cancelled_model_history,
+    truncate_incomplete_events,
+    truncate_incomplete_model_history,
+)
 from carapace.session.types import ActiveSession, SessionSubscriber, TurnExecutionResult
 from carapace.usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
 from carapace.ws_models import ApprovalRequest, ApprovalResponse, FinalStatus, TurnUsage
@@ -804,57 +805,10 @@ class SessionTurnMixin(SessionTurnHost):
         return complete_cancelled_model_history(messages)
 
     def _truncate_incomplete_model_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
-        pending_tool_calls: set[str] = set()
-        safe_prefix_end = 0
-
-        for index, message in enumerate(messages):
-            if isinstance(message, ModelResponse):
-                for part in message.parts:
-                    if isinstance(part, ToolCallPart | NativeToolCallPart):
-                        tool_call_id = getattr(part, "tool_call_id", None)
-                        if isinstance(tool_call_id, str) and tool_call_id:
-                            pending_tool_calls.add(tool_call_id)
-            elif isinstance(message, ModelRequest):
-                for part in message.parts:
-                    if isinstance(part, ToolReturnPart | NativeToolReturnPart):
-                        tool_call_id = getattr(part, "tool_call_id", None)
-                        if isinstance(tool_call_id, str) and tool_call_id in pending_tool_calls:
-                            pending_tool_calls.remove(tool_call_id)
-
-            if not pending_tool_calls:
-                safe_prefix_end = index + 1
-
-        return messages[:safe_prefix_end]
+        return truncate_incomplete_model_history(messages)
 
     def _complete_cancelled_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return complete_cancelled_events(events)
 
     def _truncate_incomplete_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        tools_with_results = {
-            event.get("tool")
-            for event in events
-            if event.get("role") == "tool_result" and isinstance(event.get("tool"), str)
-        }
-        pending_by_tool: dict[str, int] = {}
-        safe_prefix_end = 0
-
-        for index, event in enumerate(events):
-            role = event.get("role")
-            tool = event.get("tool")
-            if not isinstance(tool, str):
-                tool = ""
-
-            if role == "tool_call" and tool in tools_with_results:
-                pending_by_tool[tool] = pending_by_tool.get(tool, 0) + 1
-            elif role == "tool_result" and tool in tools_with_results:
-                outstanding = pending_by_tool.get(tool, 0)
-                if outstanding > 0:
-                    if outstanding == 1:
-                        pending_by_tool.pop(tool, None)
-                    else:
-                        pending_by_tool[tool] = outstanding - 1
-
-            if not pending_by_tool:
-                safe_prefix_end = index + 1
-
-        return events[:safe_prefix_end]
+        return truncate_incomplete_events(events)

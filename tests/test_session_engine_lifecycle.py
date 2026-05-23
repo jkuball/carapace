@@ -15,6 +15,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 import carapace.usage as usage_mod
 from carapace.session import SessionManager
 from carapace.session.state import SessionRuntime
+from carapace.session.transcript import completed_model_turn_end_indexes, history_for_completed_turn_count
 from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
@@ -667,15 +668,12 @@ def test_reset_to_turn_rejects_unknown_target(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_history_for_completed_turn_count_excludes_trailing_incomplete_request(tmp_path: Path):
-    with _patch_sentinel():
-        engine = _make_engine(tmp_path)
-
+def test_history_for_completed_turn_count_excludes_trailing_incomplete_request():
     history = [
         ModelRequest(parts=[UserPromptPart(content="first")]),
         ModelResponse(parts=[TextPart(content="first answer")]),
         ModelRequest(parts=[UserPromptPart(content="second")]),
     ]
 
-    assert engine._completed_model_turn_end_indexes(history) == [1]
-    assert engine._history_for_completed_turn_count(history, 2) == history[:2]
+    assert completed_model_turn_end_indexes(history) == [1]
+    assert history_for_completed_turn_count(history, 2) == history[:2]
