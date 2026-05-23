@@ -448,11 +448,20 @@ def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
 
 def test_non_slash_user_message_count_ignores_slash_lines() -> None:
     events: list[dict[str, Any]] = [
-        {"role": "user", "content": "/model-agent openai:gpt-4o"},
-        {"role": "command", "command": "model-agent", "data": {}},
+        {"role": "user", "content": "/model openai:gpt-4o"},
+        {"role": "command", "command": "model", "data": {}},
         {"role": "user", "content": "hello"},
     ]
     assert _non_slash_user_message_count(events) == 1
+
+
+def test_non_slash_user_message_count_includes_unknown_slash_lines() -> None:
+    events: list[dict[str, Any]] = [
+        {"role": "user", "content": "/tmp"},
+        {"role": "assistant", "content": "ok"},
+        {"role": "user", "content": "hello"},
+    ]
+    assert _non_slash_user_message_count(events) == 2
 
 
 def test_non_slash_user_message_count_plain_users() -> None:

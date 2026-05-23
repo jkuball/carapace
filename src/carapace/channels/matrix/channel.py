@@ -499,7 +499,10 @@ class MatrixChannel:
             await self._handle_command(room_id, session_id, body, event.sender)
             return
 
-        # Delegate to SessionEngine
+        await self._submit_user_message(room_id, session_id, body)
+
+    async def _submit_user_message(self, room_id: str, session_id: str, body: str) -> None:
+        """Delegate a Matrix user message to SessionEngine."""
         sub = self._room_subscribers.get(room_id)
         if sub is None:
             sub = MatrixSubscriber(self, room_id)
@@ -571,7 +574,7 @@ class MatrixChannel:
             reply = format_command_result_text(result)
             await self._send_text(room_id, reply)
         else:
-            await self._send_text(room_id, f"Unknown command: `{cmd}`. Type `/help` for a list.")
+            await self._submit_user_message(room_id, session_id, text)
 
     async def _handle_reset(self, room_id: str, old_session_id: str) -> None:
         """Create a new session for this room."""
