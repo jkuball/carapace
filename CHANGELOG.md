@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.123.2 (2026-05-23)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: treat unknown slash text as user messages
+  ([`cd0f8a6`](https://github.com/thiesgerken/carapace/commit/cd0f8a69359d030053e7e4d3a9a033f5f8212720))
+
 ## v0.123.1 (2026-05-23)
 
 
