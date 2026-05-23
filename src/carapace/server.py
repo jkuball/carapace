@@ -355,6 +355,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
         git_author=_config.git.author,
+        session_mgr=session_mgr,
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 

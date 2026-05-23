@@ -18,10 +18,10 @@ from carapace.sandbox.runtime import (
     ContainerRuntime,
     ExecResult,
     NetworkTunnel,
-    SandboxStatus,
     SkillActivationError,
     SkillActivationInputs,
 )
+from carapace.sandbox.runtime_controller import SandboxRuntimeController
 from carapace.sandbox.session_lifecycle import (
     SandboxSessionLifecycle,
     SandboxSessionLifecycleState,
@@ -34,6 +34,7 @@ from carapace.sandbox.state import (
     load_sandbox_snapshot,
     save_sandbox_snapshot,
 )
+from carapace.sandbox.store import FileSandboxPersistence, SandboxPersistence, SandboxStore
 from carapace.security.context import ApprovalSource, ApprovalVerdict
 
 _SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
@@ -199,6 +200,7 @@ class SandboxManager:
         proxy_port: int = 3128,
         sandbox_port: int = 8322,
         git_author: str = "carapace <carapace@%h>",
+        session_mgr: SandboxPersistence | None = None,
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
@@ -209,6 +211,9 @@ class SandboxManager:
         self._idle_timeout = idle_timeout_minutes * 60
         self._proxy_port = proxy_port
         self._sandbox_port = sandbox_port
+        self._session_mgr = session_mgr or FileSandboxPersistence(data_dir)
+        self._sandbox_store = SandboxStore(self._session_mgr)
+        self._runtime_controller = SandboxRuntimeController(self._sandbox_store)
         self._sessions: dict[str, SessionContainer] = {}
         self._token_to_session: dict[str, str] = {}
         self._session_tokens: dict[str, str] = {}
@@ -329,34 +334,11 @@ class SandboxManager:
     def _get_exec_lock(self, session_id: str) -> Lock:
         return self._exec_coordinator.get_exec_lock(session_id)
 
-    def _save_transient_sandbox_snapshot(
-        self,
-        session_id: str,
-        status: SandboxStatus,
-        *,
-        last_error: str | None = None,
-    ) -> None:
-        existing = load_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
-        snapshot = SessionSandboxSnapshot(
-            exists=existing.exists if existing is not None else False,
-            runtime=self._runtime.runtime_kind,
-            status=status,
-            resource_id=existing.resource_id if existing is not None else None,
-            resource_kind=existing.resource_kind if existing is not None else None,
-            storage_present=existing.storage_present if existing is not None else False,
-            provisioned_bytes=existing.provisioned_bytes if existing is not None else None,
-            last_measured_used_bytes=existing.last_measured_used_bytes if existing is not None else None,
-            last_measured_at=existing.last_measured_at if existing is not None else None,
-            updated_at=datetime.now(tz=UTC),
-            last_error=last_error,
-        )
-        save_sandbox_snapshot(self._sandbox_snapshot_path(session_id), snapshot)
-
     async def ensure_session(self, session_id: str) -> tuple[SessionContainer, bool]:
         sc = self._sessions.get(session_id)
         needs_startup = sc is None or not await self._runtime.is_running(sc.container_id)
         if needs_startup:
-            self._save_transient_sandbox_snapshot(session_id, "pending")
+            self._runtime_controller.starting(session_id, runtime=self._runtime.runtime_kind)
 
         try:
             ensured_sc, needs_runtime_setup = await self._session_lifecycle.ensure_session(session_id)
@@ -368,12 +350,20 @@ class SandboxManager:
                     logger.exception(
                         f"Failed to refresh sandbox snapshot after startup failure for session {session_id}"
                     )
-                    self._save_transient_sandbox_snapshot(session_id, "error", last_error=str(exc))
+                self._runtime_controller.failed(session_id, str(exc))
             raise
 
         if needs_startup:
             try:
-                await self.refresh_sandbox_snapshot(session_id, container_id=ensured_sc.container_id)
+                snapshot = await self.refresh_sandbox_snapshot(session_id, container_id=ensured_sc.container_id)
+                self._runtime_controller.ready(
+                    session_id,
+                    runtime=self._runtime.runtime_kind,
+                    resource_id=snapshot.resource_id,
+                    resource_kind=snapshot.resource_kind,
+                    storage_present=snapshot.storage_present,
+                    needs_runtime_setup=needs_runtime_setup,
+                )
             except Exception:
                 logger.exception(f"Failed to refresh sandbox snapshot after startup for session {session_id}")
         return ensured_sc, needs_runtime_setup
@@ -393,6 +383,7 @@ class SandboxManager:
         *,
         measure_usage: bool = False,
         container_id: str | None = None,
+        record_runtime: bool = True,
     ) -> SessionSandboxSnapshot:
         sandbox_name = self._sandbox_name(session_id)
         resolved_container_id = container_id
@@ -430,6 +421,15 @@ class SandboxManager:
             updated_at=datetime.now(tz=UTC),
         )
         save_sandbox_snapshot(self._sandbox_snapshot_path(session_id), snapshot)
+        if record_runtime:
+            self._runtime_controller.refreshed(
+                session_id,
+                runtime=self._runtime.runtime_kind,
+                status=snapshot.status,
+                resource_id=snapshot.resource_id,
+                resource_kind=snapshot.resource_kind,
+                storage_present=snapshot.storage_present,
+            )
         return snapshot
 
     async def _exec_in_container(
@@ -466,33 +466,60 @@ class SandboxManager:
         context_file_creds: list[tuple[str, str, str]] | None = None,
         after_exec_credential_notify: Callable[[], None] | None = None,
     ) -> ExecResult:
-        return await self._exec_coordinator.exec(
+        operation = self._runtime_controller.queue_operation(
             session_id,
-            command,
-            timeout=timeout,
-            ensure_session=lambda sid: self.ensure_session(sid),
-            rerun_skill_setup=lambda sid: self._rerun_activated_skill_setup(sid),
-            log_container_tail=lambda container_id, sid: self._log_container_tail(container_id, sid),
-            prepare_session_recreate=lambda sid: self._prepare_session_recreate(sid),
-            exec_in_container=lambda sc, cmd, cmd_timeout=30, **kwargs: self._exec_in_container(
-                sc,
-                cmd,
-                timeout=cmd_timeout,
-                **kwargs,
-            ),
-            prepare_context_tunnels=lambda sc, tunnels: self._prepare_context_tunnels(sc, tunnels),
-            cleanup_context_tunnels=lambda sc, tunnels: self._cleanup_context_tunnels(sc, tunnels),
-            write_context_file_credentials=lambda sc, creds: self._write_context_file_credentials(sc, creds),
-            delete_context_file_credentials=lambda sid, written: self._delete_context_file_credentials(sid, written),
-            bypass_proxy=bypass_proxy,
-            workdir=workdir,
-            contexts=contexts,
-            extra_env=extra_env,
-            context_domains=context_domains,
-            context_tunnels=context_tunnels,
-            context_file_creds=context_file_creds,
-            after_exec_credential_notify=after_exec_credential_notify,
+            command=command,
+            cwd=workdir,
+            contexts=contexts or [],
+            temporary_domains=context_domains,
         )
+        try:
+            result = await self._exec_coordinator.exec(
+                session_id,
+                command,
+                timeout=timeout,
+                ensure_session=lambda sid: self.ensure_session(sid),
+                rerun_skill_setup=lambda sid: self._rerun_activated_skill_setup(sid),
+                log_container_tail=lambda container_id, sid: self._log_container_tail(container_id, sid),
+                prepare_session_recreate=lambda sid: self._prepare_session_recreate(sid),
+                exec_in_container=lambda sc, cmd, cmd_timeout=30, **kwargs: self._exec_in_container(
+                    sc,
+                    cmd,
+                    timeout=cmd_timeout,
+                    **kwargs,
+                ),
+                prepare_context_tunnels=lambda sc, tunnels: self._prepare_context_tunnels(sc, tunnels),
+                cleanup_context_tunnels=lambda sc, tunnels: self._cleanup_context_tunnels(sc, tunnels),
+                write_context_file_credentials=lambda sc, creds: self._write_context_file_credentials(sc, creds),
+                delete_context_file_credentials=lambda sid, written: self._delete_context_file_credentials(
+                    sid,
+                    written,
+                ),
+                bypass_proxy=bypass_proxy,
+                workdir=workdir,
+                contexts=contexts,
+                extra_env=extra_env,
+                context_domains=context_domains,
+                context_tunnels=context_tunnels,
+                context_file_creds=context_file_creds,
+                after_exec_credential_notify=after_exec_credential_notify,
+                record_operation_phase=lambda phase, event_type, payload: self._runtime_controller.operation_phase(
+                    session_id,
+                    operation.operation_id,
+                    phase,
+                    event_type,
+                    payload,
+                ),
+            )
+        except Exception as exc:
+            self._runtime_controller.operation_failed(session_id, operation.operation_id, str(exc))
+            raise
+        except BaseException as exc:
+            self._runtime_controller.operation_interrupted(session_id, operation.operation_id, str(exc))
+            raise
+
+        self._runtime_controller.operation_finished(session_id, operation.operation_id, result)
+        return result
 
     _KNOWLEDGE_WORKDIR = "/workspace"
 
@@ -818,10 +845,16 @@ class SandboxManager:
             logger.warning(f"Failed to clean up context tunnels for session {sc.session_id}: {result.output}")
 
     async def cleanup_session(self, session_id: str) -> None:
+        self._runtime_controller.suspending(session_id)
         sc = self._sessions.get(session_id)
         if sc is not None:
             try:
-                await self.refresh_sandbox_snapshot(session_id, measure_usage=True, container_id=sc.container_id)
+                await self.refresh_sandbox_snapshot(
+                    session_id,
+                    measure_usage=True,
+                    container_id=sc.container_id,
+                    record_runtime=False,
+                )
             except Exception:
                 logger.exception(f"Failed to refresh sandbox snapshot before cleanup for session {session_id}")
         await self._session_lifecycle.cleanup_session(session_id)
@@ -831,11 +864,15 @@ class SandboxManager:
             logger.exception(f"Failed to refresh sandbox snapshot after cleanup for session {session_id}")
 
     async def destroy_session(self, session_id: str) -> None:
+        self._runtime_controller.destroying(session_id)
         await self._session_lifecycle.destroy_session(session_id)
+        self._runtime_controller.destroyed(session_id)
         clear_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
 
     async def reset_session(self, session_id: str) -> None:
+        self._runtime_controller.resetting(session_id)
         await self._session_lifecycle.reset_session(session_id)
+        self._runtime_controller.destroyed(session_id)
         save_sandbox_snapshot(
             self._sandbox_snapshot_path(session_id),
             SessionSandboxSnapshot(runtime=self._runtime.runtime_kind, updated_at=datetime.now(tz=UTC)),

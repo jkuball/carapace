@@ -323,6 +323,70 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path):
 
 
 @pytest.mark.anyio
+async def test_exec_command_records_durable_operation_state(tmp_path: Path):
+    runtime = make_runtime_mock()
+    runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
+    runtime.create_sandbox = AsyncMock(return_value="container-1")
+    runtime.get_ip = AsyncMock(return_value="172.18.0.22")
+    runtime.logs = AsyncMock(return_value="carapace sandbox ready")
+    runtime.exec = AsyncMock(
+        side_effect=[
+            ExecResult(exit_code=0, output=""),
+            ExecResult(exit_code=0, output="ok"),
+        ]
+    )
+
+    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+
+    result = await mgr.exec_command("sess-1", "echo ok", contexts=["example"], context_domains={"api.example.com"})
+
+    assert result.output == "ok"
+    events = mgr._sandbox_store.load_events("sess-1")
+    operation_id = next(event.operation_id for event in events if event.type == "sandbox_operation_queued")
+    assert operation_id is not None
+    operation = mgr._session_mgr.load_sandbox_operation("sess-1", operation_id)
+    assert operation is not None
+    assert operation.phase == "completed"
+    assert operation.exit_code == 0
+    assert operation.command == "echo ok"
+    assert operation.contexts == ["example"]
+    assert operation.temporary_domains == ["api.example.com"]
+    runtime_state = mgr._sandbox_store.load_runtime("sess-1")
+    assert runtime_state.phase == "ready"
+    assert runtime_state.active_operation_id is None
+
+
+@pytest.mark.anyio
+async def test_exec_command_records_nonzero_exit_as_failed_operation(tmp_path: Path):
+    runtime = make_runtime_mock()
+    runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
+    runtime.create_sandbox = AsyncMock(return_value="container-1")
+    runtime.get_ip = AsyncMock(return_value="172.18.0.22")
+    runtime.logs = AsyncMock(return_value="carapace sandbox ready")
+    runtime.exec = AsyncMock(
+        side_effect=[
+            ExecResult(exit_code=0, output=""),
+            ExecResult(exit_code=7, output="bad"),
+        ]
+    )
+
+    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+
+    result = await mgr.exec_command("sess-1", "exit 7")
+
+    assert result.output == "bad\n[exit code: 7]"
+    events = mgr._sandbox_store.load_events("sess-1")
+    operation_id = next(event.operation_id for event in events if event.type == "sandbox_operation_queued")
+    assert operation_id is not None
+    operation = mgr._session_mgr.load_sandbox_operation("sess-1", operation_id)
+    assert operation is not None
+    assert operation.phase == "failed"
+    assert operation.exit_code == 7
+    assert operation.last_error == "Command exited with 7"
+    assert mgr._sandbox_store.load_runtime("sess-1").active_operation_id is None
+
+
+@pytest.mark.anyio
 async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
     """After container recreation, activation providers re-materialize file credentials."""
     runtime = make_runtime_mock()

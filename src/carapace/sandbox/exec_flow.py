@@ -8,7 +8,9 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from carapace.sandbox.events import SandboxEventType
 from carapace.sandbox.file_ops import ContextFileCredential, WrittenContextFile
+from carapace.sandbox.operations import SandboxOperationPhase
 from carapace.sandbox.runtime import ContainerGoneError, ContainerRuntime, ExecResult, NetworkTunnel
 from carapace.sandbox.session_lifecycle import SessionContainer
 from carapace.security.context import ApprovalSource, ApprovalVerdict
@@ -28,6 +30,7 @@ type WriteContextFileCredentialsCallback = Callable[
     Awaitable[list[WrittenContextFile]],
 ]
 type DeleteContextFileCredentialsCallback = Callable[[str, list[WrittenContextFile]], Awaitable[None]]
+type OperationPhaseCallback = Callable[[SandboxOperationPhase, SandboxEventType, dict[str, object] | None], None]
 
 
 @dataclass
@@ -109,6 +112,7 @@ class SandboxExecCoordinator:
         context_tunnels: list[NetworkTunnel] | None = None,
         context_file_creds: list[ContextFileCredential] | None = None,
         after_exec_credential_notify: AfterExecCredentialNotify | None = None,
+        record_operation_phase: OperationPhaseCallback | None = None,
     ) -> ExecResult:
         """Run a command in the sandbox and return the raw ExecResult."""
         contexts = contexts or []
@@ -116,13 +120,20 @@ class SandboxExecCoordinator:
         sc: SessionContainer | None = None
         tunnels_prepared = False
 
+        if record_operation_phase is not None:
+            record_operation_phase("claiming_lock", "sandbox_operation_phase_changed", None)
+
         async with self.get_exec_lock(session_id):
             if bypass_proxy:
                 self._state.proxy_bypass_sessions.add(session_id)
                 logger.info(f"Proxy bypass ENABLED for session {session_id}")
             try:
+                if record_operation_phase is not None:
+                    record_operation_phase("ensuring_sandbox", "sandbox_operation_lock_acquired", None)
                 sc, needs_runtime_setup = await ensure_session(session_id)
                 if needs_runtime_setup:
+                    if record_operation_phase is not None:
+                        record_operation_phase("running_skill_setup", "sandbox_operation_phase_changed", None)
                     await rerun_skill_setup(session_id)
                 sc.last_used = time.time()
                 logger.debug(f"Exec in session {session_id}: {command}")
@@ -139,11 +150,31 @@ class SandboxExecCoordinator:
                     self._state.exec_context_skill_domains[session_id].update(context_domains)
 
                 try:
+                    if record_operation_phase is not None:
+                        record_operation_phase(
+                            "preparing_context",
+                            "sandbox_operation_context_prepared",
+                            {"contexts": contexts, "temporary_domains": sorted(context_domains or set())},
+                        )
                     if context_tunnels:
+                        if record_operation_phase is not None:
+                            record_operation_phase(
+                                "preparing_tunnels",
+                                "tunnels_prepared",
+                                {"tunnels": [tunnel.display for tunnel in context_tunnels]},
+                            )
                         await prepare_context_tunnels(sc, context_tunnels)
                         tunnels_prepared = True
                     if context_file_creds:
+                        if record_operation_phase is not None:
+                            record_operation_phase(
+                                "injecting_credentials",
+                                "credential_files_injected",
+                                {"files": [file_path for _, file_path, _ in context_file_creds]},
+                            )
                         written_files = await write_context_file_credentials(sc, context_file_creds)
+                    if record_operation_phase is not None:
+                        record_operation_phase("running_command", "sandbox_command_started", None)
                     exec_result = await exec_in_container(
                         sc,
                         command,
@@ -154,18 +185,36 @@ class SandboxExecCoordinator:
                     )
                 except ContainerGoneError:
                     logger.warning(f"Container gone for session {session_id}, recreating sandbox")
+                    if record_operation_phase is not None:
+                        record_operation_phase("recovering_container", "sandbox_operation_phase_changed", None)
                     tunnels_prepared = False
                     await log_container_tail(sc.container_id, session_id)
                     prepare_session_recreate(session_id)
                     sc, _ = await ensure_session(session_id)
+                    if record_operation_phase is not None:
+                        record_operation_phase("running_skill_setup", "sandbox_operation_phase_changed", None)
                     await rerun_skill_setup(session_id)
 
                     written_files.clear()
                     if context_tunnels:
+                        if record_operation_phase is not None:
+                            record_operation_phase(
+                                "preparing_tunnels",
+                                "tunnels_prepared",
+                                {"tunnels": [tunnel.display for tunnel in context_tunnels]},
+                            )
                         await prepare_context_tunnels(sc, context_tunnels)
                         tunnels_prepared = True
                     if context_file_creds:
+                        if record_operation_phase is not None:
+                            record_operation_phase(
+                                "injecting_credentials",
+                                "credential_files_injected",
+                                {"files": [file_path for _, file_path, _ in context_file_creds]},
+                            )
                         written_files = await write_context_file_credentials(sc, context_file_creds)
+                    if record_operation_phase is not None:
+                        record_operation_phase("running_command", "sandbox_command_started", None)
                     exec_result = await exec_in_container(
                         sc,
                         command,
@@ -176,11 +225,15 @@ class SandboxExecCoordinator:
                     )
 
                 if after_exec_credential_notify is not None:
+                    if record_operation_phase is not None:
+                        record_operation_phase("collecting_notifications", "sandbox_operation_phase_changed", None)
                     after_exec_credential_notify()
                 return exec_result
             finally:
                 original_exc = sys.exc_info()[1]
                 cleanup_exc: Exception | None = None
+                if record_operation_phase is not None:
+                    record_operation_phase("cleaning_up", "sandbox_operation_cleanup_started", None)
                 if bypass_proxy:
                     self._state.proxy_bypass_sessions.discard(session_id)
                     logger.info(f"Proxy bypass DISABLED for session {session_id}")
