@@ -665,6 +665,102 @@ class SessionEngine(SessionTurnMixin):
         """Return the ``ActiveSession`` if loaded, else ``None``."""
         return self._active.get(session_id)
 
+    def pending_approval_requests(self, session_id: str) -> list[dict[str, Any]]:
+        """Return pending tool approval requests from memory and durable runtime state."""
+        active = self._active.get(session_id)
+        pending_by_id: dict[str, dict[str, Any]] = {}
+        if active is not None:
+            for request in active.pending_approval_requests:
+                tool_call_id = request.get("tool_call_id")
+                if isinstance(tool_call_id, str) and tool_call_id:
+                    pending_by_id[tool_call_id] = dict(request)
+
+        runtime = self._session_store.load_runtime(session_id)
+        if not runtime.pending_approval_ids:
+            return list(pending_by_id.values())
+
+        resolved_ids = {
+            event.get("tool_call_id")
+            for event in self._session_mgr.load_events(session_id)
+            if event.get("role") == "approval_response" and isinstance(event.get("tool_call_id"), str)
+        }
+        requested_ids = {item for item in runtime.pending_approval_ids if item not in resolved_ids}
+        if not requested_ids:
+            return list(pending_by_id.values())
+
+        for event in self._session_mgr.load_events(session_id):
+            if event.get("role") != "approval_request":
+                continue
+            tool_call_id = event.get("tool_call_id")
+            if not isinstance(tool_call_id, str) or tool_call_id not in requested_ids or tool_call_id in pending_by_id:
+                continue
+            pending_by_id[tool_call_id] = {
+                "tool_call_id": tool_call_id,
+                "tool": event.get("tool", ""),
+                "args": event.get("args", {}),
+                "explanation": event.get("explanation", ""),
+                "risk_level": event.get("risk_level", ""),
+            }
+        return list(pending_by_id.values())
+
+    def pending_escalations(self, session_id: str) -> list[dict[str, Any]]:
+        """Return pending escalations from memory and durable runtime state."""
+        active = self._active.get(session_id)
+        pending_by_id: dict[str, dict[str, Any]] = {}
+        if active is not None:
+            for request in active.pending_escalations:
+                request_id = request.get("request_id")
+                if isinstance(request_id, str) and request_id:
+                    pending_by_id[request_id] = dict(request)
+
+        runtime = self._session_store.load_runtime(session_id)
+        if not runtime.pending_escalation_ids:
+            return list(pending_by_id.values())
+
+        events = self._session_mgr.load_events(session_id)
+        resolved_ids = {
+            event.get("request_id")
+            for event in events
+            if event.get("role") in {"domain_access_approval", "git_push_approval", "credential_approval"}
+            and event.get("decision") is not None
+            and isinstance(event.get("request_id"), str)
+        }
+        requested_ids = {item for item in runtime.pending_escalation_ids if item not in resolved_ids}
+        if not requested_ids:
+            return list(pending_by_id.values())
+
+        for event in events:
+            request_id = event.get("request_id")
+            if not isinstance(request_id, str) or request_id not in requested_ids or request_id in pending_by_id:
+                continue
+            role = event.get("role")
+            if role == "git_push_approval":
+                pending_by_id[request_id] = {
+                    "request_id": request_id,
+                    "kind": "git_push",
+                    "ref": event.get("ref", ""),
+                    "explanation": event.get("explanation", ""),
+                    "changed_files": event.get("changed_files", []),
+                }
+            elif role == "credential_approval":
+                pending_by_id[request_id] = {
+                    "request_id": request_id,
+                    "kind": "credential_access",
+                    "vault_paths": event.get("vault_paths", []),
+                    "names": event.get("names", []),
+                    "descriptions": event.get("descriptions", []),
+                    "skill_name": event.get("skill_name"),
+                    "explanation": event.get("explanation", ""),
+                }
+            elif role == "domain_access_approval":
+                pending_by_id[request_id] = {
+                    "request_id": request_id,
+                    "kind": "domain_access",
+                    "domain": event.get("domain", ""),
+                    "command": event.get("command", ""),
+                }
+        return list(pending_by_id.values())
+
     def _sync_active_session_policy(self, active: ActiveSession) -> None:
         if active.security is not None:
             active.security.set_policy(

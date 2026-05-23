@@ -29,6 +29,7 @@ from carapace.security.context import CredentialAccessEntry
 from carapace.server import app, sandbox_app
 from carapace.session import SessionEngine, SessionManager
 from carapace.session.archive import SessionArchiveResult, SessionArchiveService
+from carapace.session.state import SessionRuntime
 from carapace.skills import SkillRegistry
 from carapace.usage import LlmRequestState
 
@@ -1810,6 +1811,78 @@ def test_ws_status_includes_live_llm_activity_when_running(client, auth_headers,
         assert status["llm_activity"]["request_id"] == "req-1"
         assert status["llm_activity"]["phase"] == "thinking"
         assert status["llm_activity"]["source"] == "agent"
+
+
+def test_ws_replays_durable_pending_approval_request(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+    srv._engine.session_mgr.append_events(
+        sid,
+        [
+            {
+                "role": "approval_request",
+                "tool_call_id": "tool-1",
+                "tool": "exec",
+                "args": {"command": "date"},
+                "explanation": "run date",
+                "risk_level": "low",
+            }
+        ],
+    )
+    srv._engine.session_mgr.save_session_runtime(
+        SessionRuntime(
+            session_id=sid,
+            phase="waiting_tool_approval",
+            current_turn_id="turn-1",
+            pending_approval_ids=["tool-1"],
+        )
+    )
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+        _consume_status(ws)
+        msg = ws.receive_json()
+        assert msg == {
+            "type": "approval_request",
+            "tool_call_id": "tool-1",
+            "tool": "exec",
+            "args": {"command": "date"},
+            "explanation": "run date",
+            "risk_level": "low",
+        }
+
+
+def test_ws_replays_durable_pending_domain_escalation(client, auth_headers, bearer):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+    srv._engine.session_mgr.append_events(
+        sid,
+        [
+            {
+                "role": "domain_access_approval",
+                "request_id": "req-1",
+                "domain": "example.com",
+                "command": "curl https://example.com",
+            }
+        ],
+    )
+    srv._engine.session_mgr.save_session_runtime(
+        SessionRuntime(
+            session_id=sid,
+            phase="waiting_escalation",
+            current_turn_id="turn-1",
+            pending_escalation_ids=["req-1"],
+        )
+    )
+
+    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+        _consume_status(ws)
+        msg = ws.receive_json()
+        assert msg == {
+            "type": "domain_access_approval_request",
+            "request_id": "req-1",
+            "domain": "example.com",
+            "command": "curl https://example.com",
+        }
 
 
 def test_history_includes_thinking_reasoning_metadata(client, auth_headers):

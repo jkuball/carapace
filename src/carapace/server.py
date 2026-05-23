@@ -1859,7 +1859,7 @@ async def chat_ws(
     # If agent is already running (e.g. reconnect), the subscriber will
     # start receiving events immediately.  If there are pending approvals,
     # re-send them so the client can respond.
-    for pa in list(active.pending_approval_requests):
+    for pa in _engine.pending_approval_requests(session_id):
         with contextlib.suppress(Exception):
             await _send(
                 websocket,
@@ -1871,7 +1871,7 @@ async def chat_ws(
                     risk_level=pa.get("risk_level", ""),
                 ),
             )
-    for pp in list(active.pending_escalations):
+    for pp in _engine.pending_escalations(session_id):
         with contextlib.suppress(Exception):
             if pp.get("kind") == "git_push":
                 await _send(
