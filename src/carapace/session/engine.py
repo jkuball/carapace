@@ -67,6 +67,7 @@ from carapace.security.context import (
 )
 from carapace.security.sentinel import Sentinel
 from carapace.session.manager import SessionManager
+from carapace.session.store import SessionStore
 from carapace.session.titler import generate_title
 from carapace.session.turns import SessionTurnMixin
 from carapace.session.types import ActiveSession, SessionSubscriber
@@ -179,6 +180,7 @@ class SessionEngine(SessionTurnMixin):
         self._knowledge_dir = knowledge_dir
         self._git_store = git_store
         self._session_mgr = session_mgr
+        self._session_store = SessionStore(session_mgr)
         self._skill_catalog = skill_catalog
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
@@ -873,8 +875,24 @@ class SessionEngine(SessionTurnMixin):
 
         await self.clear_pending_notifications(session_id)
 
+        turn_id = secrets.token_hex(8)
+        self._record_session_runtime_transition(
+            session_id,
+            to_phase="queued",
+            event_type="turn_queued",
+            turn_id=turn_id,
+            payload={"source": "submit_message"},
+            updates={
+                "pending_approval_ids": [],
+                "pending_escalation_ids": [],
+                "sandbox_operation_ids": [],
+                "last_error": None,
+                "lease": None,
+            },
+        )
+
         active.agent_task = asyncio.create_task(
-            self._run_turn(active, content, origin=origin),
+            self._run_turn(active, content, origin=origin, turn_id=turn_id),
             name=f"agent-turn-{session_id}",
         )
 
@@ -986,6 +1004,14 @@ class SessionEngine(SessionTurnMixin):
         if not active:
             return
         if active.agent_task and not active.agent_task.done():
+            runtime = self._session_store.load_runtime(session_id)
+            self._record_session_runtime_transition(
+                session_id,
+                to_phase="cancelling",
+                event_type="turn_phase_changed",
+                turn_id=runtime.current_turn_id,
+                payload={"source": "submit_cancel"},
+            )
             active.agent_task.cancel()
             active.tool_approval_queue.put_nowait(None)
             active.escalation_queue.put_nowait(None)
@@ -1612,6 +1638,7 @@ class SessionEngine(SessionTurnMixin):
                         "changed_files": changed_files,
                     }
                 )
+                self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(
                     active, "on_git_push_approval_request", request_id, ref, explanation, changed_files
                 )
@@ -1644,6 +1671,7 @@ class SessionEngine(SessionTurnMixin):
                         "explanation": explanation,
                     }
                 )
+                self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(
                     active,
                     "on_credential_approval_request",
@@ -1662,6 +1690,7 @@ class SessionEngine(SessionTurnMixin):
                 active.pending_escalations.append(
                     {"request_id": request_id, "kind": "domain_access", "domain": subject, "command": cmd}
                 )
+                self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(active, "on_domain_access_approval_request", request_id, subject, cmd)
 
             if self._notification_router is not None:
@@ -1679,6 +1708,7 @@ class SessionEngine(SessionTurnMixin):
                 if msg is None:
                     await self._clear_pending_notification(active, session_id, notif_id)
                     active.pending_escalations.clear()
+                    self._record_escalation_resolved(session_id, request_id, cancelled=True)
                     return UserEscalationDecision(allowed=False)
                 if msg.request_id == request_id:
                     decision = msg.decision
@@ -1712,6 +1742,7 @@ class SessionEngine(SessionTurnMixin):
                     active.pending_escalations = [
                         p for p in active.pending_escalations if p["request_id"] != request_id
                     ]
+                    self._record_escalation_resolved(session_id, request_id)
                     await self._clear_pending_notification(active, session_id, notif_id)
                     return UserEscalationDecision(allowed=decision != "deny", message=message)
 

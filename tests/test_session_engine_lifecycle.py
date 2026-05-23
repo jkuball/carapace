@@ -215,6 +215,85 @@ def test_submit_cancel_persists_interruption_marker(tmp_path: Path):
         ]
         assert sub.cancelled == 1
 
+        runtime = engine.session_mgr.load_session_runtime(sid)
+        assert runtime is not None
+        assert runtime.phase == "cancelled"
+        assert runtime.pending_approval_ids == []
+        assert runtime.pending_escalation_ids == []
+        runtime_events = engine.session_mgr.load_session_runtime_events(sid)
+        assert [event.type for event in runtime_events] == [
+            "turn_queued",
+            "turn_started",
+            "turn_phase_changed",
+            "turn_phase_changed",
+            "turn_phase_changed",
+            "turn_cancelled",
+        ]
+        assert [event.to_phase for event in runtime_events] == [
+            "queued",
+            "preparing_turn",
+            "running_llm",
+            "cancelling",
+            "finalizing_cancelled",
+            "cancelled",
+        ]
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
+def test_submit_message_records_successful_runtime_transitions(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session().session_id
+
+        async def _complete_turn(
+            user_input: str,
+            _deps: Any,
+            message_history: list[Any],
+            **_kwargs: Any,
+        ) -> tuple[list[Any], str, str, None]:
+            return (
+                [
+                    *message_history,
+                    ModelRequest(parts=[UserPromptPart(content=user_input)]),
+                    ModelResponse(parts=[TextPart(content="done")]),
+                ],
+                "done",
+                "",
+                None,
+            )
+
+        with patch("carapace.session.engine.run_agent_turn", new=_complete_turn):
+            await engine.submit_message(sid, "hello")
+            active = engine.get_active(sid)
+            assert active is not None and active.agent_task is not None
+            await active.agent_task
+
+        runtime = engine.session_mgr.load_session_runtime(sid)
+        assert runtime is not None
+        assert runtime.phase == "idle"
+        assert runtime.current_turn_id is None
+        assert runtime.pending_approval_ids == []
+        assert runtime.pending_escalation_ids == []
+
+        runtime_events = engine.session_mgr.load_session_runtime_events(sid)
+        assert [event.type for event in runtime_events] == [
+            "turn_queued",
+            "turn_started",
+            "turn_phase_changed",
+            "turn_phase_changed",
+            "turn_finalized",
+        ]
+        assert [event.to_phase for event in runtime_events] == [
+            "queued",
+            "preparing_turn",
+            "running_llm",
+            "finalizing",
+            "idle",
+        ]
+        assert len({event.turn_id for event in runtime_events}) == 1
+
     with _patch_sentinel():
         asyncio.run(_run())
 

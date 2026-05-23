@@ -655,6 +655,13 @@ def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
         result = await task
 
         assert result.allowed is True
+        runtime = engine.session_mgr.load_session_runtime(sid)
+        assert runtime is not None
+        assert runtime.phase == "idle"
+        assert runtime.pending_escalation_ids == []
+        runtime_events = engine.session_mgr.load_session_runtime_events(sid)
+        assert [event.type for event in runtime_events] == ["escalation_requested", "escalation_resolved"]
+        assert [event.to_phase for event in runtime_events] == ["waiting_escalation", "idle"]
         engine._notification_router.clear_notifications.assert_awaited_once_with(
             session_id=sid,
             notif_id=f"esc:{sid}:{pending['request_id']}",
