@@ -46,14 +46,16 @@ _TURN_CANCELLED_TOOL_MESSAGE = "Tool call was canceled because the turn ended be
 
 
 def _non_slash_user_message_count(events: list[dict[str, Any]]) -> int:
-    """Count user lines that are not slash commands (matches server slash-command routing)."""
-    return sum(
-        1
-        for event in events
-        if event.get("role") == "user"
-        and isinstance(content := event.get("content"), str)
-        and not content.startswith("/")
-    )
+    """Count user lines that were routed to the agent, not command-result echoes."""
+    count = 0
+    for index, event in enumerate(events):
+        if event.get("role") != "user" or not isinstance(content := event.get("content"), str):
+            continue
+        next_event = events[index + 1] if index + 1 < len(events) else None
+        if content.startswith("/") and isinstance(next_event, dict) and next_event.get("role") == "command":
+            continue
+        count += 1
+    return count
 
 
 def _truncate_for_log(text: str, limit: int = 160) -> str:

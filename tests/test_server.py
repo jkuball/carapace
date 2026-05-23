@@ -1887,13 +1887,38 @@ def test_ws_skills_command(client, auth_headers, bearer):
         assert msg["command"] == "skills"
 
 
-def test_ws_unknown_command(client, auth_headers, bearer):
+def test_ws_unknown_command_is_agent_message(client, auth_headers, bearer, monkeypatch):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
+    async def _fake_run_turn(
+        user_input: str,
+        _deps: object,
+        message_history: list[object],
+        **_kwargs: object,
+    ) -> tuple[list[object], str, str, str]:
+        assert user_input == "/tmp"
+        return (
+            [
+                *message_history,
+                ModelRequest(parts=[UserPromptPart(content=user_input)]),
+                ModelResponse(parts=[TextPart(content="treated as text")]),
+            ],
+            "treated as text",
+            "",
+            "success",
+        )
+
+    monkeypatch.setattr(srv._engine.sandbox_mgr, "refresh_sandbox_snapshot", AsyncMock())
+    monkeypatch.setattr(srv._engine, "_generate_title", AsyncMock(return_value="title"))
+    monkeypatch.setattr("carapace.session.engine.run_agent_turn", _fake_run_turn)
+
     with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
         _consume_status(ws)
-        ws.send_json({"type": "message", "content": "/foobar"})
+        ws.send_json({"type": "message", "content": "/tmp"})
         msg = ws.receive_json()
-        assert msg["type"] == "error"
-        assert "Unknown command" in msg["detail"]
+        assert msg["type"] == "user_message"
+        assert msg["content"] == "/tmp"
+        msg = ws.receive_json()
+        assert msg["type"] == "done"
+        assert msg["content"] == "treated as text"

@@ -237,20 +237,19 @@ async def test_handle_reset_creates_new_session(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_handle_command_unknown(tmp_path: Path):
+async def test_handle_command_unknown_submits_agent_message(tmp_path: Path):
     ch = _make_channel(tmp_path)
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt1"))
-    # Engine returns None for unknown commands
     ch._engine.handle_slash_command.return_value = None
+    ch._engine.submit_message = AsyncMock()
 
     await ch._handle_command(room_id, ch._room_sessions[room_id], "/foobar", "@alice:example.com")
 
-    # Should have sent an "Unknown command" message
-    ch._client.room_send.assert_called_once()
-    sent_body = ch._client.room_send.call_args[0][2]["body"]
-    assert "Unknown command" in sent_body
+    ch._client.room_send.assert_not_called()
+    ch._engine.submit_message.assert_awaited_once()
+    assert ch._engine.submit_message.await_args.args[:2] == (ch._room_sessions[room_id], "/foobar")
 
 
 @pytest.mark.anyio

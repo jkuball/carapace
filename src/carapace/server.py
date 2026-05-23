@@ -1987,9 +1987,6 @@ async def chat_ws(
                         )
                     continue
 
-                await _send(websocket, ErrorMessage(detail=f"Unknown command: {user_input.split()[0]}"))
-                continue
-
             # --- Agent turn ---
             await _engine.submit_message(session_id, user_input, origin=sub)
 
