@@ -6,7 +6,7 @@ import logging  # stdlib logging used only for _InterceptHandler → loguru brid
 import os
 import sys
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -78,6 +78,7 @@ from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import ApprovalSource, ApprovalVerdict
 from carapace.session import SessionEngine, SessionManager
 from carapace.session.archive import SessionArchiveService
+from carapace.session.transcript import normalize_unattended_output_history, truncate_incomplete_model_history
 from carapace.skills import SkillRegistry
 from carapace.usage import LlmRequestState, SessionBudgetExceededError
 from carapace.ws_models import (
@@ -245,7 +246,7 @@ async def _autosave_inactive_sessions() -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     global \
         _data_dir, \
         _config, \
@@ -1178,8 +1179,8 @@ async def update_session(
                     # Transitioning unattended -> attended!
                     history = _engine.session_mgr.load_history(session_id)
                     previous_history = history
-                    truncated_history = _engine._truncate_incomplete_model_history(history)
-                    normalized_history = _engine._normalize_unattended_output_history(truncated_history)
+                    truncated_history = truncate_incomplete_model_history(history)
+                    normalized_history = normalize_unattended_output_history(truncated_history)
                     _engine.session_mgr.save_history(session_id, normalized_history)
 
         archive_changed = next_attributes.archived != state.attributes.archived

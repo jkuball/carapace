@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import traceback
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from functools import partial
@@ -33,16 +33,12 @@ from carapace.models import Config, Deps, ToolCallCallback, ToolResult
 from carapace.notifications.router import NotificationRouter, build_turn_outcome_notification_id
 from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
-from carapace.session.events import SessionEventType
 from carapace.session.manager import SessionManager
 from carapace.session.runtime_controller import SessionRuntimeController
-from carapace.session.state import SessionRuntimePhase
 from carapace.session.store import SessionStore
 from carapace.session.transcript import (
     complete_cancelled_events,
     complete_cancelled_model_history,
-    truncate_incomplete_events,
-    truncate_incomplete_model_history,
 )
 from carapace.session.types import ActiveSession, SessionSubscriber, TurnExecutionResult
 from carapace.usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
@@ -323,7 +319,7 @@ class SessionTurnMixin(SessionTurnHost):
             self._runtime_controller.turn_cancelled(session_id, turn_id)
         except SessionBudgetExceededError as exc:
             logger.info(f"Session budget blocked LLM call for {session_id}: {exc}")
-            self._record_failed_turn_runtime(session_id, turn_id, str(exc))
+            self._runtime_controller.turn_failed(session_id, turn_id, str(exc))
             await self._finalize_failed_turn(
                 active,
                 session_id,
@@ -340,7 +336,7 @@ class SessionTurnMixin(SessionTurnHost):
                 + f"llm_requests={len(active.llm_request_log.records)} "
                 + f"sentinel_evals={sentinel_evals} prompt={_truncate_for_log(user_input)}"
             )
-            self._record_failed_turn_runtime(session_id, turn_id, str(exc))
+            self._runtime_controller.turn_failed(session_id, turn_id, str(exc))
             await self._finalize_failed_turn(
                 active,
                 session_id,
@@ -351,7 +347,7 @@ class SessionTurnMixin(SessionTurnHost):
             await self._broadcast(active, "on_error", str(exc), turn_terminal=True)
         except Exception:
             logger.exception(f"Agent error session={session_id} prompt={_truncate_for_log(user_input)}")
-            self._record_failed_turn_runtime(session_id, turn_id, traceback.format_exc())
+            self._runtime_controller.turn_failed(session_id, turn_id, traceback.format_exc())
             await self._finalize_failed_turn(
                 active,
                 session_id,
@@ -364,36 +360,6 @@ class SessionTurnMixin(SessionTurnHost):
             if active.security:
                 active.security.clear_current_parent_tool()
             active.agent_task = None
-
-    def _record_session_runtime_transition(
-        self,
-        session_id: str,
-        *,
-        to_phase: SessionRuntimePhase,
-        event_type: SessionEventType,
-        turn_id: str | None = None,
-        command_id: str | None = None,
-        updates: Mapping[str, Any] | None = None,
-        payload: Mapping[str, Any] | None = None,
-    ) -> None:
-        self._runtime_controller.transition(
-            session_id,
-            to_phase=to_phase,
-            event_type=event_type,
-            turn_id=turn_id,
-            command_id=command_id,
-            updates=updates,
-            payload=payload,
-        )
-
-    def _record_failed_turn_runtime(self, session_id: str, turn_id: str | None, error: str) -> None:
-        self._runtime_controller.turn_failed(session_id, turn_id, error)
-
-    def _record_escalation_requested(self, session_id: str, request_id: str) -> None:
-        self._runtime_controller.escalation_requested(session_id, request_id)
-
-    def _record_escalation_resolved(self, session_id: str, request_id: str, *, cancelled: bool = False) -> None:
-        self._runtime_controller.escalation_resolved(session_id, request_id, cancelled=cancelled)
 
     def _save_turn_progress(self, session_id: str, active: ActiveSession) -> None:
         self._session_mgr.save_usage(session_id, active.usage_tracker)
@@ -682,12 +648,12 @@ class SessionTurnMixin(SessionTurnHost):
         else:
             history = self._session_mgr.load_history(session_id)
             history.append(ModelRequest(parts=[UserPromptPart(content=user_input)]))
-        history = self._complete_cancelled_model_history(history)
+        history = complete_cancelled_model_history(history)
         if terminal_message:
             history.append(ModelResponse(parts=[TextPart(content=terminal_message)]))
         self._session_mgr.save_history(session_id, history)
 
-        events = self._complete_cancelled_events(self._session_mgr.load_events(session_id))
+        events = complete_cancelled_events(self._session_mgr.load_events(session_id))
         if terminal_message:
             event: dict[str, Any] = {
                 "role": "assistant",
@@ -698,15 +664,3 @@ class SessionTurnMixin(SessionTurnHost):
                 event["final_status"] = final_status
             events.append(event)
         self._session_mgr.save_events(session_id, events)
-
-    def _complete_cancelled_model_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
-        return complete_cancelled_model_history(messages)
-
-    def _truncate_incomplete_model_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
-        return truncate_incomplete_model_history(messages)
-
-    def _complete_cancelled_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return complete_cancelled_events(events)
-
-    def _truncate_incomplete_events(self, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return truncate_incomplete_events(events)

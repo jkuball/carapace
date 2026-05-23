@@ -22,6 +22,7 @@ from pydantic_ai.messages import (
 import carapace.usage as usage_mod
 from carapace.models import ContextGrant, CredentialRegistryProtocol, SkillCredentialDecl
 from carapace.sandbox.state import SessionSandboxSnapshot
+from carapace.session.transcript import truncate_incomplete_events
 from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
@@ -498,7 +499,7 @@ def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path:
         ],
     )
 
-    truncated = engine._truncate_incomplete_events(engine.session_mgr.load_events(sid))
+    truncated = truncate_incomplete_events(engine.session_mgr.load_events(sid))
 
     assert all("timestamp" in event for event in truncated)
     assert _without_timestamps(truncated) == [

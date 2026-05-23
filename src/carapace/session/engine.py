@@ -22,10 +22,6 @@ from typing import Any, Literal
 
 from loguru import logger
 from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.messages import (
-    ModelMessage,
-    ToolCallPart,
-)
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
@@ -67,13 +63,11 @@ from carapace.session.state import SessionRuntime
 from carapace.session.store import SessionStore
 from carapace.session.titler import generate_title
 from carapace.session.transcript import (
-    CompletedEventTurn,
     completed_event_turns,
-    completed_model_turn_end_indexes,
     history_for_completed_turn_count,
-    is_terminal_history_message,
     normalize_unattended_output_history,
-    task_output_text,
+    truncate_incomplete_events,
+    truncate_incomplete_model_history,
 )
 from carapace.session.turns import SessionTurnMixin
 from carapace.session.types import ActiveSession, SessionSubscriber
@@ -913,8 +907,8 @@ class SessionEngine(SessionTurnMixin):
             await self._broadcast(active, "on_error", "Agent is busy — cancel first")
             return
 
-        events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
-        turns = self._completed_event_turns(events)
+        events = truncate_incomplete_events(self._session_mgr.load_events(session_id))
+        turns = completed_event_turns(events)
         if not turns:
             await self._broadcast(active, "on_error", "No completed turn available to retry")
             return
@@ -929,8 +923,8 @@ class SessionEngine(SessionTurnMixin):
             await self._broadcast(active, "on_error", "Agent is busy — cancel first")
             return False
 
-        events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
-        turns = self._completed_event_turns(events)
+        events = truncate_incomplete_events(self._session_mgr.load_events(session_id))
+        turns = completed_event_turns(events)
         target = next((turn for turn in turns if turn.end_event_index == event_index), None)
         if target is None:
             await self._broadcast(active, "on_error", "Unknown reset target")
@@ -956,22 +950,22 @@ class SessionEngine(SessionTurnMixin):
             raise RuntimeError(msg)
 
         source_state = active.state.model_copy(deep=True)
-        events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
-        turns = self._completed_event_turns(events)
+        events = truncate_incomplete_events(self._session_mgr.load_events(session_id))
+        turns = completed_event_turns(events)
         target = next((turn for turn in turns if turn.end_event_index == event_index), None)
         if target is None:
             msg = "Unknown fork target"
             raise ValueError(msg)
 
         forked_events = events[: target.end_event_index + 1]
-        turn_count = len(self._completed_event_turns(forked_events))
-        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        forked_history = self._history_for_completed_turn_count(history, turn_count)
+        turn_count = len(completed_event_turns(forked_events))
+        history = truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
+        forked_history = history_for_completed_turn_count(history, turn_count)
         target_unattended = source_state.attributes.unattended if unattended is None else unattended
         target_ask_mode = source_state.attributes.ask_mode if ask_mode is None else ask_mode
         target_yolo_mode = source_state.attributes.yolo_mode if yolo_mode is None else yolo_mode
         if source_state.attributes.unattended and not target_unattended:
-            forked_history = self._normalize_unattended_output_history(forked_history)
+            forked_history = normalize_unattended_output_history(forked_history)
 
         now = datetime.now(tz=UTC)
         forked_session_id = f"{now:%Y-%m-%d-%H-%M}-{secrets.token_hex(4)}"
@@ -1428,29 +1422,11 @@ class SessionEngine(SessionTurnMixin):
 
         return self._session_mgr.update_events(session_id, _mutate)
 
-    def _completed_event_turns(self, events: list[dict[str, Any]]) -> list[CompletedEventTurn]:
-        return completed_event_turns(events)
-
-    def _completed_model_turn_end_indexes(self, messages: list[ModelMessage]) -> list[int]:
-        return completed_model_turn_end_indexes(messages)
-
-    def _is_terminal_history_message(self, message: ModelMessage) -> bool:
-        return is_terminal_history_message(message)
-
-    def _history_for_completed_turn_count(self, messages: list[ModelMessage], turn_count: int) -> list[ModelMessage]:
-        return history_for_completed_turn_count(messages, turn_count)
-
-    def _normalize_unattended_output_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
-        return normalize_unattended_output_history(messages)
-
-    def _task_output_text(self, part: ToolCallPart) -> str | None:
-        return task_output_text(part)
-
     def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
-        truncated_events = self._truncate_incomplete_events(events)
-        turn_count = len(self._completed_event_turns(truncated_events))
-        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        truncated_history = self._history_for_completed_turn_count(history, turn_count)
+        truncated_events = truncate_incomplete_events(events)
+        turn_count = len(completed_event_turns(truncated_events))
+        history = truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
+        truncated_history = history_for_completed_turn_count(history, turn_count)
 
         self._session_mgr.save_events(session_id, truncated_events)
         self._session_mgr.save_history(session_id, truncated_history)
@@ -1528,7 +1504,7 @@ class SessionEngine(SessionTurnMixin):
                         }
                     ],
                 )
-                self._record_escalation_requested(session_id, request_id)
+                self._runtime_controller.escalation_requested(session_id, request_id)
                 await self._broadcast(
                     active, "on_git_push_approval_request", request_id, ref, explanation, changed_files
                 )
@@ -1550,7 +1526,7 @@ class SessionEngine(SessionTurnMixin):
                         }
                     ],
                 )
-                self._record_escalation_requested(session_id, request_id)
+                self._runtime_controller.escalation_requested(session_id, request_id)
                 await self._broadcast(
                     active,
                     "on_credential_approval_request",
@@ -1566,7 +1542,7 @@ class SessionEngine(SessionTurnMixin):
                     session_id,
                     [{"role": "domain_access_approval", "request_id": request_id, "domain": subject, "command": cmd}],
                 )
-                self._record_escalation_requested(session_id, request_id)
+                self._runtime_controller.escalation_requested(session_id, request_id)
                 await self._broadcast(active, "on_domain_access_approval_request", request_id, subject, cmd)
 
             if self._notification_router is not None:
@@ -1583,7 +1559,7 @@ class SessionEngine(SessionTurnMixin):
                 msg = await active.escalation_queue.get()
                 if msg is None:
                     await self._clear_pending_notification(active, session_id, notif_id)
-                    self._record_escalation_resolved(session_id, request_id, cancelled=True)
+                    self._runtime_controller.escalation_resolved(session_id, request_id, cancelled=True)
                     return UserEscalationDecision(allowed=False)
                 if msg.request_id == request_id:
                     decision = msg.decision
@@ -1614,7 +1590,7 @@ class SessionEngine(SessionTurnMixin):
                             "message": message,
                         }
                     self._session_mgr.append_events(session_id, [response_event])
-                    self._record_escalation_resolved(session_id, request_id)
+                    self._runtime_controller.escalation_resolved(session_id, request_id)
                     await self._clear_pending_notification(active, session_id, notif_id)
                     return UserEscalationDecision(allowed=decision != "deny", message=message)
 
