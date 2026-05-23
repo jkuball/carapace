@@ -736,18 +736,11 @@ class SessionEngine(SessionTurnMixin):
         self._session_mgr.save_history(session_id, repaired_history)
 
     def pending_approval_requests(self, session_id: str) -> list[dict[str, Any]]:
-        """Return pending tool approval requests from memory and durable runtime state."""
-        active = self._active.get(session_id)
+        """Return pending tool approval requests from durable runtime state."""
         pending_by_id: dict[str, dict[str, Any]] = {}
-        if active is not None:
-            for request in active.pending_approval_requests:
-                tool_call_id = request.get("tool_call_id")
-                if isinstance(tool_call_id, str) and tool_call_id:
-                    pending_by_id[tool_call_id] = dict(request)
-
         runtime = self._session_store.load_runtime(session_id)
         if not runtime.pending_approval_ids:
-            return list(pending_by_id.values())
+            return []
 
         resolved_ids = {
             event.get("tool_call_id")
@@ -756,7 +749,7 @@ class SessionEngine(SessionTurnMixin):
         }
         requested_ids = {item for item in runtime.pending_approval_ids if item not in resolved_ids}
         if not requested_ids:
-            return list(pending_by_id.values())
+            return []
 
         for event in self._session_mgr.load_events(session_id):
             if event.get("role") != "approval_request":
@@ -774,18 +767,11 @@ class SessionEngine(SessionTurnMixin):
         return list(pending_by_id.values())
 
     def pending_escalations(self, session_id: str) -> list[dict[str, Any]]:
-        """Return pending escalations from memory and durable runtime state."""
-        active = self._active.get(session_id)
+        """Return pending escalations from durable runtime state."""
         pending_by_id: dict[str, dict[str, Any]] = {}
-        if active is not None:
-            for request in active.pending_escalations:
-                request_id = request.get("request_id")
-                if isinstance(request_id, str) and request_id:
-                    pending_by_id[request_id] = dict(request)
-
         runtime = self._session_store.load_runtime(session_id)
         if not runtime.pending_escalation_ids:
-            return list(pending_by_id.values())
+            return []
 
         events = self._session_mgr.load_events(session_id)
         resolved_ids = {
@@ -797,7 +783,7 @@ class SessionEngine(SessionTurnMixin):
         }
         requested_ids = {item for item in runtime.pending_escalation_ids if item not in resolved_ids}
         if not requested_ids:
-            return list(pending_by_id.values())
+            return []
 
         for event in events:
             request_id = event.get("request_id")
@@ -813,10 +799,12 @@ class SessionEngine(SessionTurnMixin):
                     "changed_files": event.get("changed_files", []),
                 }
             elif role == "credential_approval":
+                vault_paths = event.get("vault_paths", [])
                 pending_by_id[request_id] = {
                     "request_id": request_id,
                     "kind": "credential_access",
-                    "vault_paths": event.get("vault_paths", []),
+                    "vault_path": vault_paths[0] if vault_paths else "",
+                    "vault_paths": vault_paths,
                     "names": event.get("names", []),
                     "descriptions": event.get("descriptions", []),
                     "skill_name": event.get("skill_name"),
@@ -1772,7 +1760,7 @@ class SessionEngine(SessionTurnMixin):
             # escalation callback is still blocked on the queue.
             match_key = {"git_push": "ref", "credential_access": "vault_path"}.get(kind, "domain")
             match_val = context.get(match_key, subject)
-            for old in list(active.pending_escalations):
+            for old in self.pending_escalations(session_id):
                 if old.get("kind") == kind and old.get(match_key) == match_val:
                     logger.info(f"Superseding stale {kind} escalation {old['request_id']} for {match_val}")
                     active.escalation_queue.put_nowait(
@@ -1794,15 +1782,6 @@ class SessionEngine(SessionTurnMixin):
                             "changed_files": changed_files,
                         }
                     ],
-                )
-                active.pending_escalations.append(
-                    {
-                        "request_id": request_id,
-                        "kind": "git_push",
-                        "ref": ref,
-                        "explanation": explanation,
-                        "changed_files": changed_files,
-                    }
                 )
                 self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(
@@ -1826,17 +1805,6 @@ class SessionEngine(SessionTurnMixin):
                         }
                     ],
                 )
-                active.pending_escalations.append(
-                    {
-                        "request_id": request_id,
-                        "kind": "credential_access",
-                        "vault_path": vault_path,
-                        "vault_paths": [vault_path],
-                        "names": [cred_name],
-                        "descriptions": [cred_desc],
-                        "explanation": explanation,
-                    }
-                )
                 self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(
                     active,
@@ -1852,9 +1820,6 @@ class SessionEngine(SessionTurnMixin):
                 self._session_mgr.append_events(
                     session_id,
                     [{"role": "domain_access_approval", "request_id": request_id, "domain": subject, "command": cmd}],
-                )
-                active.pending_escalations.append(
-                    {"request_id": request_id, "kind": "domain_access", "domain": subject, "command": cmd}
                 )
                 self._record_escalation_requested(session_id, request_id)
                 await self._broadcast(active, "on_domain_access_approval_request", request_id, subject, cmd)
@@ -1873,7 +1838,6 @@ class SessionEngine(SessionTurnMixin):
                 msg = await active.escalation_queue.get()
                 if msg is None:
                     await self._clear_pending_notification(active, session_id, notif_id)
-                    active.pending_escalations.clear()
                     self._record_escalation_resolved(session_id, request_id, cancelled=True)
                     return UserEscalationDecision(allowed=False)
                 if msg.request_id == request_id:
@@ -1905,9 +1869,6 @@ class SessionEngine(SessionTurnMixin):
                             "message": message,
                         }
                     self._session_mgr.append_events(session_id, [response_event])
-                    active.pending_escalations = [
-                        p for p in active.pending_escalations if p["request_id"] != request_id
-                    ]
                     self._record_escalation_resolved(session_id, request_id)
                     await self._clear_pending_notification(active, session_id, notif_id)
                     return UserEscalationDecision(allowed=decision != "deny", message=message)

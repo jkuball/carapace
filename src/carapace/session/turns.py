@@ -535,7 +535,6 @@ class SessionTurnMixin(SessionTurnHost):
                 }
             ],
         )
-        active.pending_approval_requests.append(req.model_dump())
         runtime = self._session_store.load_runtime(session_id)
         pending_ids = [item for item in runtime.pending_approval_ids if item != req.tool_call_id]
         pending_ids.append(req.tool_call_id)
@@ -593,7 +592,6 @@ class SessionTurnMixin(SessionTurnHost):
                 )
                 remaining.discard(msg.tool_call_id)
         self._append_approval_response_events(session_id, results, responses)
-        active.pending_approval_requests.clear()
         runtime = self._session_store.load_runtime(session_id)
         self._record_session_runtime_transition(
             session_id,

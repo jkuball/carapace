@@ -648,7 +648,7 @@ def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
         await asyncio.sleep(0)
 
         engine._notification_router.dispatch_escalation.assert_awaited_once()
-        pending = active.pending_escalations[0]
+        pending = engine.pending_escalations(sid)[0]
         await engine.submit_approval(
             sid, type("Resp", (), {"request_id": pending["request_id"], "decision": "allow", "message": None})()
         )
@@ -754,6 +754,7 @@ def test_pending_requests_include_durable_escalations(tmp_path: Path) -> None:
         {
             "request_id": "req-1",
             "kind": "credential_access",
+            "vault_path": "dev/api",
             "vault_paths": ["dev/api"],
             "names": ["api"],
             "descriptions": ["API token"],
