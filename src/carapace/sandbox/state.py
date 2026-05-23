@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from carapace.sandbox.runtime import SandboxRuntimeKind, SandboxStatus
 
@@ -22,6 +23,41 @@ class SessionSandboxSnapshot(BaseModel):
     last_measured_at: datetime | None = None
     updated_at: datetime | None = None
     last_error: str | None = None
+
+
+SandboxRuntimePhase = Literal[
+    "missing",
+    "starting",
+    "ready",
+    "suspending",
+    "suspended",
+    "resuming",
+    "resetting",
+    "destroying",
+    "error",
+]
+
+
+class SandboxLease(BaseModel):
+    owner: str
+    acquired_at: datetime
+    expires_at: datetime
+
+
+class SandboxRuntimeState(BaseModel):
+    session_id: str
+    phase: SandboxRuntimePhase = "missing"
+    version: int = 0
+    runtime: SandboxRuntimeKind | None = None
+    resource_id: str | None = None
+    resource_kind: str | None = None
+    storage_present: bool = False
+    needs_runtime_setup: bool = False
+    active_operation_id: str | None = None
+    lease: SandboxLease | None = None
+    updated_at: datetime | None = None
+    last_error: str | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 _snapshot_cache_lock = RLock()

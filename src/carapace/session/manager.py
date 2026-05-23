@@ -15,12 +15,17 @@ from pydantic import BaseModel
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
 from carapace.models import SessionAttributes, SessionBudget, SessionState
+from carapace.sandbox.events import SandboxRuntimeEvent
+from carapace.sandbox.operations import SandboxOperation
 from carapace.sandbox.state import (
+    SandboxRuntimeState,
     SessionSandboxSnapshot,
     clear_sandbox_snapshot,
     load_sandbox_snapshot,
     save_sandbox_snapshot,
 )
+from carapace.session.events import SessionRuntimeEvent
+from carapace.session.state import SessionRuntime
 from carapace.usage import LlmRequestLog, LlmRequestState, UsageTracker
 
 
@@ -257,6 +262,65 @@ class SessionManager:
         path = self.sessions_dir / session_id / "llm_activity.yaml"
         path.unlink(missing_ok=True)
 
+    # --- Session runtime persistence ---
+
+    def _session_runtime_path(self, session_id: str) -> Path:
+        return self.sessions_dir / session_id / "runtime.yaml"
+
+    def load_session_runtime(self, session_id: str) -> SessionRuntime | None:
+        path = self._session_runtime_path(session_id)
+        if not path.exists():
+            return None
+        self._log_disk_read("session runtime", path, session_id=session_id)
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+        if not raw:
+            return None
+        return SessionRuntime.model_validate(raw)
+
+    def save_session_runtime(self, runtime: SessionRuntime) -> None:
+        session_dir = self.sessions_dir / runtime.session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = self._session_runtime_path(runtime.session_id)
+        with open(path, "w") as f:
+            yaml.dump(runtime.model_dump(mode="json"), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        self._notify_change()
+
+    def clear_session_runtime(self, session_id: str) -> None:
+        self._session_runtime_path(session_id).unlink(missing_ok=True)
+        self._notify_change()
+
+    def _session_runtime_events_path(self, session_id: str) -> Path:
+        return self.sessions_dir / session_id / "runtime_events.yaml"
+
+    def load_session_runtime_events(self, session_id: str) -> list[SessionRuntimeEvent]:
+        path = self._session_runtime_events_path(session_id)
+        if not path.exists():
+            return []
+        self._log_disk_read("session runtime events", path, session_id=session_id)
+        events: list[SessionRuntimeEvent] = []
+        with open(path) as f:
+            for doc in yaml.safe_load_all(f):
+                if doc:
+                    events.append(SessionRuntimeEvent.model_validate(doc))
+        return events
+
+    def append_session_runtime_events(self, session_id: str, events: list[SessionRuntimeEvent]) -> None:
+        session_dir = self.sessions_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = self._session_runtime_events_path(session_id)
+        with open(path, "a") as f:
+            for event in events:
+                f.write("---\n")
+                yaml.dump(
+                    _to_yaml_safe(event),
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+        self._notify_change()
+
     # --- Sandbox snapshot persistence ---
 
     def _sandbox_snapshot_path(self, session_id: str) -> Path:
@@ -274,6 +338,115 @@ class SessionManager:
 
     def clear_sandbox_snapshot(self, session_id: str) -> None:
         clear_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        self._notify_change()
+
+    # --- Sandbox runtime persistence ---
+
+    def _sandbox_runtime_path(self, session_id: str) -> Path:
+        return self.sessions_dir / session_id / "sandbox_runtime.yaml"
+
+    def load_sandbox_runtime(self, session_id: str) -> SandboxRuntimeState | None:
+        path = self._sandbox_runtime_path(session_id)
+        if not path.exists():
+            return None
+        self._log_disk_read("sandbox runtime", path, session_id=session_id)
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+        if not raw:
+            return None
+        return SandboxRuntimeState.model_validate(raw)
+
+    def save_sandbox_runtime(self, runtime: SandboxRuntimeState) -> None:
+        session_dir = self.sessions_dir / runtime.session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = self._sandbox_runtime_path(runtime.session_id)
+        with open(path, "w") as f:
+            yaml.dump(runtime.model_dump(mode="json"), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        self._notify_change()
+
+    def clear_sandbox_runtime(self, session_id: str) -> None:
+        self._sandbox_runtime_path(session_id).unlink(missing_ok=True)
+        self._notify_change()
+
+    def _sandbox_runtime_events_path(self, session_id: str) -> Path:
+        return self.sessions_dir / session_id / "sandbox_events.yaml"
+
+    def load_sandbox_runtime_events(self, session_id: str) -> list[SandboxRuntimeEvent]:
+        path = self._sandbox_runtime_events_path(session_id)
+        if not path.exists():
+            return []
+        self._log_disk_read("sandbox runtime events", path, session_id=session_id)
+        events: list[SandboxRuntimeEvent] = []
+        with open(path) as f:
+            for doc in yaml.safe_load_all(f):
+                if doc:
+                    events.append(SandboxRuntimeEvent.model_validate(doc))
+        return events
+
+    def append_sandbox_runtime_events(self, session_id: str, events: list[SandboxRuntimeEvent]) -> None:
+        session_dir = self.sessions_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = self._sandbox_runtime_events_path(session_id)
+        with open(path, "a") as f:
+            for event in events:
+                f.write("---\n")
+                yaml.dump(
+                    _to_yaml_safe(event),
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+        self._notify_change()
+
+    # --- Sandbox operation persistence ---
+
+    def _sandbox_operation_dir(self, session_id: str) -> Path:
+        return self.sessions_dir / session_id / "sandbox_operations"
+
+    def _sandbox_operation_path(self, session_id: str, operation_id: str) -> Path:
+        return self._sandbox_operation_dir(session_id) / f"{operation_id}.yaml"
+
+    def load_sandbox_operation(self, session_id: str, operation_id: str) -> SandboxOperation | None:
+        path = self._sandbox_operation_path(session_id, operation_id)
+        if not path.exists():
+            return None
+        self._log_disk_read("sandbox operation", path, session_id=session_id)
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+        if not raw:
+            return None
+        return SandboxOperation.model_validate(raw)
+
+    def save_sandbox_operation(self, operation: SandboxOperation) -> None:
+        operation_dir = self._sandbox_operation_dir(operation.session_id)
+        operation_dir.mkdir(parents=True, exist_ok=True)
+        path = self._sandbox_operation_path(operation.session_id, operation.operation_id)
+        with open(path, "w") as f:
+            yaml.dump(
+                operation.model_dump(mode="json"),
+                f,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+        self._notify_change()
+
+    def list_sandbox_operations(self, session_id: str) -> list[SandboxOperation]:
+        operation_dir = self._sandbox_operation_dir(session_id)
+        if not operation_dir.exists():
+            return []
+        self._log_disk_read("sandbox operation directory listing", operation_dir, session_id=session_id)
+        operations: list[SandboxOperation] = []
+        for path in sorted(operation_dir.glob("*.yaml")):
+            with open(path) as f:
+                raw = yaml.safe_load(f)
+            if raw:
+                operations.append(SandboxOperation.model_validate(raw))
+        return operations
+
+    def clear_sandbox_operation(self, session_id: str, operation_id: str) -> None:
+        self._sandbox_operation_path(session_id, operation_id).unlink(missing_ok=True)
         self._notify_change()
 
     # --- Event log (ordered display history including slash commands) ---
