@@ -8,8 +8,7 @@ A skill is a directory with a `SKILL.md` file (Markdown instructions with YAML f
 
 carapace extends the format with optional files and metadata:
 
-- **`SKILL.md` frontmatter `metadata.carapace`** — preferred place for carapace-specific metadata: network domain declarations, credential needs, and command aliases
-- **`carapace.yaml`** — legacy fallback for the same carapace-specific metadata
+- **`SKILL.md` frontmatter `metadata.carapace`** — carapace-specific metadata: network domain declarations, credential needs, and command aliases
 - **`pyproject.toml`** + **`uv.lock`** — Python dependencies installed via `uv sync --locked`
 - **`package.json`** + **`package-lock.json`** or **`pnpm-lock.yaml`** — Node dependencies installed with the matching package manager
 - **`setup.sh`** — optional post-activation setup script for local config generation or other derived artifacts
@@ -31,12 +30,6 @@ skills/
       run.mjs
     references/
       api-docs.md
-  expense-tracker/
-    SKILL.md
-    carapace.yaml
-    scripts/
-      add_expense.py
-      query_expenses.py
 ```
 
 ## SKILL.md (AgentSkills standard)
@@ -71,7 +64,7 @@ Summarize the top results for the user.
 
 ## carapace metadata
 
-Preferred location: `SKILL.md` frontmatter under `metadata.carapace`. Legacy `carapace.yaml` is still supported with the same schema when inline metadata is absent.
+Declare carapace-specific metadata in `SKILL.md` frontmatter under `metadata.carapace`.
 
 ```yaml
 ---
@@ -99,32 +92,6 @@ metadata:
       - name: web-search
         command: uv run --directory /workspace/skills/web-search scripts/search.py
 ---
-```
-
-Legacy fallback file:
-
-```yaml
-network:
-  domains:
-    - "api.searxng.example.com"
-    - "*.search.example.com"
-  tunnels:
-    - host: imap.zoho.eu
-      remote_port: 993
-      local_port: 1993
-      description: Zoho IMAP over the carapace CONNECT proxy
-
-credentials:
-  - vault_path: "dev/searxng-url"
-    description: Base URL for the SearXNG instance
-    env_var: SEARXNG_URL
-  - vault_path: "dev/searxng-cert"
-    description: Optional client certificate
-    file: "~/.config/searxng/client.pem"
-
-commands:
-  - name: web-search
-    command: uv run --directory /workspace/skills/web-search scripts/search.py
 ```
 
 ### Fields
@@ -184,7 +151,7 @@ Skill-declared domains and credentials are **not globally available** in the ses
    Tunnel declarations are also applied here: carapace temporarily shadows the declared hostnames inside the sandbox, starts trusted CONNECT-backed tunnel helpers, and tears them down again after the exec.
 4. **No context = no access**: An exec without `contexts` (or with unrelated contexts) does not get the skill's domains or credentials. The sentinel evaluates any credential access without a matching context.
 
-For command aliases declared in `carapace.yaml`, carapace also recognizes the alias at the start of an `exec` command. If the owning skill is already active but missing from `contexts`, carapace adds that context automatically, resolves the command through the generated shim on `PATH`, and warns the agent to pass the context explicitly next time while continuing to use the plain alias.
+For command aliases declared in `metadata.carapace`, carapace also recognizes the alias at the start of an `exec` command. If the owning skill is already active but missing from `contexts`, carapace adds that context automatically, resolves the command through the generated shim on `PATH`, and warns the agent to pass the context explicitly next time while continuing to use the plain alias.
 
 ### Matching semantics
 
@@ -290,12 +257,12 @@ The sentinel can also read skill files directly (via its `list_skill_files` and 
 
 ## Self-improvement
 
-The agent can create new skills by writing files to `/workspace/skills/` in the sandbox (SKILL.md, scripts, optional pyproject.toml, optional carapace.yaml) and then committing and pushing them via Git.
+The agent can create new skills by writing files to `/workspace/skills/` in the sandbox (SKILL.md, scripts, optional pyproject.toml/package.json/setup.sh provider files) and then committing and pushing them via Git.
 
 The workflow for the agent to create a skill via chat:
 
 1. User asks for a new skill (or the agent proposes one)
-2. Agent plans the skill (SKILL.md, scripts, optional provider files such as pyproject/package.json/setup.sh, optional carapace.yaml)
+2. Agent plans the skill (SKILL.md, scripts, optional provider files such as pyproject/package.json/setup.sh)
 3. Agent writes the files in the sandbox at `/workspace/skills/<skill-name>/`
 4. Agent tests the skill in the sandbox
 5. Agent commits and pushes via Git — the sentinel evaluates the push via the pre-receive hook

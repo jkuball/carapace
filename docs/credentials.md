@@ -56,7 +56,7 @@ credentials:
 
 Hidden credentials are treated as not found.
 
-## Skill-declared credentials (`metadata.carapace` or legacy `carapace.yaml`)
+## Skill-declared credentials (`metadata.carapace`)
 
 Skills can declare credentials for auto-injection:
 

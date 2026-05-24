@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import secrets
 import shutil
 from collections.abc import Callable
@@ -172,11 +171,6 @@ class SessionManager:
     def load_history(self, session_id: str) -> list[ModelMessage]:
         history_path = self.sessions_dir / session_id / "history.yaml"
         if not history_path.exists():
-            # fallback to legacy JSON
-            json_path = history_path.with_suffix(".json")
-            if json_path.exists():
-                self._log_disk_read("session history (legacy json)", json_path, session_id=session_id)
-                return ModelMessagesTypeAdapter.validate_json(json_path.read_bytes())
             return []
         self._log_disk_read("session history", history_path, session_id=session_id)
         with open(history_path) as f:
@@ -197,11 +191,6 @@ class SessionManager:
     def load_usage(self, session_id: str) -> UsageTracker:
         usage_path = self.sessions_dir / session_id / "usage.yaml"
         if not usage_path.exists():
-            # fallback to legacy JSON
-            json_path = usage_path.with_suffix(".json")
-            if json_path.exists():
-                self._log_disk_read("session usage (legacy json)", json_path, session_id=session_id)
-                return UsageTracker.model_validate_json(json_path.read_bytes())
             return UsageTracker()
         self._log_disk_read("session usage", usage_path, session_id=session_id)
         with open(usage_path) as f:
@@ -281,11 +270,6 @@ class SessionManager:
     def _load_events_unlocked(self, session_id: str) -> list[dict[str, Any]]:
         events_path = self.sessions_dir / session_id / "events.yaml"
         if not events_path.exists():
-            # fallback to legacy JSON
-            json_path = events_path.with_suffix(".json")
-            if json_path.exists():
-                self._log_disk_read("session events (legacy json)", json_path, session_id=session_id)
-                return json.loads(json_path.read_bytes())
             return []
         result: list[dict[str, Any]] = []
         self._log_disk_read("session events", events_path, session_id=session_id)

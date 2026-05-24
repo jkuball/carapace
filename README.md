@@ -24,13 +24,13 @@
   <a href="charts/carapace/README.md">⚓ Helm Chart</a>
 </p>
 
-carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its memory is not hidden inside an app-specific database: personality, policy, skills and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
+carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its durable context is not hidden inside an app-specific database: personality, policy, skills and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
 
 ## Highlights
 
 - 🛡️ Sentinel-gated execution. Every non-trivial action is reviewed by a dedicated security agent that keeps session context, not a static allowlist spreadsheet.
 - ☸️ Kubernetes-ready sandboxes. Docker and Kubernetes runtimes are both supported, with StatefulSet-backed sandbox sessions, per-session PVCs, and idle-to-zero scaling already in place.
-- 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, memory, and archived sessions live in files you can inspect, diff, sync, and push upstream.
+- 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, and archived sessions live in files you can inspect, diff, sync, and push upstream.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context. Neither the agent nor the backend have a giant `.env` with all of your secrets.
 - ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
@@ -101,7 +101,7 @@ carapace treats long-term agent state as a repository, not as an opaque internal
 - The agent's policy lives in `SECURITY.md`.
 - Its personality and user model live in `SOUL.md` and `USER.md`.
 - Skills are plain files in AgentSkills format.
-- Memory is markdown on disk.
+- Durable context is markdown and other plain files on disk.
 - Session histories can be archived into the knowledge repo and pushed upstream.
 
 That makes the system inspectable in a way most agent projects are not. You can review what changed, diff it, sync it, and audit how the agent's knowledge evolves over time.

@@ -48,8 +48,7 @@ what a script does when you see the agent running skill commands.
 
 About use_skill: when you see a use_skill call, the `declared_domains`
 and `declared_creds` fields are NOT requested by the agent — they are
-declared by the skill itself in its carapace metadata (`SKILL.md`
-frontmatter or `carapace.yaml`) and
+declared by the skill itself in its SKILL.md `metadata.carapace` frontmatter and
 automatically bundled into the call for your review. Approving
 use_skill implicitly grants all declared domains and credentials
 for the duration of that skill's usage. Your job is to judge whether

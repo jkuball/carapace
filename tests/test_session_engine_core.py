@@ -33,13 +33,17 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     skill_name = "reinject-skill"
     skill_dir = tmp_path / "skills" / skill_name
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(f"---\nname: {skill_name}\n---\n")
-    (skill_dir / "carapace.yaml").write_text(
-        "credentials:\n"
-        "  - vault_path: vault/secret\n"
-        "    description: API key\n"
-        "    env_var: API_KEY\n"
-        "    file: .secrets/key.txt\n"
+    (skill_dir / "SKILL.md").write_text(
+        f"---\n"
+        f"name: {skill_name}\n"
+        "metadata:\n"
+        "  carapace:\n"
+        "    credentials:\n"
+        "      - vault_path: vault/secret\n"
+        "        description: API key\n"
+        "        env_var: API_KEY\n"
+        "        file: .secrets/key.txt\n"
+        "---\n"
     )
 
     with _patch_sentinel():

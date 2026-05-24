@@ -71,7 +71,7 @@ class SkillCommandDecl(BaseModel):
 
 
 class SkillCarapaceConfig(BaseModel):
-    """Parsed carapace config declared inline in SKILL.md or in ``carapace.yaml``."""
+    """Parsed carapace config declared inline in SKILL.md frontmatter."""
 
     network: SkillNetworkConfig = SkillNetworkConfig()
     credentials: list[SkillCredentialDecl] = []

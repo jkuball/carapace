@@ -169,7 +169,7 @@ As a rule of thumb, if a runtime agent can succeed without reading a section eve
 
 ## carapace metadata (`metadata.carapace`)
 
-Preferred: declare carapace-specific metadata inline in `SKILL.md` under `metadata.carapace`. Use legacy `carapace.yaml` only when you need a compatibility fallback.
+Declare carapace-specific metadata inline in `SKILL.md` under `metadata.carapace`.
 
 Top-level keys:
 

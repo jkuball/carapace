@@ -64,7 +64,7 @@ Good filenames are `REFERENCE.md`, `CONFIG.md`, or `references/*.md`.
 
 ## Setup Guidance
 
-If a skill needs credentials or network access, note that activation handles them automatically after approval. Do not inline credential wiring, secret-handling procedures, or large `metadata.carapace` / legacy `carapace.yaml` walkthroughs in `SKILL.md`.
+If a skill needs credentials or network access, note that activation handles them automatically after approval. Do not inline credential wiring, secret-handling procedures, or large `metadata.carapace` schema walkthroughs in `SKILL.md`.
 
 ## Template
 

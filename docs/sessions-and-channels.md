@@ -55,7 +55,7 @@ Sessions persist across server restarts. In-memory state (action log, sentinel c
 
 - `history.yaml` stores the full `ModelMessage` sequence that is fed back into Pydantic AI on the next turn. This is the model-side conversation state.
 - `events.yaml` stores the normalized session transcript used by the UI and APIs. It includes items that do not belong in model history, such as slash commands, approval requests/responses, and other operational events.
-- The REST history endpoint prefers `events.yaml` and only falls back to rebuilding a simplified transcript from `history.yaml` for legacy sessions.
+- The REST history endpoint reads `events.yaml` as the user-facing transcript source.
 - Retry, reset, fork, and knowledge export align both files by completed turns, but they do not collapse them into a single source of truth.
 
 ## Knowledge commits

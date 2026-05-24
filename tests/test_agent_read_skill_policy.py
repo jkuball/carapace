@@ -13,6 +13,21 @@ from carapace.agent.tools import (
 from carapace.sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
 
 
+def _write_skill_with_command(skill_dir: Path, *, name: str, command_name: str, command: str) -> None:
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_dir.joinpath("SKILL.md").write_text(
+        f"---\n"
+        f"name: {name}\n"
+        f"metadata:\n"
+        f"  carapace:\n"
+        f"    commands:\n"
+        f"      - name: {command_name}\n"
+        f"        command: {command}\n"
+        f"---\n"
+        f"# {name}\n"
+    )
+
+
 def test_allows_read_for_skill_root_file_when_not_activated(tmp_path: Path) -> None:
     skill_file = tmp_path / "skills" / "demo" / "SKILL.md"
     skill_file.parent.mkdir(parents=True, exist_ok=True)
@@ -148,14 +163,10 @@ def test_ignores_non_backend_skill_path_mentions(tmp_path: Path) -> None:
 
 def test_detects_command_alias_conflict_with_active_skill(tmp_path: Path) -> None:
     active_skill_dir = tmp_path / "skills" / "web"
-    active_skill_dir.mkdir(parents=True, exist_ok=True)
-    (active_skill_dir / "SKILL.md").write_text("# Web")
-    (active_skill_dir / "carapace.yaml").write_text("commands:\n  - name: web\n    command: uv run web\n")
+    _write_skill_with_command(active_skill_dir, name="web", command_name="web", command="uv run web")
 
     new_skill_dir = tmp_path / "skills" / "web-plus"
-    new_skill_dir.mkdir(parents=True, exist_ok=True)
-    (new_skill_dir / "SKILL.md").write_text("# Web Plus")
-    (new_skill_dir / "carapace.yaml").write_text("commands:\n  - name: web\n    command: uv run web-plus\n")
+    _write_skill_with_command(new_skill_dir, name="web-plus", command_name="web", command="uv run web-plus")
 
     result = _skill_command_alias_conflict("web-plus", tmp_path, activated_skills=["web"])
 
@@ -167,9 +178,7 @@ def test_detects_command_alias_conflict_with_active_skill(tmp_path: Path) -> Non
 
 def test_resolves_exec_alias_and_auto_adds_context(tmp_path: Path) -> None:
     skill_dir = tmp_path / "skills" / "web"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# Web")
-    (skill_dir / "carapace.yaml").write_text("commands:\n  - name: web\n    command: uv run web\n")
+    _write_skill_with_command(skill_dir, name="web", command_name="web", command="uv run web")
 
     command, contexts, warning = _resolve_exec_command_alias(
         "web search docs/skills.md",
@@ -188,9 +197,7 @@ def test_resolves_exec_alias_and_auto_adds_context(tmp_path: Path) -> None:
 
 def test_resolves_exec_alias_without_warning_when_context_present(tmp_path: Path) -> None:
     skill_dir = tmp_path / "skills" / "web"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# Web")
-    (skill_dir / "carapace.yaml").write_text("commands:\n  - name: web\n    command: uv run web\n")
+    _write_skill_with_command(skill_dir, name="web", command_name="web", command="uv run web")
 
     command, contexts, warning = _resolve_exec_command_alias(
         f"{SKILL_COMMAND_SHIM_DIR}/web search docs/skills.md",
@@ -233,9 +240,7 @@ def test_resolves_exec_alias_from_frontmatter_metadata(tmp_path: Path) -> None:
 
 def test_alias_auto_add_keeps_skill_directory_warning_on_original_contexts(tmp_path: Path) -> None:
     skill_dir = tmp_path / "skills" / "web"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# Web")
-    (skill_dir / "carapace.yaml").write_text("commands:\n  - name: web\n    command: uv run web\n")
+    _write_skill_with_command(skill_dir, name="web", command_name="web", command="uv run web")
 
     original_command = "web search /workspace/skills/web/data.json"
     requested_contexts: list[str] = []

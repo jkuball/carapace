@@ -54,7 +54,7 @@ class SkillRegistry:
         return skill_md.read_text()
 
     def get_carapace_config(self, skill_name: str) -> SkillCarapaceConfig | None:
-        """Load carapace skill config from SKILL.md frontmatter or ``carapace.yaml``."""
+        """Load carapace skill config from SKILL.md frontmatter."""
         skill_dir = self.skills_dir / skill_name
         skill_md = skill_dir / "SKILL.md"
         if skill_md.exists():
@@ -66,18 +66,7 @@ class SkillRegistry:
                 except Exception as exc:
                     logger.warning(f"Failed to parse metadata.carapace in SKILL.md for skill '{skill_name}': {exc}")
                     return None
-
-        cfg_path = skill_dir / "carapace.yaml"
-        if not cfg_path.exists():
-            return None
-        try:
-            raw = yaml.safe_load(cfg_path.read_text())
-            if not isinstance(raw, dict):
-                return None
-            return SkillCarapaceConfig.model_validate(raw)
-        except Exception as exc:
-            logger.warning(f"Failed to parse carapace.yaml for skill '{skill_name}': {exc}")
-            return None
+        return None
 
     def _parse_frontmatter(self, skill_md: Path, skill_dir: Path) -> SkillInfo | None:
         frontmatter = self._load_frontmatter(skill_md, skill_dir)

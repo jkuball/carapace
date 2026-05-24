@@ -126,7 +126,7 @@ The main agent, built on [Pydantic AI](https://ai.pydantic.dev/). It receives me
 | `exec`        | Run a shell command in the sandbox (default timeout: 30s)                 |
 
 Persistent writes to workspace files, skills, and archived session snapshots happen via `git commit` + `git push` inside the sandbox. Each push is evaluated by the security sentinel through a pre-receive hook, so persistent knowledge changes do not bypass the sentinel.
-Skill credential declarations in a skill's carapace metadata (`SKILL.md` frontmatter or legacy `carapace.yaml`) are evaluated during `use_skill`; approved credentials are fetched from the configured backend and cached before automatic setup runs. Automatic setup can use committed provider files such as `pyproject.toml` + `uv.lock`, `package.json` + a lockfile, and `setup.sh`. Those provider files are restored from the pushed upstream revision before execution so local sandbox edits are not run automatically.
+Skill credential declarations in a skill's `SKILL.md` `metadata.carapace` frontmatter are evaluated during `use_skill`; approved credentials are fetched from the configured backend and cached before automatic setup runs. Automatic setup can use committed provider files such as `pyproject.toml` + `uv.lock`, `package.json` + a lockfile, and `setup.sh`. Those provider files are restored from the pushed upstream revision before execution so local sandbox edits are not run automatically.
 
 ### Security Module
 

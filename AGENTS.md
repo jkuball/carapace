@@ -80,7 +80,7 @@ frontend/              # Next.js web UI (React 19, Tailwind CSS 4)
   src/components/      # React components (chat, sidebar, approval flow)
   src/hooks/           # custom hooks (WebSocket connection)
 tests/                 # pytest tests
-data/                  # runtime data directory (config, security policy, memory, sessions)
+data/                  # runtime data directory (config, sessions, notifications, knowledge repo)
 ```
 
 ## Testing
