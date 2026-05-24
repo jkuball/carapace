@@ -48,20 +48,16 @@ from carapace.git.http import GitHttpHandler
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.llm import make_model_factory
-from carapace.models import (
-    Config,
-    JobDefinition,
-    JobsFile,
+from carapace.models.config import Config
+from carapace.models.jobs import JobDefinition, JobsFile
+from carapace.models.notifications import (
     NotificationClientType,
     NotificationFocusState,
     NotificationPreferences,
     NotificationSubscription,
-    SessionAttributes,
-    SessionJobRunContext,
-    SessionState,
-    ToolResult,
-    normalize_tool_call_args,
 )
+from carapace.models.session import SessionAttributes, SessionJobRunContext, SessionState
+from carapace.models.tooling import ToolResult, normalize_tool_call_args
 from carapace.notifications import (
     NotificationPresenceRegistry,
     NotificationRouter,

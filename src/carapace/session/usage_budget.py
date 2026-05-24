@@ -6,7 +6,7 @@ import contextlib
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Literal
 
-from carapace.models import Config
+from carapace.models.config import Config
 from carapace.session.manager import SessionManager
 from carapace.session.types import ActiveSession
 from carapace.usage import (

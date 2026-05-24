@@ -16,7 +16,7 @@ from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_
 from pydantic_ai.settings import ModelSettings
 from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from carapace.models import Config, agent_available_model_entries
+from carapace.models.config import Config, agent_available_model_entries
 
 ThinkingSetting = bool | Literal["minimal", "low", "medium", "high", "xhigh"]
 

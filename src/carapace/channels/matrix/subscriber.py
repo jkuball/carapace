@@ -15,7 +15,7 @@ from carapace.channels.matrix.approval import (
     PendingDomainApproval,
 )
 from carapace.channels.matrix.formatting import format_approval_request, format_domain_escalation
-from carapace.models import ToolResult
+from carapace.models.tooling import ToolResult
 from carapace.usage import LlmRequestState
 from carapace.ws_models import ApprovalRequest, TurnUsage
 

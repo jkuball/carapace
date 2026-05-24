@@ -14,7 +14,7 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
-from carapace.models import SessionAttributes, SessionBudget, SessionState
+from carapace.models.session import SessionAttributes, SessionBudget, SessionState
 from carapace.sandbox.state import (
     SessionSandboxSnapshot,
     clear_sandbox_snapshot,

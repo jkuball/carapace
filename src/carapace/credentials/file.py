@@ -7,7 +7,7 @@ import yaml
 from loguru import logger
 
 from carapace.credentials.protocol import is_exposed, require_exposed
-from carapace.models import CredentialMetadata, FileCredentialBackendConfig
+from carapace.models.credentials import CredentialMetadata, FileCredentialBackendConfig
 
 
 @dataclass(slots=True)

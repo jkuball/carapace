@@ -8,7 +8,7 @@ from threading import RLock
 
 import yaml
 
-from carapace.models import NotificationPreferences, NotificationSubscription
+from carapace.models.notifications import NotificationPreferences, NotificationSubscription
 
 
 def derive_owner_key(token: str) -> str:

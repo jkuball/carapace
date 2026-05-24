@@ -8,7 +8,7 @@ from loguru import logger
 from carapace.credentials.bitwarden import BitwardenBackend
 from carapace.credentials.file import FileVaultBackend
 from carapace.credentials.protocol import VaultBackend
-from carapace.models import (
+from carapace.models.credentials import (
     BitwardenCredentialBackendConfig,
     CredentialMetadata,
     CredentialsConfig,

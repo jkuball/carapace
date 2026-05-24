@@ -4,7 +4,7 @@ import httpx
 from loguru import logger
 
 from carapace.credentials.protocol import is_exposed, require_exposed
-from carapace.models import BitwardenCredentialBackendConfig, CredentialMetadata
+from carapace.models.credentials import BitwardenCredentialBackendConfig, CredentialMetadata
 
 
 class BitwardenBackend:

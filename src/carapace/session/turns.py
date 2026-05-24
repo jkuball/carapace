@@ -33,7 +33,9 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import UsageLimits
 
-from carapace.models import Config, Deps, ToolCallCallback, ToolResult
+from carapace.models.agent import Deps
+from carapace.models.config import Config
+from carapace.models.tooling import ToolCallCallback, ToolResult
 from carapace.notifications.router import NotificationRouter, build_turn_outcome_notification_id
 from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message

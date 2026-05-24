@@ -12,7 +12,7 @@ from loguru import logger
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 import carapace.security as security_mod
-from carapace.models import normalize_tool_call_args
+from carapace.models.tooling import normalize_tool_call_args
 from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
 from carapace.security.context import (
     ApprovalSource,

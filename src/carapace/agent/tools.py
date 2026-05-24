@@ -15,17 +15,10 @@ from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, Too
 import carapace.security as security
 from carapace.config import load_workspace_file
 from carapace.llm import model_settings_for_config
-from carapace.models import (
-    ContextGrant,
-    CredentialMetadata,
-    Deps,
-    SkillCarapaceConfig,
-    SkillCredentialDecl,
-    TaskDone,
-    TaskFailed,
-    ToolResult,
-    normalize_tool_call_args,
-)
+from carapace.models.agent import Deps, TaskDone, TaskFailed
+from carapace.models.credentials import CredentialMetadata
+from carapace.models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
+from carapace.models.tooling import ToolResult, normalize_tool_call_args
 from carapace.sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
 from carapace.sandbox.runtime import SkillActivationError
 from carapace.sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR

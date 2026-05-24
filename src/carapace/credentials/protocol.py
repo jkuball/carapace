@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from carapace.models import BitwardenCredentialBackendConfig, CredentialMetadata, FileCredentialBackendConfig
+from carapace.models.credentials import (
+    BitwardenCredentialBackendConfig,
+    CredentialMetadata,
+    FileCredentialBackendConfig,
+)
 
 
 class VaultBackend(Protocol):

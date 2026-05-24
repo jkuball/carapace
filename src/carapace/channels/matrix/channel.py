@@ -27,7 +27,8 @@ from carapace.channels.matrix.formatting import (
     md_to_html,
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
-from carapace.models import Config, MatrixChannelConfig, MatrixTokenFile, SkillInfo
+from carapace.models.config import Config, MatrixChannelConfig, MatrixTokenFile
+from carapace.models.skills import SkillInfo
 from carapace.notifications import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
 from carapace.session import SessionEngine, SessionManager

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from carapace.models import Config
+from carapace.models.config import Config
 
 
 def get_config_path() -> Path:

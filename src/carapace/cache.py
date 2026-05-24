@@ -9,7 +9,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from carapace.models import CacheConfig
+from carapace.models.config import CacheConfig
 
 
 class SessionListCache:

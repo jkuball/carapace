@@ -6,7 +6,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from py_vapid import Vapid01
 
-from carapace.models import NotificationsConfig
+from carapace.models.notifications import NotificationsConfig
 
 _DEFAULT_VAPID_SUBJECT = "mailto:carapace@localhost"
 
