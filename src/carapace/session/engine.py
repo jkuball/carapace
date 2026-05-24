@@ -13,23 +13,18 @@ import asyncio
 import base64
 import contextlib
 import secrets
-import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from loguru import logger
-from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import (
     ModelMessage,
     ToolCallPart,
 )
 from pydantic_ai.models import Model
-from pydantic_ai.usage import UsageLimits
 
-import carapace.security as security_mod
 from carapace.agent.loop import run_agent_turn as _run_agent_turn
 from carapace.git.store import GitStore
 from carapace.models import (
@@ -41,19 +36,13 @@ from carapace.models import (
     SkillInfo,
     ToolCallCallback,
     ToolResult,
-    normalize_tool_call_args,
 )
-from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
+from carapace.notifications.router import NotificationRouter
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.runtime import SkillActivationInputs, SkillFileCredential
-from carapace.security.context import (
-    ApprovalSource,
-    ApprovalVerdict,
-    SessionSecurity,
-    UserEscalationDecision,
-    normalize_optional_message,
-)
+from carapace.security.context import SessionSecurity
 from carapace.security.sentinel import Sentinel
+from carapace.session.approvals import SessionApprovalMixin
 from carapace.session.commands import SessionCommandMixin
 from carapace.session.manager import SessionManager
 from carapace.session.model_selection import SessionModelMixin
@@ -69,20 +58,10 @@ from carapace.session.transcript import (
 )
 from carapace.session.turns import SessionTurnMixin
 from carapace.session.types import ActiveSession, SessionSubscriber
+from carapace.session.usage_budget import SessionUsageBudgetMixin
 from carapace.skills import SkillRegistry
 from carapace.usage import (
-    BudgetGauge,
-    LlmRequestRecord,
     LlmRequestState,
-    LlmSource,
-    SessionBudgetExceededError,
-    gauge_breakdown_pct_dict,
-    last_record_for_source,
-    llm_request_sink_scope,
-    usage_budget_exceeded_error,
-    usage_budget_gauges,
-    usage_last_request_row,
-    usage_limits_for_remaining_budget,
 )
 from carapace.usage import (
     note_llm_request_text as _note_llm_request_text,
@@ -93,11 +72,7 @@ from carapace.usage import (
 from carapace.ws_models import (
     ApprovalResponse,
     EscalationResponse,
-    TurnUsage,
-    TurnUsageBreakdownPct,
 )
-
-_DEFAULT_CONTEXT_CAP_TOKENS = 200_000
 
 
 # Compatibility shims for tests that patch helpers on carapace.session.engine.
@@ -113,20 +88,13 @@ def note_llm_request_thinking() -> LlmRequestState | None:
     return _note_llm_request_thinking()
 
 
-# security_mod is still imported for evaluate_domain_with (used in domain approval callback)
-
-
-def _escalation_notification_body(subject: str, kind: str) -> str:
-    match kind:
-        case "git_push":
-            return f"Approval needed to push changes to {subject}."
-        case "credential_access":
-            return f"Approval needed to access credential {subject}."
-        case _:
-            return f"Approval needed to access {subject}."
-
-
-class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
+class SessionEngine(
+    SessionCommandMixin,
+    SessionModelMixin,
+    SessionUsageBudgetMixin,
+    SessionApprovalMixin,
+    SessionTurnMixin,
+):
     """Central session lifecycle manager.
 
     Owns all in-memory session state, security sessions, and agent execution.
@@ -224,221 +192,6 @@ class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
     @property
     def agent_model(self) -> Model | None:
         return self._agent_model
-
-    def _usage_last_llm_payload_row(self, active: ActiveSession, source: LlmSource) -> dict[str, Any] | None:
-        """``usage_last_request_row`` plus ``context_cap_tokens`` and ``context_used_pct`` for the UI."""
-        rec = last_record_for_source(active.llm_request_log, source)
-        row = usage_last_request_row(rec)
-        if row is None:
-            return None
-        mid = (
-            active.agent_model_name or self._config.agent.model
-            if source == "agent"
-            else active.sentinel_model_name or self._config.agent.sentinel_model
-        )
-        cap = self._max_input_tokens_for_model_id(mid)
-        if cap is None:
-            cap = _DEFAULT_CONTEXT_CAP_TOKENS
-        cs = row["context_size"]
-        pct = min(100.0, (100.0 * cs / cap)) if cap > 0 else 0.0
-        out: dict[str, Any] = dict(row)
-        out["context_cap_tokens"] = cap
-        out["context_used_pct"] = round(pct, 1)
-        return out
-
-    def agent_model_id_for_gauge(self, active: ActiveSession) -> str:
-        """Canonical carapace model id (``provider:name``) for UI gauge / config lookup.
-
-        Do not use the provider's raw ``model_name`` from the LLM log — it is often a short
-        id without the ``provider:`` prefix, so it would not match ``available_models`` entries.
-        """
-        return active.agent_model_name or self._config.agent.model
-
-    def agent_context_cap_for_gauge(self, active: ActiveSession) -> int:
-        model_id = self.agent_model_id_for_gauge(active)
-        return self._max_input_tokens_for_model_id(model_id) or _DEFAULT_CONTEXT_CAP_TOKENS
-
-    def _budget_gauges(self, active: ActiveSession) -> list[BudgetGauge]:
-        budget = active.state.budget
-        return usage_budget_gauges(
-            active.usage_tracker,
-            input_tokens_limit=budget.input_tokens,
-            output_tokens_limit=budget.output_tokens,
-            total_cost_limit=budget.cost_usd,
-            tool_calls_limit=budget.tool_calls,
-        )
-
-    def _budget_exceeded_error(self, active: ActiveSession) -> SessionBudgetExceededError | None:
-        budget = active.state.budget
-        return usage_budget_exceeded_error(
-            active.usage_tracker,
-            input_tokens_limit=budget.input_tokens,
-            output_tokens_limit=budget.output_tokens,
-            total_cost_limit=budget.cost_usd,
-            tool_calls_limit=budget.tool_calls,
-        )
-
-    def _assert_llm_budget_available(self, active: ActiveSession) -> None:
-        error = self._budget_exceeded_error(active)
-        if error is not None:
-            raise error
-
-    def _remaining_usage_limits(self, active: ActiveSession) -> UsageLimits | None:
-        return usage_limits_for_remaining_budget(
-            active.usage_tracker,
-            output_tokens_limit=active.state.budget.output_tokens,
-        )
-
-    def _remaining_aux_usage_limits(self, active: ActiveSession) -> UsageLimits | None:
-        return usage_limits_for_remaining_budget(
-            active.usage_tracker,
-            output_tokens_limit=active.state.budget.output_tokens,
-            request_limit=10,
-        )
-
-    def _turn_usage_payload(self, active: ActiveSession) -> TurnUsage | None:
-        rec_agent = last_record_for_source(active.llm_request_log, "agent")
-        budget_gauges = self._budget_gauges(active)
-        if rec_agent is None and not budget_gauges:
-            return None
-        row = usage_last_request_row(rec_agent) if rec_agent else None
-        bd = gauge_breakdown_pct_dict(rec_agent)
-        return TurnUsage(
-            input_tokens=rec_agent.input_tokens if rec_agent else 0,
-            output_tokens=rec_agent.output_tokens if rec_agent else 0,
-            breakdown_pct=TurnUsageBreakdownPct.model_validate(bd) if bd else None,
-            model=self.agent_model_id_for_gauge(active),
-            context_cap_tokens=self.agent_context_cap_for_gauge(active),
-            ttft_ms=row["ttft_ms"] if row else None,
-            total_duration_ms=row["total_duration_ms"] if row else None,
-            reasoning_duration_ms=row["reasoning_duration_ms"] if row else None,
-            reasoning_tokens=row["reasoning_tokens"] if row else None,
-            started_at=rec_agent.started_at if rec_agent else None,
-            first_thinking_at=rec_agent.first_thinking_at if rec_agent else None,
-            last_thinking_at=rec_agent.last_thinking_at if rec_agent else None,
-            first_text_at=rec_agent.first_text_at if rec_agent else None,
-            completed_at=rec_agent.completed_at if rec_agent else None,
-            budget_gauges=budget_gauges,
-        )
-
-    async def _set_llm_request_state(self, active: ActiveSession, state: LlmRequestState) -> None:
-        active.llm_request_state = state.model_copy(deep=True)
-        self._session_mgr.save_llm_request_state(active.state.session_id, active.llm_request_state)
-        await self._broadcast(active, "on_llm_activity", active.llm_request_state.model_copy(deep=True))
-
-    async def _clear_llm_request_state(self, active: ActiveSession) -> None:
-        if active.llm_request_state is None:
-            self._session_mgr.clear_llm_request_state(active.state.session_id)
-            return
-        active.llm_request_state = None
-        self._session_mgr.clear_llm_request_state(active.state.session_id)
-        await self._broadcast(active, "on_llm_activity", None)
-
-    async def _maybe_promote_llm_request_state(self, active: ActiveSession, state: LlmRequestState | None) -> None:
-        if state is None:
-            return
-        current = active.llm_request_state
-        if current is not None and current.phase == state.phase and current.first_text_at == state.first_text_at:
-            return
-        await self._set_llm_request_state(active, state)
-
-    def _budget_command_payload(self, active: ActiveSession, *, message: str | None = None) -> dict[str, Any]:
-        gauges = self._budget_gauges(active)
-        usage_hint = (
-            "Set budgets with /budget input N, /budget output N, /budget cost N, "
-            "or /budget tools N. Use 0 to clear a limit."
-        )
-        payload: dict[str, Any] = {
-            "gauges": [g.model_dump(mode="json") for g in gauges],
-            "usage_hint": usage_hint,
-        }
-        if message is not None:
-            payload["message"] = message
-        if not gauges and message is None:
-            payload["message"] = "No session budgets configured."
-        return payload
-
-    def _parse_budget_limit_value(
-        self, metric: Literal["input", "output", "cost", "tool_calls"], raw: str
-    ) -> int | Decimal:
-        cleaned = raw.replace(",", "").replace("_", "")
-        if metric in ("input", "output", "tool_calls"):
-            lowered = cleaned.lower()
-            multiplier = 1
-            if lowered.endswith("k"):
-                multiplier = 1_000
-                lowered = lowered[:-1]
-            elif lowered.endswith("m"):
-                multiplier = 1_000_000
-                lowered = lowered[:-1]
-
-            budget_type = "tool call budget" if metric == "tool_calls" else "token budget"
-            if not lowered:
-                raise ValueError(f"Invalid {budget_type}: {raw}")
-
-            try:
-                scaled = Decimal(lowered) * multiplier
-            except InvalidOperation as exc:
-                raise ValueError(f"Invalid {budget_type}: {raw}") from exc
-
-            if scaled != scaled.to_integral_value():
-                raise ValueError(f"Invalid {budget_type}: {raw}")
-
-            value = int(scaled)
-            if value < 0:
-                raise ValueError("Budget value must be >= 0")
-            return value
-        try:
-            value = Decimal(cleaned)
-        except InvalidOperation as exc:
-            raise ValueError(f"Invalid cost budget: {raw}") from exc
-        if value < 0:
-            raise ValueError("Budget value must be >= 0")
-        return value
-
-    def _set_budget_metric(
-        self,
-        active: ActiveSession,
-        metric: Literal["input", "output", "cost", "tool_calls"],
-        value: int | Decimal,
-    ) -> str:
-        budget = active.state.budget.model_copy(deep=True)
-        if metric == "input":
-            budget.input_tokens = int(value)
-            if budget.input_tokens == 0:
-                budget.input_tokens = None
-            active.state.budget = budget
-            self._session_mgr.save_state(active.state)
-            if budget.input_tokens is None:
-                return "Cleared input token budget."
-            return f"Set input token budget to {budget.input_tokens:,} tokens."
-        if metric == "output":
-            budget.output_tokens = int(value)
-            if budget.output_tokens == 0:
-                budget.output_tokens = None
-            active.state.budget = budget
-            self._session_mgr.save_state(active.state)
-            if budget.output_tokens is None:
-                return "Cleared output token budget."
-            return f"Set output token budget to {budget.output_tokens:,} tokens."
-        if metric == "tool_calls":
-            budget.tool_calls = int(value)
-            if budget.tool_calls == 0:
-                budget.tool_calls = None
-            active.state.budget = budget
-            self._session_mgr.save_state(active.state)
-            if budget.tool_calls is None:
-                return "Cleared tool call budget."
-            suffix = "call" if budget.tool_calls == 1 else "calls"
-            return f"Set tool call budget to {budget.tool_calls:,} tool {suffix}."
-        budget.cost_usd = Decimal(value)
-        if budget.cost_usd == Decimal(0):
-            budget.cost_usd = None
-        active.state.budget = budget
-        self._session_mgr.save_state(active.state)
-        if budget.cost_usd is None:
-            return "Cleared cost budget."
-        return f"Set cost budget to ${budget.cost_usd:.4f}."
 
     # -- session lifecycle --
 
@@ -629,38 +382,6 @@ class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
         if sub not in active.subscribers:
             active.subscribers.append(sub)
         return active
-
-    @contextlib.contextmanager
-    def llm_request_recording(self, active: ActiveSession):
-        engine = self
-        session_id = active.state.session_id
-
-        class Sink:
-            async def on_request_started(self, state: LlmRequestState) -> None:
-                active.llm_request_thinking.pop(state.request_id, None)
-                await engine._set_llm_request_state(active, state)
-
-            async def on_request_completed(self, record: LlmRequestRecord) -> None:
-                thinking_content = active.llm_request_thinking.pop(record.request_id or "", "")
-                if thinking_content:
-                    thinking_event: dict[str, Any] = {
-                        "role": "thinking",
-                        "content": thinking_content,
-                    }
-                    if record.request_id:
-                        thinking_event["request_id"] = record.request_id
-                    row = usage_last_request_row(record)
-                    if row is not None and row["reasoning_duration_ms"] is not None:
-                        thinking_event["reasoning_duration_ms"] = row["reasoning_duration_ms"]
-                    if row is not None and row["reasoning_tokens"] is not None:
-                        thinking_event["reasoning_tokens"] = row["reasoning_tokens"]
-                    engine._session_mgr.append_events(session_id, [thinking_event])
-                active.llm_request_log.records.append(record)
-                engine._session_mgr.save_llm_request_log(session_id, active.llm_request_log)
-                await engine._clear_llm_request_state(active)
-
-        with llm_request_sink_scope(Sink()):
-            yield
 
     def unsubscribe(self, session_id: str, sub: SessionSubscriber) -> None:
         """Detach a subscriber.  Does NOT cancel agent work or destroy security."""
@@ -891,71 +612,6 @@ class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
             else:
                 active.escalation_queue.put_nowait(response)
 
-    def _record_tool_call_event(
-        self,
-        session_id: str,
-        *,
-        tool: str,
-        args: dict[str, Any],
-        detail: str,
-        approval_source: ApprovalSource | None = None,
-        approval_verdict: ApprovalVerdict | None = None,
-        approval_explanation: str | None = None,
-        parent_tool_id: str | None = None,
-        match_args: dict[str, Any] | None = None,
-    ) -> str:
-        normalized_args = normalize_tool_call_args(tool, args)
-        contexts_raw = normalized_args.get("contexts")
-        matching_args = normalize_tool_call_args(tool, match_args) if match_args is not None else normalized_args
-        event: dict[str, Any] = {
-            "role": "tool_call",
-            "tool": tool,
-            "args": normalized_args,
-            "detail": detail,
-            "approval_source": approval_source,
-            "approval_verdict": approval_verdict,
-            "approval_explanation": approval_explanation,
-        }
-        if parent_tool_id is not None:
-            event["parent_tool_id"] = parent_tool_id
-        if isinstance(contexts_raw, list):
-            event["contexts"] = list(contexts_raw)
-
-        is_pending_sentinel_update = approval_source == "sentinel" and approval_verdict is None
-        should_update_existing = approval_source in {"sentinel", "user"} and (
-            approval_verdict is not None or (tool == "proxy_domain" and is_pending_sentinel_update)
-        )
-
-        def _mutate(events: list[dict[str, Any]]) -> str:
-            if should_update_existing:
-                for index in range(len(events) - 1, -1, -1):
-                    existing = events[index]
-                    if existing.get("role") != "tool_call":
-                        continue
-                    if existing.get("tool") != tool:
-                        continue
-                    if existing.get("parent_tool_id") != parent_tool_id:
-                        continue
-                    if existing.get("approval_source") != "sentinel":
-                        continue
-                    if existing.get("approval_verdict") not in (None, "escalate"):
-                        continue
-                    existing_args = existing.get("args")
-                    if not isinstance(existing_args, dict):
-                        continue
-                    if any(existing_args.get(key) != value for key, value in matching_args.items()):
-                        continue
-
-                    tool_id = str(existing.get("tool_id") or uuid.uuid4())
-                    events[index] = {**existing, **event, "tool_id": tool_id}
-                    return tool_id
-
-            tool_id = str(uuid.uuid4())
-            events.append({**event, "tool_id": tool_id})
-            return tool_id
-
-        return self._session_mgr.update_events(session_id, _mutate)
-
     def _completed_event_turns(self, events: list[dict[str, Any]]) -> list[CompletedEventTurn]:
         return completed_event_turns(events)
 
@@ -1015,346 +671,3 @@ class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
         except Exception as exc:
             logger.warning(f"Title generation failed for {session_id}: {exc}")
         return ""
-
-    def _make_escalation_cb(
-        self,
-        active: ActiveSession,
-    ) -> Callable[[str, str, dict[str, Any]], Awaitable[UserEscalationDecision]]:
-        """Build a callback that broadcasts sentinel escalations (proxy domain or git push) to subscribers."""
-
-        async def _escalate(session_id: str, subject: str, context: dict[str, Any]) -> UserEscalationDecision:
-            request_id = secrets.token_hex(8)
-            notif_id = build_escalation_notification_id(session_id, request_id)
-            cmd = context.get("command", "")
-            kind = context.get("kind", "domain_access")
-
-            # Auto-deny stale pending escalations of the same kind+key.
-            # This happens when an exec timeout killed git push but the old
-            # escalation callback is still blocked on the queue.
-            match_key = {"git_push": "ref", "credential_access": "vault_path"}.get(kind, "domain")
-            match_val = context.get(match_key, subject)
-            for old in list(active.pending_escalations):
-                if old.get("kind") == kind and old.get(match_key) == match_val:
-                    logger.info(f"Superseding stale {kind} escalation {old['request_id']} for {match_val}")
-                    active.escalation_queue.put_nowait(
-                        EscalationResponse(request_id=old["request_id"], decision="deny")
-                    )
-
-            if kind == "git_push":
-                ref = context.get("ref", subject)
-                explanation = context.get("explanation", "")
-                changed_files: list[str] = context.get("changed_files", [])
-                self._session_mgr.append_events(
-                    session_id,
-                    [
-                        {
-                            "role": "git_push_approval",
-                            "request_id": request_id,
-                            "ref": ref,
-                            "explanation": explanation,
-                            "changed_files": changed_files,
-                        }
-                    ],
-                )
-                active.pending_escalations.append(
-                    {
-                        "request_id": request_id,
-                        "kind": "git_push",
-                        "ref": ref,
-                        "explanation": explanation,
-                        "changed_files": changed_files,
-                    }
-                )
-                await self._broadcast(
-                    active, "on_git_push_approval_request", request_id, ref, explanation, changed_files
-                )
-            elif kind == "credential_access":
-                vault_path = context.get("vault_path", subject)
-                cred_name = context.get("name", vault_path)
-                cred_desc = context.get("description", "")
-                explanation = context.get("explanation", "")
-                self._session_mgr.append_events(
-                    session_id,
-                    [
-                        {
-                            "role": "credential_approval",
-                            "request_id": request_id,
-                            "vault_paths": [vault_path],
-                            "names": [cred_name],
-                            "descriptions": [cred_desc],
-                            "explanation": explanation,
-                        }
-                    ],
-                )
-                active.pending_escalations.append(
-                    {
-                        "request_id": request_id,
-                        "kind": "credential_access",
-                        "vault_path": vault_path,
-                        "vault_paths": [vault_path],
-                        "names": [cred_name],
-                        "descriptions": [cred_desc],
-                        "explanation": explanation,
-                    }
-                )
-                await self._broadcast(
-                    active,
-                    "on_credential_approval_request",
-                    request_id,
-                    [vault_path],
-                    [cred_name],
-                    [cred_desc],
-                    None,
-                    explanation,
-                )
-            else:
-                self._session_mgr.append_events(
-                    session_id,
-                    [{"role": "domain_access_approval", "request_id": request_id, "domain": subject, "command": cmd}],
-                )
-                active.pending_escalations.append(
-                    {"request_id": request_id, "kind": "domain_access", "domain": subject, "command": cmd}
-                )
-                await self._broadcast(active, "on_domain_access_approval_request", request_id, subject, cmd)
-
-            if self._notification_router is not None:
-                delivered = await self._notification_router.dispatch_escalation(
-                    session_id=session_id,
-                    request_id=request_id,
-                    title="Action Required",
-                    body=_escalation_notification_body(subject, kind),
-                )
-                if delivered.delivered_subscription_ids:
-                    active.pending_notifications[notif_id] = delivered.delivered_subscription_ids
-            # Block until a subscriber responds
-            while True:
-                msg = await active.escalation_queue.get()
-                if msg is None:
-                    await self._clear_pending_notification(active, session_id, notif_id)
-                    active.pending_escalations.clear()
-                    return UserEscalationDecision(allowed=False)
-                if msg.request_id == request_id:
-                    decision = msg.decision
-                    message = normalize_optional_message(msg.message)
-                    event_roles = {
-                        "git_push": "git_push_approval",
-                        "credential_access": "credential_approval",
-                    }
-                    event_role = event_roles.get(kind, "domain_access_approval")
-                    if kind == "credential_access":
-                        vp = context.get("vault_path", subject)
-                        response_event: dict[str, Any] = {
-                            "role": event_role,
-                            "request_id": request_id,
-                            "vault_paths": [vp],
-                            "decision": decision,
-                            "decision_source": "user",
-                            "message": message,
-                        }
-                    else:
-                        response_event = {
-                            "role": event_role,
-                            "request_id": request_id,
-                            "domain": subject,
-                            "command": cmd,
-                            "decision": decision,
-                            "decision_source": "user",
-                            "message": message,
-                        }
-                    self._session_mgr.append_events(session_id, [response_event])
-                    active.pending_escalations = [
-                        p for p in active.pending_escalations if p["request_id"] != request_id
-                    ]
-                    await self._clear_pending_notification(active, session_id, notif_id)
-                    return UserEscalationDecision(allowed=decision != "deny", message=message)
-
-        return _escalate
-
-    def _make_domain_info_cb(
-        self,
-        active: ActiveSession,
-    ) -> Callable[
-        [
-            str,
-            str,
-            ApprovalSource | None,
-            ApprovalVerdict | None,
-            str | None,
-        ],
-        None,
-    ]:
-        """Build a callback that broadcasts domain access decisions to subscribers."""
-        session_id = active.state.session_id
-
-        def _notify(
-            domain: str,
-            detail: str,
-            approval_source: ApprovalSource | None = None,
-            approval_verdict: ApprovalVerdict | None = None,
-            approval_explanation: str | None = None,
-        ) -> None:
-            parent_id = active.security.current_parent_tool_id if active.security else None
-            tool_id = self._record_tool_call_event(
-                session_id,
-                tool="proxy_domain",
-                args={"domain": domain},
-                detail=detail,
-                approval_source=approval_source,
-                approval_verdict=approval_verdict,
-                approval_explanation=approval_explanation,
-                parent_tool_id=parent_id,
-            )
-            task = asyncio.ensure_future(
-                self._broadcast(
-                    active,
-                    "on_domain_info",
-                    domain,
-                    detail,
-                    approval_source,
-                    approval_verdict,
-                    approval_explanation,
-                    tool_id,
-                    parent_id,
-                )
-            )
-            active._pending_sends.add(task)
-            task.add_done_callback(active._pending_sends.discard)
-
-        return _notify
-
-    def _make_push_info_cb(
-        self,
-        active: ActiveSession,
-    ) -> Callable[
-        [
-            str,
-            str,
-            str,
-            ApprovalSource | None,
-            ApprovalVerdict | None,
-            str | None,
-        ],
-        Awaitable[None],
-    ]:
-        """Build a callback that broadcasts git push decisions to subscribers."""
-        session_id = active.state.session_id
-
-        async def _notify(
-            ref: str,
-            decision: str,
-            detail: str,
-            approval_source: ApprovalSource | None = None,
-            approval_verdict: ApprovalVerdict | None = None,
-            approval_explanation: str | None = None,
-        ) -> None:
-            parent_id = active.security.current_parent_tool_id if active.security else None
-            tool_id = self._record_tool_call_event(
-                session_id,
-                tool="git_push",
-                args={"ref": ref, "decision": decision},
-                detail=detail,
-                approval_source=approval_source,
-                approval_verdict=approval_verdict,
-                approval_explanation=approval_explanation,
-                parent_tool_id=parent_id,
-                match_args={"ref": ref},
-            )
-            await self._broadcast(
-                active,
-                "on_git_push_info",
-                ref,
-                decision,
-                detail,
-                approval_source,
-                approval_verdict,
-                approval_explanation,
-                tool_id,
-                parent_id,
-            )
-
-        return _notify
-
-    def _make_credential_info_cb(
-        self,
-        active: ActiveSession,
-    ) -> Callable[
-        [
-            str,
-            str,
-            str,
-            ApprovalSource | None,
-            ApprovalVerdict | None,
-            str | None,
-        ],
-        None,
-    ]:
-        """Build a callback that broadcasts credential access decisions to subscribers."""
-        session_id = active.state.session_id
-
-        def _notify(
-            vault_path: str,
-            name: str,
-            detail: str,
-            approval_source: ApprovalSource | None = None,
-            approval_verdict: ApprovalVerdict | None = None,
-            approval_explanation: str | None = None,
-        ) -> None:
-            parent_id = active.security.current_parent_tool_id if active.security else None
-            tool_id = self._record_tool_call_event(
-                session_id,
-                tool="credential_access",
-                args={"vault_path": vault_path, "name": name},
-                detail=detail,
-                approval_source=approval_source,
-                approval_verdict=approval_verdict,
-                approval_explanation=approval_explanation,
-                parent_tool_id=parent_id,
-                match_args={"vault_path": vault_path},
-            )
-            task = asyncio.ensure_future(
-                self._broadcast(
-                    active,
-                    "on_credential_info",
-                    vault_path,
-                    name,
-                    detail,
-                    approval_source,
-                    approval_verdict,
-                    approval_explanation,
-                    tool_id,
-                    parent_id,
-                )
-            )
-            active._pending_sends.add(task)
-            task.add_done_callback(active._pending_sends.discard)
-
-        return _notify
-
-    def _make_domain_eval_cb(
-        self,
-        security: SessionSecurity,
-        sentinel: Sentinel,
-        active: ActiveSession,
-    ) -> Callable[[str, str], Awaitable[bool]]:
-        """Build a callback for SandboxManager.request_domain_approval."""
-
-        async def _eval(domain: str, command: str) -> bool:
-            with self.llm_request_recording(active):
-                try:
-                    return await security_mod.evaluate_domain_with(
-                        security,
-                        sentinel,
-                        domain,
-                        command,
-                        usage_tracker=active.usage_tracker,
-                        assert_llm_budget_available=lambda: self._assert_llm_budget_available(active),
-                        usage_limits=self._remaining_aux_usage_limits(active),
-                    )
-                except SessionBudgetExceededError as exc:
-                    logger.info(f"Session budget blocked domain evaluation for {active.state.session_id}: {exc}")
-                    return False
-                except UsageLimitExceeded as exc:
-                    logger.info(f"Usage limits blocked domain evaluation for {active.state.session_id}: {exc}")
-                    return False
-
-        return _eval
