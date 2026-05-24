@@ -10,11 +10,11 @@ from loguru import logger
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 
-from carapace.llm import model_settings_for_config
-from carapace.models.config import AvailableModelEntry, Config, agent_available_model_entries
-from carapace.models.session import SessionState
-from carapace.session.manager import SessionManager
-from carapace.session.types import ActiveSession
+from ..llm import model_settings_for_config
+from ..models.config import AvailableModelEntry, Config, agent_available_model_entries
+from ..models.session import SessionState
+from .manager import SessionManager
+from .types import ActiveSession
 
 
 class _UnsetType:

@@ -5,9 +5,9 @@ from typing import Literal, Protocol
 
 from loguru import logger
 
-from carapace.notifications.models import NotificationPreferences, NotificationSubscription
-from carapace.notifications.presence import NotificationPresenceRegistry
-from carapace.notifications.store import NotificationStore
+from .models import NotificationPreferences, NotificationSubscription
+from .presence import NotificationPresenceRegistry
+from .store import NotificationStore
 
 NotificationKind = Literal[
     "escalation_pending",

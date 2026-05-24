@@ -12,7 +12,7 @@ from docker.errors import APIError, DockerException, ImageNotFound, NotFound
 from docker.types import Mount as DockerMount
 from loguru import logger
 
-from carapace.sandbox.runtime import (
+from .runtime import (
     ContainerConfig,
     ContainerGoneError,
     ContainerRuntime,

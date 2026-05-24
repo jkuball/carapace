@@ -11,7 +11,7 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from carapace.usage import LlmRequestLogCapability, UsageTracker
+from ..usage import LlmRequestLogCapability, UsageTracker
 
 _SYSTEM_PROMPT = """\
 Generate a very short title (3-8 words) for a chat conversation.

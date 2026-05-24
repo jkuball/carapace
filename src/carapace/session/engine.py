@@ -25,25 +25,39 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models import Model
 
-from carapace.agent.deps import Deps
-from carapace.agent.loop import run_agent_turn as _run_agent_turn
-from carapace.git.store import GitStore
-from carapace.models.config import Config
-from carapace.models.credentials import CredentialRegistryProtocol
-from carapace.models.session import SessionAttributes, SessionState
-from carapace.models.skills import SkillInfo
-from carapace.models.tooling import ToolCallCallback, ToolResult
-from carapace.notifications.router import NotificationRouter
-from carapace.sandbox.manager import SandboxManager
-from carapace.sandbox.runtime import SkillActivationInputs, SkillFileCredential
-from carapace.security.context import SessionSecurity
-from carapace.security.sentinel import Sentinel
-from carapace.session.approvals import SessionApprovalMixin
-from carapace.session.commands import SessionCommandMixin
-from carapace.session.manager import SessionManager
-from carapace.session.model_selection import SessionModelMixin
-from carapace.session.titler import generate_title
-from carapace.session.transcript import (
+from ..agent.deps import Deps
+from ..agent.loop import run_agent_turn as _run_agent_turn
+from ..git.store import GitStore
+from ..models.config import Config
+from ..models.credentials import CredentialRegistryProtocol
+from ..models.session import SessionAttributes, SessionState
+from ..models.skills import SkillInfo
+from ..models.tooling import ToolCallCallback, ToolResult
+from ..notifications.router import NotificationRouter
+from ..sandbox.manager import SandboxManager
+from ..sandbox.runtime import SkillActivationInputs, SkillFileCredential
+from ..security.context import SessionSecurity
+from ..security.sentinel import Sentinel
+from ..skills import SkillRegistry
+from ..usage import (
+    LlmRequestState,
+)
+from ..usage import (
+    note_llm_request_text as _note_llm_request_text,
+)
+from ..usage import (
+    note_llm_request_thinking as _note_llm_request_thinking,
+)
+from ..ws_models import (
+    ApprovalResponse,
+    EscalationResponse,
+)
+from .approvals import SessionApprovalMixin
+from .commands import SessionCommandMixin
+from .manager import SessionManager
+from .model_selection import SessionModelMixin
+from .titler import generate_title
+from .transcript import (
     CompletedEventTurn,
     completed_event_turns,
     completed_model_turn_end_indexes,
@@ -52,23 +66,9 @@ from carapace.session.transcript import (
     normalize_unattended_output_history,
     task_output_text,
 )
-from carapace.session.turns import SessionTurnMixin
-from carapace.session.types import ActiveSession, SessionSubscriber
-from carapace.session.usage_budget import SessionUsageBudgetMixin
-from carapace.skills import SkillRegistry
-from carapace.usage import (
-    LlmRequestState,
-)
-from carapace.usage import (
-    note_llm_request_text as _note_llm_request_text,
-)
-from carapace.usage import (
-    note_llm_request_thinking as _note_llm_request_thinking,
-)
-from carapace.ws_models import (
-    ApprovalResponse,
-    EscalationResponse,
-)
+from .turns import SessionTurnMixin
+from .types import ActiveSession, SessionSubscriber
+from .usage_budget import SessionUsageBudgetMixin
 
 
 # Compatibility shims for tests that patch helpers on carapace.session.engine.

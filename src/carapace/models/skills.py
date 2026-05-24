@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from carapace.sandbox.runtime import NetworkTunnel
+from ..sandbox.runtime import NetworkTunnel
 
 
 class SkillCredentialDecl(BaseModel):

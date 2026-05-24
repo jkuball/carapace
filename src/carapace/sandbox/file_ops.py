@@ -7,11 +7,11 @@ from typing import Protocol
 
 from loguru import logger
 
-from carapace.sandbox.container_scripts import (
+from .container_scripts import (
     SANDBOX_STR_REPLACE_SCRIPT as _STR_REPLACE_SCRIPT,
 )
-from carapace.sandbox.container_scripts import build_file_read_script
-from carapace.sandbox.runtime import ExecResult
+from .container_scripts import build_file_read_script
+from .runtime import ExecResult
 
 # Maximum characters returned for a single text file read (body only; headers are extra).
 MAX_READ_OUTPUT_CHARS = 65536

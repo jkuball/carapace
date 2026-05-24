@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import yaml
 from croniter import croniter
 
-from carapace.models.jobs import JobCronTrigger, JobDefinition, JobsFile
+from .models.jobs import JobCronTrigger, JobDefinition, JobsFile
 
 JobTriggerKind = Literal["api", "cron", "manual"]
 

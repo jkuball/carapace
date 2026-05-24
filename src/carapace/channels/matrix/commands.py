@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from carapace.agent.deps import Deps
-from carapace.models.skills import context_grants_session_summary
-from carapace.ws_models import CommandResult
+from ...agent.deps import Deps
+from ...models.skills import context_grants_session_summary
+from ...ws_models import CommandResult
 
 
 def handle_matrix_slash_command(

@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from carapace.security.context import ApprovalSource, ApprovalVerdict
+from ..security.context import ApprovalSource, ApprovalVerdict
 
 
 @dataclass(frozen=True, slots=True)

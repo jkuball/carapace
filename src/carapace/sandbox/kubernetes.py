@@ -14,7 +14,7 @@ from kr8s._api import Api
 from kr8s.asyncio.objects import Deployment, Pod, StatefulSet, new_class
 from loguru import logger
 
-from carapace.sandbox.runtime import (
+from .runtime import (
     ContainerConfig,
     ContainerGoneError,
     ContainerRuntime,

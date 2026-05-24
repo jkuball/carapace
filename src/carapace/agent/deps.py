@@ -8,16 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.models import Model
 from pydantic_ai.usage import UsageLimits
 
-from carapace.git.store import GitStore
-from carapace.models.config import Config
-from carapace.models.credentials import CredentialRegistryProtocol
-from carapace.models.session import SessionState
-from carapace.models.skills import SkillInfo
-from carapace.models.tooling import ToolCallCallback, ToolResult
-from carapace.sandbox.manager import SandboxManager
-from carapace.security.context import SessionSecurity
-from carapace.security.sentinel import Sentinel
-from carapace.usage import UsageTracker
+from ..git.store import GitStore
+from ..models.config import Config
+from ..models.credentials import CredentialRegistryProtocol
+from ..models.session import SessionState
+from ..models.skills import SkillInfo
+from ..models.tooling import ToolCallCallback, ToolResult
+from ..sandbox.manager import SandboxManager
+from ..security.context import SessionSecurity
+from ..security.sentinel import Sentinel
+from ..usage import UsageTracker
 
 
 class TaskDone(BaseModel):

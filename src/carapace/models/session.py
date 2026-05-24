@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from carapace.models.skills import ContextGrant
+from .skills import ContextGrant
 
 
 class SessionBudget(BaseModel):

@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 from loguru import logger
 
-from carapace.models.skills import SkillCarapaceConfig, SkillInfo
+from .models.skills import SkillCarapaceConfig, SkillInfo
 
 
 @dataclass(frozen=True)

@@ -11,10 +11,11 @@ from pathlib import Path
 
 from loguru import logger
 
-from carapace.sandbox import file_ops
-from carapace.sandbox.exec_flow import SandboxExecCoordinator, SandboxExecState
-from carapace.sandbox.file_ops import SandboxFileOps
-from carapace.sandbox.runtime import (
+from ..security.context import ApprovalSource, ApprovalVerdict
+from . import file_ops
+from .exec_flow import SandboxExecCoordinator, SandboxExecState
+from .file_ops import SandboxFileOps
+from .runtime import (
     ContainerRuntime,
     ExecResult,
     NetworkTunnel,
@@ -22,19 +23,18 @@ from carapace.sandbox.runtime import (
     SkillActivationError,
     SkillActivationInputs,
 )
-from carapace.sandbox.session_lifecycle import (
+from .session_lifecycle import (
     SandboxSessionLifecycle,
     SandboxSessionLifecycleState,
     SessionContainer,
 )
-from carapace.sandbox.skill_activation import SkillActivationRunner
-from carapace.sandbox.state import (
+from .skill_activation import SkillActivationRunner
+from .state import (
     SessionSandboxSnapshot,
     clear_sandbox_snapshot,
     load_sandbox_snapshot,
     save_sandbox_snapshot,
 )
-from carapace.security.context import ApprovalSource, ApprovalVerdict
 
 _SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 FILE_READ_SCRIPT = file_ops.FILE_READ_SCRIPT

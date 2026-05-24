@@ -13,7 +13,8 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from carapace.security.context import (
+from ..usage import LlmRequestLogCapability, UsageTracker
+from .context import (
     ActionLogEntry,
     AgentResponseEntry,
     ApprovalEntry,
@@ -29,7 +30,6 @@ from carapace.security.context import (
     UserMessageEntry,
     UserVouchedEntry,
 )
-from carapace.usage import LlmRequestLogCapability, UsageTracker
 
 _SENTINEL_SYSTEM_PREFIX = """\
 You are the security gate for an AI agent system called carapace.

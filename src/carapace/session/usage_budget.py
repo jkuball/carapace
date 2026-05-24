@@ -6,10 +6,8 @@ import contextlib
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Literal
 
-from carapace.models.config import Config
-from carapace.session.manager import SessionManager
-from carapace.session.types import ActiveSession
-from carapace.usage import (
+from ..models.config import Config
+from ..usage import (
     BudgetGauge,
     LlmRequestRecord,
     LlmRequestState,
@@ -23,7 +21,9 @@ from carapace.usage import (
     usage_last_request_row,
     usage_limits_for_remaining_budget,
 )
-from carapace.ws_models import TurnUsage, TurnUsageBreakdownPct
+from ..ws_models import TurnUsage, TurnUsageBreakdownPct
+from .manager import SessionManager
+from .types import ActiveSession
 
 if TYPE_CHECKING:
     from pydantic_ai.usage import UsageLimits

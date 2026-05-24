@@ -14,14 +14,14 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
-from carapace.models.session import SessionAttributes, SessionBudget, SessionState
-from carapace.sandbox.state import (
+from ..models.session import SessionAttributes, SessionBudget, SessionState
+from ..sandbox.state import (
     SessionSandboxSnapshot,
     clear_sandbox_snapshot,
     load_sandbox_snapshot,
     save_sandbox_snapshot,
 )
-from carapace.usage import LlmRequestLog, LlmRequestState, UsageTracker
+from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
 
 
 def _to_yaml_safe(value: Any) -> Any:

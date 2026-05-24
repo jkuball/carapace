@@ -11,21 +11,21 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 from pydantic_ai.exceptions import UsageLimitExceeded
 
-import carapace.security as security_mod
-from carapace.models.tooling import normalize_tool_call_args
-from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
-from carapace.security.context import (
+from .. import security as security_mod
+from ..models.tooling import normalize_tool_call_args
+from ..notifications.router import NotificationRouter, build_escalation_notification_id
+from ..security.context import (
     ApprovalSource,
     ApprovalVerdict,
     SessionSecurity,
     UserEscalationDecision,
     normalize_optional_message,
 )
-from carapace.security.sentinel import Sentinel
-from carapace.session.manager import SessionManager
-from carapace.session.types import ActiveSession
-from carapace.usage import SessionBudgetExceededError
-from carapace.ws_models import EscalationResponse
+from ..security.sentinel import Sentinel
+from ..usage import SessionBudgetExceededError
+from ..ws_models import EscalationResponse
+from .manager import SessionManager
+from .types import ActiveSession
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager

@@ -12,24 +12,24 @@ from loguru import logger
 from pydantic import Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
 
-import carapace.security as security
-from carapace.agent.deps import Deps, TaskDone, TaskFailed
-from carapace.config import load_workspace_file
-from carapace.llm import model_settings_for_config
-from carapace.models.credentials import CredentialMetadata
-from carapace.models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
-from carapace.models.tooling import ToolResult, normalize_tool_call_args
-from carapace.sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
-from carapace.sandbox.runtime import SkillActivationError
-from carapace.sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
-from carapace.security.context import (
+from .. import security as security
+from ..config import load_workspace_file
+from ..llm import model_settings_for_config
+from ..models.credentials import CredentialMetadata
+from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
+from ..models.tooling import ToolResult, normalize_tool_call_args
+from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
+from ..sandbox.runtime import SkillActivationError
+from ..sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
+from ..security.context import (
     ContextGrantEntry,
     CredentialAccessEntry,
     SkillActivatedEntry,
     ToolResultEntry,
 )
-from carapace.skills import SkillRegistry
-from carapace.usage import LlmRequestLogCapability
+from ..skills import SkillRegistry
+from ..usage import LlmRequestLogCapability
+from .deps import Deps, TaskDone, TaskFailed
 
 _WORKSPACE_ROOT = PurePosixPath("/workspace")
 _SKILLS_ROOT = PurePosixPath("skills")

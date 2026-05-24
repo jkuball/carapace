@@ -17,7 +17,7 @@ from rich.panel import Panel
 from rich.table import Table
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
-from carapace.payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
+from .payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
 
 load_dotenv()
 

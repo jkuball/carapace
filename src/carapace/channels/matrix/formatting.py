@@ -6,8 +6,8 @@ import json
 
 import markdown as md
 
-from carapace.payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
-from carapace.ws_models import ApprovalRequest, CommandResult
+from ...payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
+from ...ws_models import ApprovalRequest, CommandResult
 
 
 def md_to_html(text: str) -> str:

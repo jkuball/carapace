@@ -8,19 +8,19 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from carapace.channels.matrix.approval import (
+from ...models.tooling import ToolResult
+from ...usage import LlmRequestState
+from ...ws_models import ApprovalRequest, TurnUsage
+from .approval import (
     TYPING_INTERVAL,
     PendingApproval,
     PendingCredentialApproval,
     PendingDomainApproval,
 )
-from carapace.channels.matrix.formatting import format_approval_request, format_domain_escalation
-from carapace.models.tooling import ToolResult
-from carapace.usage import LlmRequestState
-from carapace.ws_models import ApprovalRequest, TurnUsage
+from .formatting import format_approval_request, format_domain_escalation
 
 if TYPE_CHECKING:
-    from carapace.channels.matrix.channel import MatrixChannel
+    from .channel import MatrixChannel
 
 
 class MatrixSubscriber:

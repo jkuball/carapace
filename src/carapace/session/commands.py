@@ -6,14 +6,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from carapace.git.store import GitStore
-from carapace.models.config import Config
-from carapace.models.skills import SkillInfo, context_grants_session_summary
-from carapace.sandbox.manager import SandboxManager
-from carapace.session.manager import SessionManager
-from carapace.session.types import ActiveSession
-from carapace.skills import SkillRegistry
-from carapace.ws_models import SLASH_COMMANDS
+from ..git.store import GitStore
+from ..models.config import Config
+from ..models.skills import SkillInfo, context_grants_session_summary
+from ..sandbox.manager import SandboxManager
+from ..skills import SkillRegistry
+from ..ws_models import SLASH_COMMANDS
+from .manager import SessionManager
+from .types import ActiveSession
 
 
 class SessionCommandHost(Protocol):

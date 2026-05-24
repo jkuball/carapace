@@ -27,16 +27,16 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import UsageLimits
 
-from carapace.agent.deps import Deps, TaskDone, TaskFailed
-from carapace.agent.tools import create_agent
-from carapace.security.context import (
+from ..security.context import (
     AgentResponseEntry,
     ApprovalEntry,
     AuditEntry,
     SentinelVerdict,
     UserMessageEntry,
 )
-from carapace.ws_models import ApprovalRequest, FinalStatus
+from ..ws_models import ApprovalRequest, FinalStatus
+from .deps import Deps, TaskDone, TaskFailed
+from .tools import create_agent
 
 
 async def run_agent_turn(

@@ -10,8 +10,9 @@ from pydantic_ai import ApprovalRequired
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.usage import UsageLimits
 
-from carapace.security.context import ActionLogEntry as ActionLogEntry
-from carapace.security.context import (
+from ..usage import UsageTracker
+from .context import ActionLogEntry as ActionLogEntry
+from .context import (
     ApprovalSource,
     ApprovalVerdict,
     AuditEntry,
@@ -25,10 +26,9 @@ from carapace.security.context import (
     format_denial_message,
     normalize_optional_message,
 )
-from carapace.security.context import CredentialAccessEntry as CredentialAccessEntry
-from carapace.security.exec_allowlist import match_auto_allowed_exec
-from carapace.security.sentinel import Sentinel
-from carapace.usage import UsageTracker
+from .context import CredentialAccessEntry as CredentialAccessEntry
+from .exec_allowlist import match_auto_allowed_exec
+from .sentinel import Sentinel
 
 SAFE_TOOLS: frozenset[str] = frozenset(
     {

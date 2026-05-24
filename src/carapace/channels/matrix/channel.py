@@ -12,7 +12,13 @@ from typing import Any, Protocol, cast
 import nio
 from loguru import logger
 
-from carapace.channels.matrix.approval import (
+from ...models.config import Config, MatrixChannelConfig, MatrixTokenFile
+from ...models.skills import SkillInfo
+from ...notifications.presence import NotificationPresenceRegistry
+from ...sandbox.manager import SandboxManager
+from ...session import SessionEngine, SessionManager
+from ...ws_models import ApprovalResponse, CommandResult, EscalationResponse
+from .approval import (
     APPROVE_COMMANDS,
     APPROVE_REACTIONS,
     DENY_COMMANDS,
@@ -22,17 +28,11 @@ from carapace.channels.matrix.approval import (
     PendingCredentialApproval,
     PendingDomainApproval,
 )
-from carapace.channels.matrix.formatting import (
+from .formatting import (
     format_command_result_text,
     md_to_html,
 )
-from carapace.channels.matrix.subscriber import MatrixSubscriber
-from carapace.models.config import Config, MatrixChannelConfig, MatrixTokenFile
-from carapace.models.skills import SkillInfo
-from carapace.notifications.presence import NotificationPresenceRegistry
-from carapace.sandbox.manager import SandboxManager
-from carapace.session import SessionEngine, SessionManager
-from carapace.ws_models import ApprovalResponse, CommandResult, EscalationResponse
+from .subscriber import MatrixSubscriber
 
 
 # Pyrefly widens matrix-nio's decorated async methods to

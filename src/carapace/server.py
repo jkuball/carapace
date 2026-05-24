@@ -38,41 +38,41 @@ from pydantic import BaseModel, ValidationError, field_validator, model_validato
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import ModelMessage
 
-from carapace import get_version
-from carapace.auth import get_token
-from carapace.bootstrap import ensure_data_dir, ensure_knowledge_dir
-from carapace.cache import SessionListCache
-from carapace.config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
-from carapace.credentials import CredentialRegistry, build_credential_registry
-from carapace.git.http import GitHttpHandler
-from carapace.git.store import GitStore
-from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
-from carapace.llm import make_model_factory
-from carapace.models.config import Config
-from carapace.models.jobs import JobDefinition, JobsFile
-from carapace.models.session import SessionAttributes, SessionJobRunContext, SessionState
-from carapace.models.tooling import ToolResult, normalize_tool_call_args
-from carapace.notifications.models import (
+from . import get_version
+from .auth import get_token
+from .bootstrap import ensure_data_dir, ensure_knowledge_dir
+from .cache import SessionListCache
+from .config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
+from .credentials import CredentialRegistry, build_credential_registry
+from .git.http import GitHttpHandler
+from .git.store import GitStore
+from .jobs import JobsScheduler, JobsStore, build_job_run_message
+from .llm import make_model_factory
+from .models.config import Config
+from .models.jobs import JobDefinition, JobsFile
+from .models.session import SessionAttributes, SessionJobRunContext, SessionState
+from .models.tooling import ToolResult, normalize_tool_call_args
+from .notifications.models import (
     NotificationClientType,
     NotificationFocusState,
     NotificationPreferences,
     NotificationSubscription,
 )
-from carapace.notifications.presence import NotificationPresenceRegistry
-from carapace.notifications.router import NotificationRouter
-from carapace.notifications.sender import WebPushSender
-from carapace.notifications.store import NotificationStore, derive_owner_key
-from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
-from carapace.sandbox.manager import SandboxManager
-from carapace.sandbox.proxy import ProxyServer
-from carapace.sandbox.runtime import ContainerRuntime
-from carapace.sandbox.state import SessionSandboxSnapshot
-from carapace.security.context import ApprovalSource, ApprovalVerdict
-from carapace.session import SessionEngine, SessionManager
-from carapace.session.archive import SessionArchiveService
-from carapace.skills import SkillRegistry
-from carapace.usage import LlmRequestState, SessionBudgetExceededError
-from carapace.ws_models import (
+from .notifications.presence import NotificationPresenceRegistry
+from .notifications.router import NotificationRouter
+from .notifications.sender import WebPushSender
+from .notifications.store import NotificationStore, derive_owner_key
+from .notifications.vapid import derive_vapid_public_key, ensure_vapid_config
+from .sandbox.manager import SandboxManager
+from .sandbox.proxy import ProxyServer
+from .sandbox.runtime import ContainerRuntime
+from .sandbox.state import SessionSandboxSnapshot
+from .security.context import ApprovalSource, ApprovalVerdict
+from .session import SessionEngine, SessionManager
+from .session.archive import SessionArchiveService
+from .skills import SkillRegistry
+from .usage import LlmRequestState, SessionBudgetExceededError
+from .ws_models import (
     SLASH_COMMANDS,
     ApprovalRequest,
     ApprovalResponse,
@@ -128,7 +128,7 @@ _APP_VERSION = get_version()
 def _create_sandbox_runtime(config: Config, data_dir: Path) -> ContainerRuntime:
     """Instantiate the sandbox container runtime based on config."""
     if config.sandbox.runtime == "kubernetes":
-        from carapace.sandbox.kubernetes import KubernetesRuntime
+        from .sandbox.kubernetes import KubernetesRuntime
 
         return KubernetesRuntime(
             namespace=config.sandbox.k8s_namespace,
@@ -148,7 +148,7 @@ def _create_sandbox_runtime(config: Config, data_dir: Path) -> ContainerRuntime:
             resource_limits_memory=config.sandbox.k8s_resource_limits_memory,
         )
 
-    from carapace.sandbox.docker import DockerRuntime
+    from .sandbox.docker import DockerRuntime
 
     host_data_dir_env = os.environ.get("CARAPACE_HOST_DATA_DIR")
     return DockerRuntime(
@@ -460,7 +460,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     matrix_channel = None
     if _config.channels.matrix.enabled:
-        from carapace.channels.matrix import MatrixChannel
+        from .channels.matrix import MatrixChannel
 
         matrix_channel = MatrixChannel(
             config=_config.channels.matrix,
@@ -2101,7 +2101,7 @@ async def evaluate_push(req: PushEvalRequest) -> dict[str, str]:
     if active.security is None or active.sentinel is None:
         return {"verdict": "deny", "reason": "Session not initialized"}
 
-    from carapace.security import evaluate_push_with
+    from .security import evaluate_push_with
 
     with _engine.llm_request_recording(active):
         try:
@@ -2258,7 +2258,7 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         if active.security is None or active.sentinel is None:
             return Response(status_code=403, content="Session not initialized")
 
-        from carapace.security import evaluate_credential_with
+        from .security import evaluate_credential_with
 
         with _engine.llm_request_recording(active):
             try:
