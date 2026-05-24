@@ -22,17 +22,9 @@ SessionRuntimePhase = Literal[
     "cancelled",
 ]
 
-SessionRecoveryPolicy = Literal["repair_as_cancelled", "mark_failed", "retry_from_checkpoint"]
-
 
 def utc_now() -> datetime:
     return datetime.now(tz=UTC)
-
-
-class RuntimeLease(BaseModel):
-    owner: str
-    acquired_at: datetime = Field(default_factory=utc_now)
-    expires_at: datetime
 
 
 class SessionRuntime(BaseModel):
@@ -43,11 +35,8 @@ class SessionRuntime(BaseModel):
     previous_phase: SessionRuntimePhase | None = None
     pending_approval_ids: list[str] = Field(default_factory=list)
     pending_escalation_ids: list[str] = Field(default_factory=list)
-    sandbox_operation_ids: list[str] = Field(default_factory=list)
-    lease: RuntimeLease | None = None
     updated_at: datetime = Field(default_factory=utc_now)
     last_error: str | None = None
-    recovery_policy: SessionRecoveryPolicy = "repair_as_cancelled"
 
     @property
     def is_active(self) -> bool:

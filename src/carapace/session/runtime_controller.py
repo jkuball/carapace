@@ -48,9 +48,7 @@ class SessionRuntimeController:
             updates={
                 "pending_approval_ids": [],
                 "pending_escalation_ids": [],
-                "sandbox_operation_ids": [],
                 "last_error": None,
-                "lease": None,
             },
         )
 
@@ -73,8 +71,6 @@ class SessionRuntimeController:
                 "current_turn_id": None,
                 "pending_approval_ids": [],
                 "pending_escalation_ids": [],
-                "sandbox_operation_ids": [],
-                "lease": None,
                 "last_error": None,
             },
         )

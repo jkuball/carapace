@@ -61,8 +61,6 @@ class SessionRuntimeRecovery:
                 "current_turn_id": None,
                 "pending_approval_ids": [],
                 "pending_escalation_ids": [],
-                "sandbox_operation_ids": [],
-                "lease": None,
                 "last_error": f"Recovered stale runtime phase: {original_phase}",
             },
             payload={"recovered_from_phase": original_phase},

@@ -46,7 +46,6 @@ class SandboxRuntimeController:
             event_type="sandbox_starting",
             updates={
                 "runtime": runtime,
-                "needs_runtime_setup": False,
                 "last_error": None,
             },
         )
@@ -59,7 +58,6 @@ class SandboxRuntimeController:
         resource_id: str | None,
         resource_kind: str | None = None,
         storage_present: bool = False,
-        needs_runtime_setup: bool = False,
     ) -> None:
         self._store.transition_runtime(
             session_id,
@@ -70,7 +68,6 @@ class SandboxRuntimeController:
                 "resource_id": resource_id,
                 "resource_kind": resource_kind,
                 "storage_present": storage_present,
-                "needs_runtime_setup": needs_runtime_setup,
                 "last_error": None,
             },
         )
@@ -94,7 +91,6 @@ class SandboxRuntimeController:
                 "resource_id": resource_id,
                 "resource_kind": resource_kind,
                 "storage_present": storage_present,
-                "needs_runtime_setup": False,
                 "last_error": None,
             },
             payload={"status": status},
@@ -118,8 +114,6 @@ class SandboxRuntimeController:
                 "resource_id": None,
                 "resource_kind": None,
                 "storage_present": False,
-                "needs_runtime_setup": False,
-                "active_operation_id": None,
                 "last_error": None,
             },
         )
@@ -129,7 +123,7 @@ class SandboxRuntimeController:
             session_id,
             to_phase="error",
             event_type="sandbox_lifecycle_failed",
-            updates={"last_error": error, "needs_runtime_setup": False},
+            updates={"last_error": error},
             payload={"error": error},
         )
 
@@ -151,13 +145,6 @@ class SandboxRuntimeController:
             temporary_domains=sorted(temporary_domains or set()),
         )
         self._store.create_operation(operation, payload={"cwd": cwd})
-        self._store.transition_runtime(
-            session_id,
-            to_phase=self._store.load_runtime(session_id).phase,
-            event_type="sandbox_operation_queued",
-            operation_id=operation.operation_id,
-            updates={"active_operation_id": operation.operation_id},
-        )
         return operation
 
     def operation_phase(
@@ -185,17 +172,10 @@ class SandboxRuntimeController:
                 event_type="sandbox_operation_failed",
                 updates={
                     "exit_code": result.exit_code,
-                    "stdout": _truncate_output(result.output),
+                    "output": _truncate_output(result.output),
                     "last_error": f"Command exited with {result.exit_code}",
                 },
                 payload={"exit_code": result.exit_code},
-            )
-            self._store.transition_runtime(
-                session_id,
-                to_phase=self._store.load_runtime(session_id).phase,
-                event_type="sandbox_operation_failed",
-                operation_id=operation_id,
-                updates={"active_operation_id": None},
             )
             return
 
@@ -204,15 +184,8 @@ class SandboxRuntimeController:
             operation_id,
             to_phase="completed",
             event_type="sandbox_operation_completed",
-            updates={"exit_code": result.exit_code, "stdout": _truncate_output(result.output), "last_error": None},
+            updates={"exit_code": result.exit_code, "output": _truncate_output(result.output), "last_error": None},
             payload={"exit_code": result.exit_code},
-        )
-        self._store.transition_runtime(
-            session_id,
-            to_phase=self._store.load_runtime(session_id).phase,
-            event_type="sandbox_operation_completed",
-            operation_id=operation_id,
-            updates={"active_operation_id": None},
         )
 
     def operation_failed(self, session_id: str, operation_id: str, error: str) -> None:
@@ -224,13 +197,6 @@ class SandboxRuntimeController:
             updates={"last_error": error},
             payload={"error": error},
         )
-        self._store.transition_runtime(
-            session_id,
-            to_phase=self._store.load_runtime(session_id).phase,
-            event_type="sandbox_operation_failed",
-            operation_id=operation_id,
-            updates={"active_operation_id": None},
-        )
 
     def operation_interrupted(self, session_id: str, operation_id: str, error: str) -> None:
         self._store.transition_operation(
@@ -240,11 +206,4 @@ class SandboxRuntimeController:
             event_type="sandbox_operation_interrupted",
             updates={"last_error": error},
             payload={"error": error},
-        )
-        self._store.transition_runtime(
-            session_id,
-            to_phase=self._store.load_runtime(session_id).phase,
-            event_type="sandbox_operation_interrupted",
-            operation_id=operation_id,
-            updates={"active_operation_id": None},
         )

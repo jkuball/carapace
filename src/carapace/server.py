@@ -75,6 +75,7 @@ from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
 from carapace.sandbox.runtime import ContainerRuntime
 from carapace.sandbox.state import SessionSandboxSnapshot
+from carapace.sandbox.store import SandboxStore
 from carapace.security.context import ApprovalSource, ApprovalVerdict
 from carapace.session import SessionEngine, SessionManager
 from carapace.session.archive import SessionArchiveService
@@ -345,6 +346,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     proxy_port = _config.sandbox.proxy_port
 
+    _sandbox_store = SandboxStore(session_mgr)
     _sandbox_mgr = SandboxManager(
         runtime=runtime,
         data_dir=_data_dir,
@@ -355,7 +357,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
         git_author=_config.git.author,
-        session_mgr=session_mgr,
+        sandbox_store=_sandbox_store,
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 

@@ -1,33 +1,27 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from carapace.sandbox.events import SandboxRuntimeEvent
-from carapace.sandbox.operations import SandboxOperation, SandboxOperationLease
-from carapace.sandbox.state import SandboxLease, SandboxRuntimeState
+from carapace.sandbox.operations import SandboxOperation
+from carapace.sandbox.state import SandboxRuntimeState
 from carapace.sandbox.store import SandboxStore, SandboxTransitionError, SandboxVersionConflictError
 from carapace.session.events import SessionRuntimeEvent
 from carapace.session.manager import SessionManager
 from carapace.session.runtime_controller import SessionRuntimeController
-from carapace.session.state import RuntimeLease, SessionRuntime
+from carapace.session.state import SessionRuntime
 from carapace.session.store import SessionStore, SessionTransitionError, SessionVersionConflictError
 
 
 def test_session_runtime_roundtrip(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
     session = mgr.create_session()
-    lease = RuntimeLease(
-        owner="controller-1",
-        expires_at=datetime.now(tz=UTC) + timedelta(seconds=30),
-    )
     runtime = SessionRuntime(
         session_id=session.session_id,
         phase="waiting_tool_approval",
         version=3,
         current_turn_id="turn-1",
         pending_approval_ids=["approval-1"],
-        lease=lease,
     )
 
     mgr.save_session_runtime(runtime)
@@ -37,8 +31,6 @@ def test_session_runtime_roundtrip(tmp_path: Path) -> None:
     assert reloaded.phase == "waiting_tool_approval"
     assert reloaded.current_turn_id == "turn-1"
     assert reloaded.pending_approval_ids == ["approval-1"]
-    assert reloaded.lease is not None
-    assert reloaded.lease.owner == "controller-1"
     assert reloaded.is_active is True
     assert reloaded.is_waiting_for_user is True
 
@@ -56,19 +48,12 @@ def test_session_runtime_can_be_cleared(tmp_path: Path) -> None:
 def test_sandbox_runtime_roundtrip(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
     session = mgr.create_session()
-    lease = SandboxLease(
-        owner="sandbox-controller-1",
-        acquired_at=datetime.now(tz=UTC),
-        expires_at=datetime.now(tz=UTC) + timedelta(seconds=30),
-    )
     runtime = SandboxRuntimeState(
         session_id=session.session_id,
         phase="ready",
         runtime="kubernetes",
         resource_id="carapace-sandbox-abc",
         resource_kind="statefulset",
-        needs_runtime_setup=True,
-        lease=lease,
     )
 
     mgr.save_sandbox_runtime(runtime)
@@ -78,9 +63,6 @@ def test_sandbox_runtime_roundtrip(tmp_path: Path) -> None:
     assert reloaded.phase == "ready"
     assert reloaded.runtime == "kubernetes"
     assert reloaded.resource_kind == "statefulset"
-    assert reloaded.needs_runtime_setup is True
-    assert reloaded.lease is not None
-    assert reloaded.lease.owner == "sandbox-controller-1"
 
 
 def test_sandbox_operation_roundtrip_and_listing(tmp_path: Path) -> None:
@@ -94,10 +76,6 @@ def test_sandbox_operation_roundtrip_and_listing(tmp_path: Path) -> None:
         command="echo hello",
         contexts=["skill:example"],
         temporary_domains=["example.com"],
-        lease=SandboxOperationLease(
-            owner="operation-runner-1",
-            expires_at=datetime.now(tz=UTC) + timedelta(seconds=30),
-        ),
     )
 
     mgr.save_sandbox_operation(operation)
@@ -263,11 +241,11 @@ def test_sandbox_store_runtime_transition_persists_event(tmp_path: Path) -> None
     )
 
     assert runtime.phase == "starting"
-    assert runtime.active_operation_id == "op-1"
     assert runtime.version == 1
     events = store.load_events(session.session_id)
     assert len(events) == 1
     assert events[0].type == "sandbox_starting"
+    assert events[0].operation_id == "op-1"
     assert events[0].from_runtime_phase == "missing"
     assert events[0].to_runtime_phase == "starting"
 

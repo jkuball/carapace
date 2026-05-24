@@ -38,12 +38,6 @@ SandboxRuntimePhase = Literal[
 ]
 
 
-class SandboxLease(BaseModel):
-    owner: str
-    acquired_at: datetime
-    expires_at: datetime
-
-
 class SandboxRuntimeState(BaseModel):
     session_id: str
     phase: SandboxRuntimePhase = "missing"
@@ -52,9 +46,6 @@ class SandboxRuntimeState(BaseModel):
     resource_id: str | None = None
     resource_kind: str | None = None
     storage_present: bool = False
-    needs_runtime_setup: bool = False
-    active_operation_id: str | None = None
-    lease: SandboxLease | None = None
     updated_at: datetime | None = None
     last_error: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)

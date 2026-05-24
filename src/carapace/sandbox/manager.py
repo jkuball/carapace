@@ -34,7 +34,7 @@ from carapace.sandbox.state import (
     load_sandbox_snapshot,
     save_sandbox_snapshot,
 )
-from carapace.sandbox.store import FileSandboxPersistence, SandboxPersistence, SandboxStore
+from carapace.sandbox.store import SandboxStore
 from carapace.security.context import ApprovalSource, ApprovalVerdict
 
 _SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
@@ -194,13 +194,13 @@ class SandboxManager:
         runtime: ContainerRuntime,
         data_dir: Path,
         knowledge_dir: Path,
+        sandbox_store: SandboxStore,
         base_image: str = "carapace-sandbox:latest",
         network_name: str = "carapace-sandbox",
         idle_timeout_minutes: int = 15,
         proxy_port: int = 3128,
         sandbox_port: int = 8322,
         git_author: str = "carapace <carapace@%h>",
-        session_mgr: SandboxPersistence | None = None,
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
@@ -211,8 +211,7 @@ class SandboxManager:
         self._idle_timeout = idle_timeout_minutes * 60
         self._proxy_port = proxy_port
         self._sandbox_port = sandbox_port
-        self._session_mgr = session_mgr or FileSandboxPersistence(data_dir)
-        self._sandbox_store = SandboxStore(self._session_mgr)
+        self._sandbox_store = sandbox_store
         self._runtime_controller = SandboxRuntimeController(self._sandbox_store)
         self._sessions: dict[str, SessionContainer] = {}
         self._token_to_session: dict[str, str] = {}
@@ -362,7 +361,6 @@ class SandboxManager:
                     resource_id=snapshot.resource_id,
                     resource_kind=snapshot.resource_kind,
                     storage_present=snapshot.storage_present,
-                    needs_runtime_setup=needs_runtime_setup,
                 )
             except Exception:
                 logger.exception(f"Failed to refresh sandbox snapshot after startup for session {session_id}")
