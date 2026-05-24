@@ -27,6 +27,7 @@ carapace is a security-first personal AI agent with LLM-powered security gating.
 - Logging: `loguru` (`from loguru import logger`) — never stdlib `logging`. Use f-strings in log calls.
 - No silent failures: don't swallow exceptions with bare `except` or `except Exception` + `logger.warning`. Let errors propagate; catch only specific, expected exceptions. If something goes wrong, it should be loud.
 - Imports ordered: stdlib → third-party → local, separated by blank lines
+- Local `carapace` imports should be relative inside the package (`from .foo` / `from ..foo`) unless an import string or external integration requires an absolute path.
 - No deferred (in-function) imports or `TYPE_CHECKING` guards — restructure modules to break circular dependencies instead
 - Linting: `uvx ruff check src/` — fix all warnings before committing
 - Git hooks use [prek](https://github.com/j178/prek) (`prek install`). Stage your changes, then run `prek run` before committing to catch issues early — this avoids the commit being rejected and having to re-run the git command.
@@ -35,7 +36,11 @@ carapace is a security-first personal AI agent with LLM-powered security gating.
 
 ```text
 src/carapace/          # main package
-  server.py            # FastAPI server (REST + WebSocket)
+  server/              # FastAPI server package (REST, WebSocket, startup wiring)
+    __init__.py        # public facade: app, sandbox_app, main, shared runtime state
+    auth.py            # FastAPI bearer/WebSocket auth dependencies
+    notifications.py   # notification and presence routes
+    websocket.py       # WebSocket chat and small web-facing routes
   cli.py               # Thin CLI client (HTTP + WS)
   auth.py              # Bearer token generation and validation
   bootstrap.py         # first-run directory and file seeding
