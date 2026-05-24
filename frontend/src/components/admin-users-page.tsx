@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, Loader2, Plus, RefreshCw, Save, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, DatabaseBackup, Loader2, Plus, RefreshCw, Save, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { createAdminUser, listAdminUsers, updateAdminUser, type AdminUserInfo } from "@/lib/api";
+import { createAdminUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
 import { getServer } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +100,7 @@ export function AdminUsersPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [upgradingUsername, setUpgradingUsername] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -197,6 +198,32 @@ export function AdminUsersPage() {
       setNotice(null);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUpgradeUser(username: string): Promise<void> {
+    const normalizedServer = normalizeServer(server);
+    if (!normalizedServer || !adminToken.trim()) {
+      setError(t("errors.missingCredentials"));
+      setNotice(null);
+      return;
+    }
+    if (!window.confirm(t("confirm.upgradeUser", { username }))) {
+      return;
+    }
+
+    setUpgradingUsername(username);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await upgradeAdminUserData(normalizedServer, adminToken.trim(), username);
+      const changedCount = Object.values(result.summary).reduce((total, entries) => total + entries.length, 0);
+      await refreshUsers(result.username, t("notices.upgraded", { username: result.username, count: changedCount }));
+    } catch (upgradeError) {
+      setError(upgradeError instanceof Error ? upgradeError.message : t("errors.upgrade"));
+      setNotice(null);
+    } finally {
+      setUpgradingUsername(null);
     }
   }
 
@@ -333,36 +360,48 @@ export function AdminUsersPage() {
                 <div className="space-y-2">
                   {users.map((user) => {
                     const selected = selectedUsername === user.username;
+                    const upgrading = upgradingUsername === user.username;
                     return (
-                      <button
-                        key={user.username}
-                        type="button"
-                        onClick={() => {
-                          setSelectedUsername(user.username);
-                          setEditDraft(draftFromUser(user));
-                          setError(null);
-                          setNotice(null);
-                        }}
-                        className={cn(
-                          "w-full rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                          selected ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-muted",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold">{user.display_name || user.username}</div>
-                            <div className={cn("mt-0.5 truncate font-mono text-xs", selected ? "text-accent-foreground/70" : "text-foreground/70")}>
-                              {user.username}
+                      <div key={user.username} className="flex items-stretch gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedUsername(user.username);
+                            setEditDraft(draftFromUser(user));
+                            setError(null);
+                            setNotice(null);
+                          }}
+                          className={cn(
+                            "min-w-0 flex-1 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            selected ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-muted",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold">{user.display_name || user.username}</div>
+                              <div className={cn("mt-0.5 truncate font-mono text-xs", selected ? "text-accent-foreground/70" : "text-foreground/70")}>
+                                {user.username}
+                              </div>
                             </div>
+                            <span className={cn(
+                              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                              user.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                            )}>
+                              {user.enabled ? t("users.enabled") : t("users.disabled")}
+                            </span>
                           </div>
-                          <span className={cn(
-                            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                            user.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-                          )}>
-                            {user.enabled ? t("users.enabled") : t("users.disabled")}
-                          </span>
-                        </div>
-                      </button>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleUpgradeUser(user.username)}
+                          title={t("actions.upgradeUser", { username: user.username })}
+                          aria-label={t("actions.upgradeUser", { username: user.username })}
+                          className={iconButtonClassName}
+                          disabled={upgradingUsername !== null || loading || !server.trim() || !adminToken.trim()}
+                        >
+                          {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseBackup className="h-4 w-4" />}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

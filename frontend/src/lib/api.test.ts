@@ -7,6 +7,7 @@ import {
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
+  upgradeAdminUserData,
 } from "./api";
 import {
   listNotificationSubscriptions,
@@ -224,4 +225,22 @@ test("updateAdminUser encodes username and surfaces backend errors", async () =>
     /User not found/,
   );
   assert.equal(capturedUrl, "https://carapace.example.test/api/admin/users/ada%20lovelace");
+});
+
+test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async () => {
+  let capturedRequest: Request | null = null;
+  setFetch(async (input, init) => {
+    capturedRequest = new Request(input, init);
+    return new Response(
+      JSON.stringify({ username: "thies", summary: { sessions: ["set owner for session-1"] } }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const result = await upgradeAdminUserData("https://carapace.example.test", "admin-token", "thies");
+
+  assert.equal(capturedRequest?.method, "POST");
+  assert.equal(capturedRequest?.url, "https://carapace.example.test/api/admin/users/thies/upgrade-data");
+  assert.equal(capturedRequest?.headers.get("Authorization"), "Bearer admin-token");
+  assert.deepEqual(result.summary.sessions, ["set owner for session-1"]);
 });

@@ -90,6 +90,11 @@ export interface AdminUserUpdateInput {
   password?: string;
 }
 
+export interface AdminDataUpgradeResult {
+  username: string;
+  summary: Record<string, string[]>;
+}
+
 function decodeAdminUser(raw: unknown): AdminUserInfo | null {
   if (!isRecord(raw)) return null;
 
@@ -222,6 +227,31 @@ export async function updateAdminUser(
     throw new Error("Invalid user response");
   }
   return user;
+}
+
+export async function upgradeAdminUserData(
+  server: string,
+  adminToken: string,
+  username: string,
+): Promise<AdminDataUpgradeResult> {
+  const res = await fetch(`${server}/api/admin/users/${encodeURIComponent(username)}/upgrade-data`, {
+    method: "POST",
+    headers: adminHeaders(adminToken),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to upgrade user data"));
+  }
+  const raw: unknown = await res.json();
+  if (!isRecord(raw) || !readString(raw, "username") || !isRecord(raw.summary)) {
+    throw new Error("Invalid upgrade response");
+  }
+  const summary: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw.summary)) {
+    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+      summary[key] = value;
+    }
+  }
+  return { username: readString(raw, "username")!, summary };
 }
 
 export async function getServerMeta(

@@ -200,6 +200,23 @@ def test_admin_user_management_returns_503_when_admin_token_is_unset(client, mon
     assert resp.json() == {"detail": "Admin token is not configured"}
 
 
+def test_admin_user_upgrade_data_uses_selected_user(client, bearer):
+    state = srv._engine.session_mgr.create_session()
+    headers = {"Authorization": f"Bearer {bearer}"}
+
+    resp = client.post("/api/admin/users/thies/upgrade-data", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["username"] == "thies"
+    assert srv._engine.session_mgr.load_meta(state.session_id).user == "thies"
+
+
+def test_admin_user_upgrade_data_requires_existing_user(client, bearer):
+    resp = client.post("/api/admin/users/missing/upgrade-data", headers={"Authorization": f"Bearer {bearer}"})
+
+    assert resp.status_code == 404
+
+
 def test_meta_requires_auth(client):
     resp = client.get("/api/meta")
     assert resp.status_code in (401, 403)

@@ -66,6 +66,7 @@
             "loading": "Loading…",
             "refresh": "Refresh users",
             "new": "New user",
+            "upgradeUser": "Upgrade data for {username}",
             "create": "Create user",
             "creating": "Creating…",
             "save": "Save changes",
@@ -74,13 +75,18 @@
         "notices": {
             "loaded": "Users loaded.",
             "created": "Created {username}.",
-            "saved": "Saved {username}."
+            "saved": "Saved {username}.",
+            "upgraded": "Upgraded data for {username}: {count} changes."
         },
         "errors": {
             "missingCredentials": "Server URL and admin token are required.",
             "load": "Failed to load users.",
             "create": "Failed to create user.",
-            "save": "Failed to save user."
+            "save": "Failed to save user.",
+            "upgrade": "Failed to upgrade user data."
+        },
+        "confirm": {
+            "upgradeUser": "Upgrade existing data using {username}?"
         },
         "meta": {
             "tokenVersion": "Token v{version}",
