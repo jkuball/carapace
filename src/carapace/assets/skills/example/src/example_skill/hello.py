@@ -24,12 +24,6 @@ def main() -> None:
         status = "present" if path.exists() else "not mounted"
         print(f"  /workspace/{name}: {status}")
 
-    # Read-only memory
-    memory = WORKSPACE / "memory"
-    if memory.exists():
-        files = list(memory.rglob("*"))
-        print(f"  /workspace/memory/: {len(files)} file(s)")
-
     print(f"\nReading tunnel config from {CONFIG_PATH} ...")
     try:
         config = json.loads(CONFIG_PATH.read_text())

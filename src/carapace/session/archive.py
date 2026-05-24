@@ -13,9 +13,10 @@ from typing import Any, Literal
 from loguru import logger
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
 
-from carapace.git.store import GitStore
-from carapace.models import SessionCommitConfig, SessionState
-from carapace.session.manager import SessionManager
+from ..git.store import GitStore
+from ..models.config import SessionCommitConfig
+from ..models.session import SessionState
+from .manager import SessionManager
 
 ArchiveTrigger = Literal["manual", "autosave", "archive"]
 

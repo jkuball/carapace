@@ -12,31 +12,24 @@ from loguru import logger
 from pydantic import Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
 
-import carapace.security as security
-from carapace.config import load_workspace_file
-from carapace.llm import model_settings_for_config
-from carapace.models import (
-    ContextGrant,
-    CredentialMetadata,
-    Deps,
-    SkillCarapaceConfig,
-    SkillCredentialDecl,
-    TaskDone,
-    TaskFailed,
-    ToolResult,
-    normalize_tool_call_args,
-)
-from carapace.sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
-from carapace.sandbox.runtime import SkillActivationError
-from carapace.sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
-from carapace.security.context import (
+from .. import security as security
+from ..config import load_workspace_file
+from ..llm import model_settings_for_config
+from ..models.credentials import CredentialMetadata
+from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
+from ..models.tooling import ToolResult, normalize_tool_call_args
+from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
+from ..sandbox.runtime import SkillActivationError
+from ..sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
+from ..security.context import (
     ContextGrantEntry,
     CredentialAccessEntry,
     SkillActivatedEntry,
     ToolResultEntry,
 )
-from carapace.skills import SkillRegistry
-from carapace.usage import LlmRequestLogCapability
+from ..skills import SkillRegistry
+from ..usage import LlmRequestLogCapability
+from .deps import Deps, TaskDone, TaskFailed
 
 _WORKSPACE_ROOT = PurePosixPath("/workspace")
 _SKILLS_ROOT = PurePosixPath("skills")
@@ -398,13 +391,12 @@ def build_system_prompt(deps: Deps) -> str:
         "# Sandbox Environment\n"
         "Commands run inside a Docker sandbox container.\n"
         "`/workspace/` is a Git repository cloned from the server. "
-        "All changes to memory, skills, and other user files must be committed and pushed "
+        "All changes to workspace files, skills, and archived session files must be committed and pushed "
         "(`git add`, `git commit`, `git push`) — this is the only way to persist changes. "
         "Every push is evaluated by the security sentinel via a pre-receive hook.\n\n"
         "## Workspace layout\n"
         "- `/workspace/SOUL.md`, `/workspace/USER.md`, `/workspace/SECURITY.md` "
         "— personality and security policy files\n"
-        "- `/workspace/memory/` — memory files\n"
         "- `/workspace/sessions/YYYY/MM/<session_id>/conversation.json` "
         "— archived conversation snapshots committed to the knowledge repo\n"
         "- `/workspace/skills/` — activated skills (populated by `use_skill`)\n"

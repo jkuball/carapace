@@ -1,4 +1,4 @@
-"""Tests for the sandbox proxy: domain matching, allowlists, and carapace.yaml parsing."""
+"""Tests for the sandbox proxy: domain matching, allowlists, and skill metadata parsing."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from carapace.models import SkillCarapaceConfig
+from carapace.models.skills import SkillCarapaceConfig
 from carapace.sandbox.exec_flow import SandboxExecCoordinator, SandboxExecState
 from carapace.sandbox.manager import _CONTEXT_TUNNEL_HELPER, SandboxManager
 from carapace.sandbox.proxy import ProxyServer, domain_matches
@@ -292,7 +292,7 @@ def test_skill_activation_trusted_files_include_skill_md() -> None:
 
     providers = [provider for provider in SKILL_ACTIVATION_PROVIDERS if provider.name == "setup.sh"]
 
-    assert runner.trusted_files_for(providers) == {"SKILL.md", "carapace.yaml", "setup.sh"}
+    assert runner.trusted_files_for(providers) == {"SKILL.md", "setup.sh"}
 
 
 @pytest.mark.anyio
@@ -338,7 +338,6 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
             ContainerGoneError(),  # exec_command triggers recreate
             _ok,  # _clone_knowledge_repo probe after recreate
             _ok,  # git checkout SKILL.md
-            _ok,  # git checkout carapace.yaml
             _ok,  # git checkout setup.sh
             _ok,  # _file_write_in_container (credential materialization)
             _ok,  # setup.sh execution
@@ -374,13 +373,13 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
     activation_cb.assert_awaited_once_with(session_id, "moneydb")
 
     # Verify upstream restore is used for trusted provider files.
-    restore_call = runtime.exec.call_args_list[5]
+    restore_call = runtime.exec.call_args_list[4]
     assert "git checkout @{upstream} -- skills/moneydb/setup.sh" in restore_call.args[1]
 
     # Verify the credential file was written into the new container via exec.
-    # The 7th exec call (index 6) is the _file_write_in_container for the
+    # The 6th exec call (index 5) is the _file_write_in_container for the
     # credential — check that it targeted the correct workdir.
-    write_call = runtime.exec.call_args_list[6]
+    write_call = runtime.exec.call_args_list[5]
     shell_cmd = write_call.args[1]
     assert "/tmp/creds/api_key.json" in shell_cmd
     assert base64.b64encode(b"secret-key-value").decode() in shell_cmd
@@ -398,7 +397,6 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
         side_effect=[
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after create
             ExecResult(exit_code=0, output=""),  # git checkout SKILL.md
-            ExecResult(exit_code=0, output=""),  # git checkout carapace.yaml
             ExecResult(exit_code=0, output=""),  # git checkout setup.sh
             ExecResult(exit_code=0, output=""),  # credential file write
             ExecResult(exit_code=0, output=""),  # setup.sh execution
@@ -424,12 +422,12 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
     result = await mgr.activate_skill("sess-1", "cred-setup")
     assert "setup.sh completed." in result
 
-    setup_call = runtime.exec.call_args_list[5]
+    setup_call = runtime.exec.call_args_list[4]
     assert setup_call.args[1] == "sh ./setup.sh"
     assert setup_call.kwargs.get("workdir") == "/workspace/skills/cred-setup"
     assert setup_call.kwargs.get("env") == {"API_TOKEN": "secret-token"}
 
-    restore_call = runtime.exec.call_args_list[3]
+    restore_call = runtime.exec.call_args_list[2]
     assert "git checkout @{upstream} -- skills/cred-setup/setup.sh" in restore_call.args[1]
 
 
@@ -446,7 +444,6 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
             ContainerGoneError(),  # trusted restore triggers recreate
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after recreate
             ExecResult(exit_code=0, output=""),  # retried git checkout SKILL.md
-            ExecResult(exit_code=0, output=""),  # retried git checkout carapace.yaml
             ExecResult(exit_code=0, output=""),  # git checkout setup.sh
             ExecResult(exit_code=0, output=""),  # setup.sh execution
         ]
@@ -464,7 +461,7 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
     assert runtime.create_sandbox.await_count == 2
 
     restore_retry_call = runtime.exec.call_args_list[4]
-    assert "git checkout @{upstream} -- skills/restore-retry/carapace.yaml" in restore_retry_call.args[1]
+    assert "git checkout @{upstream} -- skills/restore-retry/setup.sh" in restore_retry_call.args[1]
 
 
 @pytest.mark.anyio
@@ -510,7 +507,6 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
         side_effect=[
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after create
             ExecResult(exit_code=0, output=""),  # git checkout SKILL.md
-            ExecResult(exit_code=0, output=""),  # git checkout carapace.yaml
             ExecResult(exit_code=0, output=""),  # command alias registration
         ]
     )
@@ -531,21 +527,25 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     assert "Command aliases registered: web." in result
     assert "PATH" not in mgr.get_session_env("sess-1")
 
-    register_call = runtime.exec.call_args_list[3]
+    register_call = runtime.exec.call_args_list[2]
     shell_cmd = register_call.args[1]
     wrapper = '#!/bin/sh\nexec uv run --directory /workspace/skills/web web-search "$@"\n'
     assert "/workspace/.carapace/bin/web" in shell_cmd
     assert base64.b64encode(wrapper.encode()).decode() in shell_cmd
 
 
-# ── carapace.yaml parsing ───────────────────────────────────────────
+# ── SKILL.md metadata parsing ───────────────────────────────────────
 
 
-class TestcarapaceYamlParsing:
+class TestSkillMetadataParsing:
+    def _write_skill_md(self, skill_dir: Path, body: str) -> None:
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(body)
+
     def test_parse_frontmatter_carapace_metadata(self, tmp_path: Path):
         skill_dir = tmp_path / "inline"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
+        self._write_skill_md(
+            skill_dir,
             "---\n"
             "name: inline\n"
             "metadata:\n"
@@ -557,7 +557,7 @@ class TestcarapaceYamlParsing:
             "      - name: inline-search\n"
             "        command: uv run inline-search\n"
             "---\n"
-            "Body.\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -569,10 +569,18 @@ class TestcarapaceYamlParsing:
 
     def test_parse_network_domains(self, tmp_path: Path):
         skill_dir = tmp_path / "web-search"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: web-search\n---\nBody.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  domains:\n    - api.example.com\n    - '*.cdn.example.com'\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: web-search\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      domains:\n"
+            "        - api.example.com\n"
+            "        - '*.cdn.example.com'\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -582,10 +590,19 @@ class TestcarapaceYamlParsing:
 
     def test_parse_network_tunnels(self, tmp_path: Path):
         skill_dir = tmp_path / "zoho-mail"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nname: zoho-mail\n---\nBody.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  tunnels:\n    - host: imap.zoho.eu\n      remote_port: 993\n      local_port: 1993\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: zoho-mail\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      tunnels:\n"
+            "        - host: imap.zoho.eu\n"
+            "          remote_port: 993\n"
+            "          local_port: 1993\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -594,48 +611,17 @@ class TestcarapaceYamlParsing:
         assert len(cfg.network.tunnels) == 1
         assert cfg.network.tunnels[0].display == "imap.zoho.eu:993 via :1993"
 
-    def test_frontmatter_carapace_metadata_takes_precedence(self, tmp_path: Path):
-        skill_dir = tmp_path / "precedence"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\n"
-            "name: precedence\n"
-            "metadata:\n"
-            "  carapace:\n"
-            "    network:\n"
-            "      domains:\n"
-            "        - inline.example.com\n"
-            "---\n"
-            "Body.\n"
-        )
-        (skill_dir / "carapace.yaml").write_text("network:\n  domains:\n    - file.example.com\n")
-
-        registry = SkillRegistry(tmp_path)
-        cfg = registry.get_carapace_config("precedence")
-        assert cfg is not None
-        assert cfg.network.domains == ["inline.example.com"]
-
-    def test_no_carapace_yaml(self, tmp_path: Path):
+    def test_no_carapace_metadata(self, tmp_path: Path):
         skill_dir = tmp_path / "plain"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
+        self._write_skill_md(skill_dir, "Body.\n")
 
         registry = SkillRegistry(tmp_path)
         assert registry.get_carapace_config("plain") is None
 
-    def test_invalid_carapace_yaml(self, tmp_path: Path):
-        skill_dir = tmp_path / "bad"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text(": invalid yaml {{{\n")
-
-        registry = SkillRegistry(tmp_path)
-        assert registry.get_carapace_config("bad") is None
-
-    def test_invalid_frontmatter_carapace_does_not_fallback_to_file(self, tmp_path: Path):
+    def test_invalid_frontmatter_carapace_returns_none(self, tmp_path: Path):
         skill_dir = tmp_path / "bad-inline"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
+        self._write_skill_md(
+            skill_dir,
             "---\n"
             "name: bad-inline\n"
             "metadata:\n"
@@ -644,19 +630,27 @@ class TestcarapaceYamlParsing:
             "      - name: bad command\n"
             "        command: uv run ok\n"
             "---\n"
-            "Body.\n"
+            "Body.\n",
         )
-        (skill_dir / "carapace.yaml").write_text("network:\n  domains:\n    - file.example.com\n")
 
         registry = SkillRegistry(tmp_path)
         assert registry.get_carapace_config("bad-inline") is None
 
     def test_invalid_tunnel_host_rejects_config(self, tmp_path: Path):
         skill_dir = tmp_path / "bad-tunnel"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  tunnels:\n    - host: '*.zoho.eu'\n      remote_port: 993\n      local_port: 1993\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: bad-tunnel\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      tunnels:\n"
+            "        - host: '*.zoho.eu'\n"
+            "          remote_port: 993\n"
+            "          local_port: 1993\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -664,10 +658,19 @@ class TestcarapaceYamlParsing:
 
     def test_invalid_tunnel_ip_literal_rejects_config(self, tmp_path: Path):
         skill_dir = tmp_path / "bad-tunnel-ip"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  tunnels:\n    - host: 10.0.0.1\n      remote_port: 993\n      local_port: 1993\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: bad-tunnel-ip\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      tunnels:\n"
+            "        - host: 10.0.0.1\n"
+            "          remote_port: 993\n"
+            "          local_port: 1993\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -675,10 +678,19 @@ class TestcarapaceYamlParsing:
 
     def test_invalid_tunnel_internal_service_rejects_config(self, tmp_path: Path):
         skill_dir = tmp_path / "bad-tunnel-svc"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  tunnels:\n    - host: kubernetes.default.svc\n      remote_port: 443\n      local_port: 1443\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: bad-tunnel-svc\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      tunnels:\n"
+            "        - host: kubernetes.default.svc\n"
+            "          remote_port: 443\n"
+            "          local_port: 1443\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -686,10 +698,19 @@ class TestcarapaceYamlParsing:
 
     def test_invalid_tunnel_trailing_dot_blocked_host_rejects_config(self, tmp_path: Path):
         skill_dir = tmp_path / "bad-tunnel-dot"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text(
-            "network:\n  tunnels:\n    - host: localhost.\n      remote_port: 443\n      local_port: 1443\n"
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: bad-tunnel-dot\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    network:\n"
+            "      tunnels:\n"
+            "        - host: localhost.\n"
+            "          remote_port: 443\n"
+            "          local_port: 1443\n"
+            "---\n"
+            "Body.\n",
         )
 
         registry = SkillRegistry(tmp_path)
@@ -697,9 +718,17 @@ class TestcarapaceYamlParsing:
 
     def test_empty_network_section(self, tmp_path: Path):
         skill_dir = tmp_path / "minimal"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("Body.\n")
-        (skill_dir / "carapace.yaml").write_text("hints:\n  likely_classification: read_external\n")
+        self._write_skill_md(
+            skill_dir,
+            "---\n"
+            "name: minimal\n"
+            "metadata:\n"
+            "  carapace:\n"
+            "    hints:\n"
+            "      likely_classification: read_external\n"
+            "---\n"
+            "Body.\n",
+        )
 
         registry = SkillRegistry(tmp_path)
         cfg = registry.get_carapace_config("minimal")

@@ -7,7 +7,7 @@ from threading import RLock
 import yaml
 from pydantic import BaseModel
 
-from carapace.sandbox.runtime import SandboxRuntimeKind, SandboxStatus
+from .runtime import SandboxRuntimeKind, SandboxStatus
 
 
 class SessionSandboxSnapshot(BaseModel):

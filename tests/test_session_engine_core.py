@@ -20,7 +20,8 @@ from pydantic_ai.messages import (
 )
 
 import carapace.usage as usage_mod
-from carapace.models import ContextGrant, CredentialRegistryProtocol, SkillCredentialDecl
+from carapace.models.credentials import CredentialRegistryProtocol
+from carapace.models.skills import ContextGrant, SkillCredentialDecl
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
@@ -32,13 +33,17 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     skill_name = "reinject-skill"
     skill_dir = tmp_path / "skills" / skill_name
     skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(f"---\nname: {skill_name}\n---\n")
-    (skill_dir / "carapace.yaml").write_text(
-        "credentials:\n"
-        "  - vault_path: vault/secret\n"
-        "    description: API key\n"
-        "    env_var: API_KEY\n"
-        "    file: .secrets/key.txt\n"
+    (skill_dir / "SKILL.md").write_text(
+        f"---\n"
+        f"name: {skill_name}\n"
+        "metadata:\n"
+        "  carapace:\n"
+        "    credentials:\n"
+        "      - vault_path: vault/secret\n"
+        "        description: API key\n"
+        "        env_var: API_KEY\n"
+        "        file: .secrets/key.txt\n"
+        "---\n"
     )
 
     with _patch_sentinel():

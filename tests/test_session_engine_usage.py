@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import carapace.usage as usage_mod
-from carapace.models import SessionBudget
+from carapace.models.session import SessionBudget
 from carapace.usage import LlmRequestRecord, LlmRequestState, ModelUsage
 from tests.session_helpers import (
     _FakeSubscriber,

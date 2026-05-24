@@ -8,10 +8,12 @@ import pytest
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage
 
+from carapace.agent.deps import Deps, TaskDone, TaskFailed
 from carapace.agent.loop import run_agent_turn
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
-from carapace.models import Config, Deps, SessionState, TaskDone, TaskFailed
+from carapace.models.config import Config
+from carapace.models.session import SessionState
 from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import AgentResponseEntry, SessionSecurity
 from carapace.security.sentinel import Sentinel

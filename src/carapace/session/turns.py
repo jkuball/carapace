@@ -33,14 +33,16 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import UsageLimits
 
-from carapace.models import Config, Deps, ToolCallCallback, ToolResult
-from carapace.notifications.router import NotificationRouter, build_turn_outcome_notification_id
-from carapace.sandbox.manager import SandboxManager
-from carapace.security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
-from carapace.session.manager import SessionManager
-from carapace.session.types import ActiveSession, SessionSubscriber, TurnExecutionResult
-from carapace.usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
-from carapace.ws_models import ApprovalRequest, ApprovalResponse, FinalStatus, TurnUsage
+from ..agent.deps import Deps
+from ..models.config import Config
+from ..models.tooling import ToolCallCallback, ToolResult
+from ..notifications.router import NotificationRouter, build_turn_outcome_notification_id
+from ..sandbox.manager import SandboxManager
+from ..security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
+from ..usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
+from ..ws_models import ApprovalRequest, ApprovalResponse, FinalStatus, TurnUsage
+from .manager import SessionManager
+from .types import ActiveSession, SessionSubscriber, TurnExecutionResult
 
 _TURN_CANCELLED_TOOL_MESSAGE = "Tool call was canceled because the turn ended before it completed."
 

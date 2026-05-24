@@ -66,7 +66,7 @@ You see diff and commits.
 
 ## Usually low risk
 
-- Reading files, memory, skill docs
+- Reading files, archived sessions, skill docs
 - Writing / editing in the sandbox (including working copies of policy and profile files — until push, that stays local to the session)
 - Read-only shell commands (`ls`, `cat`, `grep`, …)
 - `list_skills`, your own skill-inspection tools

@@ -11,8 +11,8 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel
 
-from carapace.sandbox.runtime import ContainerRuntime, SandboxConfig
-from carapace.security.context import ApprovalSource, ApprovalVerdict
+from ..security.context import ApprovalSource, ApprovalVerdict
+from .runtime import ContainerRuntime, SandboxConfig
 
 
 class SessionContainer(BaseModel):

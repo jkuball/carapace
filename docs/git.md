@@ -1,6 +1,6 @@
 # Git Integration
 
-carapace manages a **knowledge repository** — a Git repo containing the security policy, memory files, skills, and any other files the agent works with. The repo lives on the server at `$CARAPACE_DATA_DIR/knowledge/` and is cloned into every sandbox container at `/workspace`.
+carapace manages a **knowledge repository** — a Git repo containing the security policy, workspace files, skills, archived session snapshots, and any other durable files the agent works with. The repo lives on the server at `$CARAPACE_DATA_DIR/knowledge/` and is cloned into every sandbox container at `/workspace`.
 
 Optionally, you can connect an **upstream remote** so the knowledge repo is synchronised with an external Git server (GitHub, Gitea, GitLab, etc.).
 
@@ -62,7 +62,7 @@ When the server starts with a remote configured:
 1. **Initialise local repo.** If `$CARAPACE_DATA_DIR/knowledge/` has no `.git` directory, `git init -b main` creates one. The local branch is always `main`, regardless of the `branch` setting.
 2. **Add remote.** The upstream URL is registered as `origin` (or updated if it already exists).
 3. **Pull.** carapace fetches from the remote and syncs the local branch. If the local repo is empty (fresh init) and the remote has content, it adopts the remote branch directly (`git reset --hard`). If the local repo already has commits, it does a fast-forward merge. If the remote branch is also empty, this step is a no-op.
-4. **Bootstrap.** Default knowledge files (`SECURITY.md`, `SOUL.md`, `USER.md`, `memory/CORE.md`, example skills) are seeded **only if they don't already exist** — files pulled from the remote are not overwritten.
+4. **Bootstrap.** Default knowledge files (`SECURITY.md`, `SOUL.md`, `USER.md`, example skills) are seeded **only if they don't already exist** — files pulled from the remote are not overwritten.
 5. **Commit & push.** If the bootstrap created any new files, they are committed and pushed to the remote.
 
 On subsequent server restarts the same sequence runs, but typically only step 3 (pull) has any effect, keeping the server in sync with upstream changes.

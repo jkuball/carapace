@@ -26,7 +26,6 @@ _KNOWLEDGE_USER_FILES: list[tuple[str, str]] = [
 # Critical knowledge files: overwrite when CARAPACE_RESET_ASSETS is set.
 _KNOWLEDGE_CRITICAL_FILES: list[tuple[str, str]] = [
     ("SECURITY.md", "SECURITY.md"),
-    ("CORE.md", "memory/CORE.md"),
 ]
 
 _KNOWLEDGE_GITIGNORE = """\

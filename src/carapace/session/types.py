@@ -15,11 +15,12 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models import Model
 
-from carapace.models import SessionState, ToolResult
-from carapace.security.context import ApprovalSource, ApprovalVerdict, SessionSecurity
-from carapace.security.sentinel import Sentinel
-from carapace.usage import LlmRequestLog, LlmRequestState, UsageTracker
-from carapace.ws_models import ApprovalRequest, ApprovalResponse, EscalationResponse, FinalStatus, TurnUsage
+from ..models.session import SessionState
+from ..models.tooling import ToolResult
+from ..security.context import ApprovalSource, ApprovalVerdict, SessionSecurity
+from ..security.sentinel import Sentinel
+from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
+from ..ws_models import ApprovalRequest, ApprovalResponse, EscalationResponse, FinalStatus, TurnUsage
 
 
 @runtime_checkable

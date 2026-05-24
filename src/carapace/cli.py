@@ -17,7 +17,7 @@ from rich.panel import Panel
 from rich.table import Table
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
-from carapace.payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
+from .payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
 
 load_dotenv()
 
@@ -157,13 +157,6 @@ def _render_command_result(data: dict[str, Any]) -> None:
             else:
                 for s in payload:
                     console.print(f"  [bold]{s['name']}[/bold]: {s['description']}")
-
-        case "memory":
-            if not payload:
-                console.print("No memory files.")
-            else:
-                for f in payload:
-                    console.print(f"  {f}")
 
         case "usage":
             _render_usage(payload)

@@ -13,13 +13,13 @@ from carapace.credentials import (
     build_credential_registry,
     is_exposed,
 )
-from carapace.models import (
+from carapace.models.credentials import (
     BitwardenCredentialBackendConfig,
     CredentialMetadata,
     CredentialsConfig,
     FileCredentialBackendConfig,
-    SkillCredentialDecl,
 )
+from carapace.models.skills import SkillCredentialDecl
 
 # ---------------------------------------------------------------------------
 # Model tests

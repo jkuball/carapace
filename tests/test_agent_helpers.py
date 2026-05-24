@@ -7,9 +7,11 @@ from unittest.mock import MagicMock
 from pydantic_ai.models import Model
 
 from carapace.agent import build_system_prompt
+from carapace.agent.deps import Deps
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
-from carapace.models import Config, Deps, SessionState
+from carapace.models.config import Config
+from carapace.models.session import SessionState
 from carapace.sandbox.manager import SandboxManager
 from carapace.security.context import SessionSecurity
 from carapace.security.sentinel import Sentinel

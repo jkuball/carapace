@@ -10,10 +10,10 @@ from py_vapid import Vapid01
 from pywebpush import WebPushException, webpush
 from requests import RequestException
 
-from carapace.models import NotificationSubscription
-from carapace.notifications.router import NotificationPayload
-from carapace.notifications.store import NotificationStore
-from carapace.notifications.vapid import load_vapid_private_key
+from .models import NotificationSubscription
+from .router import NotificationPayload
+from .store import NotificationStore
+from .vapid import load_vapid_private_key
 
 
 class WebPushSender:

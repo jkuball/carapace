@@ -13,7 +13,8 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from carapace.security.context import (
+from ..usage import LlmRequestLogCapability, UsageTracker
+from .context import (
     ActionLogEntry,
     AgentResponseEntry,
     ApprovalEntry,
@@ -29,7 +30,6 @@ from carapace.security.context import (
     UserMessageEntry,
     UserVouchedEntry,
 )
-from carapace.usage import LlmRequestLogCapability, UsageTracker
 
 _SENTINEL_SYSTEM_PREFIX = """\
 You are the security gate for an AI agent system called carapace.
@@ -48,8 +48,7 @@ what a script does when you see the agent running skill commands.
 
 About use_skill: when you see a use_skill call, the `declared_domains`
 and `declared_creds` fields are NOT requested by the agent — they are
-declared by the skill itself in its carapace metadata (`SKILL.md`
-frontmatter or `carapace.yaml`) and
+declared by the skill itself in its SKILL.md `metadata.carapace` frontmatter and
 automatically bundled into the call for your review. Approving
 use_skill implicitly grants all declared domains and credentials
 for the duration of that skill's usage. Your job is to judge whether

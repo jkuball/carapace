@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 from loguru import logger
 
-from carapace.credentials.protocol import is_exposed, require_exposed
-from carapace.models import BitwardenCredentialBackendConfig, CredentialMetadata
+from ..models.credentials import BitwardenCredentialBackendConfig, CredentialMetadata
+from .protocol import is_exposed, require_exposed
 
 
 class BitwardenBackend:

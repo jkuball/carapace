@@ -8,10 +8,10 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from carapace.sandbox.file_ops import ContextFileCredential, WrittenContextFile
-from carapace.sandbox.runtime import ContainerGoneError, ContainerRuntime, ExecResult, NetworkTunnel
-from carapace.sandbox.session_lifecycle import SessionContainer
-from carapace.security.context import ApprovalSource, ApprovalVerdict
+from ..security.context import ApprovalSource, ApprovalVerdict
+from .file_ops import ContextFileCredential, WrittenContextFile
+from .runtime import ContainerGoneError, ContainerRuntime, ExecResult, NetworkTunnel
+from .session_lifecycle import SessionContainer
 
 type DomainApprovalCallback = Callable[[str, str], Awaitable[bool]]
 type DomainNotifyCallback = Callable[[str, str, ApprovalSource | None, ApprovalVerdict | None, str | None], None]
@@ -233,7 +233,7 @@ class SandboxExecCoordinator:
         return self._state.session_current_contexts.get(session_id, [])
 
     def is_domain_skill_granted(self, session_id: str, domain: str) -> bool:
-        from carapace.sandbox.proxy import domain_matches
+        from .proxy import domain_matches
 
         skill_domains = self._state.exec_context_skill_domains.get(session_id, set())
         domain_lower = domain.lower()

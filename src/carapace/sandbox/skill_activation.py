@@ -8,8 +8,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from carapace.sandbox.file_ops import ContextFileCredential, SessionContainerLike, WrittenContextFile
-from carapace.sandbox.runtime import ExecResult, SkillActivationError, SkillActivationInputs
+from .file_ops import ContextFileCredential, SessionContainerLike, WrittenContextFile
+from .runtime import ExecResult, SkillActivationError, SkillActivationInputs
 
 SKILL_COMMAND_SHIM_DIR = "/workspace/.carapace/bin"
 
@@ -96,7 +96,7 @@ class SkillActivationRunner:
         return [provider for provider in SKILL_ACTIVATION_PROVIDERS if provider.matches(skill_dir)]
 
     def trusted_files_for(self, providers: list[SkillActivationProvider]) -> set[str]:
-        trusted_files = {"SKILL.md", "carapace.yaml"}
+        trusted_files = {"SKILL.md"}
         for provider in providers:
             trusted_files.update(provider.trusted_files)
         return trusted_files

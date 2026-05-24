@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from carapace.models import ContextGrant, SessionAttributes, SessionBudget, SkillCredentialDecl
+from carapace.models.session import SessionAttributes, SessionBudget
+from carapace.models.skills import ContextGrant, SkillCredentialDecl
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import (
     SessionSecurity,

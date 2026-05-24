@@ -8,18 +8,17 @@ from pydantic import ValidationError
 from pydantic_ai.models.openai import OpenAIChatModel
 
 from carapace.llm import make_model_factory, model_settings_for_config
-from carapace.models import (
+from carapace.models.config import (
     AgentConfig,
     AvailableModelEntry,
     Config,
-    JobCronTrigger,
-    JobDefinition,
-    JobsFile,
+    agent_available_model_entries,
+)
+from carapace.models.jobs import JobCronTrigger, JobDefinition, JobsFile
+from carapace.models.session import SessionBudget, SessionState
+from carapace.notifications.models import (
     NotificationsConfig,
     NotificationSubscription,
-    SessionBudget,
-    SessionState,
-    agent_available_model_entries,
 )
 from carapace.security.context import (
     AuditEntry,

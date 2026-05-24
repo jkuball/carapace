@@ -7,10 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 from py_vapid import Vapid01
 from pywebpush import WebPushException
 
-from carapace.models import NotificationPreferences, NotificationsConfig, NotificationSubscription
-from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
+from carapace.notifications.models import NotificationPreferences, NotificationsConfig, NotificationSubscription
+from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.notifications.router import NotificationDeliveryResult, NotificationPayload, NotificationRouter
 from carapace.notifications.sender import WebPushSender
+from carapace.notifications.store import NotificationStore, derive_owner_key
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 
 

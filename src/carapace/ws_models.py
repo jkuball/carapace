@@ -5,8 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from carapace.security.context import ApprovalSource, ApprovalVerdict
-from carapace.usage import BudgetGauge, LlmRequestPhase, LlmSource
+from .security.context import ApprovalSource, ApprovalVerdict
+from .usage import BudgetGauge, LlmRequestPhase, LlmSource
 
 FinalStatus = Literal["success", "warning"]
 

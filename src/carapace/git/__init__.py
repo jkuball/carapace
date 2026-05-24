@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from carapace.git.http import GitHttpHandler
-from carapace.git.store import GitStore
+from .http import GitHttpHandler
+from .store import GitStore
 
 __all__ = ["GitHttpHandler", "GitStore"]

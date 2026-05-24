@@ -6,8 +6,8 @@ import json
 
 import markdown as md
 
-from carapace.payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
-from carapace.ws_models import ApprovalRequest, CommandResult
+from ...payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
+from ...ws_models import ApprovalRequest, CommandResult
 
 
 def md_to_html(text: str) -> str:
@@ -77,14 +77,6 @@ def format_command_result_text(result: CommandResult) -> str:
             lines = ["**Skills:**\n"]
             for skill in skills:
                 lines.append(f"- **{skill.get('name', '?')}** — {skill.get('description', '')}")
-            return "\n".join(lines)
-
-        case "memory":
-            if not data:
-                return "No memory files."
-            lines = ["**Memory files:**\n"]
-            for f in data:
-                lines.append(f"- {f}")
             return "\n".join(lines)
 
         case "retitle":
