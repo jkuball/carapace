@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import nio
 import pytest
+import yaml
 
 from carapace.bootstrap import ensure_data_dir
 from carapace.channels.matrix import (
@@ -22,7 +23,7 @@ from carapace.channels.matrix import (
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.config import load_config
-from carapace.models.config import MatrixChannelConfig, MatrixTokenFile, Secret
+from carapace.models.config import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile, Secret
 from carapace.models.session import SessionBudget
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
@@ -121,6 +122,43 @@ def test_find_session_returns_matching_session(tmp_path: Path):
     mgr = SessionManager(tmp_path)
     s = mgr.create_session("matrix", "!room:example.com")
     assert mgr.find_session("matrix", "!room:example.com") == s.session_id
+
+
+def test_matrix_session_created_with_token_owner(tmp_path: Path):
+    ch = _make_channel(tmp_path)
+    token_file = tmp_path / "matrix_token.yaml"
+    token_file.write_text(
+        yaml.safe_dump(
+            MatrixTokensFile(
+                tokens=[
+                    MatrixTokenFile(
+                        access_token="tok_good",
+                        device_id="DEV1",
+                        user_id="@carapace:example.com",
+                        user="Thies",
+                    )
+                ]
+            ).model_dump(mode="json", exclude_none=True)
+        )
+    )
+
+    token, device_id = ch._load_token(token_file)
+    session_id = ch._get_or_create_session("!room:example.com")
+
+    assert token == "tok_good"
+    assert device_id == "DEV1"
+    assert ch._session_mgr.load_meta(session_id).user == "thies"
+
+
+def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path):
+    ch = _make_channel(tmp_path)
+    existing = ch._session_mgr.create_session("matrix", "!room:example.com")
+    ch._owner_user = "thies"
+
+    session_id = ch._get_or_create_session("!room:example.com")
+
+    assert session_id == existing.session_id
+    assert ch._session_mgr.load_meta(session_id).user == "thies"
 
 
 def test_find_session_ignores_different_channel(tmp_path: Path):

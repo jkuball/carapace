@@ -148,14 +148,15 @@ class SessionManager:
         if not self.sessions_dir.exists():
             return []
         self._log_disk_read("session directory listing", self.sessions_dir)
-        session_ids = [d.name for d in self.sessions_dir.iterdir() if d.is_dir()]
-        if user is not None:
-            session_ids = [session_id for session_id in session_ids if self.is_owned_by(session_id, user)]
-        return sorted(
-            session_ids,
-            key=lambda s: self._get_mtime(s),
-            reverse=True,
-        )
+        candidates: list[tuple[float, str]] = []
+        for session_dir in self.sessions_dir.iterdir():
+            if not session_dir.is_dir():
+                continue
+            session_id = session_dir.name
+            if user is not None and self.load_meta(session_id).user != user:
+                continue
+            candidates.append((self._get_mtime(session_id), session_id))
+        return [session_id for _, session_id in sorted(candidates, reverse=True)]
 
     def find_session(self, channel_type: str, channel_ref: str) -> str | None:
         """Return the most recently active session ID for the given channel, or None."""

@@ -53,11 +53,19 @@ class Secret(BaseModel):
 
 
 class MatrixTokenFile(BaseModel):
-    """Schema for the persisted ``matrix_token.json`` file."""
+    """Schema for one persisted Matrix access token."""
 
     access_token: str
     device_id: str | None = None
     user_id: str | None = None
+    user: str | None = None
+
+
+class MatrixTokensFile(BaseModel):
+    """Schema for the persisted ``matrix_token.yaml`` file."""
+
+    version: int = 1
+    tokens: list[MatrixTokenFile] = []
 
 
 class MatrixChannelConfig(BaseModel):

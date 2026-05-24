@@ -217,6 +217,53 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
     sender.send_batch.assert_not_awaited()
 
 
+async def test_notification_router_skips_ownerless_session_when_owner_resolver_is_configured(tmp_path) -> None:
+    store = NotificationStore(tmp_path)
+    now = datetime.now(tz=UTC)
+    store.upsert_subscription(
+        owner_key="",
+        user="alice",
+        endpoint="https://push.example.test/alice",
+        p256dh="key-1",
+        auth="auth-1",
+        device_name="Alice Phone",
+        notification_prefs=NotificationPreferences(attended_turn_completed=True),
+        ttl=timedelta(days=30),
+        now=now,
+    )
+    store.upsert_subscription(
+        owner_key="",
+        user="bob",
+        endpoint="https://push.example.test/bob",
+        p256dh="key-2",
+        auth="auth-2",
+        device_name="Bob Laptop",
+        notification_prefs=NotificationPreferences(attended_turn_completed=True),
+        ttl=timedelta(days=30),
+        now=now,
+    )
+    sender = AsyncMock()
+    sender.send_batch = AsyncMock(return_value={})
+    router = NotificationRouter(
+        store=store,
+        presence=NotificationPresenceRegistry(ttl=timedelta(seconds=60)),
+        sender=sender,
+        owner_key="",
+        owner_for_session=lambda _session_id: None,
+    )
+
+    delivery = await router.dispatch_turn_outcome(
+        session_id="ownerless-session",
+        assistant_event_index=3,
+        kind="attended_turn_completed",
+        title="Session Update",
+        body="Assistant turn completed",
+    )
+
+    assert delivery == NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
+    sender.send_batch.assert_not_awaited()
+
+
 async def test_notification_router_dispatch_test_targets_single_subscription(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     sender = AsyncMock()
