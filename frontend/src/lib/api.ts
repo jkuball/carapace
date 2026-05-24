@@ -31,7 +31,7 @@ function headers(_session: string): HeadersInit {
 function adminHeaders(adminToken: string): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${adminToken}`,
+    Authorization: `Bearer ${adminToken}`,
   };
 }
 
@@ -105,13 +105,13 @@ function decodeAdminUser(raw: unknown): AdminUserInfo | null {
   const passwordChangedAt = readString(raw, "password_changed_at");
   const tokenVersion = readNumber(raw, "token_version");
   if (
-    !username
-    || displayName === undefined
-    || !createdAt
-    || !updatedAt
-    || !passwordChangedAt
-    || tokenVersion === undefined
-    || typeof raw.enabled !== "boolean"
+    !username ||
+    displayName === undefined ||
+    !createdAt ||
+    !updatedAt ||
+    !passwordChangedAt ||
+    tokenVersion === undefined ||
+    typeof raw.enabled !== "boolean"
   ) {
     return null;
   }
@@ -214,11 +214,14 @@ export async function updateAdminUser(
   username: string,
   body: AdminUserUpdateInput,
 ): Promise<AdminUserInfo> {
-  const res = await fetch(`${server}/api/admin/users/${encodeURIComponent(username)}`, {
-    method: "PATCH",
-    headers: adminHeaders(adminToken),
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}`,
+    {
+      method: "PATCH",
+      headers: adminHeaders(adminToken),
+      body: JSON.stringify(body),
+    },
+  );
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, "Failed to update user"));
   }
@@ -234,20 +237,30 @@ export async function upgradeAdminUserData(
   adminToken: string,
   username: string,
 ): Promise<AdminDataUpgradeResult> {
-  const res = await fetch(`${server}/api/admin/users/${encodeURIComponent(username)}/upgrade-data`, {
-    method: "POST",
-    headers: adminHeaders(adminToken),
-  });
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}/upgrade-data`,
+    {
+      method: "POST",
+      headers: adminHeaders(adminToken),
+    },
+  );
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, "Failed to upgrade user data"));
   }
   const raw: unknown = await res.json();
-  if (!isRecord(raw) || !readString(raw, "username") || !isRecord(raw.summary)) {
+  if (
+    !isRecord(raw) ||
+    !readString(raw, "username") ||
+    !isRecord(raw.summary)
+  ) {
     throw new Error("Invalid upgrade response");
   }
   const summary: Record<string, string[]> = {};
   for (const [key, value] of Object.entries(raw.summary)) {
-    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === "string")
+    ) {
       summary[key] = value;
     }
   }
