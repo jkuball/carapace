@@ -13,9 +13,9 @@ from pydantic import Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
 
 import carapace.security as security
+from carapace.agent.deps import Deps, TaskDone, TaskFailed
 from carapace.config import load_workspace_file
 from carapace.llm import model_settings_for_config
-from carapace.models.agent import Deps, TaskDone, TaskFailed
 from carapace.models.credentials import CredentialMetadata
 from carapace.models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
 from carapace.models.tooling import ToolResult, normalize_tool_call_args

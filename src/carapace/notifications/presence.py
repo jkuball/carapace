@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import RLock
 
-from carapace.models.notifications import NotificationClientType, NotificationFocusState
+from carapace.notifications.models import NotificationClientType, NotificationFocusState
 
 
 @dataclass(frozen=True, slots=True)

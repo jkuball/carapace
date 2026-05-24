@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
-from carapace.models import JobDefinition
+from carapace.models.jobs import JobDefinition
 
 
 def test_jobs_store_roundtrip(tmp_path):

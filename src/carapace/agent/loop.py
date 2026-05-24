@@ -27,8 +27,8 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import UsageLimits
 
+from carapace.agent.deps import Deps, TaskDone, TaskFailed
 from carapace.agent.tools import create_agent
-from carapace.models.agent import Deps, TaskDone, TaskFailed
 from carapace.security.context import (
     AgentResponseEntry,
     ApprovalEntry,

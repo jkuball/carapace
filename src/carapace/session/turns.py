@@ -33,7 +33,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.usage import UsageLimits
 
-from carapace.models.agent import Deps
+from carapace.agent.deps import Deps
 from carapace.models.config import Config
 from carapace.models.tooling import ToolCallCallback, ToolResult
 from carapace.notifications.router import NotificationRouter, build_turn_outcome_notification_id

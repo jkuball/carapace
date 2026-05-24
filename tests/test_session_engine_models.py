@@ -18,7 +18,7 @@ from pydantic_ai.usage import RunUsage
 
 import carapace.security as security_mod
 import carapace.usage as usage_mod
-from carapace.models import SessionBudget
+from carapace.models.session import SessionBudget
 from carapace.security.context import SentinelVerdict, SessionSecurity, ToolCallEntry
 from carapace.security.sentinel import Sentinel
 from carapace.session.turns import _non_slash_user_message_count

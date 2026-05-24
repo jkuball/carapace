@@ -5,7 +5,7 @@ from typing import Literal, Protocol
 
 from loguru import logger
 
-from carapace.models.notifications import NotificationPreferences, NotificationSubscription
+from carapace.notifications.models import NotificationPreferences, NotificationSubscription
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.notifications.store import NotificationStore
 

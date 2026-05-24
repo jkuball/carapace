@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from carapace.models.agent import Deps
+from carapace.agent.deps import Deps
 from carapace.models.skills import context_grants_session_summary
 from carapace.ws_models import CommandResult
 

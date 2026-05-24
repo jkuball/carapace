@@ -6,12 +6,13 @@ def test_import_carapace():
 
 
 def test_import_models():
-    from carapace.models import (  # noqa: F401
-        Config,
-        Deps,
-        SessionState,
-        SkillInfo,
-    )
+    from carapace.models.config import Config  # noqa: F401
+    from carapace.models.session import SessionState  # noqa: F401
+    from carapace.models.skills import SkillInfo  # noqa: F401
+
+
+def test_import_agent_deps():
+    from carapace.agent.deps import Deps, TaskDone, TaskFailed  # noqa: F401
 
 
 def test_import_config():

@@ -22,8 +22,9 @@ from carapace.channels.matrix import (
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.config import load_config
-from carapace.models import MatrixChannelConfig, MatrixTokenFile, Secret, SessionBudget
-from carapace.notifications import NotificationPresenceRegistry
+from carapace.models.config import MatrixChannelConfig, MatrixTokenFile, Secret
+from carapace.models.session import SessionBudget
+from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
 from carapace.session import SessionEngine, SessionManager
 from carapace.ws_models import ApprovalRequest, CommandResult

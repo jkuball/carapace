@@ -29,7 +29,7 @@ from carapace.channels.matrix.formatting import (
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.models.config import Config, MatrixChannelConfig, MatrixTokenFile
 from carapace.models.skills import SkillInfo
-from carapace.notifications import NotificationPresenceRegistry
+from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
 from carapace.session import SessionEngine, SessionManager
 from carapace.ws_models import ApprovalResponse, CommandResult, EscalationResponse

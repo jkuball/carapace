@@ -25,9 +25,9 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models import Model
 
+from carapace.agent.deps import Deps
 from carapace.agent.loop import run_agent_turn as _run_agent_turn
 from carapace.git.store import GitStore
-from carapace.models.agent import Deps
 from carapace.models.config import Config
 from carapace.models.credentials import CredentialRegistryProtocol
 from carapace.models.session import SessionAttributes, SessionState

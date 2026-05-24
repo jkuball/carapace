@@ -20,7 +20,8 @@ from pydantic_ai.messages import (
 )
 
 import carapace.usage as usage_mod
-from carapace.models import ContextGrant, CredentialRegistryProtocol, SkillCredentialDecl
+from carapace.models.credentials import CredentialRegistryProtocol
+from carapace.models.skills import ContextGrant, SkillCredentialDecl
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps

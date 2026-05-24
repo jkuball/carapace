@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from carapace.models import ContextGrant, SessionState, SkillCredentialDecl, context_grants_session_summary
+from carapace.models.session import SessionState
+from carapace.models.skills import ContextGrant, SkillCredentialDecl, context_grants_session_summary
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.runtime import ExecResult
 from carapace.sandbox.session_lifecycle import SessionContainer

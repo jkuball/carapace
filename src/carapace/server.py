@@ -50,23 +50,19 @@ from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.llm import make_model_factory
 from carapace.models.config import Config
 from carapace.models.jobs import JobDefinition, JobsFile
-from carapace.models.notifications import (
+from carapace.models.session import SessionAttributes, SessionJobRunContext, SessionState
+from carapace.models.tooling import ToolResult, normalize_tool_call_args
+from carapace.notifications.models import (
     NotificationClientType,
     NotificationFocusState,
     NotificationPreferences,
     NotificationSubscription,
 )
-from carapace.models.session import SessionAttributes, SessionJobRunContext, SessionState
-from carapace.models.tooling import ToolResult, normalize_tool_call_args
-from carapace.notifications import (
-    NotificationPresenceRegistry,
-    NotificationRouter,
-    NotificationStore,
-    WebPushSender,
-    derive_owner_key,
-    derive_vapid_public_key,
-    ensure_vapid_config,
-)
+from carapace.notifications.presence import NotificationPresenceRegistry
+from carapace.notifications.router import NotificationRouter
+from carapace.notifications.sender import WebPushSender
+from carapace.notifications.store import NotificationStore, derive_owner_key
+from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.proxy import ProxyServer
 from carapace.sandbox.runtime import ContainerRuntime

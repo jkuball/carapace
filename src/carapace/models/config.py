@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_serializer, 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from carapace.models.credentials import CredentialsConfig
-from carapace.models.notifications import NotificationsConfig
 from carapace.models.session import SessionBudget
+from carapace.notifications.models import NotificationsConfig
 
 
 class Secret(BaseModel):

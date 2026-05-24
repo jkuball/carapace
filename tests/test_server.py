@@ -20,8 +20,10 @@ from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
-from carapace.models import CredentialMetadata, SessionBudget
-from carapace.notifications import NotificationPresenceRegistry, NotificationStore, derive_owner_key
+from carapace.models.credentials import CredentialMetadata
+from carapace.models.session import SessionBudget
+from carapace.notifications.presence import NotificationPresenceRegistry
+from carapace.notifications.store import NotificationStore, derive_owner_key
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot

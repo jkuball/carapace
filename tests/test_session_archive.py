@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from carapace.git.store import GitStore
-from carapace.models import SessionCommitConfig
+from carapace.models.config import SessionCommitConfig
 from carapace.session.archive import SessionArchiveService
 from carapace.session.manager import SessionManager
 
