@@ -159,6 +159,13 @@ def test_password_change_increments_token_version_and_invalidates_old_tokens(tmp
     assert store.validate_session_token(new_token) is not None
 
 
+def test_set_password_raises_for_missing_user(tmp_path) -> None:
+    store = AuthStore(tmp_path, AuthConfig())
+
+    with pytest.raises(KeyError):
+        store.set_password("missing", "new-secret")
+
+
 def test_expired_token_is_rejected(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
     store.create_user(username="thies", password="secret")

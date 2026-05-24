@@ -123,7 +123,13 @@ async def verify_admin_token(
 ) -> str:
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin token required")
-    expected = get_token()
+    try:
+        expected = get_token()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin token is not configured",
+        ) from exc
     if credentials.credentials != expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
     return credentials.credentials

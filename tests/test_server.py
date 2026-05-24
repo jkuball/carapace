@@ -191,6 +191,15 @@ def test_admin_user_management_uses_admin_token_only(client):
     assert login_resp.status_code == 200
 
 
+def test_admin_user_management_returns_503_when_admin_token_is_unset(client, monkeypatch):
+    monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
+
+    resp = client.get("/api/admin/users", headers={"Authorization": "Bearer anything"})
+
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Admin token is not configured"}
+
+
 def test_meta_requires_auth(client):
     resp = client.get("/api/meta")
     assert resp.status_code in (401, 403)

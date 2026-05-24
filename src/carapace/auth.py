@@ -196,15 +196,26 @@ class AuthStore:
             return updated
 
     def set_password(self, username: str, password: str) -> AuthUser:
-        user = self.get_user(username)
-        return self.update_user(
-            username,
-            {
-                "password_hash": hash_password(password),
-                "password_changed_at": datetime.now(tz=UTC),
-                "token_version": user.token_version + 1 if user is not None else 1,
-            },
-        )
+        key = normalize_username(username)
+        password_hash = hash_password(password)
+        with self._lock:
+            users_file = self.load_users()
+            existing = users_file.users.get(key)
+            if existing is None:
+                raise KeyError(key)
+            payload = existing.model_dump(mode="python")
+            payload.update(
+                {
+                    "password_hash": password_hash,
+                    "password_changed_at": datetime.now(tz=UTC),
+                    "token_version": existing.token_version + 1,
+                    "updated_at": datetime.now(tz=UTC),
+                }
+            )
+            updated = AuthUser.model_validate(payload)
+            users_file.users[key] = updated
+            self.save_users(users_file)
+            return updated
 
     def verify_password(self, username: str, password: str) -> AuthUser | None:
         user = self.get_user(username)

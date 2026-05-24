@@ -74,7 +74,7 @@ class SessionListCache:
         loop.call_soon_threadsafe(lambda: loop.create_task(self.invalidate()))
 
     def _cache_key(self, include_archived: bool, include_message_count: bool, *, user: str | None = None) -> str:
-        owner = user or "all"
+        owner = f"user:{user}" if user is not None else "scope:all"
         return f"carapace:sessions:list:{owner}:{int(include_archived)}:{int(include_message_count)}"
 
     async def _redis_get(self, cache_key: str) -> list[dict[str, Any]] | None:
