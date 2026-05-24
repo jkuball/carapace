@@ -94,7 +94,7 @@ The same envelope is used for normal agent tools and for security-side notificat
 - Git push summary: `tool` is `git_push`.
 - Credential decision summary: `tool` is `credential_access`, `args` includes `vault_path`.
 
-Exact args depend on the producer; see `WebSocketSubscriber` in [`src/carapace/server.py`](../src/carapace/server.py).
+Exact args depend on the producer; see `WebSocketSubscriber` in [`src/carapace/server/websocket.py`](../src/carapace/server/websocket.py).
 
 `tool_call` and `tool_result` may also include stable `tool_id` values, and nested tool calls include `parent_tool_id` so the frontend can render tool trees.
 
@@ -135,9 +135,9 @@ Both controls operate on the normalized event log used by `/api/sessions/{sessio
 
 ## Related code
 
-| Piece                          | Location                                                    |
-| ------------------------------ | ----------------------------------------------------------- |
-| Message models & parser        | `src/carapace/ws_models.py`                                 |
-| WebSocket route & handshake    | `src/carapace/server.py` (`chat_ws`, `WebSocketSubscriber`) |
-| Broadcasts from session engine | `src/carapace/session/engine.py`                            |
-| Frontend types                 | `frontend/src/lib/types.ts`                                 |
+| Piece                          | Location                                                              |
+| ------------------------------ | --------------------------------------------------------------------- |
+| Message models & parser        | `src/carapace/ws_models.py`                                           |
+| WebSocket route & handshake    | `src/carapace/server/websocket.py` (`chat_ws`, `WebSocketSubscriber`) |
+| Broadcasts from session engine | `src/carapace/session/engine.py`                                      |
+| Frontend types                 | `frontend/src/lib/types.ts`                                           |

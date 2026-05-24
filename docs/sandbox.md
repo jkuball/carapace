@@ -16,7 +16,6 @@ flowchart LR
     subgraph container ["Session Container (Debian + Python + Node tooling)"]
         Workspace["/workspace/ (git clone, persistent mount)"]
         Skills["/workspace/skills/"]
-        Memory["/workspace/memory/"]
     end
 
     subgraph external [Internet]

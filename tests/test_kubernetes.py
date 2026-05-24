@@ -97,8 +97,8 @@ def test_sandboxes_kr8s_plural_matches_crd():
 
 def test_mount_to_subpath():
     rt = _make_runtime(data_dir="/data")
-    mount = Mount(source="/data/memory", target="/workspace/memory", read_only=True)
-    assert rt._mount_to_subpath(mount) == "memory"
+    mount = Mount(source="/data/cache", target="/workspace/cache", read_only=True)
+    assert rt._mount_to_subpath(mount) == "cache"
 
 
 def test_mount_to_subpath_nested():
@@ -123,7 +123,7 @@ def test_build_pod_dict_basic():
         name="carapace-sandbox-test123",
         labels={"carapace.session": "test123"},
         mounts=[
-            Mount(source="/data/memory", target="/workspace/memory", read_only=True),
+            Mount(source="/data/cache", target="/workspace/cache", read_only=True),
             Mount(source="/data/sessions/s1/workspace/skills", target="/workspace/skills"),
         ],
         network="carapace-sandbox",
@@ -151,7 +151,7 @@ def test_build_pod_dict_basic():
     # Volume mounts use subPath from PVC
     vmounts = container["volumeMounts"]
     assert len(vmounts) == 2
-    assert vmounts[0]["subPath"] == "memory"
+    assert vmounts[0]["subPath"] == "cache"
     assert vmounts[0].get("readOnly") is True
     assert vmounts[1]["subPath"] == "sessions/s1/workspace/skills"
 

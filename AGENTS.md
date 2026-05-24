@@ -48,7 +48,6 @@ src/carapace/          # main package
   models.py            # Pydantic models and dataclasses
   ws_models.py         # WebSocket message protocol models
   usage.py             # token usage tracking (ModelUsage, UsageTracker)
-  memory.py            # markdown-based persistent memory
   skills.py            # skill registry
   credentials.py       # password-manager-backed credentials
   agent/

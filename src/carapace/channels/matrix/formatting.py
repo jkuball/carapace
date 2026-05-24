@@ -79,14 +79,6 @@ def format_command_result_text(result: CommandResult) -> str:
                 lines.append(f"- **{skill.get('name', '?')}** — {skill.get('description', '')}")
             return "\n".join(lines)
 
-        case "memory":
-            if not data:
-                return "No memory files."
-            lines = ["**Memory files:**\n"]
-            for f in data:
-                lines.append(f"- {f}")
-            return "\n".join(lines)
-
         case "retitle":
             return data.get("message", "")
 

@@ -158,13 +158,6 @@ def _render_command_result(data: dict[str, Any]) -> None:
                 for s in payload:
                     console.print(f"  [bold]{s['name']}[/bold]: {s['description']}")
 
-        case "memory":
-            if not payload:
-                console.print("No memory files.")
-            else:
-                for f in payload:
-                    console.print(f"  {f}")
-
         case "usage":
             _render_usage(payload)
 

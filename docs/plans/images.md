@@ -93,7 +93,7 @@ The `images` key is only present when images exist (backward compatible). The hi
 - `load_image(session_id, image_id) → (bytes, media_type)` — read back with media type detection from extension
 - `image_path(session_id, image_id) → Path` — resolve path for serving
 
-**`src/carapace/server.py`** — two new routes:
+**`src/carapace/server/__init__.py`** — two new routes:
 
 | Method | Path                                   | Purpose                                                                                       |
 | ------ | -------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -177,7 +177,7 @@ Tools keep returning `str`. A tool that generates an image (screenshot, chart, r
 
 This requires:
 
-- **`src/carapace/models.py`**: expose `save_image` access through `Deps` (add `SessionManager` ref or a bound closure)
+- **`src/carapace/agent/deps.py`**: expose `save_image` access through `Deps` (add `SessionManager` ref or a bound closure)
 - **`frontend/src/components/markdown-content.tsx`**: `<img>` rendering (already required for Phase 5)
 
 No new protocol messages, no tool return type changes.
@@ -207,11 +207,11 @@ Images should be forwarded to the sentinel's shadow conversation as well. Image 
 | File                              | Changes                                                          |
 | --------------------------------- | ---------------------------------------------------------------- |
 | `src/carapace/session/manager.py` | `save_image()`, `load_image()`, `image_path()` helpers           |
-| `src/carapace/server.py`          | `POST` + `GET` image endpoints                                   |
+| `src/carapace/server/__init__.py` | `POST` + `GET` image endpoints                                   |
 | `src/carapace/ws_models.py`       | `UserMessage.images`, `Done.images`                              |
 | `src/carapace/session/engine.py`  | `submit_message()`, `_run_turn()` accept images; event recording |
 | `src/carapace/agent/loop.py`      | `run_agent_turn()` multimodal prompt construction                |
-| `src/carapace/models.py`          | `Deps` — expose image storage for future tools                   |
+| `src/carapace/agent/deps.py`      | `Deps` — expose image storage for future tools                   |
 
 ### Frontend
 

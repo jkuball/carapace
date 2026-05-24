@@ -19,10 +19,6 @@ def test_import_config():
     from carapace.config import get_data_dir, load_config, load_workspace_file  # noqa: F401
 
 
-def test_import_memory():
-    from carapace.memory import MemoryStore  # noqa: F401
-
-
 def test_import_session():
     from carapace.session import SessionManager  # noqa: F401
 
