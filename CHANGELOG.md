@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.123.3 (2026-05-24)
+
+
+### Other
+
+
+- refactor
+  ([`1ed7d6d`](https://github.com/thiesgerken/carapace/commit/1ed7d6d5d0393b67a94a8979d3e98086d025fecd))
+
+- refactor init into history and sessions
+  ([`f0be756`](https://github.com/thiesgerken/carapace/commit/f0be756d710b69357875a7b0b1bf453dd2c631b1))
+
+- remove more legacy stuff
+  ([`9b20ab4`](https://github.com/thiesgerken/carapace/commit/9b20ab4718664f7657adba6d3597925fba1afdbe))
+
+- remove stale memory stuff and update docs
+  ([`16ca62d`](https://github.com/thiesgerken/carapace/commit/16ca62d2ff785b3d6f95bf5ab421fabdfbe77a76))
+
+- split server.py
+  ([`490dcf1`](https://github.com/thiesgerken/carapace/commit/490dcf1ee81e7c795c9439f2839dd98e8f9f8266))
+
+- use relative imports
+  ([`c4aadc2`](https://github.com/thiesgerken/carapace/commit/c4aadc2c421561705f0f10c004cac5b9e1212046))
+
+- further model refactor
+  ([`8fd33b3`](https://github.com/thiesgerken/carapace/commit/8fd33b34f94fa28f90d08d7e66f158586ee977e7))
+
+- refactor models.py into submodule
+  ([`b56db99`](https://github.com/thiesgerken/carapace/commit/b56db9927a995e2fcf8ff10f08e039935b588bbd))
+
+- approvals + usage/budget
+  ([`86be3d6`](https://github.com/thiesgerken/carapace/commit/86be3d6e02b4a83a4fb5e55c22d753cedf92b9a5))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: split engine.py into multiple files
+  ([`d924c04`](https://github.com/thiesgerken/carapace/commit/d924c042e4cbdc2c944e343e6a6120e27a8d84c1))
+
 ## v0.123.2 (2026-05-23)
 
 
