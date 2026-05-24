@@ -138,7 +138,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
           {loading ? t("connecting") : t("connect")}
         </button>
         <a
-          href={`${server.replace(/\/$/, "")}/api/admin/users`}
+          href={`/admin/users?server=${encodeURIComponent(server.replace(/\/$/, ""))}`}
           className="block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           {t("adminLink")}

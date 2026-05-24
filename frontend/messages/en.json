@@ -31,6 +31,64 @@
             "connectionFailed": "Connection failed"
         }
     },
+    "admin": {
+        "title": "Admin",
+        "backToApp": "Back to app",
+        "serverLabel": "Server URL",
+        "serverPlaceholder": "No server selected",
+        "adminTokenLabel": "Admin token",
+        "adminTokenPlaceholder": "CARAPACE_TOKEN",
+        "users": {
+            "title": "Users",
+            "savedUsers": "Users",
+            "loading": "Loading users…",
+            "empty": "No users found",
+            "selectUser": "Select a user",
+            "enabled": "Enabled",
+            "disabled": "Disabled"
+        },
+        "create": {
+            "title": "New user",
+            "subtitle": "Create a local user"
+        },
+        "fields": {
+            "username": "Username",
+            "password": "Password",
+            "newPassword": "New password",
+            "keepPassword": "Keep current password",
+            "displayName": "Display name",
+            "email": "Email",
+            "roles": "Roles",
+            "enabled": "Enabled"
+        },
+        "actions": {
+            "load": "Load",
+            "loading": "Loading…",
+            "refresh": "Refresh users",
+            "new": "New user",
+            "create": "Create user",
+            "creating": "Creating…",
+            "save": "Save changes",
+            "saving": "Saving…"
+        },
+        "notices": {
+            "loaded": "Users loaded.",
+            "created": "Created {username}.",
+            "saved": "Saved {username}."
+        },
+        "errors": {
+            "missingCredentials": "Server URL and admin token are required.",
+            "load": "Failed to load users.",
+            "create": "Failed to create user.",
+            "save": "Failed to save user."
+        },
+        "meta": {
+            "tokenVersion": "Token v{version}",
+            "updated": "Updated {timestamp}",
+            "lastLogin": "Last login {timestamp}",
+            "never": "never"
+        }
+    },
     "preferences": {
         "title": "Preferences",
         "description": "Frontend settings for language and other app-level behavior.",

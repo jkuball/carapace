@@ -12,7 +12,7 @@ import type {
   SessionListPage,
   SessionSandboxSnapshot,
 } from "./types";
-import { isRecord, readNumber, readString } from "./decoding";
+import { isRecord, readNumber, readString, readStringArray } from "./decoding";
 
 async function fetch(
   input: RequestInfo | URL,
@@ -25,6 +25,13 @@ function headers(_session: string): HeadersInit {
   void _session;
   return {
     "Content-Type": "application/json",
+  };
+}
+
+function adminHeaders(adminToken: string): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${adminToken}`,
   };
 }
 
@@ -51,6 +58,79 @@ export interface ServerMeta {
 export interface AuthUserInfo {
   username: string;
   display_name: string | null;
+}
+
+export interface AdminUserInfo {
+  username: string;
+  enabled: boolean;
+  token_version: number;
+  display_name: string;
+  email: string | null;
+  roles: string[];
+  created_at: string;
+  updated_at: string;
+  password_changed_at: string;
+  last_login_at: string | null;
+  config: unknown;
+}
+
+export interface AdminUserCreateInput {
+  username: string;
+  password: string;
+  display_name?: string;
+  email?: string | null;
+  roles?: string[];
+}
+
+export interface AdminUserUpdateInput {
+  display_name?: string;
+  email?: string | null;
+  roles?: string[];
+  enabled?: boolean;
+  password?: string;
+}
+
+function decodeAdminUser(raw: unknown): AdminUserInfo | null {
+  if (!isRecord(raw)) return null;
+
+  const username = readString(raw, "username");
+  const displayName = readString(raw, "display_name");
+  const createdAt = readString(raw, "created_at");
+  const updatedAt = readString(raw, "updated_at");
+  const passwordChangedAt = readString(raw, "password_changed_at");
+  const tokenVersion = readNumber(raw, "token_version");
+  if (
+    !username
+    || displayName === undefined
+    || !createdAt
+    || !updatedAt
+    || !passwordChangedAt
+    || tokenVersion === undefined
+    || typeof raw.enabled !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    username,
+    enabled: raw.enabled,
+    token_version: tokenVersion,
+    display_name: displayName,
+    email: readString(raw, "email") ?? null,
+    roles: readStringArray(raw, "roles") ?? [],
+    created_at: createdAt,
+    updated_at: updatedAt,
+    password_changed_at: passwordChangedAt,
+    last_login_at: readString(raw, "last_login_at") ?? null,
+    config: raw.config,
+  };
+}
+
+function decodeAdminUsers(raw: unknown): AdminUserInfo[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => decodeAdminUser(item))
+    .filter((item): item is AdminUserInfo => item !== null);
 }
 
 export async function login(
@@ -88,6 +168,60 @@ export async function logout(server: string): Promise<void> {
   if (!res.ok && res.status !== 401) {
     throw new Error(await readErrorMessage(res, "Logout failed"));
   }
+}
+
+export async function listAdminUsers(
+  server: string,
+  adminToken: string,
+): Promise<AdminUserInfo[]> {
+  const res = await fetch(`${server}/api/admin/users`, {
+    headers: adminHeaders(adminToken),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to list users"));
+  }
+  return decodeAdminUsers(await res.json());
+}
+
+export async function createAdminUser(
+  server: string,
+  adminToken: string,
+  body: AdminUserCreateInput,
+): Promise<AdminUserInfo> {
+  const res = await fetch(`${server}/api/admin/users`, {
+    method: "POST",
+    headers: adminHeaders(adminToken),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to create user"));
+  }
+  const user = decodeAdminUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
+}
+
+export async function updateAdminUser(
+  server: string,
+  adminToken: string,
+  username: string,
+  body: AdminUserUpdateInput,
+): Promise<AdminUserInfo> {
+  const res = await fetch(`${server}/api/admin/users/${encodeURIComponent(username)}`, {
+    method: "PATCH",
+    headers: adminHeaders(adminToken),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to update user"));
+  }
+  const user = decodeAdminUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
 }
 
 export async function getServerMeta(

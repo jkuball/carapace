@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createAdminUser,
   deleteNotificationSubscription,
   getVapidPublicKey,
+  listAdminUsers,
   sendTestNotification,
+  updateAdminUser,
 } from "./api";
 import {
   listNotificationSubscriptions,
@@ -138,4 +141,87 @@ test("sendTestNotification surfaces backend detail messages on failure", async (
       ),
     /Failed to deliver test notification/,
   );
+});
+
+test("admin user helpers send bearer token and parse users", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    calls.push(request);
+    return new Response(
+      JSON.stringify([
+        {
+          username: "thies",
+          enabled: true,
+          token_version: 2,
+          display_name: "Thies",
+          email: "thies@example.test",
+          roles: ["admin"],
+          created_at: "2026-05-24T12:00:00Z",
+          updated_at: "2026-05-24T12:00:00Z",
+          password_changed_at: "2026-05-24T12:00:00Z",
+          last_login_at: null,
+          config: {},
+        },
+      ]),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const users = await listAdminUsers("https://carapace.example.test", "admin-token");
+
+  assert.equal(calls[0].headers.get("Authorization"), "Bearer admin-token");
+  assert.equal(users[0].username, "thies");
+  assert.equal(users[0].roles[0], "admin");
+});
+
+test("createAdminUser posts admin payload", async () => {
+  let capturedBody = "";
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    capturedBody = await request.text();
+    return new Response(
+      JSON.stringify({
+        username: "ada",
+        enabled: true,
+        token_version: 1,
+        display_name: "Ada",
+        email: null,
+        roles: [],
+        created_at: "2026-05-24T12:00:00Z",
+        updated_at: "2026-05-24T12:00:00Z",
+        password_changed_at: "2026-05-24T12:00:00Z",
+        last_login_at: null,
+        config: {},
+      }),
+      { status: 201, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const user = await createAdminUser("https://carapace.example.test", "admin-token", {
+    username: "ada",
+    password: "secret",
+    display_name: "Ada",
+  });
+
+  assert.equal(JSON.parse(capturedBody).username, "ada");
+  assert.equal(user.username, "ada");
+});
+
+test("updateAdminUser encodes username and surfaces backend errors", async () => {
+  let capturedUrl = "";
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    capturedUrl = request.url;
+    return new Response(JSON.stringify({ detail: "User not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  await assert.rejects(
+    () => updateAdminUser("https://carapace.example.test", "admin-token", "ada lovelace", { enabled: false }),
+    /User not found/,
+  );
+  assert.equal(capturedUrl, "https://carapace.example.test/api/admin/users/ada%20lovelace");
 });

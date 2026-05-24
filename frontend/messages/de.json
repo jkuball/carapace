@@ -31,6 +31,64 @@
             "connectionFailed": "Verbindung fehlgeschlagen"
         }
     },
+    "admin": {
+        "title": "Admin",
+        "backToApp": "Zurück zur App",
+        "serverLabel": "Server-URL",
+        "serverPlaceholder": "Kein Server ausgewählt",
+        "adminTokenLabel": "Admin-Token",
+        "adminTokenPlaceholder": "CARAPACE_TOKEN",
+        "users": {
+            "title": "Benutzer",
+            "savedUsers": "Benutzer",
+            "loading": "Benutzer werden geladen…",
+            "empty": "Keine Benutzer gefunden",
+            "selectUser": "Benutzer auswählen",
+            "enabled": "Aktiv",
+            "disabled": "Deaktiviert"
+        },
+        "create": {
+            "title": "Neuer Benutzer",
+            "subtitle": "Lokalen Benutzer anlegen"
+        },
+        "fields": {
+            "username": "Benutzername",
+            "password": "Passwort",
+            "newPassword": "Neues Passwort",
+            "keepPassword": "Aktuelles Passwort behalten",
+            "displayName": "Anzeigename",
+            "email": "E-Mail",
+            "roles": "Rollen",
+            "enabled": "Aktiv"
+        },
+        "actions": {
+            "load": "Laden",
+            "loading": "Lädt…",
+            "refresh": "Benutzer aktualisieren",
+            "new": "Neuer Benutzer",
+            "create": "Benutzer anlegen",
+            "creating": "Lege an…",
+            "save": "Änderungen speichern",
+            "saving": "Speichert…"
+        },
+        "notices": {
+            "loaded": "Benutzer geladen.",
+            "created": "{username} angelegt.",
+            "saved": "{username} gespeichert."
+        },
+        "errors": {
+            "missingCredentials": "Server-URL und Admin-Token sind erforderlich.",
+            "load": "Benutzer konnten nicht geladen werden.",
+            "create": "Benutzer konnte nicht angelegt werden.",
+            "save": "Benutzer konnte nicht gespeichert werden."
+        },
+        "meta": {
+            "tokenVersion": "Token v{version}",
+            "updated": "Aktualisiert {timestamp}",
+            "lastLogin": "Letzter Login {timestamp}",
+            "never": "nie"
+        }
+    },
     "preferences": {
         "title": "Einstellungen",
         "description": "Frontend-Einstellungen für Sprache und anderes app-weites Verhalten.",
