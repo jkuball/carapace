@@ -9,7 +9,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
 
 import logfire
 import loguru
@@ -17,7 +16,6 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import (
     APIRouter,
-    Depends,
     FastAPI,
     HTTPException,
     Request,
@@ -37,11 +35,9 @@ from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path,
 from ..credentials import CredentialRegistry, build_credential_registry
 from ..git.http import GitHttpHandler
 from ..git.store import GitStore
-from ..jobs import JobsScheduler, JobsStore, build_job_run_message
+from ..jobs import JobsScheduler, JobsStore
 from ..llm import make_model_factory
 from ..models.config import Config
-from ..models.jobs import JobDefinition, JobsFile
-from ..models.session import SessionJobRunContext
 from ..notifications.presence import NotificationPresenceRegistry
 from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
@@ -50,18 +46,17 @@ from ..notifications.vapid import ensure_vapid_config
 from ..sandbox.manager import SandboxManager
 from ..sandbox.proxy import ProxyServer
 from ..sandbox.runtime import ContainerRuntime
-from ..sandbox.state import SessionSandboxSnapshot
 from ..session import SessionEngine, SessionManager
 from ..session.archive import SessionArchiveService
 from ..skills import SkillRegistry
 from ..usage import SessionBudgetExceededError
-from .auth import verify_token as _verify_token
 from .auth import verify_ws_token
 from .history import router as history_router
+from .jobs import _jobs_scheduler_loop
+from .jobs import router as jobs_router
 from .notifications import _set_notification_presence as _set_notification_presence
 from .notifications import router as notifications_router
-from .sessions import SessionInfo as SessionInfo
-from .sessions import _session_info_from_state as _session_info_from_state
+from .session_sandbox import router as session_sandbox_router
 from .sessions import router as sessions_router
 from .websocket import ServerMeta as ServerMeta
 from .websocket import VapidPublicKeyResponse as VapidPublicKeyResponse
@@ -88,7 +83,6 @@ _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
-_JOB_SCHEDULER_SWEEP_SECONDS = 60
 _APP_VERSION = get_version()
 _verify_ws_token = verify_ws_token
 
@@ -144,34 +138,6 @@ async def _session_archive_loop() -> None:
             await _autosave_inactive_sessions()
         except Exception as exc:
             logger.warning(f"Session archive autosave loop error: {exc}")
-
-
-async def _jobs_scheduler_loop() -> None:
-    """Periodically enqueue due cron-triggered jobs."""
-    while True:
-        await asyncio.sleep(_JOB_SCHEDULER_SWEEP_SECONDS)
-        try:
-            await _run_due_jobs_once()
-        except Exception as exc:
-            logger.warning(f"Jobs scheduler loop error: {exc}")
-
-
-async def _run_due_jobs_once(*, now: datetime | None = None) -> int:
-    due_runs = _jobs_scheduler.collect_due_runs(now=now)
-    for due_run in due_runs:
-        try:
-            await _run_job_definition(
-                due_run.job,
-                trigger_kind="cron",
-                triggered_at=due_run.scheduled_at,
-                cron_expression=due_run.trigger.expression,
-                trigger_timezone=due_run.trigger.timezone,
-            )
-        except HTTPException as exc:
-            logger.warning(f"Scheduled job {due_run.job.id} skipped: {exc.detail}")
-        except Exception as exc:
-            logger.warning(f"Scheduled job {due_run.job.id} failed: {exc}")
-    return len(due_runs)
 
 
 async def _autosave_inactive_sessions() -> None:
@@ -486,214 +452,6 @@ app.add_middleware(
 )
 
 
-class JobRunRequest(BaseModel):
-    data: str | None = None
-
-
-class JobRunResult(BaseModel):
-    job_id: str
-    session_id: str
-    created_new_session: bool
-    session: SessionInfo
-
-
-async def _run_job_definition(
-    job: JobDefinition,
-    *,
-    trigger_kind: Literal["api", "cron", "manual"],
-    triggered_at: datetime | None = None,
-    payload: str | None = None,
-    cron_expression: str | None = None,
-    trigger_timezone: str | None = None,
-) -> JobRunResult:
-    created_new_session = False
-    effective_triggered_at = triggered_at or datetime.now(tz=UTC)
-
-    if job.persistent_session_id is None:
-        state = _engine.session_mgr.create_session(
-            channel_type="job",
-            channel_ref=f"job:{job.id}",
-            budget=_engine.config.agent.default_session_budget,
-            private=job.private,
-            unattended=job.unattended,
-            ask_mode=job.ask_mode,
-            yolo_mode=job.yolo_mode,
-        )
-        state.agent_model_name = job.agent_model_name
-        state.sentinel_model_name = job.sentinel_model_name
-        state.title_model_name = job.title_model_name
-        created_new_session = True
-    else:
-        state = _engine.session_mgr.load_state(job.persistent_session_id)
-        if state is None:
-            raise HTTPException(status_code=409, detail="Configured persistent session was not found")
-        if state.attributes.unattended:
-            raise HTTPException(status_code=409, detail="Configured persistent session must be attended")
-        if state.attributes.archived:
-            raise HTTPException(status_code=409, detail="Configured persistent session must not be archived")
-
-    if _engine.is_agent_running(state.session_id):
-        raise HTTPException(status_code=409, detail="Target session is busy")
-
-    job_run_context = SessionJobRunContext(
-        job_id=job.id,
-        trigger_kind=trigger_kind,
-        triggered_at=effective_triggered_at,
-        data=payload,
-        cron_expression=cron_expression,
-    )
-    state.latest_job_run = job_run_context
-    _engine.session_mgr.save_state(state)
-    _engine.update_active_state(state.session_id, latest_job_run=job_run_context)
-
-    resolved_trigger_timezone = trigger_timezone or (
-        next(
-            (t.timezone for t in job.triggers if t.expression == cron_expression and t.timezone),
-            None,
-        )
-        if cron_expression
-        else None
-    )
-    message = build_job_run_message(
-        job,
-        trigger_kind=trigger_kind,
-        triggered_at=effective_triggered_at,
-        payload=payload,
-        cron_expression=cron_expression,
-        timezone=resolved_trigger_timezone,
-    )
-    await _engine.submit_message(state.session_id, message)
-
-    refreshed = _engine.session_mgr.load_state(state.session_id)
-    if refreshed is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    session = _session_info_from_state(refreshed, include_message_count=True)
-    return JobRunResult(
-        job_id=job.id,
-        session_id=refreshed.session_id,
-        created_new_session=created_new_session,
-        session=session,
-    )
-
-
-# --- REST: Jobs ---
-
-
-@router.get("/jobs", response_model=JobsFile)
-async def list_jobs(_token: str = Depends(_verify_token)) -> JobsFile:
-    return _jobs_store.load()
-
-
-@router.post("/jobs", response_model=JobDefinition, status_code=201)
-async def create_job(
-    body: JobDefinition,
-    _token: str = Depends(_verify_token),
-) -> JobDefinition:
-    try:
-        return _jobs_store.create_job(body)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@router.get("/jobs/{job_id}", response_model=JobDefinition)
-async def get_job(job_id: str, _token: str = Depends(_verify_token)) -> JobDefinition:
-    job = _jobs_store.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
-@router.put("/jobs/{job_id}", response_model=JobDefinition)
-async def update_job(
-    job_id: str,
-    body: JobDefinition,
-    _token: str = Depends(_verify_token),
-) -> JobDefinition:
-    if body.id != job_id:
-        raise HTTPException(status_code=400, detail="Job id in path and body must match")
-    try:
-        return _jobs_store.update_job(job_id, body)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Job not found") from exc
-
-
-@router.delete("/jobs/{job_id}", status_code=204)
-async def delete_job(job_id: str, _token: str = Depends(_verify_token)) -> Response:
-    deleted = _jobs_store.delete_job(job_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return Response(status_code=204)
-
-
-@router.post("/jobs/{job_id}/run", response_model=JobRunResult)
-async def run_job(
-    job_id: str,
-    body: JobRunRequest | None = None,
-    _token: str = Depends(_verify_token),
-) -> JobRunResult:
-    job = _jobs_store.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    body = body or JobRunRequest()
-    return await _run_job_definition(
-        job,
-        trigger_kind="api",
-        payload=body.data,
-    )
-
-
-@router.get("/sessions/{session_id}/sandbox", response_model=SessionSandboxSnapshot)
-async def get_session_sandbox(session_id: str, _token: str = Depends(_verify_token)) -> SessionSandboxSnapshot:
-    state = _engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    snapshot = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return snapshot or SessionSandboxSnapshot()
-
-
-@router.post("/sessions/{session_id}/sandbox/up", response_model=SessionSandboxSnapshot)
-async def start_session_sandbox(session_id: str, _token: str = Depends(_verify_token)) -> SessionSandboxSnapshot:
-    state = _engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if state.attributes.archived:
-        raise HTTPException(status_code=409, detail="Archived sessions must be unarchived before use")
-    if _engine.is_agent_running(session_id):
-        raise HTTPException(status_code=409, detail="Cannot start sandbox while an agent turn is running")
-    await _engine.sandbox_mgr.ensure_session(session_id)
-    snapshot = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return snapshot or SessionSandboxSnapshot()
-
-
-@router.post("/sessions/{session_id}/sandbox/down", response_model=SessionSandboxSnapshot)
-async def stop_session_sandbox(session_id: str, _token: str = Depends(_verify_token)) -> SessionSandboxSnapshot:
-    state = _engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if state.attributes.archived:
-        raise HTTPException(status_code=409, detail="Archived sessions must be unarchived before use")
-    if _engine.is_agent_running(session_id):
-        raise HTTPException(status_code=409, detail="Cannot scale down sandbox while an agent turn is running")
-    await _engine.sandbox_mgr.cleanup_session(session_id)
-    snapshot = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return snapshot or SessionSandboxSnapshot()
-
-
-@router.post("/sessions/{session_id}/sandbox/wipe", response_model=SessionSandboxSnapshot)
-async def wipe_session_sandbox(session_id: str, _token: str = Depends(_verify_token)) -> SessionSandboxSnapshot:
-    state = _engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if state.attributes.archived:
-        raise HTTPException(status_code=409, detail="Archived sessions must be unarchived before use")
-    if _engine.is_agent_running(session_id):
-        raise HTTPException(status_code=409, detail="Cannot wipe sandbox while an agent turn is running")
-    await _engine.sandbox_mgr.reset_session(session_id)
-    snapshot = _engine.session_mgr.load_sandbox_snapshot(session_id)
-    return snapshot or SessionSandboxSnapshot()
-
-
 class _InterceptHandler(logging.Handler):
     """Route stdlib logging records to loguru."""
 
@@ -827,6 +585,8 @@ async def evaluate_push(req: PushEvalRequest) -> dict[str, str]:
 
 router.include_router(sessions_router)
 router.include_router(history_router)
+router.include_router(jobs_router)
+router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
 router.include_router(websocket_router)
 app.include_router(router)

@@ -15,12 +15,14 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 # We patch the server module globals directly for testing
 import carapace.sandbox.state as sandbox_state
 import carapace.server as srv
+import carapace.server.jobs as server_jobs
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models.credentials import CredentialMetadata
+from carapace.models.jobs import JobDefinition
 from carapace.models.session import SessionBudget
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.notifications.store import NotificationStore, derive_owner_key
@@ -666,7 +668,7 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     monkeypatch.setattr(srv._engine, "submit_message", submit_message)
 
     srv._jobs_store.create_job(
-        srv.JobDefinition.model_validate(
+        JobDefinition.model_validate(
             {
                 "id": "daily-briefing",
                 "name": "Daily Briefing",
@@ -679,7 +681,7 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
     assert srv._jobs_scheduler.collect_due_runs(now=start) == []
 
-    dispatched = await srv._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
+    dispatched = await server_jobs._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
 
     assert dispatched == 1
     (session_id, message), kwargs = submit_message.await_args
@@ -695,7 +697,7 @@ async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> Non
     monkeypatch.setattr(srv._engine, "submit_message", submit_message)
 
     srv._jobs_store.create_job(
-        srv.JobDefinition.model_validate(
+        JobDefinition.model_validate(
             {
                 "id": "timezone-ambiguous",
                 "name": "Timezone Ambiguous",
@@ -711,7 +713,7 @@ async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> Non
     start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
     assert srv._jobs_scheduler.collect_due_runs(now=start) == []
 
-    dispatched = await srv._run_job_definition(
+    dispatched = await server_jobs._run_job_definition(
         srv._jobs_store.get_job("timezone-ambiguous"),
         trigger_kind="cron",
         triggered_at=datetime(2026, 5, 9, 10, 1, tzinfo=UTC),
