@@ -15,7 +15,6 @@ import contextlib
 import secrets
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -25,24 +24,15 @@ from loguru import logger
 from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.messages import (
     ModelMessage,
-    ModelRequest,
-    ModelResponse,
-    TextPart,
-    ThinkingPart,
     ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
 )
-from pydantic_ai.models import Model, infer_model
-from pydantic_ai.settings import ModelSettings
+from pydantic_ai.models import Model
 from pydantic_ai.usage import UsageLimits
 
 import carapace.security as security_mod
 from carapace.agent.loop import run_agent_turn as _run_agent_turn
 from carapace.git.store import GitStore
-from carapace.llm import model_settings_for_config
 from carapace.models import (
-    AvailableModelEntry,
     Config,
     CredentialRegistryProtocol,
     Deps,
@@ -51,8 +41,6 @@ from carapace.models import (
     SkillInfo,
     ToolCallCallback,
     ToolResult,
-    agent_available_model_entries,
-    context_grants_session_summary,
     normalize_tool_call_args,
 )
 from carapace.notifications.router import NotificationRouter, build_escalation_notification_id
@@ -66,8 +54,19 @@ from carapace.security.context import (
     normalize_optional_message,
 )
 from carapace.security.sentinel import Sentinel
+from carapace.session.commands import SessionCommandMixin
 from carapace.session.manager import SessionManager
+from carapace.session.model_selection import SessionModelMixin
 from carapace.session.titler import generate_title
+from carapace.session.transcript import (
+    CompletedEventTurn,
+    completed_event_turns,
+    completed_model_turn_end_indexes,
+    history_for_completed_turn_count,
+    is_terminal_history_message,
+    normalize_unattended_output_history,
+    task_output_text,
+)
 from carapace.session.turns import SessionTurnMixin
 from carapace.session.types import ActiveSession, SessionSubscriber
 from carapace.skills import SkillRegistry
@@ -92,21 +91,11 @@ from carapace.usage import (
     note_llm_request_thinking as _note_llm_request_thinking,
 )
 from carapace.ws_models import (
-    SLASH_COMMANDS,
     ApprovalResponse,
     EscalationResponse,
     TurnUsage,
     TurnUsageBreakdownPct,
 )
-
-
-class _UnsetType:
-    pass
-
-
-_UNSET = _UnsetType()
-
-ModelType = Literal["agent", "sentinel", "title"]
 
 _DEFAULT_CONTEXT_CAP_TOKENS = 200_000
 
@@ -127,13 +116,6 @@ def note_llm_request_thinking() -> LlmRequestState | None:
 # security_mod is still imported for evaluate_domain_with (used in domain approval callback)
 
 
-@dataclass(frozen=True, slots=True)
-class CompletedEventTurn:
-    start_event_index: int
-    end_event_index: int
-    user_content: str
-
-
 def _escalation_notification_body(subject: str, kind: str) -> str:
     match kind:
         case "git_push":
@@ -144,7 +126,7 @@ def _escalation_notification_body(subject: str, kind: str) -> str:
             return f"Approval needed to access {subject}."
 
 
-class SessionEngine(SessionTurnMixin):
+class SessionEngine(SessionCommandMixin, SessionModelMixin, SessionTurnMixin):
     """Central session lifecycle manager.
 
     Owns all in-memory session state, security sessions, and agent execution.
@@ -242,21 +224,6 @@ class SessionEngine(SessionTurnMixin):
     @property
     def agent_model(self) -> Model | None:
         return self._agent_model
-
-    @property
-    def available_models(self) -> list[str]:
-        return [e.model_id for e in self.available_model_entries]
-
-    @property
-    def available_model_entries(self) -> list[AvailableModelEntry]:
-        """Deduplicated ``agent.available_models`` (last row per ``model_id``), sorted by id."""
-        return agent_available_model_entries(self._config.agent)
-
-    def _max_input_tokens_for_model_id(self, model_id: str) -> int | None:
-        for e in self.available_model_entries:
-            if e.model_id == model_id:
-                return e.max_input_tokens
-        return None
 
     def _usage_last_llm_payload_row(self, active: ActiveSession, source: LlmSource) -> dict[str, Any] | None:
         """``usage_last_request_row`` plus ``context_cap_tokens`` and ``context_used_pct`` for the UI."""
@@ -473,57 +440,6 @@ class SessionEngine(SessionTurnMixin):
             return "Cleared cost budget."
         return f"Set cost budget to ${budget.cost_usd:.4f}."
 
-    def _resolve_model(self, name: str) -> Model:
-        """Create a Model from a name, using the model_factory if available."""
-        return self._model_factory(name) if self._model_factory else infer_model(name)
-
-    def _resolve_model_settings(self, name: str) -> ModelSettings | None:
-        """Build per-model request settings from the configured catalog."""
-        return model_settings_for_config(self._config, name, default_thinking=True)
-
-    def _restore_persisted_model_overrides(self, active: ActiveSession) -> None:
-        """Validate restored overrides, falling back to defaults when they are no longer usable."""
-        state_changed = False
-
-        if active.agent_model_name is not None:
-            try:
-                active.agent_model = self._resolve_model(active.agent_model_name)
-            except Exception as exc:
-                logger.warning(
-                    f"Persisted agent model override {active.agent_model_name!r} for session "
-                    + f"{active.state.session_id} is no longer valid: {exc}. Falling back to "
-                    + f"{self._config.agent.model!r}."
-                )
-                self._apply_model_override(active, "agent", None, None)
-                state_changed = True
-
-        if active.sentinel_model_name is not None and active.sentinel is not None:
-            try:
-                active.sentinel.set_model(active.sentinel_model_name)
-            except Exception as exc:
-                logger.warning(
-                    f"Persisted sentinel model override {active.sentinel_model_name!r} for session "
-                    + f"{active.state.session_id} is no longer valid: {exc}. Falling back to "
-                    + f"{self._config.agent.sentinel_model!r}."
-                )
-                self._apply_model_override(active, "sentinel", None, None)
-                state_changed = True
-
-        if active.title_model_name is not None:
-            try:
-                self._resolve_model(active.title_model_name)
-            except Exception as exc:
-                logger.warning(
-                    f"Persisted title model override {active.title_model_name!r} for session "
-                    + f"{active.state.session_id} is no longer valid: {exc}. Falling back to "
-                    + f"{self._config.agent.title_model!r}."
-                )
-                self._apply_model_override(active, "title", None, None)
-                state_changed = True
-
-        if state_changed:
-            self._session_mgr.save_state(active.state)
-
     # -- session lifecycle --
 
     def _ensure_active(self, session_id: str) -> ActiveSession:
@@ -688,37 +604,6 @@ class SessionEngine(SessionTurnMixin):
                 setattr(active.state, field_name, value)
             if "attributes" in changes:
                 self._sync_active_session_policy(active)
-
-    def update_session_model_overrides(
-        self,
-        session_id: str,
-        *,
-        agent_model_name: str | None | _UnsetType = _UNSET,
-        sentinel_model_name: str | None | _UnsetType = _UNSET,
-    ) -> SessionState:
-        """Persist agent and sentinel model overrides without routing through slash commands."""
-        active = self._active.get(session_id)
-        state = active.state if active is not None else self._session_mgr.load_state(session_id)
-        if state is None:
-            raise KeyError(session_id)
-
-        if not isinstance(agent_model_name, _UnsetType):
-            next_agent_model = None if agent_model_name is None else self._resolve_model(agent_model_name)
-            if active is not None:
-                self._apply_model_override(active, "agent", agent_model_name, next_agent_model)
-            else:
-                state.agent_model_name = agent_model_name
-
-        if not isinstance(sentinel_model_name, _UnsetType):
-            if sentinel_model_name is not None:
-                self._resolve_model(sentinel_model_name)
-            if active is not None:
-                self._apply_model_override(active, "sentinel", sentinel_model_name, None)
-            else:
-                state.sentinel_model_name = sentinel_model_name
-
-        self._session_mgr.save_state(state)
-        return state
 
     def is_agent_running(self, session_id: str) -> bool:
         active = self._active.get(session_id)
@@ -1006,338 +891,6 @@ class SessionEngine(SessionTurnMixin):
             else:
                 active.escalation_queue.put_nowait(response)
 
-    # -- slash commands --
-
-    async def handle_slash_command(self, session_id: str, command: str) -> dict[str, Any] | None:
-        """Process a slash command, return structured data or ``None``."""
-        active = self._active.get(session_id)
-        if not active:
-            return None
-
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-
-        if cmd == "/help":
-            return {"command": "help", "data": {"commands": SLASH_COMMANDS}}
-
-        if cmd == "/session":
-            grants_summary = context_grants_session_summary(
-                session_id,
-                active.state.context_grants,
-                self._sandbox_mgr.get_cached_credential,
-            )
-            return {
-                "command": "session",
-                "data": {
-                    "session_id": session_id,
-                    "channel_type": active.state.channel_type,
-                    "context_grants": grants_summary,
-                    "allowed_domains": self._sandbox_mgr.get_domain_info(session_id),
-                },
-            }
-
-        if cmd == "/skills":
-            skills = [{"name": s.name, "description": s.description.strip()} for s in self._skill_catalog]
-            return {"command": "skills", "data": skills}
-
-        if cmd == "/retitle":
-            arg = parts[1].strip() if len(parts) > 1 else ""
-            if arg:
-                active.state.title = arg
-                self._session_mgr.save_state(active.state)
-                await self._broadcast(active, "on_title_update", arg)
-                return {"command": "retitle", "data": {"message": f"Title set to: {arg}"}}
-            events = list(self._session_mgr.load_events(session_id))
-            new_title = await self._generate_title(active, events)
-            if not new_title:
-                return {
-                    "command": "retitle",
-                    "data": {"message": "Could not generate a title (no eligible messages yet, or generation failed)."},
-                }
-            return {"command": "retitle", "data": {"message": f"Title: {new_title}"}}
-
-        if cmd == "/models":
-            return self._handle_models_command(active)
-
-        if cmd == "/model":
-            return await self._handle_model_selector_command(
-                active,
-                parts[1].strip() if len(parts) > 1 else "",
-                slash_line=command.strip(),
-            )
-
-        if cmd == "/usage":
-            tracker = active.usage_tracker
-            costs = tracker.estimated_cost()
-            cat_costs = tracker.estimated_category_cost()
-            return {
-                "command": "usage",
-                "data": {
-                    "models": {k: v.model_dump() for k, v in tracker.models.items()},
-                    "categories": {k: v.model_dump() for k, v in tracker.categories.items()},
-                    "total_input": tracker.total_input,
-                    "total_output": tracker.total_output,
-                    "total_tool_calls": tracker.tool_calls,
-                    "costs": {k: str(v) for k, v in costs.items()},
-                    "category_costs": {k: str(v) for k, v in cat_costs.items()},
-                    "budget_gauges": [g.model_dump(mode="json") for g in self._budget_gauges(active)],
-                    "last_llm_agent": self._usage_last_llm_payload_row(active, "agent"),
-                    "last_llm_sentinel": self._usage_last_llm_payload_row(active, "sentinel"),
-                },
-            }
-
-        if cmd == "/budget":
-            if len(parts) == 1:
-                return {"command": "budget", "data": self._budget_command_payload(active)}
-
-            args = parts[1].strip().split(maxsplit=1)
-            metric_aliases = {
-                "input": "input",
-                "output": "output",
-                "cost": "cost",
-                "tools": "tool_calls",
-                "tool": "tool_calls",
-                "tool_calls": "tool_calls",
-                "tool-calls": "tool_calls",
-            }
-            metric = metric_aliases.get(args[0].lower()) if len(args) == 2 else None
-            if len(args) != 2 or metric is None:
-                return {
-                    "command": "budget",
-                    "data": {
-                        **self._budget_command_payload(active),
-                        "error": (
-                            "Usage: /budget, /budget input N, /budget output N, /budget cost N, or /budget tools N"
-                        ),
-                    },
-                }
-
-            assert metric in ("input", "output", "cost", "tool_calls")
-
-            try:
-                value = self._parse_budget_limit_value(metric, args[1].strip())
-            except ValueError as exc:
-                return {
-                    "command": "budget",
-                    "data": {**self._budget_command_payload(active), "error": str(exc)},
-                }
-            message = self._set_budget_metric(active, metric, value)
-            return {
-                "command": "budget",
-                "data": self._budget_command_payload(active, message=message),
-            }
-
-        if cmd == "/pull":
-            return await self._handle_pull_command()
-
-        if cmd == "/push":
-            return await self._handle_push_command()
-
-        if cmd == "/reload":
-            return await self._handle_reload_command(session_id)
-
-        return None
-
-    # -- pull / push from/to remote --
-
-    async def _handle_push_command(self) -> dict[str, Any]:
-        """Handle the ``/push`` slash command — push to external remote."""
-        if not self._config.git.remote:
-            return {"command": "push", "data": {"message": "No external remote configured."}}
-        try:
-            await self._git_store.push_to_remote()
-            return {"command": "push", "data": {"message": "Pushed to external remote."}}
-        except Exception as exc:
-            return {"command": "push", "data": {"message": f"Push failed: {exc}"}}
-
-    async def _handle_pull_command(self) -> dict[str, Any]:
-        """Handle the ``/pull`` slash command — pull from external remote."""
-        if not self._config.git.remote:
-            return {"command": "pull", "data": {"message": "No external remote configured."}}
-        try:
-            summary = await self._git_store.pull_from_remote()
-            # Re-scan skills after pull
-            registry = SkillRegistry(self._knowledge_dir / "skills")
-            self._skill_catalog = registry.scan()
-            return {"command": "pull", "data": {"message": summary}}
-        except RuntimeError as exc:
-            return {"command": "pull", "data": {"message": f"Pull failed: {exc}"}}
-
-    async def _handle_reload_command(self, session_id: str) -> dict[str, Any]:
-        """Handle the ``/reload`` slash command — reset the sandbox completely."""
-        try:
-            await self._sandbox_mgr.reset_session(session_id)
-            return {
-                "command": "reload",
-                "data": {
-                    "message": ("Sandbox reset. A fresh workspace will be created from Git on the next command."),
-                },
-            }
-        except Exception as exc:
-            return {"command": "reload", "data": {"message": f"Reload failed: {exc}"}}
-
-    # -- model switching --
-
-    _MODEL_TYPES: tuple[ModelType, ...] = ("agent", "sentinel", "title")
-
-    def _handle_models_command(self, active: ActiveSession) -> dict[str, Any]:
-        """Show the available model catalog for selection."""
-        available = [e.model_dump(mode="json", by_alias=True) for e in self.available_model_entries]
-        return {"command": "models", "data": {"available": available}}
-
-    def _models_slash_view(self, active: ActiveSession) -> dict[str, dict[str, str]]:
-        defaults = {
-            "agent": self._config.agent.model,
-            "sentinel": self._config.agent.sentinel_model,
-            "title": self._config.agent.title_model,
-        }
-        overrides = {
-            "agent": active.agent_model_name,
-            "sentinel": active.sentinel_model_name,
-            "title": active.title_model_name,
-        }
-        return {t: {"current": overrides[t] or defaults[t], "default": defaults[t]} for t in self._MODEL_TYPES}
-
-    async def _handle_model_selector_command(
-        self, active: ActiveSession, arg: str, *, slash_line: str
-    ) -> dict[str, Any]:
-        """Process ``/model [ROLE] [MODEL | reset]`` while keeping ``/model MODEL`` as ``all``."""
-        if not arg:
-            return self._handle_model_all_command(active, "")
-
-        target_aliases: dict[str, ModelType | Literal["all"]] = {
-            "all": "all",
-            "agent": "agent",
-            "sentinel": "sentinel",
-            "title": "title",
-        }
-        args = arg.split(maxsplit=1)
-        target = target_aliases.get(args[0].lower())
-        if target is None:
-            return self._handle_model_all_command(active, arg)
-
-        remainder = args[1].strip() if len(args) == 2 else ""
-        if target == "all":
-            return self._handle_model_all_command(active, remainder)
-        return await self._handle_model_command(active, target, remainder, slash_line=slash_line)
-
-    def _handle_model_all_command(self, active: ActiveSession, arg: str) -> dict[str, Any]:
-        """Process ``/model [MODEL | reset]`` — show or set all three model roles at once."""
-        defaults = {
-            "agent": self._config.agent.model,
-            "sentinel": self._config.agent.sentinel_model,
-            "title": self._config.agent.title_model,
-        }
-        models_view = self._models_slash_view(active)
-
-        if not arg:
-            return {"command": "model", "data": {"models": models_view}}
-
-        if arg == "reset":
-            for mt in self._MODEL_TYPES:
-                self._apply_model_override(active, mt, None, None)
-            self._session_mgr.save_state(active.state)
-            reset_view = {t: {"current": defaults[t], "default": defaults[t]} for t in self._MODEL_TYPES}
-            return {
-                "command": "model",
-                "data": {"models": reset_view, "message": "Reset all models to defaults."},
-            }
-
-        try:
-            new_model = self._resolve_model(arg)
-        except Exception as exc:
-            return {"command": "model", "data": {"models": models_view, "error": str(exc)}}
-
-        self._apply_model_override(active, "agent", arg, new_model)
-        self._apply_model_override(active, "sentinel", arg, None)
-        self._apply_model_override(active, "title", arg, None)
-        self._session_mgr.save_state(active.state)
-        switched = {t: {"current": arg, "default": defaults[t]} for t in self._MODEL_TYPES}
-        return {
-            "command": "model",
-            "data": {
-                "models": switched,
-                "message": f"Switched agent, sentinel, and title to: {arg}",
-            },
-        }
-
-    async def _handle_model_command(
-        self, active: ActiveSession, model_type: ModelType, arg: str, *, slash_line: str
-    ) -> dict[str, Any]:
-        """Process ``/model ROLE [MODEL | reset]`` for one model role."""
-        cmd_name = {"agent": "model-agent", "sentinel": "model-sentinel", "title": "model-title"}[model_type]
-        defaults = {
-            "agent": self._config.agent.model,
-            "sentinel": self._config.agent.sentinel_model,
-            "title": self._config.agent.title_model,
-        }
-        overrides = {
-            "agent": active.agent_model_name,
-            "sentinel": active.sentinel_model_name,
-            "title": active.title_model_name,
-        }
-        default = defaults[model_type]
-        current = overrides[model_type] or default
-
-        # No argument — show current
-        if not arg:
-            return {"command": cmd_name, "data": {"current": current, "default": default}}
-
-        # Reset
-        if arg == "reset":
-            self._apply_model_override(active, model_type, None, None)
-            self._session_mgr.save_state(active.state)
-            if model_type == "title":
-                await self._regenerate_title(active, pending_user_line=slash_line)
-            return {
-                "command": cmd_name,
-                "data": {"current": default, "default": default, "message": f"Reset to default: {default}"},
-            }
-
-        # Switch
-        try:
-            new_model = self._resolve_model(arg)
-        except Exception as exc:
-            return {"command": cmd_name, "data": {"current": current, "default": default, "error": str(exc)}}
-
-        self._apply_model_override(active, model_type, arg, new_model if model_type == "agent" else None)
-        self._session_mgr.save_state(active.state)
-        if model_type == "title":
-            await self._regenerate_title(active, pending_user_line=slash_line)
-        return {
-            "command": cmd_name,
-            "data": {"current": arg, "default": default, "message": f"Switched to: {arg}"},
-        }
-
-    def _apply_model_override(
-        self, active: ActiveSession, model_type: ModelType, name: str | None, model_obj: Model | None = None
-    ) -> None:
-        if model_type == "agent":
-            active.agent_model = model_obj
-            active.agent_model_name = name
-            active.state.agent_model_name = name
-        elif model_type == "sentinel":
-            active.sentinel_model_name = name
-            active.state.sentinel_model_name = name
-            if active.sentinel:
-                active.sentinel.set_model(name or self._config.agent.sentinel_model)
-        elif model_type == "title":
-            active.title_model_name = name
-            active.state.title_model_name = name
-
-    async def _regenerate_title(self, active: ActiveSession, *, pending_user_line: str | None = None) -> None:
-        """Regenerate the session title using the current title model.
-
-        *pending_user_line* is the slash command line not yet persisted to events (e.g. first
-        ``/model title`` in a session).
-        """
-        session_id = active.state.session_id
-        events = list(self._session_mgr.load_events(session_id))
-        if pending_user_line:
-            events.append({"role": "user", "content": pending_user_line})
-        if events:
-            await self._generate_title(active, events)
-
     def _record_tool_call_event(
         self,
         session_id: str,
@@ -1404,122 +957,22 @@ class SessionEngine(SessionTurnMixin):
         return self._session_mgr.update_events(session_id, _mutate)
 
     def _completed_event_turns(self, events: list[dict[str, Any]]) -> list[CompletedEventTurn]:
-        turns: list[CompletedEventTurn] = []
-        start_event_index: int | None = None
-        user_content: str | None = None
-
-        for index, event in enumerate(events):
-            role = event.get("role")
-            if role == "user" and isinstance(content := event.get("content"), str) and not content.startswith("/"):
-                start_event_index = index
-                user_content = content
-            elif role == "assistant" and start_event_index is not None and user_content is not None:
-                turns.append(
-                    CompletedEventTurn(
-                        start_event_index=start_event_index,
-                        end_event_index=index,
-                        user_content=user_content,
-                    )
-                )
-                start_event_index = None
-                user_content = None
-
-        return turns
+        return completed_event_turns(events)
 
     def _completed_model_turn_end_indexes(self, messages: list[ModelMessage]) -> list[int]:
-        turn_end_indexes: list[int] = []
-        current_turn_start: int | None = None
-
-        for index, message in enumerate(messages):
-            has_user_prompt = isinstance(message, ModelRequest) and any(
-                isinstance(part, UserPromptPart) and isinstance(part.content, str) for part in message.parts
-            )
-            if not has_user_prompt:
-                continue
-            if (
-                current_turn_start is not None
-                and index - 1 > current_turn_start
-                and self._is_terminal_history_message(messages[index - 1])
-            ):
-                turn_end_indexes.append(index - 1)
-            current_turn_start = index
-
-        if (
-            current_turn_start is not None
-            and len(messages) - 1 > current_turn_start
-            and self._is_terminal_history_message(messages[-1])
-        ):
-            turn_end_indexes.append(len(messages) - 1)
-
-        return turn_end_indexes
+        return completed_model_turn_end_indexes(messages)
 
     def _is_terminal_history_message(self, message: ModelMessage) -> bool:
-        if isinstance(message, ModelResponse):
-            return True
-        if not isinstance(message, ModelRequest):
-            return False
-        return any(
-            isinstance(part, ToolReturnPart) and part.tool_name in {"task_done", "task_failed"}
-            for part in message.parts
-        )
+        return is_terminal_history_message(message)
 
     def _history_for_completed_turn_count(self, messages: list[ModelMessage], turn_count: int) -> list[ModelMessage]:
-        if turn_count <= 0:
-            return []
-
-        turn_end_indexes = self._completed_model_turn_end_indexes(messages)
-        if not turn_end_indexes:
-            return []
-
-        capped_turn_count = min(turn_count, len(turn_end_indexes))
-        return messages[: turn_end_indexes[capped_turn_count - 1] + 1]
+        return history_for_completed_turn_count(messages, turn_count)
 
     def _normalize_unattended_output_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
-        """Rewrite unattended task output tools into plain assistant text for attended forks."""
-        normalized: list[ModelMessage] = []
-        index = 0
-
-        while index < len(messages):
-            current = messages[index]
-            next_message = messages[index + 1] if index + 1 < len(messages) else None
-
-            if isinstance(current, ModelResponse):
-                tool_call_parts = [part for part in current.parts if isinstance(part, ToolCallPart)]
-                other_parts = [part for part in current.parts if not isinstance(part, ToolCallPart | ThinkingPart)]
-                if (
-                    len(tool_call_parts) == 1
-                    and not other_parts
-                    and tool_call_parts[0].tool_name in {"task_done", "task_failed"}
-                    and isinstance(next_message, ModelRequest)
-                    and any(
-                        isinstance(part, ToolReturnPart)
-                        and part.tool_name == tool_call_parts[0].tool_name
-                        and part.tool_call_id == tool_call_parts[0].tool_call_id
-                        for part in next_message.parts
-                    )
-                ):
-                    content = self._task_output_text(tool_call_parts[0])
-                    if content is not None:
-                        normalized.append(replace(current, parts=[TextPart(content=content)]))
-                        index += 2
-                        continue
-
-            normalized.append(current)
-            index += 1
-
-        return normalized
+        return normalize_unattended_output_history(messages)
 
     def _task_output_text(self, part: ToolCallPart) -> str | None:
-        args = part.args if isinstance(part.args, dict) else None
-        if args is None:
-            return None
-        if part.tool_name == "task_done":
-            value = args.get("result")
-        elif part.tool_name == "task_failed":
-            value = args.get("problem")
-        else:
-            return None
-        return value if isinstance(value, str) and value else None
+        return task_output_text(part)
 
     def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
         truncated_events = self._truncate_incomplete_events(events)
