@@ -98,7 +98,7 @@ The `images` key is only present when images exist (backward compatible). The hi
 | Method | Path                                   | Purpose                                                                                       |
 | ------ | -------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `POST` | `/api/sessions/{id}/images`            | Multipart upload; validates file type + size (20 MB cap); returns `{ images: [{ id, url }] }` |
-| `GET`  | `/api/sessions/{id}/images/{image_id}` | Serve stored image with correct `Content-Type`; bearer auth                                   |
+| `GET`  | `/api/sessions/{id}/images/{image_id}` | Serve stored image with correct `Content-Type`; session-cookie auth                           |
 
 Session cleanup: no changes needed — existing `DELETE /api/sessions/{id}` removes the session directory.
 
@@ -128,7 +128,7 @@ Session cleanup: no changes needed — existing `DELETE /api/sessions/{id}` remo
 
 **`frontend/src/lib/api.ts`**:
 
-- `uploadImages(sessionId, files): Promise<ImageRef[]>` — `FormData` upload with bearer auth
+- `uploadImages(sessionId, files): Promise<ImageRef[]>` — `FormData` upload with session-cookie auth
 - `imageUrl(sessionId, imageId): string` — construct serving URL
 
 **`frontend/src/lib/types.ts`**:

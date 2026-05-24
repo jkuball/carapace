@@ -19,12 +19,14 @@
     "connect": {
         "description": "Connect to your server",
         "serverLabel": "Server URL",
-        "tokenLabel": "Bearer Token",
-        "tokenPlaceholder": "Paste your token",
+        "usernameLabel": "Username",
+        "usernamePlaceholder": "thies",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Password",
         "connect": "Connect",
         "connecting": "Connecting…",
+        "adminLink": "Manage users",
         "errors": {
-            "invalidToken": "Invalid token",
             "serverError": "Server error: {status}",
             "connectionFailed": "Connection failed"
         }

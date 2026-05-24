@@ -44,6 +44,7 @@ class JobCronTrigger(BaseModel):
 
 class JobDefinition(BaseModel):
     id: str
+    user: str | None = None
     name: str
     enabled: bool = True
     triggers: Annotated[list[JobCronTrigger], Field(default_factory=list)]
@@ -68,6 +69,9 @@ class JobDefinition(BaseModel):
         self.id = self.id.strip()
         if not self.id:
             raise ValueError("job id must not be empty")
+
+        if self.user is not None:
+            self.user = self.user.strip().lower() or None
 
         self.name = self.name.strip()
         if not self.name:

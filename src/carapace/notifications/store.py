@@ -36,19 +36,28 @@ class NotificationStore:
             raw = yaml.safe_load(f) or {}
         return NotificationSubscription.model_validate(raw)
 
-    def list_subscriptions(self, *, owner_key: str | None = None) -> list[NotificationSubscription]:
+    def list_subscriptions(
+        self,
+        *,
+        owner_key: str | None = None,
+        user: str | None = None,
+    ) -> list[NotificationSubscription]:
         with self._lock:
             subscriptions = [
                 NotificationSubscription.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
                 for path in sorted(self._dir.glob("*.yaml"))
             ]
         if owner_key is None:
-            return subscriptions
+            if user is None:
+                return subscriptions
+            return [subscription for subscription in subscriptions if subscription.user == user]
         return [subscription for subscription in subscriptions if subscription.owner_key == owner_key]
 
-    def find_by_endpoint(self, *, owner_key: str, endpoint: str) -> NotificationSubscription | None:
+    def find_by_endpoint(
+        self, *, owner_key: str = "", user: str | None = None, endpoint: str
+    ) -> NotificationSubscription | None:
         normalized_endpoint = endpoint.strip()
-        for subscription in self.list_subscriptions(owner_key=owner_key):
+        for subscription in self.list_subscriptions(owner_key=owner_key or None, user=user):
             if subscription.endpoint == normalized_endpoint:
                 return subscription
         return None
@@ -81,7 +90,8 @@ class NotificationStore:
     def upsert_subscription(
         self,
         *,
-        owner_key: str,
+        owner_key: str = "",
+        user: str | None = None,
         endpoint: str,
         p256dh: str,
         auth: str,
@@ -91,11 +101,12 @@ class NotificationStore:
         now: datetime | None = None,
     ) -> NotificationSubscription:
         current = now or datetime.now(tz=UTC)
-        existing = self.find_by_endpoint(owner_key=owner_key, endpoint=endpoint)
+        existing = self.find_by_endpoint(owner_key=owner_key, user=user, endpoint=endpoint)
         if existing is None:
             subscription = NotificationSubscription(
                 id=uuid.uuid4().hex,
                 owner_key=owner_key,
+                user=user,
                 device_name=device_name,
                 endpoint=endpoint,
                 p256dh=p256dh,

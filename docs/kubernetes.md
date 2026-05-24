@@ -12,11 +12,11 @@ carapace supports Kubernetes as a sandbox runtime. Instead of Docker containers,
 ## Quick start
 
 ```bash
-# 1. Create a secret with your API key and bearer token (or use an ExternalSecret / SealedSecret)
+# 1. Create a secret with your API key and admin token (or use an ExternalSecret / SealedSecret)
 kubectl create namespace carapace
 kubectl create secret generic carapace-secrets -n carapace \
   --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
-  --from-literal=CARAPACE_TOKEN=my-secret-token
+  --from-literal=CARAPACE_TOKEN=my-secret-admin-token
 
 # 2. Install from OCI registry, referencing the secret
 helm install carapace oci://ghcr.io/thiesgerken/charts/carapace \

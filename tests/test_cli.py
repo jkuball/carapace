@@ -31,7 +31,8 @@ def test_chat_help():
     output = _strip_ansi(result.output)
     assert "--session" in output
     assert "--server" in output
-    assert "--token" in output
+    assert "--user" in output
+    assert "--password" in output
 
 
 @pytest.mark.parametrize(
@@ -95,15 +96,38 @@ def test_chat_list_fetches_all_session_pages(monkeypatch: pytest.MonkeyPatch) ->
     )
     seen_params: list[dict[str, str]] = []
 
-    def fake_get(url: str, *, headers: dict[str, str] | None = None, params: dict[str, str] | None = None):
-        assert url == "http://example.test/api/sessions"
-        assert headers == {"Authorization": "Bearer test-token"}
-        seen_params.append(dict(params or {}))
-        return _FakeHttpResponse(next(responses))
+    class _Cookie:
+        name = "carapace_session"
+        value = "session-token"
 
-    monkeypatch.setattr(cli_module.httpx, "get", fake_get)
+    class _Cookies:
+        def __init__(self) -> None:
+            self.jar = [_Cookie()]
 
-    result = runner.invoke(app, ["--server", "http://example.test", "--token", "test-token", "--list"])
+    class _FakeClient:
+        def __init__(self, base_url: str):
+            assert base_url == "http://example.test"
+            self.cookies = _Cookies()
+
+        def post(self, url: str, *, json: dict[str, str] | None = None):
+            assert url == "/api/auth/login"
+            assert json == {"username": "thies", "password": "secret"}
+            return _FakeHttpResponse({"user": {"username": "thies"}})
+
+        def get(self, url: str, *, params: dict[str, str] | None = None):
+            assert url == "/api/sessions"
+            seen_params.append(dict(params or {}))
+            return _FakeHttpResponse(next(responses))
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cli_module.httpx, "Client", _FakeClient)
+
+    result = runner.invoke(
+        app,
+        ["chat", "--server", "http://example.test", "--user", "thies", "--password", "secret", "--list"],
+    )
 
     assert result.exit_code == 0
     output = _strip_ansi(result.output)

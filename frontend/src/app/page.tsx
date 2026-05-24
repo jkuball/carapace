@@ -10,7 +10,7 @@ import { NewSessionButton, type NewSessionOptions } from "@/components/new-sessi
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
-import { createSession, deleteSession, getServerMeta, getSession, listSessions, updateSession } from "@/lib/api";
+import { createSession, deleteSession, getServerMeta, getSession, listSessions, logout, updateSession } from "@/lib/api";
 import {
   clearConnection,
   getShowArchivedSessionsPreference,
@@ -380,6 +380,9 @@ function HomeContent() {
   }
 
   function handleDisconnect() {
+    if (server) {
+      void logout(server).catch(() => undefined);
+    }
     refreshRequestIdRef.current += 1;
     loadingMoreSessionsRef.current = false;
     failedLoadMoreCursorRef.current = null;

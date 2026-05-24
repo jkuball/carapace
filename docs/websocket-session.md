@@ -8,11 +8,9 @@ For the broader notification backend, including presence, suppression, and push 
 
 - **URL:** `ws://<host>/api/chat/{session_id}` or `wss://…` for HTTPS deployments.
 - Optional query parameter: `client_id=<stable-client-id>` to let reconnects map to the same interactive presence source.
-- **Auth** (either works):
-  - Query: `?token=<server bearer token>`
-  - Header: `Authorization: Bearer <server bearer token>`
+- **Auth:** the same `carapace_session` HttpOnly cookie issued by `POST /api/auth/login` for the web UI and CLI.
 
-If the token is wrong, the server closes the socket with policy violation (`1008`) before accepting.
+If the cookie is missing, expired, revoked, or belongs to a different user than the session owner, the server closes the socket with policy violation (`1008`) before accepting.
 
 If `session_id` does not exist on disk, the server closes with code **4004** and reason `Session not found` before completing the handshake.
 

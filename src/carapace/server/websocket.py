@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 from pydantic import BaseModel
 
+from ..auth import UserIdentity
 from ..models.tooling import ToolResult, normalize_tool_call_args
 from ..notifications.models import NotificationClientType
 from ..notifications.vapid import derive_vapid_public_key
@@ -80,12 +81,12 @@ def _llm_activity_payload(activity: LlmRequestState | None) -> LlmActivity | Non
 
 
 @router.get("/commands")
-async def list_commands(_token: str = Depends(verify_token)) -> list[dict[str, str]]:
+async def list_commands(_user: Annotated[UserIdentity, Depends(verify_token)]) -> list[dict[str, str]]:
     return SLASH_COMMANDS
 
 
 @router.get("/meta", response_model=ServerMeta)
-async def get_meta(_token: str = Depends(verify_token)) -> ServerMeta:
+async def get_meta(_user: Annotated[UserIdentity, Depends(verify_token)]) -> ServerMeta:
     return ServerMeta(version=server._APP_VERSION)
 
 
@@ -98,7 +99,7 @@ async def get_vapid_public_key() -> VapidPublicKeyResponse:
 
 
 @router.get("/models")
-async def list_models(_token: str = Depends(verify_token)) -> list[dict[str, Any]]:
+async def list_models(_user: Annotated[UserIdentity, Depends(verify_token)]) -> list[dict[str, Any]]:
     return [e.model_dump(mode="json", by_alias=True) for e in server._engine.available_model_entries]
 
 
@@ -292,11 +293,11 @@ class WebSocketSubscriber:
 async def chat_ws(
     websocket: WebSocket,
     session_id: str,
-    _token: Annotated[str, Depends(verify_ws_token)],
+    user: Annotated[UserIdentity, Depends(verify_ws_token)],
     client_id: Annotated[str | None, Query()] = None,
 ) -> None:
     current_state = server._engine.session_mgr.load_state(session_id)
-    if current_state is None:
+    if current_state is None or not server._engine.session_mgr.is_owned_by(session_id, user.username):
         logger.warning(f"WebSocket rejected — session {session_id} not found")
         await websocket.close(code=4004, reason="Session not found")
         return

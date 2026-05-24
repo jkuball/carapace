@@ -2,10 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { login } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
-  onConnect: (server: string, token: string) => void;
+  onConnect: (server: string, username: string) => void;
 }
 
 function defaultServer(): string {
@@ -20,7 +21,8 @@ function defaultServer(): string {
 export function ConnectForm({ onConnect }: ConnectFormProps) {
   const t = useTranslations("connect");
   const [server, setServer] = useState(defaultServer);
-  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,16 +32,9 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
     setLoading(true);
 
     try {
-      const res = await fetch(`${server.replace(/\/$/, "")}/api/sessions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok)
-        throw new Error(
-          res.status === 401
-            ? t("errors.invalidToken")
-            : t("errors.serverError", { status: res.status }),
-        );
-      onConnect(server.replace(/\/$/, ""), token);
+      const normalizedServer = server.replace(/\/$/, "");
+      const user = await login(normalizedServer, username, password);
+      onConnect(normalizedServer, user.username);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.connectionFailed"));
     } finally {
@@ -83,20 +78,43 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
 
           <div className="space-y-1.5">
             <label
-              htmlFor="token"
+              htmlFor="username"
               className="text-xs font-medium text-muted-foreground"
             >
-              {t("tokenLabel")}
+              {t("usernameLabel")}
             </label>
             <input
-              id="token"
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={t("tokenPlaceholder")}
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder={t("usernamePlaceholder")}
               required
               className={cn(
-                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm font-mono",
+                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm",
+                "outline-none transition-colors",
+                "focus:ring-2 focus:ring-ring/30 focus:border-ring",
+                "placeholder:text-muted-foreground/50",
+              )}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="password"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              {t("passwordLabel")}
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("passwordPlaceholder")}
+              required
+              className={cn(
+                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm",
                 "outline-none transition-colors",
                 "focus:ring-2 focus:ring-ring/30 focus:border-ring",
                 "placeholder:text-muted-foreground/50",
@@ -109,7 +127,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
 
         <button
           type="submit"
-          disabled={loading || !token}
+          disabled={loading || !username || !password}
           className={cn(
             "w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors",
             "bg-foreground text-background",
@@ -119,6 +137,12 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
         >
           {loading ? t("connecting") : t("connect")}
         </button>
+        <a
+          href={`${server.replace(/\/$/, "")}/api/admin/users`}
+          className="block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {t("adminLink")}
+        </a>
       </form>
     </div>
   );

@@ -83,8 +83,17 @@ class JobsStore:
     def list_jobs(self) -> list[JobDefinition]:
         return self.load().jobs
 
+    def list_jobs_for_user(self, user: str) -> list[JobDefinition]:
+        return [job for job in self.load().jobs if job.user == user]
+
     def get_job(self, job_id: str) -> JobDefinition | None:
         return next((job for job in self.load().jobs if job.id == job_id), None)
+
+    def get_job_for_user(self, job_id: str, user: str) -> JobDefinition | None:
+        job = self.get_job(job_id)
+        if job is None or job.user != user:
+            return None
+        return job
 
     def create_job(self, job: JobDefinition) -> JobDefinition:
         jobs_file = self.load()

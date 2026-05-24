@@ -98,7 +98,7 @@ flowchart TD
 
 ### FastAPI Server
 
-The HTTP/WebSocket entry point. `src/carapace/server/__init__.py` is the public facade that exposes `app`, `sandbox_app`, and `main`, owns process startup/shutdown wiring, and keeps shared runtime state for compatibility with tests and route modules. Routes are split into focused modules: `server/auth.py` for bearer and WebSocket auth dependencies, `server/notifications.py` for notification and presence endpoints, `server/websocket.py` for chat WebSocket and small web-facing metadata routes, and `server/state.py` for accessing the mutable facade state from extracted routes.
+The HTTP/WebSocket entry point. `src/carapace/server/__init__.py` is the public facade that exposes `app`, `sandbox_app`, and `main`, owns process startup/shutdown wiring, and keeps shared runtime state for compatibility with tests and route modules. Routes are split into focused modules: `server/auth.py` for cookie-session auth and admin user-management routes, `server/notifications.py` for notification and presence endpoints, `server/websocket.py` for chat WebSocket and small web-facing metadata routes, and `server/state.py` for accessing the mutable facade state from extracted routes.
 
 ### Session Engine
 
@@ -168,7 +168,7 @@ This map describes the Python modules under `src/carapace/`. It is meant as a na
 | -------------- | --------------------------------------------------------------------------------------------- |
 | `__init__.py`  | Package version helper (`get_version`).                                                       |
 | `__main__.py`  | `python -m carapace` entry point; delegates to the server CLI entry point.                    |
-| `auth.py`      | Bearer token generation/loading used by API clients.                                          |
+| `auth.py`      | File-backed users, password hashing, signed session cookies, and admin token loading.         |
 | `bootstrap.py` | First-run data and knowledge directory seeding, including bundled knowledge files and skills. |
 | `cache.py`     | In-memory cache for paginated session-list responses.                                         |
 | `cli.py`       | Thin terminal client for REST and WebSocket session interaction.                              |
@@ -274,7 +274,7 @@ This map describes the Python modules under `src/carapace/`. It is meant as a na
 | Module                    | Responsibility                                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `server/__init__.py`      | FastAPI app facade, startup/shutdown lifecycle, shared state, REST routes not yet split out, internal API, sandbox API, and `main()`. |
-| `server/auth.py`          | Bearer-token and WebSocket-token FastAPI dependencies.                                                                                |
+| `server/auth.py`          | Login/logout, cookie-session FastAPI dependencies, WebSocket auth, and admin user-management routes.                                  |
 | `server/notifications.py` | Notification subscription, test, and presence routes.                                                                                 |
 | `server/state.py`         | Helper for extracted route modules to access the mutable `carapace.server` facade.                                                    |
 | `server/websocket.py`     | Chat WebSocket route, `WebSocketSubscriber`, and small web-facing metadata/model routes.                                              |
@@ -317,7 +317,7 @@ carapace runs three separate listener ports for security isolation:
 
 | Port                | Bind address | Auth                                 | Purpose                                                                               |
 | ------------------- | ------------ | ------------------------------------ | ------------------------------------------------------------------------------------- |
-| 8321 (public API)   | `0.0.0.0`    | Bearer token                         | REST API, WebSocket — used by the frontend and CLI                                    |
+| 8321 (public API)   | `0.0.0.0`    | HttpOnly session cookie              | REST API, WebSocket — used by the frontend and CLI                                    |
 | 8322 (sandbox API)  | `0.0.0.0`    | HTTP Basic Auth (`session_id:token`) | Git HTTP backend + credential endpoints (`/credentials`) — used by sandbox containers |
 | 8320 (internal API) | `127.0.0.1`  | None (loopback only)                 | Sentinel callback — used by the pre-receive hook                                      |
 | 3128 (proxy)        | `0.0.0.0`    | Proxy-Authorization Basic Auth       | HTTP forward proxy — used by sandbox containers for outbound traffic                  |
@@ -392,7 +392,7 @@ services:
 
 For Kubernetes deployments, the Docker socket is replaced by in-cluster Kubernetes API access — see [kubernetes.md](kubernetes.md).
 
-The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, session files, notification state, and `jobs.yaml` lives there. The Git-backed knowledge repo lives in a separate `knowledge_dir` (default `./knowledge` relative to the config file, which resolves to `data/knowledge/` in the default setup).
+The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, auth files, session files, notification state, and `jobs.yaml` lives there. The Git-backed knowledge repo lives in a separate `knowledge_dir` (default `./knowledge` relative to the config file, which resolves to `data/knowledge/` in the default setup).
 
 ## Configuration
 
@@ -444,6 +444,15 @@ sessions:
 notifications:
   enabled: true
   presence_ttl_seconds: 60
+
+auth:
+  cookie:
+    name: carapace_session
+    ttl_seconds: 1209600
+    secure: false
+    same_site: lax
+  admin_token:
+    env: CARAPACE_TOKEN
 
 git:
   remote: https://gitea.example.com/user/knowledge.git

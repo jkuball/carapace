@@ -42,11 +42,12 @@ class SessionListCache:
     async def get_session_infos(
         self,
         *,
+        user: str | None = None,
         include_archived: bool,
         include_message_count: bool,
         loader: Callable[[], list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
-        cache_key = self._cache_key(include_archived, include_message_count)
+        cache_key = self._cache_key(include_archived, include_message_count, user=user)
 
         redis_cached = await self._redis_get(cache_key)
         if redis_cached is not None:
@@ -60,12 +61,9 @@ class SessionListCache:
         if self._redis_client is None:
             raise RuntimeError("Session list cache has not been started")
         try:
-            await self._redis_client.delete(
-                self._cache_key(False, False),
-                self._cache_key(False, True),
-                self._cache_key(True, False),
-                self._cache_key(True, True),
-            )
+            keys = [key async for key in self._redis_client.scan_iter("carapace:sessions:list:*")]
+            if keys:
+                await self._redis_client.delete(*keys)
         except (OSError, RedisError) as exc:
             logger.warning(f"Failed to invalidate Redis session list cache: {exc}")
 
@@ -75,8 +73,9 @@ class SessionListCache:
         loop = self._loop
         loop.call_soon_threadsafe(lambda: loop.create_task(self.invalidate()))
 
-    def _cache_key(self, include_archived: bool, include_message_count: bool) -> str:
-        return f"carapace:sessions:list:{int(include_archived)}:{int(include_message_count)}"
+    def _cache_key(self, include_archived: bool, include_message_count: bool, *, user: str | None = None) -> str:
+        owner = user or "all"
+        return f"carapace:sessions:list:{owner}:{int(include_archived)}:{int(include_message_count)}"
 
     async def _redis_get(self, cache_key: str) -> list[dict[str, Any]] | None:
         if self._redis_client is None:

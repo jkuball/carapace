@@ -123,6 +123,7 @@ See [docs/security.md](docs/security.md), [docs/credentials.md](docs/credentials
 ```bash
 cp .env.example .env
 # fill in ANTHROPIC_API_KEY and CARAPACE_TOKEN
+# CARAPACE_TOKEN is the admin/bootstrap token, not the normal app login
 
 docker compose build
 docker compose up -d
@@ -136,12 +137,19 @@ This starts:
 Optional CLI connection:
 
 ```bash
-uv run carapace --token "$CARAPACE_TOKEN"
+curl -X POST http://localhost:8321/api/admin/users \
+  -H "Authorization: Bearer $CARAPACE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+
+uv run carapace --user thies --password change-me
 ```
+
+The web UI uses the same username/password login and stores the session in an HttpOnly cookie.
 
 You can use whichever LLM backend fits your setup: hosted APIs, self-hosted `vllm`, `llama.cpp`, LM Studio, or anything else that exposes a compatible endpoint.
 
-For the full Docker Compose setup, model configuration, credential backends, Matrix integration, and knowledge-repo configuration, see [docs/quickstart.md](docs/quickstart.md). For Kubernetes deployment, see [docs/kubernetes.md](docs/kubernetes.md) and [charts/carapace/README.md](charts/carapace/README.md).
+For the full Docker Compose setup, auth model, model configuration, credential backends, Matrix integration, and knowledge-repo configuration, see [docs/quickstart.md](docs/quickstart.md) and [docs/auth.md](docs/auth.md). For Kubernetes deployment, see [docs/kubernetes.md](docs/kubernetes.md) and [charts/carapace/README.md](charts/carapace/README.md).
 
 ## Architecture
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, model_validator
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
 
+from ..auth import UserIdentity
 from ..models.tooling import normalize_tool_call_args
 from ..security.context import ApprovalSource, ApprovalVerdict
 from ..ws_models import FinalStatus
@@ -82,10 +83,12 @@ class HistoryMessage(BaseModel):
 @router.get("/sessions/{session_id}/history", response_model=list[HistoryMessage])
 async def get_session_history(
     session_id: str,
+    user: Annotated[UserIdentity, Depends(verify_token)],
     limit: Annotated[int, Query()] = -1,
-    _token: str = Depends(verify_token),
 ) -> list[HistoryMessage]:
-    if server._engine.session_mgr.load_state(session_id) is None:
+    if server._engine.session_mgr.load_state(session_id) is None or not server._engine.session_mgr.is_owned_by(
+        session_id, user.username
+    ):
         raise HTTPException(status_code=404, detail="Session not found")
 
     events = server._engine.session_mgr.load_events(session_id)

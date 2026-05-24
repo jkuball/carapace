@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Literal, Protocol
 
@@ -77,11 +78,13 @@ class NotificationRouter:
         presence: NotificationPresenceRegistry,
         sender: NotificationSender,
         owner_key: str,
+        owner_for_session: Callable[[str], str | None] | None = None,
     ) -> None:
         self._store = store
         self._presence = presence
         self._sender = sender
         self._owner_key = owner_key
+        self._owner_for_session = owner_for_session
 
     async def dispatch_escalation(
         self,
@@ -137,7 +140,12 @@ class NotificationRouter:
         notif_id: str,
         subscription_ids: set[str] | None = None,
     ) -> NotificationDeliveryResult:
-        subscriptions = self._store.list_subscriptions(owner_key=self._owner_key)
+        owner = self._owner_for_session(session_id) if self._owner_for_session is not None else None
+        subscriptions = (
+            self._store.list_subscriptions(user=owner)
+            if owner
+            else self._store.list_subscriptions(owner_key=self._owner_key)
+        )
         if subscription_ids is not None:
             subscriptions = [subscription for subscription in subscriptions if subscription.id in subscription_ids]
         if not subscriptions:
@@ -196,9 +204,15 @@ class NotificationRouter:
             )
             return NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
 
+        owner = self._owner_for_session(session_id) if self._owner_for_session is not None else None
+        all_subscriptions = (
+            self._store.list_subscriptions(user=owner)
+            if owner
+            else self._store.list_subscriptions(owner_key=self._owner_key)
+        )
         subscriptions = [
             subscription
-            for subscription in self._store.list_subscriptions(owner_key=self._owner_key)
+            for subscription in all_subscriptions
             if _preferences_allow(subscription.notification_prefs, kind)
         ]
         if not subscriptions:

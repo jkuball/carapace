@@ -18,7 +18,7 @@ Fill in the required values:
 ```env
 # Required
 ANTHROPIC_API_KEY=sk-ant-...
-CARAPACE_TOKEN=pick-a-secret-bearer-token
+CARAPACE_TOKEN=pick-a-secret-admin-token
 
 # Optional — uncomment if needed
 # GOOGLE_API_KEY=...
@@ -26,7 +26,7 @@ CARAPACE_TOKEN=pick-a-secret-bearer-token
 # CARAPACE_GIT_TOKEN=...
 ```
 
-`CARAPACE_TOKEN` is the bearer token that authenticates CLI, web UI, and Matrix connections to the server. Pick any random string.
+`CARAPACE_TOKEN` is the admin/bootstrap token for managing users. Normal web UI, CLI, REST, and WebSocket access uses username/password login and an HttpOnly session cookie.
 
 ## 2. Build and start
 
@@ -42,13 +42,26 @@ This starts:
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
-The web UI prompts for the server URL and token on first connect.
+Create the first user with the admin token:
+
+```bash
+curl -X POST http://localhost:8321/api/admin/users \
+  -H "Authorization: Bearer $CARAPACE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+```
+
+The web UI prompts for the server URL, username, and password on first connect.
+
+See [auth.md](auth.md) for the full user-file format, admin API, and session-cookie behavior.
 
 ## 3. Connect via CLI (optional)
 
 ```bash
-uv run carapace --token "$CARAPACE_TOKEN"
+uv run carapace --user thies --password change-me
 ```
+
+You can also set `CARAPACE_USER` and `CARAPACE_PASSWORD` for the CLI.
 
 ## 4. Configure `data/config.yaml`
 
@@ -121,9 +134,19 @@ Notes:
 - If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
 - The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
 - Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
-- Notification subscriptions are grouped by an `owner_key` derived from the current `CARAPACE_TOKEN`. If you rotate that token, existing notification subscriptions no longer match and clients must subscribe again.
+- Notification subscriptions are grouped by the authenticated username. Legacy `owner_key` values still parse for older files.
 
-## 5. Connect Matrix (optional)
+## 5. Upgrade an existing single-user data directory
+
+If you already have data from a pre-user-auth version, assign it to a stable username before normal use:
+
+```bash
+uv run carapace upgrade-data --user thies --data-dir data
+```
+
+The upgrade command adds ownership metadata to sessions, jobs, and notifications, moves `data/knowledge` to `data/knowledges/thies`, and converts Matrix/sandbox token JSON files to YAML with `user` fields. It creates a disabled placeholder user when needed; set a password through the admin API before logging in.
+
+## 6. Connect Matrix (optional)
 
 Create a Matrix account for carapace on your homeserver, then add to `data/config.yaml`:
 
@@ -145,7 +168,7 @@ Set `CARAPACE_MATRIX_PASSWORD` in your `.env` and restart. carapace will join th
 
 `allowed_rooms` and `allowed_users` are mandatory — without them the bot ignores all messages. This prevents accidental exposure if someone invites the bot to a public room.
 
-## 6. Set up credentials
+## 7. Set up credentials
 
 carapace can fetch credentials from a password manager on demand. The agent does not have blanket access — every credential request is evaluated by the sentinel agent and requires explicit user approval the first time it is used in a session. Credentials are intended to be consumed inside the sandbox (auto-injected via skill config or fetched with `ccred`) and must never be echoed or logged. Two backends are available.
 
@@ -231,7 +254,7 @@ credentials:
       #   - "deadbeef-..."
 ```
 
-## 7. Personalise
+## 8. Personalise
 
 Edit the workspace files in the knowledge repo to shape carapace's behaviour. With the default config, these live under `data/knowledge/`:
 

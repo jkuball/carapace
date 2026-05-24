@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 
+from ..auth import UserIdentity
 from ..notifications.models import (
     NotificationClientType,
     NotificationFocusState,
     NotificationPreferences,
     NotificationSubscription,
 )
-from ..notifications.store import derive_owner_key
 from .auth import verify_token
 from .state import server_module
 
@@ -103,9 +104,9 @@ def _notification_response(subscription: NotificationSubscription) -> Notificati
     )
 
 
-def _owned_notification_subscription(subscription_id: str, token: str) -> NotificationSubscription:
+def _owned_notification_subscription(subscription_id: str, user: UserIdentity) -> NotificationSubscription:
     subscription = server._notification_store.get_subscription(subscription_id)
-    if subscription is None or subscription.owner_key != derive_owner_key(token):
+    if subscription is None or subscription.user != user.username:
         raise HTTPException(status_code=404, detail="Notification subscription not found")
     return subscription
 
@@ -134,25 +135,24 @@ async def _set_notification_presence(
 
 @router.get("/notifications/subscriptions", response_model=list[NotificationSubscriptionResponse])
 async def list_notification_subscriptions(
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> list[NotificationSubscriptionResponse]:
     server._notification_store.cleanup_expired()
-    owner_key = derive_owner_key(_token)
-    subscriptions = server._notification_store.list_subscriptions(owner_key=owner_key)
+    subscriptions = server._notification_store.list_subscriptions(user=user.username)
     return [_notification_response(subscription) for subscription in subscriptions]
 
 
 @router.post("/notifications/subscriptions", response_model=NotificationSubscriptionResponse)
 async def upsert_notification_subscription(
     request: NotificationSubscriptionCreateRequest,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> NotificationSubscriptionResponse:
     server._notification_store.cleanup_expired()
     prefs = _default_notification_preferences()
     if request.preferences is not None:
         prefs = request.preferences.apply(prefs)
     subscription = server._notification_store.upsert_subscription(
-        owner_key=derive_owner_key(_token),
+        user=user.username,
         endpoint=request.endpoint,
         p256dh=request.p256dh,
         auth=request.auth,
@@ -164,8 +164,11 @@ async def upsert_notification_subscription(
 
 
 @router.delete("/notifications/subscriptions/{subscription_id}", status_code=204)
-async def delete_notification_subscription(subscription_id: str, _token: str = Depends(verify_token)) -> Response:
-    subscription = _owned_notification_subscription(subscription_id, _token)
+async def delete_notification_subscription(
+    subscription_id: str,
+    user: Annotated[UserIdentity, Depends(verify_token)],
+) -> Response:
+    subscription = _owned_notification_subscription(subscription_id, user)
     server._notification_store.delete_subscription(subscription.id)
     return Response(status_code=204)
 
@@ -177,9 +180,9 @@ async def delete_notification_subscription(subscription_id: str, _token: str = D
 async def patch_notification_subscription_preferences(
     subscription_id: str,
     request: NotificationPreferencesPatch,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> NotificationSubscriptionResponse:
-    subscription = _owned_notification_subscription(subscription_id, _token)
+    subscription = _owned_notification_subscription(subscription_id, user)
     updated = subscription.model_copy(update={"notification_prefs": request.apply(subscription.notification_prefs)})
     server._notification_store.save_subscription(updated)
     return _notification_response(updated)
@@ -191,10 +194,10 @@ async def patch_notification_subscription_preferences(
 )
 async def test_notification_subscription(
     subscription_id: str,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> NotificationTestResponse:
     server._notification_store.cleanup_expired()
-    subscription = _owned_notification_subscription(subscription_id, _token)
+    subscription = _owned_notification_subscription(subscription_id, user)
     delivered = await server._notification_router.dispatch_test(subscription=subscription)
     if not delivered:
         raise HTTPException(status_code=502, detail="Failed to deliver test notification")
@@ -205,9 +208,11 @@ async def test_notification_subscription(
 async def update_notification_presence(
     subscription_id: str,
     request: NotificationPresenceRequest,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> dict[str, bool]:
-    subscription = _owned_notification_subscription(subscription_id, _token)
+    subscription = _owned_notification_subscription(subscription_id, user)
+    if not server._engine.session_mgr.is_owned_by(request.session_id, user.username):
+        raise HTTPException(status_code=404, detail="Session not found")
     now = datetime.now(tz=UTC)
     updated = subscription.model_copy(update={"last_heartbeat": now, "expires_at": now + _notification_ttl()})
     server._notification_store.save_subscription(updated)
@@ -224,8 +229,10 @@ async def update_notification_presence(
 @router.post("/notifications/presence")
 async def update_interactive_presence(
     request: InteractivePresenceRequest,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> dict[str, bool]:
+    if not server._engine.session_mgr.is_owned_by(request.session_id, user.username):
+        raise HTTPException(status_code=404, detail="Session not found")
     await _set_notification_presence(
         session_id=request.session_id,
         source_id=request.source_id,

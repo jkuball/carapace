@@ -14,9 +14,16 @@ import type {
 } from "./types";
 import { isRecord, readNumber, readString } from "./decoding";
 
-function headers(token: string): HeadersInit {
+async function fetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  return globalThis.fetch(input, { ...init, credentials: "include" });
+}
+
+function headers(_session: string): HeadersInit {
+  void _session;
   return {
-    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -39,6 +46,48 @@ async function readErrorMessage(
 
 export interface ServerMeta {
   version: string;
+}
+
+export interface AuthUserInfo {
+  username: string;
+  display_name: string | null;
+}
+
+export async function login(
+  server: string,
+  username: string,
+  password: string,
+): Promise<AuthUserInfo> {
+  const res = await fetch(`${server}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Login failed"));
+  }
+  const body: unknown = await res.json();
+  if (!isRecord(body) || !isRecord(body.user)) {
+    throw new Error("Invalid login response");
+  }
+  const parsedUsername = readString(body.user, "username");
+  if (!parsedUsername) {
+    throw new Error("Invalid login response");
+  }
+  return {
+    username: parsedUsername,
+    display_name: readString(body.user, "display_name") ?? null,
+  };
+}
+
+export async function logout(server: string): Promise<void> {
+  const res = await fetch(`${server}/api/auth/logout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok && res.status !== 401) {
+    throw new Error(await readErrorMessage(res, "Logout failed"));
+  }
 }
 
 export async function getServerMeta(
@@ -576,13 +625,15 @@ export async function runJob(
 export function wsUrl(
   server: string,
   sessionId: string,
-  token: string,
+  _session: string,
   clientId?: string,
 ): string {
+  void _session;
   const base = server.replace("http://", "ws://").replace("https://", "wss://");
-  const params = new URLSearchParams({ token });
+  const params = new URLSearchParams();
   if (clientId) {
     params.set("client_id", clientId);
   }
-  return `${base}/api/chat/${sessionId}?${params.toString()}`;
+  const query = params.toString();
+  return `${base}/api/chat/${sessionId}${query ? `?${query}` : ""}`;
 }

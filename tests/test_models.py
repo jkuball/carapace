@@ -42,19 +42,22 @@ def test_config_defaults():
     assert ids == {"anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5"}
 
 
-def test_notification_subscription_rejects_empty_owner_key() -> None:
-    with pytest.raises(ValidationError, match="owner_key must not be empty"):
-        NotificationSubscription.model_validate(
-            {
-                "id": "sub-1",
-                "owner_key": " ",
-                "endpoint": "https://push.example.test/sub-1",
-                "p256dh": "key",
-                "auth": "auth",
-                "subscribed_at": "2026-05-12T00:00:00Z",
-                "expires_at": "2026-06-12T00:00:00Z",
-            }
-        )
+def test_notification_subscription_allows_empty_legacy_owner_key() -> None:
+    subscription = NotificationSubscription.model_validate(
+        {
+            "id": "sub-1",
+            "owner_key": " ",
+            "user": " Thies ",
+            "endpoint": "https://push.example.test/sub-1",
+            "p256dh": "key",
+            "auth": "auth",
+            "subscribed_at": "2026-05-12T00:00:00Z",
+            "expires_at": "2026-06-12T00:00:00Z",
+        }
+    )
+
+    assert subscription.owner_key == ""
+    assert subscription.user == "thies"
 
 
 def test_notifications_config_allows_missing_vapid_fields() -> None:

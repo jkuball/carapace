@@ -1,5 +1,6 @@
 const SERVER_KEY = "carapace_server";
-const TOKEN_KEY = "carapace_token";
+const USERNAME_KEY = "carapace_username";
+const LEGACY_TOKEN_KEY = "carapace_token";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
 const SHOW_ARCHIVED_SESSIONS_KEY = "carapace_show_archived_sessions";
 const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
@@ -16,17 +17,19 @@ export function getServer(): string {
 
 export function getToken(): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem(TOKEN_KEY) ?? "";
+  return localStorage.getItem(USERNAME_KEY) ?? "";
 }
 
-export function saveConnection(server: string, token: string) {
+export function saveConnection(server: string, username: string) {
   localStorage.setItem(SERVER_KEY, server);
-  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USERNAME_KEY, username);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function clearConnection() {
   localStorage.removeItem(SERVER_KEY);
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USERNAME_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function hasConnection(): boolean {
