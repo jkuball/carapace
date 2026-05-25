@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2, User } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
@@ -124,7 +124,6 @@ export function Sidebar({
     ? sessions.filter((session) => session.attributes.archived)
     : [];
   const accountName = currentUser?.display_name?.trim() || currentUser?.username || t("account.unknown");
-  const accountRoles = currentUser?.roles.length ? currentUser.roles.join(", ") : t("account.noRoles");
 
   useEffect(() => {
     const updateReferenceTime = (): void => {
@@ -630,10 +629,6 @@ export function Sidebar({
                         {currentUser?.username ?? t("account.unknown")}
                       </div>
                     </div>
-                  </div>
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <User className="h-3.5 w-3.5" />
-                    <span className="truncate" title={accountRoles}>{accountRoles}</span>
                   </div>
                 </div>
                 <div className="p-1">
