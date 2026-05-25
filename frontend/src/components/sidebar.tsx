@@ -603,14 +603,16 @@ export function Sidebar({
               aria-label={t("account.openMenu")}
               aria-haspopup="menu"
               aria-expanded={accountMenuOpen}
-              className={cn(
-                "inline-flex h-8 max-w-[9.5rem] items-center gap-2 rounded-full border border-border px-2 text-xs font-medium transition-colors",
-                activeView === "settings" || accountMenuOpen
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
+              className="inline-flex h-8 max-w-[9.5rem] cursor-pointer items-center gap-2 rounded-sm text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+              <span
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-semibold transition-colors",
+                  activeView === "settings" || accountMenuOpen
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-background text-muted-foreground",
+                )}
+              >
                 {accountInitial(currentUser)}
               </span>
               <span className="truncate">{accountName}</span>
