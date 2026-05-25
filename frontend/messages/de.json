@@ -28,7 +28,7 @@
         "description": "Bei carapace anmelden",
         "serverLabel": "Server-URL",
         "usernameLabel": "Benutzername",
-        "usernamePlaceholder": "thies",
+        "usernamePlaceholder": "Benutzername",
         "passwordLabel": "Passwort",
         "passwordPlaceholder": "Passwort",
         "connect": "Verbinden",
