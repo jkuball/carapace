@@ -456,7 +456,7 @@ class AuthStore:
     def _prune_sessions_file(self, sessions_file: SessionsFile, *, now: datetime) -> int:
         before = len(sessions_file.sessions)
         sessions_file.sessions = {
-            session_id: session for session_id, session in sessions_file.sessions.items() if session.is_active(now=now)
+            session_id: session for session_id, session in sessions_file.sessions.items() if session.expires_at > now
         }
         return before - len(sessions_file.sessions)
 

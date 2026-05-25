@@ -206,7 +206,7 @@ def test_revoke_token_invalidates_session(tmp_path) -> None:
     assert store.revoke_token("not-a-token") is False
 
 
-def test_create_session_prunes_expired_and_revoked_sessions(tmp_path) -> None:
+def test_create_session_prunes_expired_sessions_and_keeps_revoked_audit_trail(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
     store.create_user(username="thies", password="secret")
     now = datetime.now(tz=UTC)
@@ -235,7 +235,8 @@ def test_create_session_prunes_expired_and_revoked_sessions(tmp_path) -> None:
     fresh_session = store.create_session(username="thies")
 
     persisted_sessions = store.load_sessions().sessions
-    assert list(persisted_sessions) == [fresh_session.id]
+    assert list(persisted_sessions) == [revoked_session.id, fresh_session.id]
+    assert persisted_sessions[revoked_session.id].revoked_at == revoked_session.revoked_at
 
 
 def test_websocket_token_is_scoped_to_session_and_revocation(tmp_path) -> None:
