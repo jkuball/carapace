@@ -1,0 +1,23 @@
+http:
+  routers:
+    carapace-api:
+      rule: PathPrefix(`/api`)
+      entryPoints:
+        - web
+      priority: 100
+      service: carapace-api
+    carapace-frontend:
+      rule: PathPrefix(`/`)
+      entryPoints:
+        - web
+      priority: 1
+      service: carapace-frontend
+  services:
+    carapace-api:
+      loadBalancer:
+        servers:
+          - url: http://carapace:8321
+    carapace-frontend:
+      loadBalancer:
+        servers:
+          - url: http://frontend:80

@@ -381,13 +381,13 @@ services:
     environment:
       - CARAPACE_DATA_DIR=/data
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-    ports:
-      - "8321:8321"
-
   frontend:
     build: ./frontend
+
+  proxy:
+    image: traefik:v3.6
     ports:
-      - "3001:3000"
+      - "3001:80"
 ```
 
 For Kubernetes deployments, the Docker socket is replaced by in-cluster Kubernetes API access — see [kubernetes.md](kubernetes.md).

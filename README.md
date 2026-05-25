@@ -129,10 +129,7 @@ docker compose build
 docker compose up -d
 ```
 
-This starts:
-
-- Server at `http://localhost:8321`
-- Frontend at `http://localhost:3001`
+This starts the proxy at `http://localhost:3001`, serving the frontend and routing `/api` to the backend internally.
 
 Optional CLI connection:
 
