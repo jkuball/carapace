@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 import carapace.cli as cli_module
-from carapace.cli import _render_escalation_request, app
+from carapace.cli import _render_escalation_request, _replay_history, app
 
 runner = CliRunner()
 
@@ -137,3 +137,21 @@ def test_chat_list_fetches_all_session_pages(monkeypatch: pytest.MonkeyPatch) ->
         {"include_message_count": "true", "limit": "200"},
         {"include_message_count": "true", "limit": "200", "cursor": "1"},
     ]
+
+
+def test_replay_history_uses_authenticated_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_requests: list[tuple[str, dict[str, int]]] = []
+
+    class _FakeClient:
+        def get(self, url: str, *, params: dict[str, int] | None = None):
+            seen_requests.append((url, dict(params or {})))
+            return _FakeHttpResponse([{"role": "user", "content": "hello"}])
+
+    def fail_module_get(*args: object, **kwargs: object) -> None:
+        raise AssertionError("module-level httpx.get should not be used")
+
+    monkeypatch.setattr(cli_module.httpx, "get", fail_module_get)
+
+    _replay_history(_FakeClient(), "session-1", 25)  # type: ignore[arg-type]
+
+    assert seen_requests == [("/api/sessions/session-1/history", {"limit": 25})]

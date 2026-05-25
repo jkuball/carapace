@@ -70,11 +70,11 @@ def _ws_url(server: str, session_id: str) -> str:
     return f"{base}/api/chat/{session_id}"
 
 
-def _replay_history(server: str, session_id: str, headers: dict[str, str], limit: int) -> None:
+def _replay_history(client: httpx.Client, session_id: str, limit: int) -> None:
     """Fetch and display past conversation messages."""
     params = {} if limit < 0 else {"limit": limit}
     try:
-        resp = httpx.get(f"{server}/api/sessions/{session_id}/history", headers=headers, params=params)
+        resp = client.get(f"/api/sessions/{session_id}/history", params=params)
         resp.raise_for_status()
     except httpx.HTTPStatusError:
         return
@@ -821,7 +821,7 @@ def chat(
     console.print()
 
     if session and history != 0:
-        _replay_history(server, session_id, headers, history)
+        _replay_history(client, session_id, history)
 
     url = _ws_url(server, session_id)
     try:

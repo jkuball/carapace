@@ -214,7 +214,7 @@ async def update_admin_user(
     body: AdminUserUpdateRequest,
     _admin_token: Annotated[str, Depends(verify_admin_token)],
 ) -> AdminUserResponse:
-    updates = body.model_dump(exclude_none=True)
+    updates = body.model_dump(exclude_unset=True)
     password = updates.pop("password", None)
     try:
         if updates:

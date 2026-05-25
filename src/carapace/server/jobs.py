@@ -55,8 +55,8 @@ async def _run_due_jobs_once(*, now: datetime | None = None) -> int:
                 cron_expression=due_run.trigger.expression,
                 trigger_timezone=due_run.trigger.timezone,
             )
-        except HTTPException as exc:
-            logger.warning(f"Scheduled job {due_run.job.id} skipped: {exc.detail}")
+        except ValueError as exc:
+            logger.warning(f"Scheduled job {due_run.job.id} skipped: {exc}")
         except Exception as exc:
             logger.warning(f"Scheduled job {due_run.job.id} failed: {exc}")
     return len(due_runs)
@@ -74,9 +74,14 @@ async def _run_job_definition(
     created_new_session = False
     effective_triggered_at = triggered_at or datetime.now(tz=UTC)
 
+    def raise_job_conflict(detail: str) -> None:
+        if trigger_kind == "api":
+            raise HTTPException(status_code=409, detail=detail)
+        raise ValueError(detail)
+
     if job.persistent_session_id is None:
         if job.user is None:
-            raise HTTPException(status_code=409, detail="Job has no owner; run the data upgrade first")
+            raise_job_conflict("Job has no owner; run the data upgrade first")
         state = server._engine.session_mgr.create_session(
             channel_type="job",
             channel_ref=f"job:{job.id}",
@@ -94,14 +99,14 @@ async def _run_job_definition(
     else:
         state = server._engine.session_mgr.load_state(job.persistent_session_id)
         if state is None or job.user is None or not server._engine.session_mgr.is_owned_by(state.session_id, job.user):
-            raise HTTPException(status_code=409, detail="Configured persistent session was not found")
+            raise_job_conflict("Configured persistent session was not found")
         if state.attributes.unattended:
-            raise HTTPException(status_code=409, detail="Configured persistent session must be attended")
+            raise_job_conflict("Configured persistent session must be attended")
         if state.attributes.archived:
-            raise HTTPException(status_code=409, detail="Configured persistent session must not be archived")
+            raise_job_conflict("Configured persistent session must not be archived")
 
     if server._engine.is_agent_running(state.session_id):
-        raise HTTPException(status_code=409, detail="Target session is busy")
+        raise_job_conflict("Target session is busy")
 
     job_run_context = SessionJobRunContext(
         job_id=job.id,

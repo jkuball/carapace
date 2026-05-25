@@ -191,6 +191,26 @@ def test_admin_user_management_uses_admin_token_only(client):
     assert login_resp.status_code == 200
 
 
+def test_admin_user_update_can_clear_email(client):
+    admin_headers = {"Authorization": f"Bearer {_TEST_TOKEN}"}
+    create_resp = client.post(
+        "/api/admin/users",
+        headers=admin_headers,
+        json={
+            "username": "Ada",
+            "password": "correct-horse-battery",
+            "display_name": "Ada",
+            "email": "ada@example.test",
+        },
+    )
+    assert create_resp.status_code == 201
+
+    update_resp = client.patch("/api/admin/users/ada", headers=admin_headers, json={"email": None})
+
+    assert update_resp.status_code == 200
+    assert update_resp.json()["email"] is None
+
+
 def test_admin_user_management_returns_503_when_admin_token_is_unset(client, monkeypatch):
     monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
 
@@ -773,6 +793,30 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     assert session_id
     assert "triggered automatically" in message
     assert "* * * * *" in message
+
+
+@pytest.mark.asyncio
+async def test_run_due_jobs_once_skips_ownerless_cron_jobs(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        JobDefinition.model_validate(
+            {
+                "id": "legacy-ownerless",
+                "name": "Legacy Ownerless",
+                "prompt": "Summarize the day.",
+                "triggers": [{"expression": "* * * * *"}],
+            }
+        )
+    )
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await server_jobs._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
+
+    assert dispatched == 1
+    submit_message.assert_not_awaited()
 
 
 @pytest.mark.asyncio

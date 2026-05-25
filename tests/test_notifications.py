@@ -79,6 +79,36 @@ def test_notification_store_upsert_and_list_by_owner(tmp_path) -> None:
     assert [subscription.id for subscription in store.list_subscriptions(owner_key=owner_key)] == [created.id]
 
 
+def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> None:
+    store = NotificationStore(tmp_path)
+    now = datetime(2026, 5, 12, tzinfo=UTC)
+    endpoint = "https://push.example.test/shared"
+    created = store.upsert_subscription(
+        owner_key=derive_owner_key("token-1"),
+        endpoint=endpoint,
+        p256dh="key-1",
+        auth="auth-1",
+        device_name="Desktop",
+        notification_prefs=NotificationPreferences(),
+        ttl=timedelta(days=30),
+        now=now,
+    )
+
+    assert store.find_by_endpoint(endpoint=endpoint) is None
+
+    ownerless = store.upsert_subscription(
+        endpoint=endpoint,
+        p256dh="key-2",
+        auth="auth-2",
+        device_name="Desktop 2",
+        notification_prefs=NotificationPreferences(),
+        ttl=timedelta(days=30),
+        now=now + timedelta(hours=1),
+    )
+
+    assert ownerless.id != created.id
+
+
 def test_notification_store_cleanup_expired(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime(2026, 5, 12, tzinfo=UTC)

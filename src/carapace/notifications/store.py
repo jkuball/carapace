@@ -57,7 +57,10 @@ class NotificationStore:
         self, *, owner_key: str = "", user: str | None = None, endpoint: str
     ) -> NotificationSubscription | None:
         normalized_endpoint = endpoint.strip()
-        for subscription in self.list_subscriptions(owner_key=owner_key or None, user=user):
+        normalized_owner_key = owner_key or None
+        if normalized_owner_key is None and user is None:
+            return None
+        for subscription in self.list_subscriptions(owner_key=normalized_owner_key, user=user):
             if subscription.endpoint == normalized_endpoint:
                 return subscription
         return None
