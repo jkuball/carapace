@@ -648,6 +648,7 @@ function HomeContent() {
             server={server}
             token={token}
             isAdmin={isAdmin}
+            currentUsername={currentUser?.username ?? null}
             sessions={sessions}
             showArchivedSessions={showArchivedSessions}
             onShowArchivedSessionsChange={handleShowArchivedSessionsChange}

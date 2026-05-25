@@ -5,7 +5,7 @@ import { ArrowLeft, Check, DatabaseBackup, Loader2, Plus, RefreshCw, Save, Shiel
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { createAdminUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
+import { createAdminUser, getCurrentUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
 import { getServer } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -88,9 +88,10 @@ const iconButtonClassName = cn(
 interface AdminUsersPageProps {
   embedded?: boolean;
   server?: string;
+  currentUsername?: string | null;
 }
 
-export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUsersPageProps = {}) {
+export function AdminUsersPage({ embedded = false, server: serverProp, currentUsername = null }: AdminUsersPageProps = {}) {
   const t = useTranslations("admin");
   const [server, setServer] = useState(() => {
     if (serverProp !== undefined) return normalizeServer(serverProp);
@@ -108,6 +109,7 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
   const [upgradingUsername, setUpgradingUsername] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resolvedCurrentUsername, setResolvedCurrentUsername] = useState<string | null>(currentUsername);
   const loadedServerRef = useRef<string | null>(null);
   const lockedServer = embedded && serverProp !== undefined;
 
@@ -127,9 +129,13 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
     setLoading(true);
     setError(null);
     try {
-      const loadedUsers = await listAdminUsers(normalizedServer);
+      const [loadedUsers, loadedCurrentUser] = await Promise.all([
+        listAdminUsers(normalizedServer),
+        currentUsername === null ? getCurrentUser(normalizedServer).catch(() => null) : Promise.resolve(null),
+      ]);
       setServer(normalizedServer);
       setUsers(loadedUsers);
+      setResolvedCurrentUsername(currentUsername ?? loadedCurrentUser?.username ?? null);
       if (preferredUsername === "new") {
         setSelectedUsername("new");
         setEditDraft(null);
@@ -148,7 +154,7 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
     } finally {
       setLoading(false);
     }
-  }, [selectedUsername, server, t]);
+  }, [currentUsername, selectedUsername, server, t]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -243,7 +249,8 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
   }
 
   const selectedIsNew = selectedUsername === "new";
-    const ContentElement = embedded ? "section" : "main";
+  const visibleCurrentUsername = currentUsername ?? resolvedCurrentUsername;
+  const ContentElement = embedded ? "section" : "main";
 
   const mainContent = (
       <ContentElement className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", embedded && "bg-background/65")}>
@@ -344,6 +351,7 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
                   {users.map((user) => {
                     const selected = selectedUsername === user.username;
                     const upgrading = upgradingUsername === user.username;
+                    const isCurrentUser = user.username === visibleCurrentUsername;
                     return (
                       <div key={user.username} className="flex items-stretch gap-1">
                         <button
@@ -361,7 +369,17 @@ export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUs
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold">{user.display_name || user.username}</div>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-sm font-semibold">{user.display_name || user.username}</span>
+                                {isCurrentUser ? (
+                                  <span className={cn(
+                                    "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                    selected ? "bg-accent-foreground/15 text-accent-foreground" : "bg-muted text-muted-foreground",
+                                  )}>
+                                    {t("users.you")}
+                                  </span>
+                                ) : null}
+                              </div>
                               <div className={cn("mt-0.5 truncate font-mono text-xs", selected ? "text-accent-foreground/70" : "text-foreground/70")}>
                                 {user.username}
                               </div>

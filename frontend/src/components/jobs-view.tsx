@@ -27,6 +27,7 @@ interface JobsViewProps {
   server: string;
   token: string;
   isAdmin: boolean;
+  currentUsername: string | null;
   sessions: SessionInfo[];
   showArchivedSessions: boolean;
   onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
@@ -136,6 +137,7 @@ export function JobsView({
   server,
   token,
   isAdmin,
+  currentUsername,
   sessions,
   showArchivedSessions,
   onShowArchivedSessionsChange,
@@ -1258,7 +1260,7 @@ export function JobsView({
           aria-labelledby="settings-tab-platform-users"
           className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
         >
-          <AdminUsersPage key={server} embedded server={server} />
+          <AdminUsersPage key={server} embedded server={server} currentUsername={currentUsername} />
         </div>
       ) : (
         <div

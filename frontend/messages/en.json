@@ -44,6 +44,7 @@
             "loading": "Loading users…",
             "empty": "No users found",
             "selectUser": "Select a user",
+            "you": "You",
             "enabled": "Enabled",
             "disabled": "Disabled"
         },
