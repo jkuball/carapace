@@ -423,16 +423,6 @@ server:
   internal_port: 8320 # internal API (loopback only, sentinel callbacks)
   cors_origins: []
 
-channels:
-  matrix:
-    enabled: false
-    homeserver: https://matrix.example.com
-    user_id: "@carapace:example.com"
-    password:
-      env: CARAPACE_MATRIX_PASSWORD
-    allowed_users:
-      - "@me:example.com"
-
 sessions:
   commit:
     enabled: true
@@ -454,8 +444,7 @@ auth:
 
 git:
   remote: https://gitea.example.com/user/knowledge.git
-  token:
-    env: CARAPACE_GIT_TOKEN
+  token: ghp_xxxxxxxxxxxx
 
 knowledge_dir: ./knowledge
 
@@ -497,25 +486,25 @@ credentials:
 
 ### Secrets
 
-Secrets (Matrix password/token, Git remote token) are configured using a `Secret` object that supports three sources:
+Global config `Secret` fields, such as OpenAI-compatible model API keys, support three sources:
 
 ```yaml
 # Inline value (also accepts a plain string as shorthand)
-password:
+api_key:
   raw: "my-secret-value"
-password: "my-secret-value"  # equivalent shorthand
+api_key: "my-secret-value"  # equivalent shorthand
 
 # Environment variable (raises if the variable is not set)
-password:
-  env: CARAPACE_MATRIX_PASSWORD
+api_key:
+  env: OPENAI_API_KEY
 
 # File path (raises if the file does not exist)
-password:
-  file: /run/secrets/matrix_password
+api_key:
+  file: /run/secrets/openai_api_key
 ```
 
 Resolution priority: `raw` > `env` > `file`. Exactly one source should be set. `resolve()` returns a `SecretStr` and raises `ValueError` if the configured source is missing.
 
-Secret fields are optional (`Secret | None`). When omitted, the feature that requires the secret is simply unavailable (e.g. no Matrix password login, no Git remote authentication).
+Secret fields are optional (`Secret | None`). When omitted, the feature that requires the secret is simply unavailable.
 
 Scheduled jobs are configured separately in `$CARAPACE_DATA_DIR/jobs.yaml`; see [jobs.md](jobs.md).

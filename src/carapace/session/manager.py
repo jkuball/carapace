@@ -160,8 +160,13 @@ class SessionManager:
             if not session_dir.is_dir():
                 continue
             session_id = session_dir.name
-            if user is not None and self.load_meta(session_id).user != user:
-                continue
+            if user is not None:
+                try:
+                    if self.load_meta(session_id).user != user:
+                        continue
+                except FileNotFoundError as exc:
+                    logger.warning(f"Skipping session without owner metadata: {exc}")
+                    continue
             candidates.append((self._get_mtime(session_id), session_id))
         return [session_id for _, session_id in sorted(candidates, reverse=True)]
 

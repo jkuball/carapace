@@ -14,7 +14,8 @@ import yaml
 from loguru import logger
 
 from ...auth import normalize_username
-from ...models.config import Config, MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
+from ...models.config import Config
+from ...models.matrix import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
 from ...models.skills import SkillInfo
 from ...notifications.presence import NotificationPresenceRegistry
 from ...sandbox.manager import SandboxManager
@@ -98,6 +99,7 @@ class MatrixChannel:
         agent_model: Any,
         sandbox_mgr: SandboxManager,
         engine: SessionEngine,
+        owner_user: str,
         presence_registry: NotificationPresenceRegistry | None = None,
     ) -> None:
         self._config = config
@@ -108,7 +110,9 @@ class MatrixChannel:
         self._sandbox_mgr = sandbox_mgr
         self._engine = engine
         self._presence_registry = presence_registry
-        self._owner_user: str | None = None
+        self._owner_user = normalize_username(owner_user)
+        if not self._owner_user:
+            raise ValueError("Matrix channel owner user must not be empty")
 
         self._client = cast(MatrixClientProtocol, nio.AsyncClient(config.homeserver, config.user_id))
 
@@ -213,12 +217,11 @@ class MatrixChannel:
                 stored = self._load_persisted_token(token_file)
                 if stored is not None:
                     logger.debug("Matrix: using persisted access token")
-                    self._set_owner_user(stored.user)
                     return stored.access_token, stored.device_id
             except Exception as exc:
                 logger.warning(f"Matrix: could not read persisted token file: {exc}")
 
-        raw = self._config.token.resolve().get_secret_value() if self._config.token else ""
+        raw = self._config.token or ""
         if raw:
             device_id = None
             if ":" in raw:
@@ -232,26 +235,24 @@ class MatrixChannel:
         raw = yaml.safe_load(token_file.read_text(encoding="utf-8")) or {}
         tokens_file = MatrixTokensFile.model_validate(raw)
         for stored in tokens_file.tokens:
-            if stored.user_id == self._config.user_id:
-                return stored
+            if stored.user_id != self._config.user_id:
+                continue
+            if normalize_username(stored.user) != self._owner_user:
+                logger.warning(
+                    f"Matrix: persisted token for {self._config.user_id!r} is owned by {stored.user!r}, "
+                    f"but channel owner is {self._owner_user!r} — ignoring token"
+                )
+                continue
+            return stored
         logger.warning(f"Matrix: no persisted token for {self._config.user_id!r} in {token_file} — ignoring token file")
         return None
 
-    def _set_owner_user(self, user: str | None) -> None:
-        if not user:
-            return
-        normalized = normalize_username(user)
-        if normalized:
-            self._owner_user = normalized
-
     def _require_owner_user(self) -> str:
-        if self._owner_user is None:
-            raise RuntimeError("Matrix channel token must include a carapace user owner")
         return self._owner_user
 
     async def _password_login(self, token_file: Path) -> None:
         """Log in with the configured password secret and persist the new token. Raises on failure."""
-        password = self._config.password.resolve().get_secret_value() if self._config.password else ""
+        password = self._config.password or ""
         if not password:
             raise RuntimeError("Matrix channel: no valid token available and no password secret configured")
 

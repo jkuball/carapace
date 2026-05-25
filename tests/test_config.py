@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from carapace.config import load_config, load_workspace_file
 
 
@@ -31,6 +34,41 @@ def test_load_config_from_yaml(tmp_path: Path):
     assert cfg.agent.sentinel_model == "anthropic:claude-haiku-4-5"
     assert cfg.agent.sentinel_timeout_seconds == 15
     assert cfg.agent.tool_output_max_chars == 5000
+
+
+def test_load_config_rejects_global_channels_config(tmp_path: Path):
+    (tmp_path / "config.yaml").write_text(
+        "channels:\n"
+        "  matrix:\n"
+        "    enabled: true\n"
+        "    homeserver: https://matrix.example.com\n"
+        "    user_id: '@carapace:example.com'\n"
+    )
+
+    with pytest.raises(ValidationError):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_unknown_nested_config_key(tmp_path: Path):
+    (tmp_path / "config.yaml").write_text(
+        "agent:\n"
+        "  model: anthropic:claude-sonnet-4-6\n"
+        "  sentinel_model: anthropic:claude-haiku-4-5\n"
+        "  title_model: anthropic:claude-haiku-4-5\n"
+        "  unexpected_key: true\n"
+    )
+
+    with pytest.raises(ValidationError):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_git_secret_source_object(tmp_path: Path):
+    (tmp_path / "config.yaml").write_text(
+        "git:\n  remote: https://gitea.example.com/team/knowledge.git\n  token:\n    env: CARAPACE_GIT_TOKEN\n"
+    )
+
+    with pytest.raises(ValidationError):
+        load_config(tmp_path)
 
 
 def test_load_workspace_file_missing(tmp_path: Path):

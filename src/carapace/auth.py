@@ -15,7 +15,8 @@ from joserfc.jwk import OctKey
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field, model_validator
 
-from .models.config import AuthConfig, UserConfig
+from .models.config import AuthConfig
+from .models.user import UserConfig
 
 _password_hash = PasswordHash.recommended()
 ADMIN_ROLE = "admin"

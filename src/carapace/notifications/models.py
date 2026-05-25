@@ -3,13 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NotificationClientType = Literal["web", "matrix", "cli"]
 NotificationFocusState = Literal["visible", "hidden", "inactive"]
 
 
 class NotificationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     escalation_pending: bool = True
     attended_turn_completed: bool = True
     unattended_turn_completed: bool = False
@@ -54,6 +56,8 @@ class NotificationSubscription(BaseModel):
 
 
 class NotificationsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = True
     presence_ttl_seconds: int = 60
     subscription_ttl_days: int = 30

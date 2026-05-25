@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from pydantic import BaseModel
 
 from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
-from ..models.config import UserConfig
+from ..models.user import UserConfig
 from .state import server_module
 
 server = server_module()

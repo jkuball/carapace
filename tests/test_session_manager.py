@@ -117,6 +117,15 @@ def test_list_sessions_filters_by_owner(tmp_path: Path) -> None:
     assert mgr.list_sessions(user="bob") == [bob.session_id]
 
 
+def test_list_sessions_filters_by_owner_skips_missing_meta(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    alice = mgr.create_session(user="alice")
+    legacy = mgr.create_session(user="alice")
+    (tmp_path / "sessions" / legacy.session_id / "meta.yaml").unlink()
+
+    assert mgr.list_sessions(user="alice") == [alice.session_id]
+
+
 def test_save_and_resume_state(tmp_path: Path):
     mgr = SessionManager(tmp_path)
     state = mgr.create_session(user="thies")

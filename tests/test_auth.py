@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 
 from carapace.auth import (
     ADMIN_ROLE,
@@ -19,7 +20,8 @@ from carapace.auth import (
     validate_bootstrap_admin_password,
     verify_password,
 )
-from carapace.models.config import AuthConfig, JwtCookieConfig, UserConfig
+from carapace.models.config import AuthConfig, JwtCookieConfig
+from carapace.models.user import UserConfig
 
 
 def test_validate_bootstrap_admin_password_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,6 +98,18 @@ def test_create_user_normalizes_persists_and_verifies_password(tmp_path) -> None
     assert persisted["thies"].config.default_models == {"agent": "anthropic:test"}
     assert store.verify_password("THIES", "secret") is not None
     assert store.verify_password("thies", "wrong") is None
+
+
+def test_user_git_config_rejects_secret_source_objects() -> None:
+    with pytest.raises(ValidationError):
+        UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": "https://gitea.example.com/team/knowledge.git",
+                    "token": {"env": "CARAPACE_GIT_TOKEN"},
+                }
+            }
+        )
 
 
 def test_create_user_rejects_empty_and_duplicate_normalized_usernames(tmp_path) -> None:

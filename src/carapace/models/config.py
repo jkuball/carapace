@@ -13,7 +13,11 @@ from .credentials import CredentialsConfig
 from .session import SessionBudget
 
 
-class Secret(BaseModel):
+class ConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Secret(ConfigModel):
     """Flexible secret source: raw value, environment variable, or file.
 
     Accepts a plain string as shorthand for ``Secret(raw="...")``.
@@ -52,59 +56,7 @@ class Secret(BaseModel):
         raise ValueError("Secret has no source configured (set raw, env, or file)")
 
 
-class MatrixTokenFile(BaseModel):
-    """Schema for one persisted Matrix access token."""
-
-    access_token: str
-    device_id: str | None = None
-    user_id: str | None = None
-    user: str
-
-
-class MatrixTokensFile(BaseModel):
-    """Schema for the persisted ``matrix_token.yaml`` file."""
-
-    version: int = 1
-    tokens: list[MatrixTokenFile] = []
-
-
-class MatrixChannelConfig(BaseModel):
-    enabled: bool = False
-    homeserver: str = ""
-    user_id: str = ""
-    device_name: str = "carapace"
-    password: Secret | None = None
-    token: Secret | None = None
-    allowed_rooms: list[str] = []
-    allowed_users: list[str] = []
-
-
-class CronJobConfig(BaseModel):
-    id: str
-    schedule: str
-    instructions: str
-    approval_target: dict[str, str] = {}
-
-
-class CronChannelConfig(BaseModel):
-    enabled: bool = False
-    jobs: list[CronJobConfig] = []
-
-
-class ChannelsConfig(BaseModel):
-    matrix: MatrixChannelConfig = MatrixChannelConfig()
-    cron: CronChannelConfig = CronChannelConfig()
-
-
-class UserConfig(BaseModel):
-    credentials: dict[str, Any] = {}
-    channels: ChannelsConfig = ChannelsConfig()
-    git: dict[str, Any] = {}
-    default_models: dict[str, str] = {}
-    budgets: dict[str, Any] = {}
-
-
-class JwtCookieConfig(BaseModel):
+class JwtCookieConfig(ConfigModel):
     name: str = "carapace_session"
     issuer: str = "carapace"
     audience: str = "carapace-web"
@@ -113,14 +65,12 @@ class JwtCookieConfig(BaseModel):
     same_site: Literal["lax", "strict", "none"] = "lax"
 
 
-class AuthConfig(BaseModel):
+class AuthConfig(ConfigModel):
     cookie: JwtCookieConfig = JwtCookieConfig()
 
 
-class AvailableModelEntry(BaseModel):
+class AvailableModelEntry(ConfigModel):
     """One row in ``agent.available_models``: shorthand ``provider:name`` string or a mapping."""
-
-    model_config = ConfigDict(extra="allow")
 
     provider: str = Field(
         description="API kind used to access the model, such as anthropic, openai, or openai-chat.",
@@ -187,7 +137,7 @@ def _default_agent_available_models() -> list[AvailableModelEntry]:
     ]
 
 
-class AgentConfig(BaseModel):
+class AgentConfig(ConfigModel):
     model: str = "anthropic:claude-sonnet-4-6"
     sentinel_model: str = "anthropic:claude-haiku-4-5"
     title_model: str = "anthropic:claude-haiku-4-5"
@@ -235,7 +185,7 @@ def agent_available_model_entries(agent: AgentConfig) -> list[AvailableModelEntr
 
 
 class SandboxConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CARAPACE_SANDBOX_")
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_SANDBOX_", extra="forbid")
 
     # Container backend: "docker" for local development, "kubernetes" for cluster deployments.
     runtime: Literal["docker", "kubernetes"] = "docker"
@@ -281,16 +231,16 @@ class SandboxConfig(BaseSettings):
     cleanup_orphans_on_startup: bool = True
 
 
-class GitConfig(BaseModel):
+class GitConfig(ConfigModel):
     """Git-backed knowledge store configuration."""
 
     remote: str = ""  # optional external remote URL
     branch: str = "main"  # remote branch to fetch/push (local is always "main")
     author: str = "carapace <carapace@%h>"  # %s → session ID, %h → hostname
-    token: Secret | None = None
+    token: str | None = None
 
 
-class SessionCommitConfig(BaseModel):
+class SessionCommitConfig(ConfigModel):
     enabled: bool = True
     path_prefix: str = "sessions"
     autosave_enabled: bool = True
@@ -309,12 +259,12 @@ class SessionCommitConfig(BaseModel):
         return self
 
 
-class SessionsConfig(BaseModel):
+class SessionsConfig(ConfigModel):
     commit: SessionCommitConfig = SessionCommitConfig()
 
 
 class CacheConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CARAPACE_CACHE_")
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_CACHE_", extra="forbid")
 
     ttl_seconds: int = 1800
     redis_url: str = "redis://localhost:6379/0"
@@ -329,7 +279,7 @@ class CacheConfig(BaseSettings):
 
 
 class ServerConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CARAPACE_SERVER_")
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_SERVER_", extra="forbid")
 
     host: str = "0.0.0.0"
     port: int = 8321
@@ -345,18 +295,17 @@ class ServerConfig(BaseSettings):
     ]
 
 
-class CarapaceConfig(BaseModel):
+class CarapaceConfig(ConfigModel):
     log_level: str = "info"
     logfire_token: str = ""
 
 
-class Config(BaseModel):
+class Config(ConfigModel):
     carapace: CarapaceConfig = CarapaceConfig()
     cache: CacheConfig = CacheConfig()
     server: ServerConfig = ServerConfig()
     auth: AuthConfig = AuthConfig()
     notifications: NotificationsConfig = NotificationsConfig()
-    channels: ChannelsConfig = ChannelsConfig()
     agent: AgentConfig = AgentConfig()
     sessions: SessionsConfig = SessionsConfig()
     sandbox: SandboxConfig = SandboxConfig()

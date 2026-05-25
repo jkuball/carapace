@@ -200,7 +200,7 @@ Features:
 - Configurable allowed rooms and users
 - Matrix activity feeds the same active-session presence registry used for notification suppression and clearing
 
-Configuration in `config.yaml`:
+Configuration is per user, under `config.channels.matrix` in the user record:
 
 ```yaml
 channels:

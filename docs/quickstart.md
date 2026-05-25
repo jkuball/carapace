@@ -22,8 +22,6 @@ CARAPACE_TOKEN=pick-a-bootstrap-admin-password
 
 # Optional — uncomment if needed
 # GOOGLE_API_KEY=...
-# CARAPACE_MATRIX_PASSWORD=...
-# CARAPACE_GIT_TOKEN=...
 ```
 
 If no enabled admin user exists yet, `CARAPACE_TOKEN` becomes the bootstrap `admin` user's initial password and must be at least 16 characters long. After startup, normal web UI, CLI, REST, WebSocket, and admin access uses username/password login and an HttpOnly session cookie.
@@ -141,7 +139,7 @@ Notes:
 
 ## 5. Connect Matrix (optional)
 
-Create a Matrix account for carapace on your homeserver, then add to `data/config.yaml`:
+Create a Matrix account for carapace on your homeserver, then add Matrix settings to the owning user's config (`config.channels.matrix` in the user record):
 
 ```yaml
 channels:
@@ -149,15 +147,14 @@ channels:
     enabled: true
     homeserver: https://matrix.example.com
     user_id: "@carapace:example.com"
-    password:
-      env: CARAPACE_MATRIX_PASSWORD
+    password: "change-me"
     allowed_rooms:
       - "!roomid:example.com"
     allowed_users:
       - "@you:example.com"
 ```
 
-Set `CARAPACE_MATRIX_PASSWORD` in your `.env` and restart. carapace will join the allowed rooms and respond to messages from allowed users. Sessions are created per-room.
+Restart carapace after changing the user config. carapace starts one Matrix channel per enabled user config, joins the allowed rooms, and responds to messages from allowed users. Sessions are created per-room and owned by that user.
 
 `allowed_rooms` and `allowed_users` are mandatory — without them the bot ignores all messages. This prevents accidental exposure if someone invites the bot to a public room.
 

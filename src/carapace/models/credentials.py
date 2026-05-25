@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class ConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class CredentialMetadata(BaseModel):
@@ -22,7 +26,7 @@ class CredentialRegistryProtocol(Protocol):
     async def list(self, query: str = "") -> list[CredentialMetadata]: ...
 
 
-class FileCredentialBackendConfig(BaseModel):
+class FileCredentialBackendConfig(ConfigModel):
     """Configuration for the file-based credential backend."""
 
     type: Literal["file"] = "file"
@@ -31,7 +35,7 @@ class FileCredentialBackendConfig(BaseModel):
     hide: list[str] = []
 
 
-class BitwardenCredentialBackendConfig(BaseModel):
+class BitwardenCredentialBackendConfig(ConfigModel):
     """Configuration for a Bitwarden/Vaultwarden credential backend."""
 
     type: Literal["bitwarden"] = "bitwarden"
@@ -46,7 +50,7 @@ CredentialBackendConfig = Annotated[
 ]
 
 
-class CredentialsConfig(BaseModel):
+class CredentialsConfig(ConfigModel):
     """Top-level credential configuration with named backends."""
 
     backends: dict[str, CredentialBackendConfig] = {}

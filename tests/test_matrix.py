@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import nio
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from carapace.bootstrap import ensure_data_dir
 from carapace.channels.matrix import (
@@ -23,7 +24,7 @@ from carapace.channels.matrix import (
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
 from carapace.config import load_config
-from carapace.models.config import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile, Secret
+from carapace.models.matrix import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
 from carapace.models.session import SessionBudget
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.sandbox.manager import SandboxManager
@@ -46,6 +47,17 @@ def _make_config(**kwargs: Any) -> MatrixChannelConfig:
     return MatrixChannelConfig(**(defaults | kwargs))
 
 
+def test_matrix_config_rejects_secret_source_objects() -> None:
+    with pytest.raises(ValidationError):
+        MatrixChannelConfig.model_validate(
+            {
+                "password": {
+                    "env": "CARAPACE_MATRIX_PASSWORD",
+                },
+            }
+        )
+
+
 def _make_engine_mock() -> MagicMock:
     """Build a mock SessionEngine with commonly used async methods."""
     engine = MagicMock(spec=SessionEngine)
@@ -60,7 +72,7 @@ def _make_engine_mock() -> MagicMock:
     return engine
 
 
-def _make_channel(tmp_path: Path, **config_kwargs: Any) -> Any:
+def _make_channel(tmp_path: Path, *, owner_user: str = "thies", **config_kwargs: Any) -> Any:
     """Build a MatrixChannel with mocked internals."""
     ensure_data_dir(tmp_path)
     full_config = load_config(tmp_path)
@@ -77,12 +89,12 @@ def _make_channel(tmp_path: Path, **config_kwargs: Any) -> Any:
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         engine=_make_engine_mock(),
+        owner_user=owner_user,
         presence_registry=NotificationPresenceRegistry(ttl=timedelta(seconds=60)),
     )
     # Replace the nio client with a mock
     channel._client = AsyncMock(spec=nio.AsyncClient)
     channel._client.user_id = "@carapace:example.com"
-    channel._owner_user = "thies"
     return channel
 
 
@@ -721,11 +733,28 @@ def test_load_token_discards_stale_user_id(tmp_path: Path):
     assert token_file.exists()
 
 
+def test_load_token_discards_stale_owner(tmp_path: Path):
+    """Persisted token for a different carapace user is ignored."""
+    ch = _make_channel(tmp_path)
+    token_file = tmp_path / "matrix_token.yaml"
+    persisted = MatrixTokenFile(
+        access_token="tok_old",
+        device_id="DEV1",
+        user_id="@carapace:example.com",
+        user="alice",
+    )
+    token_file.write_text(yaml.safe_dump(MatrixTokensFile(tokens=[persisted]).model_dump(mode="json")))
+    token, device_id = ch._load_token(token_file)
+    assert token == ""
+    assert device_id is None
+    assert token_file.exists()
+
+
 @pytest.mark.anyio
 async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """After password login the persisted file includes the configured user_id."""
 
-    ch = _make_channel(tmp_path, password=Secret(raw="secret"))
+    ch = _make_channel(tmp_path, password="secret")
     token_file = tmp_path / "matrix_token.yaml"
 
     login_resp = MagicMock()
