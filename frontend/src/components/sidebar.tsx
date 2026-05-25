@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
 import { VersionBadge } from "@/components/version-badge";
+import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
 import {
   canArchiveSession,
@@ -26,6 +27,7 @@ interface SidebarProps {
   activeView?: "chat" | "settings";
   frontendVersion?: string | null;
   backendVersion?: string | null;
+  currentUser?: AuthUserInfo | null;
   onSelect: (sessionId: string) => void;
   onNew: (options?: NewSessionOptions) => void;
   onGoHome: () => void;
@@ -70,6 +72,11 @@ function runSidebarAttributeUpdate(promise: Promise<SessionInfo>): void {
   });
 }
 
+function accountInitial(user: AuthUserInfo | null | undefined): string {
+  const label = user?.display_name?.trim() || user?.username.trim() || "?";
+  return label.slice(0, 1).toLocaleUpperCase();
+}
+
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -90,6 +97,7 @@ export function Sidebar({
   activeView = "chat",
   frontendVersion = null,
   backendVersion = null,
+  currentUser = null,
   onSelect,
   onNew,
   onGoHome,
@@ -108,11 +116,15 @@ export function Sidebar({
   const { locale } = useAppLocale();
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const [referenceTime, setReferenceTime] = useState<number>(() => Date.now());
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
   const archivedSessions = showArchivedSessions
     ? sessions.filter((session) => session.attributes.archived)
     : [];
+  const accountName = currentUser?.display_name?.trim() || currentUser?.username || t("account.unknown");
+  const accountRoles = currentUser?.roles.length ? currentUser.roles.join(", ") : t("account.noRoles");
 
   useEffect(() => {
     const updateReferenceTime = (): void => {
@@ -125,6 +137,31 @@ export function Sidebar({
       window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    function handlePointerDown(event: MouseEvent): void {
+      const target = event.target;
+      if (!(target instanceof Node) || accountMenuRef.current?.contains(target)) {
+        return;
+      }
+      setAccountMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setAccountMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [accountMenuOpen]);
 
   function calendarDayNumber(date: Date): number {
     return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
@@ -564,38 +601,87 @@ export function Sidebar({
           >
             <Home className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title={t("navigation.settings")}
-            aria-label={t("navigation.settings")}
-            className={cn(
-              "rounded-md p-1.5 transition-colors",
-              activeView === "settings"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onDisconnect}
-            title={t("navigation.disconnect")}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-          <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
-          <a
-            href={githubUrl}
-            target="_blank"
-            rel="noreferrer"
-            title={t("navigation.github")}
-            aria-label={t("navigation.github")}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <GitHubIcon className="h-4 w-4" />
-          </a>
+          <div ref={accountMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((open) => !open)}
+              title={t("account.openMenu")}
+              aria-label={t("account.openMenu")}
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              className={cn(
+                "inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-xs font-semibold transition-colors",
+                activeView === "settings" || accountMenuOpen
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {accountInitial(currentUser)}
+            </button>
+
+            {accountMenuOpen ? (
+              <div
+                role="menu"
+                aria-label={t("account.menu")}
+                className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg"
+              >
+                <div className="border-b border-border/80 px-3 py-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                      {accountInitial(currentUser)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium" title={accountName}>{accountName}</div>
+                      <div className="truncate text-xs text-muted-foreground" title={currentUser?.username ?? undefined}>
+                        {currentUser?.username ?? t("account.unknown")}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <User className="h-3.5 w-3.5" />
+                    <span className="truncate" title={accountRoles}>{accountRoles}</span>
+                  </div>
+                </div>
+                <div className="p-1">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      onOpenSettings();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                    {t("navigation.settings")}
+                  </button>
+                  <a
+                    role="menuitem"
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                  >
+                    <GitHubIcon className="h-4 w-4 text-muted-foreground" />
+                    {t("navigation.github")}
+                  </a>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      onDisconnect();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {t("account.logout")}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 

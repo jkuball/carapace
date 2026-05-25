@@ -603,6 +603,7 @@ function HomeContent() {
           activeView={activeView}
           frontendVersion={BUILD_APP_VERSION}
           backendVersion={serverVersion}
+          currentUser={currentUser}
           onSelect={handleSelectSession}
           onNew={handleNewSession}
           onGoHome={handleGoHome}

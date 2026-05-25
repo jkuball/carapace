@@ -13,6 +13,13 @@
         "disconnect": "Trennen",
         "github": "GitHub-Repository"
     },
+    "account": {
+        "menu": "Kontomenü",
+        "openMenu": "Kontomenü öffnen",
+        "unknown": "Unbekannter Benutzer",
+        "noRoles": "Keine Rollen",
+        "logout": "Abmelden"
+    },
     "home": {
         "empty": {
             "description": "Wähle eine Sitzung aus oder starte eine neue"
