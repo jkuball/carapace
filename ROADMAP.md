@@ -12,7 +12,7 @@
 ## General
 
 - [ ] an actual database backend instead of files
-- [ ] Multi-User Setup, better auth than a static token, api keys ?
+- [ ] api keys, mainly for subagents
 
 ## Workspace
 
