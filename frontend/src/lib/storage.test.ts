@@ -64,6 +64,7 @@ test.beforeEach(() => {
   setWindow({
     localStorage,
     sessionStorage,
+    location: { origin: "https://carapace.example.test" },
   });
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,
@@ -114,18 +115,25 @@ test.afterEach(() => {
   }
 });
 
-test("connection helpers persist and clear server credentials", () => {
-  assert.equal(hasConnection(), false);
-
-  saveConnection("https://carapace.example.test", "token-1");
+test("connection helpers use same-origin server and clear legacy state", () => {
+  localStorage.setItem("carapace_server", "https://old.example.test");
+  localStorage.setItem("carapace_token", "legacy-token");
 
   assert.equal(getServer(), "https://carapace.example.test");
-  assert.equal(getToken(), "token-1");
+  assert.equal(localStorage.getItem("carapace_server"), null);
+  assert.equal(hasConnection(), false);
+
+  saveConnection("thies");
+
+  assert.equal(getServer(), "https://carapace.example.test");
+  assert.equal(getToken(), "thies");
   assert.equal(hasConnection(), true);
+  assert.equal(localStorage.getItem("carapace_server"), null);
+  assert.equal(localStorage.getItem("carapace_token"), null);
 
   clearConnection();
 
-  assert.equal(getServer(), "");
+  assert.equal(getServer(), "https://carapace.example.test");
   assert.equal(getToken(), "");
   assert.equal(hasConnection(), false);
 });

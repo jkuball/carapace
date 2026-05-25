@@ -3,17 +3,15 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { login, type AuthUserInfo } from "@/lib/api";
-import { defaultServer, normalizeServer } from "@/lib/server-url";
 import { getServer, getToken } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
-  onConnect: (server: string, user: AuthUserInfo) => void;
+  onConnect: (user: AuthUserInfo) => void;
 }
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {
   const t = useTranslations("connect");
-  const [server, setServer] = useState(() => getServer() || defaultServer());
   const [username, setUsername] = useState(getToken);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,9 +23,8 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
     setLoading(true);
 
     try {
-      const normalizedServer = normalizeServer(server);
-      const user = await login(normalizedServer, username, password);
-      onConnect(normalizedServer, user);
+      const user = await login(getServer(), username, password);
+      onConnect(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.connectionFailed"));
     } finally {
@@ -46,29 +43,6 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label
-              htmlFor="server"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              {t("serverLabel")}
-            </label>
-            <input
-              id="server"
-              type="url"
-              value={server}
-              onChange={(e) => setServer(e.target.value)}
-              placeholder="http://127.0.0.1:8321"
-              required
-              className={cn(
-                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm",
-                "outline-none transition-colors",
-                "focus:ring-2 focus:ring-ring/30 focus:border-ring",
-                "placeholder:text-muted-foreground/50",
-              )}
-            />
-          </div>
-
           <div className="space-y-1.5">
             <label
               htmlFor="username"

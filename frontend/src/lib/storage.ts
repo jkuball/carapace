@@ -1,3 +1,5 @@
+import { normalizeServer } from "./server-url";
+
 const SERVER_KEY = "carapace_server";
 const USERNAME_KEY = "carapace_username";
 const LEGACY_TOKEN_KEY = "carapace_token";
@@ -12,7 +14,8 @@ export type LocaleOverride = "system" | "en" | "de";
 
 export function getServer(): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem(SERVER_KEY) ?? "";
+  localStorage.removeItem(SERVER_KEY);
+  return normalizeServer(window.location.origin);
 }
 
 export function getToken(): string {
@@ -20,8 +23,8 @@ export function getToken(): string {
   return localStorage.getItem(USERNAME_KEY) ?? "";
 }
 
-export function saveConnection(server: string, username: string) {
-  localStorage.setItem(SERVER_KEY, server);
+export function saveConnection(username: string) {
+  localStorage.removeItem(SERVER_KEY);
   localStorage.setItem(USERNAME_KEY, username);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
@@ -33,7 +36,7 @@ export function clearConnection() {
 }
 
 export function hasConnection(): boolean {
-  return !!getServer() && !!getToken();
+  return !!getToken();
 }
 
 export function getLocaleOverride(): LocaleOverride {

@@ -25,7 +25,7 @@
         }
     },
     "connect": {
-        "description": "Connect to your server",
+        "description": "Sign in to carapace",
         "serverLabel": "Server URL",
         "usernameLabel": "Username",
         "usernamePlaceholder": "thies",
@@ -89,7 +89,7 @@
             "upgraded": "Upgraded data for {username}: {count} changes."
         },
         "errors": {
-            "missingCredentials": "Server URL is required.",
+            "missingCredentials": "Current origin is unavailable.",
             "load": "Failed to load users.",
             "create": "Failed to create user.",
             "save": "Failed to save user.",

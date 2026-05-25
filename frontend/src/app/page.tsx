@@ -416,7 +416,8 @@ function HomeContent() {
     };
   }, [activeSessionId, connected, hasActiveSessionLoaded, server, sessionListInitialized, token]);
 
-  function handleConnect(srv: string, user: AuthUserInfo) {
+  function handleConnect(user: AuthUserInfo) {
+    const srv = getServer();
     refreshRequestIdRef.current += 1;
     loadingMoreSessionsRef.current = false;
     failedLoadMoreCursorRef.current = null;
@@ -427,7 +428,7 @@ function HomeContent() {
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
-    saveConnection(srv, user.username);
+    saveConnection(user.username);
     setCurrentUser(user);
     setConnection({ connected: true, server: srv, token: user.username });
   }

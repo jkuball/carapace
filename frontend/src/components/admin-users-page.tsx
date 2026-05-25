@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { createAdminUser, deleteAdminUser, getCurrentUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
-import { defaultServer, normalizeServer } from "@/lib/server-url";
+import { normalizeServer } from "@/lib/server-url";
 import { getServer } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -81,12 +81,7 @@ interface AdminUsersPageProps {
 
 export function AdminUsersPage({ embedded = false, server: serverProp, currentUsername = null }: AdminUsersPageProps = {}) {
   const t = useTranslations("admin");
-  const [server, setServer] = useState(() => {
-    if (serverProp !== undefined) return normalizeServer(serverProp);
-    if (typeof window === "undefined") return defaultServer();
-    const params = new URLSearchParams(window.location.search);
-    return normalizeServer(params.get("server") ?? getServer() ?? defaultServer());
-  });
+  const [server, setServer] = useState(() => normalizeServer(serverProp ?? ""));
   const [users, setUsers] = useState<AdminUserInfo[]>([]);
   const [selectedUsername, setSelectedUsername] = useState<string | "new">("new");
   const [editDraft, setEditDraft] = useState<UserDraft | null>(null);
@@ -106,6 +101,17 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
     [selectedUsername, users],
   );
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextServer = normalizeServer(serverProp ?? getServer());
+      setServer((current) => current === nextServer ? current : nextServer);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [serverProp]);
+
   const refreshUsers = useCallback(async (preferredUsername: string | "new" = selectedUsername, message?: string): Promise<void> => {
     const normalizedServer = normalizeServer(server);
     if (!normalizedServer) {
@@ -121,7 +127,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
         listAdminUsers(normalizedServer),
         currentUsername === null ? getCurrentUser(normalizedServer).catch(() => null) : Promise.resolve(null),
       ]);
-      setServer(normalizedServer);
       setUsers(loadedUsers);
       setResolvedCurrentUsername(currentUsername ?? loadedCurrentUser?.username ?? null);
       if (preferredUsername === "new") {
@@ -281,32 +286,15 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                 <h1 className="mt-1 text-2xl font-semibold tracking-tight md:mt-0">{t("users.title")}</h1>
                 <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("users.description")}</p>
               </div>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void refreshUsers();
-                }}
-                className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]"
+              <button
+                type="button"
+                onClick={() => void refreshUsers()}
+                disabled={loading || !server.trim()}
+                className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <label className="space-y-1">
-                  <span className="text-xs font-medium text-muted-foreground">{t("serverLabel")}</span>
-                  <input
-                    type="url"
-                    value={server}
-                    onChange={(event) => setServer(event.target.value)}
-                    placeholder="http://127.0.0.1:8321"
-                    className={inputClassName}
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={loading || !server.trim()}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {loading ? t("actions.loading") : t("actions.load")}
-                </button>
-              </form>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {loading ? t("actions.loading") : t("actions.load")}
+              </button>
             </div>
             {(error || notice) && (
               <div className={cn("mt-3 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
@@ -614,7 +602,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             {t("title")}
           </div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">{server || t("serverPlaceholder")}</div>
         </div>
         <nav className="flex-1 p-3">
           <button
