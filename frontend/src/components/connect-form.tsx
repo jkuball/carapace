@@ -3,19 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { login, type AuthUserInfo } from "@/lib/api";
+import { defaultServer, normalizeServer } from "@/lib/server-url";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
   onConnect: (server: string, user: AuthUserInfo) => void;
-}
-
-function defaultServer(): string {
-  if (typeof window === "undefined") return "http://127.0.0.1:8321";
-  const url = new URL(window.location.origin);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    return `${url.protocol}//${url.hostname}:8321`;
-  }
-  return window.location.origin;
 }
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {
@@ -32,7 +24,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
     setLoading(true);
 
     try {
-      const normalizedServer = server.replace(/\/$/, "");
+      const normalizedServer = normalizeServer(server);
       const user = await login(normalizedServer, username, password);
       onConnect(normalizedServer, user);
     } catch (err) {

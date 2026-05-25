@@ -174,6 +174,55 @@ def test_revoke_token_invalidates_session(tmp_path) -> None:
     assert store.revoke_token("not-a-token") is False
 
 
+def test_create_session_prunes_expired_and_revoked_sessions(tmp_path) -> None:
+    store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
+    store.create_user(username="thies", password="secret")
+    now = datetime.now(tz=UTC)
+    expired_session = AuthSession(
+        id="expired-session",
+        user="thies",
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+    revoked_session = AuthSession(
+        id="revoked-session",
+        user="thies",
+        created_at=now - timedelta(minutes=30),
+        expires_at=now + timedelta(minutes=30),
+        revoked_at=now - timedelta(minutes=1),
+    )
+    store.save_sessions(
+        SessionsFile(
+            sessions={
+                expired_session.id: expired_session,
+                revoked_session.id: revoked_session,
+            }
+        )
+    )
+
+    fresh_session = store.create_session(username="thies")
+
+    persisted_sessions = store.load_sessions().sessions
+    assert list(persisted_sessions) == [fresh_session.id]
+
+
+def test_websocket_token_is_scoped_to_session_and_revocation(tmp_path) -> None:
+    store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
+    store.create_user(username="thies", password="secret")
+    auth_session = store.create_session(username="thies")
+    session_token = store.issue_session_token(auth_session)
+
+    websocket_token = store.issue_websocket_token(session_token)
+
+    assert websocket_token is not None
+    identity = store.validate_websocket_token(websocket_token)
+    assert identity is not None
+    assert identity.username == "thies"
+    assert store.validate_session_token(websocket_token) is None
+    store.revoke_token(session_token)
+    assert store.validate_websocket_token(websocket_token) is None
+
+
 def test_password_change_increments_token_version_and_invalidates_old_tokens(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
     store.create_user(username="thies", password="old-secret")
@@ -238,4 +287,12 @@ def test_signing_secret_is_reused_across_store_instances(tmp_path) -> None:
     reloaded_store = AuthStore(tmp_path, AuthConfig())
 
     assert reloaded_store.signing_secret() == first_secret
+
+
+def test_signing_secret_is_cached_per_store_instance(tmp_path) -> None:
+    store = AuthStore(tmp_path, AuthConfig())
+    first_secret = store.signing_secret()
+    store._secret_path.write_text("changed-on-disk", encoding="utf-8")
+
+    assert store.signing_secret() == first_secret
     assert (tmp_path / "auth" / "session_secret").stat().st_mode & 0o777 == 0o600

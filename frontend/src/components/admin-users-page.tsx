@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { createAdminUser, deleteAdminUser, getCurrentUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
+import { defaultServer, normalizeServer } from "@/lib/server-url";
 import { getServer } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
@@ -32,19 +33,6 @@ const emptyCreateDraft: CreateDraft = {
   email: "",
   roles: "",
 };
-
-function defaultServer(): string {
-  if (typeof window === "undefined") return "http://127.0.0.1:8321";
-  const url = new URL(window.location.origin);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    return `${url.protocol}//${url.hostname}:8321`;
-  }
-  return window.location.origin;
-}
-
-function normalizeServer(server: string): string {
-  return server.trim().replace(/\/$/, "");
-}
 
 function rolesFromText(value: string): string[] {
   return [...new Set(value.split(/[\n,]/).map((role) => role.trim()).filter(Boolean))];

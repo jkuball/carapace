@@ -16,6 +16,7 @@ import {
   fetchSandbox,
   fetchModels,
   forkSession,
+  getWebSocketTicket,
   type SlashCommand,
   startSandbox,
   stopSandbox,
@@ -1392,7 +1393,22 @@ export function ChatView({
     setWaiting(false);
   }, [clearToolLoading]);
   const presenceClientId = useRef(getPresenceClientId()).current;
-  const url = wsUrl(server, sessionId, token, presenceClientId);
+  const [webSocketTicket, setWebSocketTicket] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setWebSocketTicket(null);
+    getWebSocketTicket(server, token)
+      .then((ticket) => {
+        if (!cancelled) setWebSocketTicket(ticket);
+      })
+      .catch(() => {
+        if (!cancelled) setWebSocketTicket(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [server, token]);
+  const url = webSocketTicket ? wsUrl(server, sessionId, token, presenceClientId, webSocketTicket) : null;
   const { status, send } = useWebSocket(url, onMessage, onWsDisconnect);
   useSessionPresence(server, token, sessionId, status, presenceClientId);
   useEffect(() => {

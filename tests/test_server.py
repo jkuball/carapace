@@ -1824,6 +1824,17 @@ def test_ws_session_not_found(client, auth_headers):
         pass
 
 
+def test_ws_ticket_allows_cookie_free_websocket(client, auth_headers):
+    ticket_resp = client.post("/api/auth/ws-ticket", headers=auth_headers)
+    assert ticket_resp.status_code == 200
+    ticket = ticket_resp.json()["ticket"]
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?ticket={ticket}") as ws:
+        _consume_status(ws)
+
+
 def _consume_status(ws):
     """Consume the initial status message sent on connect."""
     msg = ws.receive_json()

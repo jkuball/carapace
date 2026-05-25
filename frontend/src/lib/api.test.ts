@@ -4,12 +4,14 @@ import {
   createAdminUser,
   deleteAdminUser,
   deleteNotificationSubscription,
+  getWebSocketTicket,
   getCurrentUser,
   getVapidPublicKey,
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
   upgradeAdminUserData,
+  wsUrl,
 } from "./api";
 import {
   listNotificationSubscriptions,
@@ -187,6 +189,31 @@ test("admin user helpers use cookie auth and parse users", async () => {
   assert.equal(calls[0].headers.get("Authorization"), null);
   assert.equal(users[0].username, "thies");
   assert.equal(users[0].roles[0], "admin");
+});
+
+test("getWebSocketTicket posts with cookie credentials", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
+    return new Response(JSON.stringify({ ticket: "ws-ticket-1" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  const ticket = await getWebSocketTicket("https://carapace.example.test", "");
+
+  assert.equal(ticket, "ws-ticket-1");
+  assert.equal(calls[0]?.method, "POST");
+  assert.equal(calls[0]?.credentials, "include");
+  assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/ws-ticket");
+});
+
+test("wsUrl includes client id and websocket ticket", () => {
+  assert.equal(
+    wsUrl("https://carapace.example.test", "session-1", "", "web tab", "ticket.1"),
+    "wss://carapace.example.test/api/chat/session-1?client_id=web+tab&ticket=ticket.1",
+  );
 });
 
 test("createAdminUser posts admin payload", async () => {

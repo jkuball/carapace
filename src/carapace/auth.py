@@ -128,6 +128,8 @@ class AuthStore:
         self._secret_path = self._dir / "session_secret"
         self._config = config
         self._lock = RLock()
+        self._cached_signing_secret: str | None = None
+        self._cached_signing_key: OctKey | None = None
         self._dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -278,6 +280,7 @@ class AuthStore:
         )
         with self._lock:
             sessions_file = self.load_sessions()
+            self._prune_sessions_file(sessions_file, now=now)
             sessions_file.sessions[session.id] = session
             self.save_sessions(sessions_file)
             self.update_user(username, {"last_login_at": now})
@@ -311,13 +314,26 @@ class AuthStore:
                 self.save_sessions(sessions_file)
         return revoked
 
+    def prune_sessions(self, *, now: datetime | None = None) -> int:
+        current = now or datetime.now(tz=UTC)
+        with self._lock:
+            sessions_file = self.load_sessions()
+            removed = self._prune_sessions_file(sessions_file, now=current)
+            if removed:
+                self.save_sessions(sessions_file)
+            return removed
+
     def signing_secret(self) -> str:
         with self._lock:
+            if self._cached_signing_secret is not None:
+                return self._cached_signing_secret
             if self._secret_path.exists():
-                return self._secret_path.read_text(encoding="utf-8").strip()
+                self._cached_signing_secret = self._secret_path.read_text(encoding="utf-8").strip()
+                return self._cached_signing_secret
             secret = secrets.token_urlsafe(48)
             self._secret_path.write_text(secret, encoding="utf-8")
             self._secret_path.chmod(0o600)
+            self._cached_signing_secret = secret
             return secret
 
     def issue_session_token(self, session: AuthSession) -> str:
@@ -336,11 +352,43 @@ class AuthStore:
         }
         return jwt.encode({"alg": "HS256"}, claims, self._signing_key())
 
+    def issue_websocket_token(self, session_token: str) -> str | None:
+        session_claims = self._decode_token_claims(session_token, expected_type="session")
+        if session_claims is None:
+            return None
+        if self._identity_from_claims(session_claims) is None:
+            return None
+
+        now = datetime.now(tz=UTC)
+        user = self.get_user(session_claims.sub)
+        if user is None:
+            return None
+        claims = {
+            "iss": self._config.cookie.issuer,
+            "aud": self._config.cookie.audience,
+            "typ": "websocket",
+            "sub": session_claims.sub,
+            "sid": session_claims.sid,
+            "iat": int(now.timestamp()),
+            "exp": session_claims.exp,
+            "ver": user.token_version,
+        }
+        return jwt.encode({"alg": "HS256"}, claims, self._signing_key())
+
     def validate_session_token(self, token: str) -> UserIdentity | None:
-        claims = self._decode_session_claims(token)
+        claims = self._decode_token_claims(token, expected_type="session")
         if claims is None:
             return None
 
+        return self._identity_from_claims(claims)
+
+    def validate_websocket_token(self, token: str) -> UserIdentity | None:
+        claims = self._decode_token_claims(token, expected_type="websocket")
+        if claims is None:
+            return None
+        return self._identity_from_claims(claims)
+
+    def _identity_from_claims(self, claims: SessionTokenClaims) -> UserIdentity | None:
         now = datetime.now(tz=UTC)
         if datetime.fromtimestamp(claims.exp, tz=UTC) <= now:
             return None
@@ -354,12 +402,12 @@ class AuthStore:
         return user.identity(session.user)
 
     def revoke_token(self, token: str) -> bool:
-        claims = self._decode_session_claims(token)
+        claims = self._decode_token_claims(token, expected_type="session")
         if claims is None:
             return False
         return self.revoke_session(claims.sid)
 
-    def _decode_session_claims(self, token: str) -> SessionTokenClaims | None:
+    def _decode_token_claims(self, token: str, *, expected_type: str) -> SessionTokenClaims | None:
         try:
             token_obj = jwt.decode(token, self._signing_key(), algorithms=["HS256"])
             claims = SessionTokenClaims.model_validate(token_obj.claims)
@@ -369,12 +417,22 @@ class AuthStore:
             return None
         if claims.aud != self._config.cookie.audience:
             return None
-        if claims.typ != "session":
+        if claims.typ != expected_type:
             return None
         return claims
 
     def _signing_key(self) -> OctKey:
-        return OctKey.import_key(self.signing_secret())
+        with self._lock:
+            if self._cached_signing_key is None:
+                self._cached_signing_key = OctKey.import_key(self.signing_secret())
+            return self._cached_signing_key
+
+    def _prune_sessions_file(self, sessions_file: SessionsFile, *, now: datetime) -> int:
+        before = len(sessions_file.sessions)
+        sessions_file.sessions = {
+            session_id: session for session_id, session in sessions_file.sessions.items() if session.is_active(now=now)
+        }
+        return before - len(sessions_file.sessions)
 
     def _write_yaml(self, path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

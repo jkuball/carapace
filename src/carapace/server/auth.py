@@ -24,6 +24,10 @@ class LoginResponse(BaseModel):
     user: UserIdentity
 
 
+class WebSocketTicketResponse(BaseModel):
+    ticket: str
+
+
 class AdminUserCreateRequest(BaseModel):
     username: str
     password: str
@@ -106,9 +110,13 @@ async def current_user(request: Request) -> UserIdentity:
 async def current_ws_user(websocket: WebSocket) -> UserIdentity:
     cookie_name = server._config.auth.cookie.name
     token = websocket.cookies.get(cookie_name)
-    if not token:
-        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-    identity = _auth_store().validate_session_token(token)
+    ticket = websocket.query_params.get("ticket")
+    if token:
+        identity = _auth_store().validate_session_token(token)
+    elif ticket:
+        identity = _auth_store().validate_websocket_token(ticket)
+    else:
+        identity = None
     if identity is None:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
     return identity
@@ -205,6 +213,20 @@ async def logout(
 @router.get("/auth/me", response_model=UserIdentity)
 async def me(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdentity:
     return user
+
+
+@router.post("/auth/ws-ticket", response_model=WebSocketTicketResponse)
+async def create_websocket_ticket(
+    request: Request,
+    _user: Annotated[UserIdentity, Depends(current_user)],
+) -> WebSocketTicketResponse:
+    session_cookie = request.cookies.get(server._config.auth.cookie.name)
+    if not session_cookie:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    ticket = _auth_store().issue_websocket_token(session_cookie)
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session")
+    return WebSocketTicketResponse(ticket=ticket)
 
 
 @router.get("/admin/users", response_model=list[AdminUserResponse])

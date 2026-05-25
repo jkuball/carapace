@@ -54,6 +54,10 @@ export interface AuthUserInfo {
   roles: string[];
 }
 
+export interface WebSocketTicketResponse {
+  ticket: string;
+}
+
 export interface AdminUserInfo {
   username: string;
   enabled: boolean;
@@ -179,6 +183,16 @@ export async function getCurrentUser(server: string): Promise<AuthUserInfo> {
     throw new Error("Invalid user response");
   }
   return user;
+}
+
+export async function getWebSocketTicket(server: string, token: string): Promise<string> {
+  const res = await fetch(`${server}/api/auth/ws-ticket`, {
+    method: "POST",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create websocket ticket"));
+  const body = await res.json() as WebSocketTicketResponse;
+  return body.ticket;
 }
 
 export async function logout(server: string): Promise<void> {
@@ -830,12 +844,16 @@ export function wsUrl(
   sessionId: string,
   _session: string,
   clientId?: string,
+  ticket?: string,
 ): string {
   void _session;
   const base = server.replace("http://", "ws://").replace("https://", "wss://");
   const params = new URLSearchParams();
   if (clientId) {
     params.set("client_id", clientId);
+  }
+  if (ticket) {
+    params.set("ticket", ticket);
   }
   const query = params.toString();
   return `${base}/api/chat/${sessionId}${query ? `?${query}` : ""}`;
