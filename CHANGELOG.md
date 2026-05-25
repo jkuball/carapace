@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.125.4 (2026-05-25)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: add types-docker dependency to project
+  ([`55e5887`](https://github.com/thiesgerken/carapace/commit/55e588702f2acc0b47aa1554658b86cb317e64e7))
+
 ## v0.125.3 (2026-05-25)
 
 
