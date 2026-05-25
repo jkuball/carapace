@@ -111,7 +111,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
   const [notice, setNotice] = useState<string | null>(null);
   const [resolvedCurrentUsername, setResolvedCurrentUsername] = useState<string | null>(currentUsername);
   const loadedServerRef = useRef<string | null>(null);
-  const lockedServer = embedded && serverProp !== undefined;
 
   const selectedUser = useMemo(
     () => users.find((user) => user.username === selectedUsername) ?? null,
@@ -253,28 +252,25 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
   const ContentElement = embedded ? "section" : "main";
 
   const mainContent = (
-      <ContentElement className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", embedded && "bg-background/65")}>
-        <header className="border-b border-border/80 bg-background/70 px-4 py-3 backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className={cn(
-                "flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground",
-                !embedded && "md:hidden",
-              )}>
-                <ShieldCheck className="h-4 w-4" />
-                {t("title")}
+    <ContentElement className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", embedded && "bg-background/65")}>
+        {!embedded ? (
+          <header className="border-b border-border/80 bg-background/70 px-4 py-3 backdrop-blur sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+                  <ShieldCheck className="h-4 w-4" />
+                  {t("title")}
+                </div>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight md:mt-0">{t("users.title")}</h1>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("users.description")}</p>
               </div>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight md:mt-0">{t("users.title")}</h1>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("users.description")}</p>
-            </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void refreshUsers();
-              }}
-              className={cn("grid gap-2", lockedServer ? "sm:grid-cols-[auto]" : "sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]")}
-            >
-              {!lockedServer ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void refreshUsers();
+                }}
+                className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]"
+              >
                 <label className="space-y-1">
                   <span className="text-xs font-medium text-muted-foreground">{t("serverLabel")}</span>
                   <input
@@ -285,23 +281,23 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                     className={inputClassName}
                   />
                 </label>
-              ) : null}
-              <button
-                type="submit"
-                disabled={loading || !server.trim()}
-                className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {loading ? t("actions.loading") : t("actions.load")}
-              </button>
-            </form>
-          </div>
-          {(error || notice) && (
-            <div className={cn("mt-3 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
-              {error ?? notice}
+                <button
+                  type="submit"
+                  disabled={loading || !server.trim()}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {loading ? t("actions.loading") : t("actions.load")}
+                </button>
+              </form>
             </div>
-          )}
-        </header>
+            {(error || notice) && (
+              <div className={cn("mt-3 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
+                {error ?? notice}
+              </div>
+            )}
+          </header>
+        ) : null}
 
         <div className="grid min-h-0 flex-1 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <section className="min-h-0 border-b border-border/80 bg-background/55 lg:border-r lg:border-b-0">
@@ -411,6 +407,11 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
           </section>
 
           <section className="min-h-0 overflow-y-auto px-4 py-5 sm:px-6">
+            {embedded && error ? (
+              <div className="mx-auto mb-4 max-w-3xl rounded-2xl border border-border bg-background/88 px-4 py-3 text-sm shadow-sm">
+                <p className="text-destructive">{error}</p>
+              </div>
+            ) : null}
             {selectedIsNew ? (
               <form onSubmit={(event) => void handleCreateUser(event)} className="mx-auto max-w-3xl space-y-5">
                 <div className="flex items-center gap-3">
