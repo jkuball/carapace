@@ -8,8 +8,7 @@
         "settings": "Settings",
         "jobs": "Jobs",
         "preferences": "Preferences",
-        "personal": "Personal",
-        "platform": "Platform",
+        "platform": "Admin",
         "users": "Users",
         "disconnect": "Disconnect",
         "github": "GitHub repository"

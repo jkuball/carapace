@@ -653,9 +653,6 @@ export function JobsView({
             className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-border/80"
           >
             <div className="flex items-end gap-1">
-              <span className="pb-2 pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                {tRoot("navigation.personal")}
-              </span>
               <button
                 id="settings-tab-preferences"
                 type="button"

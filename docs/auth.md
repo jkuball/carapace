@@ -47,7 +47,7 @@ Usernames are normalized to lowercase and should be stable, hand-picked names fo
 
 Set `CARAPACE_TOKEN` to a random bootstrap password in the server environment, then start the server. If `auth/users.yaml` does not contain an `admin` user, carapace creates one with the `admin` role and this password. The password must be at least 16 characters long. If it is missing or too short while the bootstrap user is needed, the server exits and prints a suggested 24-character replacement.
 
-Log in as `admin` with that bootstrap password. In **Settings**, admin users see a **Platform** group with a **Users** tab. The users panel can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
+Log in as `admin` with that bootstrap password. In **Settings**, admin users see an **Admin** group with a **Users** tab. The users panel can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
 
 You can also create users through the admin API after logging in and storing the session cookie:
 
