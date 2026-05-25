@@ -125,6 +125,20 @@ def test_ensure_bootstrap_admin_creates_admin_from_env(tmp_path, monkeypatch: py
     assert admin.roles == [ADMIN_ROLE]
 
 
+def test_ensure_bootstrap_admin_skips_when_another_admin_exists(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
+    store = AuthStore(tmp_path, AuthConfig())
+    store.create_user(username="thies", password="secret", roles=[ADMIN_ROLE])
+
+    created = store.ensure_bootstrap_admin()
+
+    assert created is None
+    assert store.get_user(ADMIN_USERNAME) is None
+
+
 def test_disabled_users_cannot_login_or_keep_existing_sessions(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
     store.create_user(username="thies", password="secret")

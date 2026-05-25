@@ -157,7 +157,10 @@ class AuthStore:
         return self.load_users().users.get(normalize_username(username))
 
     def ensure_bootstrap_admin(self) -> AuthUser | None:
-        if self.get_user(ADMIN_USERNAME) is not None:
+        users_file = self.load_users()
+        if any(user.enabled and has_admin_role(user.roles) for user in users_file.users.values()):
+            return None
+        if ADMIN_USERNAME in users_file.users:
             return None
         return self.create_user(
             username=ADMIN_USERNAME,
