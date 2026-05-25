@@ -159,7 +159,7 @@ class AuthStore:
             return None
         return self.create_user(
             username=ADMIN_USERNAME,
-            password=get_token(),
+            password=validate_bootstrap_admin_password(),
             display_name="Administrator",
             roles=[ADMIN_ROLE],
         )
@@ -402,8 +402,3 @@ def validate_bootstrap_admin_password(password: str | None = None) -> str:
             f"Suggested replacement: {suggest_bootstrap_admin_password()}"
         )
     return password
-
-
-def get_token() -> str:
-    """Return the bootstrap admin password from the CARAPACE_TOKEN environment variable."""
-    return validate_bootstrap_admin_password()

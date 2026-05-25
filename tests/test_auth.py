@@ -14,41 +14,43 @@ from carapace.auth import (
     AuthSession,
     AuthStore,
     SessionsFile,
-    get_token,
     hash_password,
     normalize_username,
+    validate_bootstrap_admin_password,
     verify_password,
 )
 from carapace.models.config import AuthConfig, JwtCookieConfig, UserConfig
 
 
-def test_get_token_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_bootstrap_admin_password_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "test-token-12345")
-    assert get_token() == "test-token-12345"
+    assert validate_bootstrap_admin_password() == "test-token-12345"
 
 
-def test_get_token_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_bootstrap_admin_password_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "  my-token-is-long  ")
-    assert get_token() == "my-token-is-long"
+    assert validate_bootstrap_admin_password() == "my-token-is-long"
 
 
-def test_get_token_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_bootstrap_admin_password_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
     with pytest.raises(RuntimeError, match="CARAPACE_TOKEN"):
-        get_token()
+        validate_bootstrap_admin_password()
 
 
-def test_get_token_raises_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_bootstrap_admin_password_raises_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "")
     with pytest.raises(RuntimeError, match="CARAPACE_TOKEN"):
-        get_token()
+        validate_bootstrap_admin_password()
 
 
-def test_get_token_raises_when_too_short_with_suggestion(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_bootstrap_admin_password_raises_when_too_short_with_suggestion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "short")
 
     with pytest.raises(RuntimeError, match=rf"at least {BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH} characters") as exc_info:
-        get_token()
+        validate_bootstrap_admin_password()
 
     suggestion = str(exc_info.value).split("Suggested replacement: ", maxsplit=1)[1]
     assert len(suggestion) == BOOTSTRAP_ADMIN_PASSWORD_SUGGESTED_LENGTH
