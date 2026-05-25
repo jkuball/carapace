@@ -37,25 +37,24 @@ docker compose up -d
 
 This starts:
 
-- **Server** at `http://localhost:8321`
-- **Frontend** at `http://localhost:3001`
+- **Proxy** at `http://localhost:3001`, serving the frontend and routing `/api` to the backend container internally
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
 Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** → **Admin** → **Users** to create your normal user. You can also use the admin API after logging in and storing the session cookie:
 
 ```bash
-curl -c carapace.cookies -X POST http://localhost:8321/api/auth/login \
+curl -c carapace.cookies -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"'"$CARAPACE_TOKEN"'"}'
 
-curl -X POST http://localhost:8321/api/admin/users \
+curl -X POST http://localhost:3001/api/admin/users \
   -b carapace.cookies \
   -H "Content-Type: application/json" \
   -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
 ```
 
-The web UI prompts for the server URL, username, and password on first connect.
+The web UI uses the same origin for frontend and API requests, so it only prompts for username and password on first connect.
 
 See [auth.md](auth.md) for the full user-file format, admin API, and session-cookie behavior.
 
