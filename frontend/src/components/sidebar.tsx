@@ -629,12 +629,25 @@ export function Sidebar({
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
                       {accountInitial(currentUser)}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium" title={accountName}>{accountName}</div>
                       <div className="truncate text-xs text-muted-foreground" title={accountUsername}>
                         {accountUsername}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      title={t("account.logout")}
+                      aria-label={t("account.logout")}
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        onDisconnect();
+                      }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
                 <div className="p-1">
@@ -661,18 +674,6 @@ export function Sidebar({
                     <GitHubIcon className="h-4 w-4 text-muted-foreground" />
                     {t("navigation.github")}
                   </a>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setAccountMenuOpen(false);
-                      onDisconnect();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {t("account.logout")}
-                  </button>
                 </div>
               </div>
             ) : null}
