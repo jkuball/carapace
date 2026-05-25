@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.125.2 (2026-05-25)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: update username placeholder in localization files for consistency
+  ([`5f3cb6d`](https://github.com/thiesgerken/carapace/commit/5f3cb6d94b91a0a553b52d440a9efdb36f86d646))
+
 ## v0.125.1 (2026-05-25)
 
 
