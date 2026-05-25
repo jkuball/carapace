@@ -2,6 +2,8 @@ services:
   carapace:
     build: .
     tty: true
+    ports:
+      - "8321:8321"
     depends_on:
       redis:
         condition: service_healthy
