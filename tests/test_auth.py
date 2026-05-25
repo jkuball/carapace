@@ -235,7 +235,8 @@ def test_create_session_prunes_expired_and_revoked_sessions(tmp_path) -> None:
     fresh_session = store.create_session(username="thies")
 
     persisted_sessions = store.load_sessions().sessions
-    assert list(persisted_sessions) == [fresh_session.id]
+    assert set(persisted_sessions) == {revoked_session.id, fresh_session.id}
+    assert persisted_sessions[revoked_session.id].revoked_at is not None
 
 
 def test_websocket_token_is_scoped_to_session_and_revocation(tmp_path) -> None:
