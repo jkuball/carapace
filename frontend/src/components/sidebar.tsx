@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Home, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2, User } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Loader2, Lock, LogOut, Mail, MessageSquare, Pin, Save, Settings2, Star, Trash2, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
@@ -579,28 +579,25 @@ export function Sidebar({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 leading-none">
+        <button
+          type="button"
+          onClick={onGoHome}
+          title={t("navigation.home")}
+          aria-label={t("navigation.home")}
+          className={cn(
+            "flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            activeView === "chat" && activeSessionId === null
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-muted",
+          )}
+        >
+          <span className="flex min-w-0 items-center gap-1.5 leading-none">
             <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
             <span className="text-sm font-semibold tracking-tight">{t("app.name")}</span>
-          </div>
+          </span>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
-        </div>
+        </button>
         <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={onGoHome}
-            title={t("navigation.home")}
-            aria-label={t("navigation.home")}
-            className={cn(
-              "rounded-md p-1.5 transition-colors",
-              activeView === "chat" && activeSessionId === null
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Home className="h-4 w-4" />
-          </button>
           <div ref={accountMenuRef} className="relative">
             <button
               type="button"
