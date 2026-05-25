@@ -8,8 +8,16 @@
         "settings": "Settings",
         "jobs": "Jobs",
         "preferences": "Preferences",
+        "platform": "Admin",
+        "users": "Users",
         "disconnect": "Disconnect",
-        "github": "GitHub repository"
+        "github": "thiesgerken/carapace"
+    },
+    "account": {
+        "menu": "Account menu",
+        "openMenu": "Open account menu",
+        "unknown": "Unknown user",
+        "logout": "Log out"
     },
     "home": {
         "empty": {
@@ -19,19 +27,89 @@
     "connect": {
         "description": "Connect to your server",
         "serverLabel": "Server URL",
-        "tokenLabel": "Bearer Token",
-        "tokenPlaceholder": "Paste your token",
+        "usernameLabel": "Username",
+        "usernamePlaceholder": "thies",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Password",
         "connect": "Connect",
         "connecting": "Connecting…",
         "errors": {
-            "invalidToken": "Invalid token",
             "serverError": "Server error: {status}",
             "connectionFailed": "Connection failed"
         }
     },
+    "admin": {
+        "title": "Admin",
+        "backToApp": "Back to app",
+        "serverLabel": "Server URL",
+        "serverPlaceholder": "No server selected",
+        "users": {
+            "title": "Users",
+            "description": "Global platform accounts, roles, and data ownership.",
+            "savedUsers": "Users",
+            "loading": "Loading users…",
+            "empty": "No users found",
+            "selectUser": "Select a user",
+            "you": "You",
+            "admin": "Admin",
+            "enabled": "Enabled",
+            "disabled": "Disabled"
+        },
+        "create": {
+            "title": "New user",
+            "subtitle": "Create a local user"
+        },
+        "fields": {
+            "username": "Username",
+            "password": "Password",
+            "newPassword": "New password",
+            "keepPassword": "Keep current password",
+            "displayName": "Display name",
+            "email": "Email",
+            "roles": "Roles",
+            "enabled": "Enabled"
+        },
+        "actions": {
+            "load": "Load",
+            "loading": "Loading…",
+            "refresh": "Refresh users",
+            "new": "New user",
+            "upgradeUser": "Upgrade data for {username}",
+            "deleteUser": "Delete {username}",
+            "create": "Create user",
+            "creating": "Creating…",
+            "save": "Save changes",
+            "saving": "Saving…"
+        },
+        "notices": {
+            "loaded": "Users loaded.",
+            "created": "Created {username}.",
+            "saved": "Saved {username}.",
+            "deleted": "Deleted {username}.",
+            "upgraded": "Upgraded data for {username}: {count} changes."
+        },
+        "errors": {
+            "missingCredentials": "Server URL is required.",
+            "load": "Failed to load users.",
+            "create": "Failed to create user.",
+            "save": "Failed to save user.",
+            "delete": "Failed to delete user.",
+            "upgrade": "Failed to upgrade user data."
+        },
+        "confirm": {
+            "deleteUser": "Delete {username}? Existing data owned by this user is not deleted.",
+            "upgradeUser": "Upgrade existing data using {username}?"
+        },
+        "meta": {
+            "tokenVersion": "Token v{version}",
+            "updated": "Updated {timestamp}",
+            "lastLogin": "Last login {timestamp}",
+            "never": "never"
+        }
+    },
     "preferences": {
         "title": "Preferences",
-        "description": "Frontend settings for language and other app-level behavior.",
+        "description": "Personal settings for this browser and your account experience.",
         "currentLocale": "Current interface language: {locale}",
         "language": {
             "label": "Language",

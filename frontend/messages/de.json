@@ -8,8 +8,16 @@
         "settings": "Einstellungen",
         "jobs": "Jobs",
         "preferences": "Allgemein",
+        "platform": "Admin",
+        "users": "Benutzer",
         "disconnect": "Trennen",
-        "github": "GitHub-Repository"
+        "github": "thiesgerken/carapace"
+    },
+    "account": {
+        "menu": "Kontomenü",
+        "openMenu": "Kontomenü öffnen",
+        "unknown": "Unbekannter Benutzer",
+        "logout": "Abmelden"
     },
     "home": {
         "empty": {
@@ -19,19 +27,89 @@
     "connect": {
         "description": "Mit deinem Server verbinden",
         "serverLabel": "Server-URL",
-        "tokenLabel": "Bearer-Token",
-        "tokenPlaceholder": "Token einfügen",
+        "usernameLabel": "Benutzername",
+        "usernamePlaceholder": "thies",
+        "passwordLabel": "Passwort",
+        "passwordPlaceholder": "Passwort",
         "connect": "Verbinden",
         "connecting": "Verbinde…",
         "errors": {
-            "invalidToken": "Ungültiger Token",
             "serverError": "Serverfehler: {status}",
             "connectionFailed": "Verbindung fehlgeschlagen"
         }
     },
+    "admin": {
+        "title": "Admin",
+        "backToApp": "Zurück zur App",
+        "serverLabel": "Server-URL",
+        "serverPlaceholder": "Kein Server ausgewählt",
+        "users": {
+            "title": "Benutzer",
+            "description": "Globale Plattform-Konten, Rollen und Datenzuordnung.",
+            "savedUsers": "Benutzer",
+            "loading": "Benutzer werden geladen…",
+            "empty": "Keine Benutzer gefunden",
+            "selectUser": "Benutzer auswählen",
+            "you": "Du",
+            "admin": "Admin",
+            "enabled": "Aktiv",
+            "disabled": "Deaktiviert"
+        },
+        "create": {
+            "title": "Neuer Benutzer",
+            "subtitle": "Lokalen Benutzer anlegen"
+        },
+        "fields": {
+            "username": "Benutzername",
+            "password": "Passwort",
+            "newPassword": "Neues Passwort",
+            "keepPassword": "Aktuelles Passwort behalten",
+            "displayName": "Anzeigename",
+            "email": "E-Mail",
+            "roles": "Rollen",
+            "enabled": "Aktiv"
+        },
+        "actions": {
+            "load": "Laden",
+            "loading": "Lädt…",
+            "refresh": "Benutzer aktualisieren",
+            "new": "Neuer Benutzer",
+            "upgradeUser": "Daten für {username} upgraden",
+            "deleteUser": "{username} löschen",
+            "create": "Benutzer anlegen",
+            "creating": "Lege an…",
+            "save": "Änderungen speichern",
+            "saving": "Speichert…"
+        },
+        "notices": {
+            "loaded": "Benutzer geladen.",
+            "created": "{username} angelegt.",
+            "saved": "{username} gespeichert.",
+            "deleted": "{username} gelöscht.",
+            "upgraded": "Daten für {username} aktualisiert: {count} Änderungen."
+        },
+        "errors": {
+            "missingCredentials": "Server-URL ist erforderlich.",
+            "load": "Benutzer konnten nicht geladen werden.",
+            "create": "Benutzer konnte nicht angelegt werden.",
+            "save": "Benutzer konnte nicht gespeichert werden.",
+            "delete": "Benutzer konnte nicht gelöscht werden.",
+            "upgrade": "Benutzerdaten konnten nicht aktualisiert werden."
+        },
+        "confirm": {
+            "deleteUser": "{username} löschen? Bestehende Daten dieses Benutzers bleiben erhalten.",
+            "upgradeUser": "Bestehende Daten mit {username} aktualisieren?"
+        },
+        "meta": {
+            "tokenVersion": "Token v{version}",
+            "updated": "Aktualisiert {timestamp}",
+            "lastLogin": "Letzter Login {timestamp}",
+            "never": "nie"
+        }
+    },
     "preferences": {
         "title": "Einstellungen",
-        "description": "Frontend-Einstellungen für Sprache und anderes app-weites Verhalten.",
+        "description": "Persönliche Einstellungen für diesen Browser und deine Nutzung.",
         "currentLocale": "Aktuelle Oberflächensprache: {locale}",
         "language": {
             "label": "Sprache",

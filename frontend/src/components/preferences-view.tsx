@@ -145,6 +145,7 @@ export function PreferencesView({
           <div className="mt-4">
             <NotificationSubscription server={server} token={token} />
           </div>
+
         </section>
       </div>
     </div>

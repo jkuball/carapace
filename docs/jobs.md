@@ -148,8 +148,13 @@ Job-linked sessions also show recent job metadata in the chat view.
 Example manual run:
 
 ```bash
+curl -c carapace-cookie.jar \
+  -H "Content-Type: application/json" \
+  http://localhost:8321/api/auth/login \
+  -d '{"username":"thies","password":"change-me"}'
+
 curl -X POST \
-  -H "Authorization: Bearer $CARAPACE_TOKEN" \
+  -b carapace-cookie.jar \
   -H "Content-Type: application/json" \
   http://localhost:8321/api/jobs/morning-briefing/run \
   -d '{"data":"Focus on production incidents only."}'

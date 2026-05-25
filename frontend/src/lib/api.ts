@@ -12,11 +12,40 @@ import type {
   SessionListPage,
   SessionSandboxSnapshot,
 } from "./types";
-import { isRecord, readNumber, readString } from "./decoding";
+import { isRecord, readNumber, readString, readStringArray } from "./decoding";
 
-function headers(token: string): HeadersInit {
+export const AUTH_REQUIRED_EVENT = "carapace:auth-required";
+
+function requestPath(input: RequestInfo | URL): string {
+  if (input instanceof Request) return new URL(input.url).pathname;
+  if (input instanceof URL) return input.pathname;
+  return new URL(input, "http://carapace.local").pathname;
+}
+
+function shouldEmitAuthRequired(input: RequestInfo | URL): boolean {
+  const path = requestPath(input);
+  return path !== "/api/auth/login" && path !== "/api/auth/logout";
+}
+
+function emitAuthRequired(input: RequestInfo | URL): void {
+  if (typeof window === "undefined" || !shouldEmitAuthRequired(input)) return;
+  window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+}
+
+async function fetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = await globalThis.fetch(input, { ...init, credentials: "include" });
+  if (response.status === 401) {
+    emitAuthRequired(input);
+  }
+  return response;
+}
+
+function headers(_session: string): HeadersInit {
+  void _session;
   return {
-    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -39,6 +68,265 @@ async function readErrorMessage(
 
 export interface ServerMeta {
   version: string;
+}
+
+export interface AuthUserInfo {
+  username: string;
+  display_name: string | null;
+  roles: string[];
+}
+
+export interface WebSocketTicketResponse {
+  ticket: string;
+}
+
+export interface AdminUserInfo {
+  username: string;
+  enabled: boolean;
+  token_version: number;
+  display_name: string;
+  email: string | null;
+  roles: string[];
+  created_at: string;
+  updated_at: string;
+  password_changed_at: string;
+  last_login_at: string | null;
+  config: unknown;
+}
+
+export interface AdminUserCreateInput {
+  username: string;
+  password: string;
+  display_name?: string;
+  email?: string | null;
+  roles?: string[];
+}
+
+export interface AdminUserUpdateInput {
+  display_name?: string;
+  email?: string | null;
+  roles?: string[];
+  enabled?: boolean;
+  password?: string;
+}
+
+export interface AdminDataUpgradeResult {
+  username: string;
+  summary: Record<string, string[]>;
+}
+
+function decodeAdminUser(raw: unknown): AdminUserInfo | null {
+  if (!isRecord(raw)) return null;
+
+  const username = readString(raw, "username");
+  const displayName = readString(raw, "display_name");
+  const createdAt = readString(raw, "created_at");
+  const updatedAt = readString(raw, "updated_at");
+  const passwordChangedAt = readString(raw, "password_changed_at");
+  const tokenVersion = readNumber(raw, "token_version");
+  if (
+    !username ||
+    displayName === undefined ||
+    !createdAt ||
+    !updatedAt ||
+    !passwordChangedAt ||
+    tokenVersion === undefined ||
+    typeof raw.enabled !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    username,
+    enabled: raw.enabled,
+    token_version: tokenVersion,
+    display_name: displayName,
+    email: readString(raw, "email") ?? null,
+    roles: readStringArray(raw, "roles") ?? [],
+    created_at: createdAt,
+    updated_at: updatedAt,
+    password_changed_at: passwordChangedAt,
+    last_login_at: readString(raw, "last_login_at") ?? null,
+    config: raw.config,
+  };
+}
+
+function decodeAdminUsers(raw: unknown): AdminUserInfo[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => decodeAdminUser(item))
+    .filter((item): item is AdminUserInfo => item !== null);
+}
+
+function decodeAuthUser(raw: unknown): AuthUserInfo | null {
+  if (!isRecord(raw)) return null;
+  const username = readString(raw, "username");
+  if (!username) return null;
+  return {
+    username,
+    display_name: readString(raw, "display_name") ?? null,
+    roles: readStringArray(raw, "roles") ?? [],
+  };
+}
+
+export async function login(
+  server: string,
+  username: string,
+  password: string,
+): Promise<AuthUserInfo> {
+  const res = await fetch(`${server}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Login failed"));
+  }
+  const body: unknown = await res.json();
+  if (!isRecord(body) || !isRecord(body.user)) {
+    throw new Error("Invalid login response");
+  }
+  const user = decodeAuthUser(body.user);
+  if (user === null) {
+    throw new Error("Invalid login response");
+  }
+  return user;
+}
+
+export async function getCurrentUser(server: string): Promise<AuthUserInfo> {
+  const res = await fetch(`${server}/api/auth/me`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to fetch current user"));
+  }
+  const user = decodeAuthUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
+}
+
+export async function getWebSocketTicket(server: string, token: string): Promise<string> {
+  const res = await fetch(`${server}/api/auth/ws-ticket`, {
+    method: "POST",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create websocket ticket"));
+  const body = await res.json() as WebSocketTicketResponse;
+  return body.ticket;
+}
+
+export async function logout(server: string): Promise<void> {
+  const res = await fetch(`${server}/api/auth/logout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok && res.status !== 401) {
+    throw new Error(await readErrorMessage(res, "Logout failed"));
+  }
+}
+
+export async function listAdminUsers(server: string): Promise<AdminUserInfo[]> {
+  const res = await fetch(`${server}/api/admin/users`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to list users"));
+  }
+  return decodeAdminUsers(await res.json());
+}
+
+export async function createAdminUser(
+  server: string,
+  body: AdminUserCreateInput,
+): Promise<AdminUserInfo> {
+  const res = await fetch(`${server}/api/admin/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to create user"));
+  }
+  const user = decodeAdminUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
+}
+
+export async function updateAdminUser(
+  server: string,
+  username: string,
+  body: AdminUserUpdateInput,
+): Promise<AdminUserInfo> {
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to update user"));
+  }
+  const user = decodeAdminUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
+}
+
+export async function deleteAdminUser(
+  server: string,
+  username: string,
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to delete user"));
+  }
+}
+
+export async function upgradeAdminUserData(
+  server: string,
+  username: string,
+): Promise<AdminDataUpgradeResult> {
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}/upgrade-data`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to upgrade user data"));
+  }
+  const raw: unknown = await res.json();
+  if (
+    !isRecord(raw) ||
+    !readString(raw, "username") ||
+    !isRecord(raw.summary)
+  ) {
+    throw new Error("Invalid upgrade response");
+  }
+  const summary: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw.summary)) {
+    if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === "string")
+    ) {
+      summary[key] = value;
+    }
+  }
+  return { username: readString(raw, "username")!, summary };
 }
 
 export async function getServerMeta(
@@ -576,13 +864,19 @@ export async function runJob(
 export function wsUrl(
   server: string,
   sessionId: string,
-  token: string,
+  _session: string,
   clientId?: string,
+  ticket?: string,
 ): string {
+  void _session;
   const base = server.replace("http://", "ws://").replace("https://", "wss://");
-  const params = new URLSearchParams({ token });
+  const params = new URLSearchParams();
   if (clientId) {
     params.set("client_id", clientId);
   }
-  return `${base}/api/chat/${sessionId}?${params.toString()}`;
+  if (ticket) {
+    params.set("ticket", ticket);
+  }
+  const query = params.toString();
+  return `${base}/api/chat/${sessionId}${query ? `?${query}` : ""}`;
 }

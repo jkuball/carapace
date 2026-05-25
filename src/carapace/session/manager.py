@@ -23,6 +23,10 @@ from ..sandbox.state import (
 from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
 
 
+class SessionMeta(BaseModel):
+    user: str | None = None
+
+
 def _to_yaml_safe(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
@@ -73,6 +77,7 @@ class SessionManager:
         channel_ref: str = "",
         budget: SessionBudget | None = None,
         *,
+        user: str | None = None,
         private: bool = False,
         unattended: bool = False,
         ask_mode: bool = False,
@@ -99,8 +104,29 @@ class SessionManager:
         )
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
+        if user is not None:
+            self.save_meta(session_id, SessionMeta(user=user))
         self._save_state(state)
         return state
+
+    def load_meta(self, session_id: str) -> SessionMeta:
+        meta_path = self.sessions_dir / session_id / "meta.yaml"
+        if not meta_path.exists():
+            return SessionMeta()
+        self._log_disk_read("session metadata", meta_path, session_id=session_id)
+        with open(meta_path) as f:
+            raw = yaml.safe_load(f) or {}
+        return SessionMeta.model_validate(raw)
+
+    def save_meta(self, session_id: str, meta: SessionMeta) -> None:
+        session_dir = self.sessions_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = session_dir / "meta.yaml"
+        with open(meta_path, "w") as f:
+            yaml.dump(meta.model_dump(mode="json", exclude_none=True), f, default_flow_style=False)
+
+    def is_owned_by(self, session_id: str, user: str) -> bool:
+        return self.load_meta(session_id).user == user
 
     def load_state(self, session_id: str) -> SessionState | None:
         """Load session state without mutating last_active."""
@@ -118,15 +144,19 @@ class SessionManager:
             state.last_active = datetime.now(tz=UTC)
         return state
 
-    def list_sessions(self) -> list[str]:
+    def list_sessions(self, *, user: str | None = None) -> list[str]:
         if not self.sessions_dir.exists():
             return []
         self._log_disk_read("session directory listing", self.sessions_dir)
-        return sorted(
-            [d.name for d in self.sessions_dir.iterdir() if d.is_dir()],
-            key=lambda s: self._get_mtime(s),
-            reverse=True,
-        )
+        candidates: list[tuple[float, str]] = []
+        for session_dir in self.sessions_dir.iterdir():
+            if not session_dir.is_dir():
+                continue
+            session_id = session_dir.name
+            if user is not None and self.load_meta(session_id).user != user:
+                continue
+            candidates.append((self._get_mtime(session_id), session_id))
+        return [session_id for _, session_id in sorted(candidates, reverse=True)]
 
     def find_session(self, channel_type: str, channel_ref: str) -> str | None:
         """Return the most recently active session ID for the given channel, or None."""

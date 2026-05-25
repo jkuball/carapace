@@ -30,7 +30,8 @@ Push subscriptions are stored as YAML files at `$CARAPACE_DATA_DIR/notifications
 Each subscription records:
 
 - `id`
-- `owner_key`
+- `user`
+- `owner_key` (legacy, optional)
 - `device_name`
 - `endpoint`
 - `p256dh`
@@ -40,7 +41,7 @@ Each subscription records:
 - `last_heartbeat`
 - `expires_at`
 
-`owner_key` is derived from the authenticated bearer token in v1. That means subscriptions are currently grouped by `CARAPACE_TOKEN`, not by a separate user id. If you rotate the token, clients need to subscribe again.
+`user` is the normalized authenticated username. Legacy subscriptions with only `owner_key` still parse, but normal authenticated APIs list and update subscriptions owned by the current user.
 
 Default per-device preferences:
 
@@ -154,7 +155,7 @@ VAPID behavior:
 
 ## API
 
-Notification subscription and presence endpoints use the same bearer token auth as the rest of the server.
+Notification subscription and presence endpoints use the same `carapace_session` cookie auth as the rest of the server.
 
 ### Public config
 

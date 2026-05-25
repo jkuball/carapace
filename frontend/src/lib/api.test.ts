@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AUTH_REQUIRED_EVENT,
+  createAdminUser,
+  deleteAdminUser,
   deleteNotificationSubscription,
+  getWebSocketTicket,
+  getCurrentUser,
   getVapidPublicKey,
+  login,
+  listAdminUsers,
   sendTestNotification,
+  updateAdminUser,
+  upgradeAdminUserData,
+  wsUrl,
 } from "./api";
 import {
   listNotificationSubscriptions,
@@ -11,6 +21,7 @@ import {
 } from "./api";
 
 const originalFetch = globalThis.fetch;
+const originalWindow = globalThis.window;
 
 function setFetch(handler: typeof fetch): void {
   Object.defineProperty(globalThis, "fetch", {
@@ -26,7 +37,22 @@ test.afterEach(() => {
     writable: true,
     value: originalFetch,
   });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: originalWindow,
+  });
 });
+
+function setWindowTarget(): EventTarget {
+  const windowTarget = new EventTarget();
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: windowTarget,
+  });
+  return windowTarget;
+}
 
 test("getVapidPublicKey returns configured key", async () => {
   setFetch(
@@ -116,7 +142,6 @@ test("postNotificationSubscriptionPresence rejects failed heartbeats", async () 
   );
 });
 
-
 test("sendTestNotification surfaces backend detail messages on failure", async () => {
   setFetch(
     async () =>
@@ -131,11 +156,212 @@ test("sendTestNotification surfaces backend detail messages on failure", async (
 
   await assert.rejects(
     () =>
-      sendTestNotification(
-        "https://carapace.example.test",
-        "token-1",
-        "sub-1",
-      ),
+      sendTestNotification("https://carapace.example.test", "token-1", "sub-1"),
     /Failed to deliver test notification/,
   );
+});
+
+test("getCurrentUser parses authenticated user roles", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
+    return new Response(
+      JSON.stringify({ username: "admin", display_name: "Admin", roles: ["admin"] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const user = await getCurrentUser("https://carapace.example.test");
+
+  assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/me");
+  assert.deepEqual(user.roles, ["admin"]);
+});
+
+test("authenticated API 401 dispatches auth-required event", async () => {
+  const windowTarget = setWindowTarget();
+  let authRequiredEvents = 0;
+  windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
+    authRequiredEvents += 1;
+  });
+  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid session" }), { status: 401 }));
+
+  await assert.rejects(
+    () => getCurrentUser("https://carapace.example.test"),
+    /Invalid session/,
+  );
+
+  assert.equal(authRequiredEvents, 1);
+});
+
+test("login 401 does not dispatch auth-required event", async () => {
+  const windowTarget = setWindowTarget();
+  let authRequiredEvents = 0;
+  windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
+    authRequiredEvents += 1;
+  });
+  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid username or password" }), { status: 401 }));
+
+  await assert.rejects(
+    () => login("https://carapace.example.test", "thies", "wrong"),
+    /Invalid username or password/,
+  );
+
+  assert.equal(authRequiredEvents, 0);
+});
+
+test("admin user helpers use cookie auth and parse users", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    calls.push(request);
+    return new Response(
+      JSON.stringify([
+        {
+          username: "thies",
+          enabled: true,
+          token_version: 2,
+          display_name: "Thies",
+          email: "thies@example.test",
+          roles: ["admin"],
+          created_at: "2026-05-24T12:00:00Z",
+          updated_at: "2026-05-24T12:00:00Z",
+          password_changed_at: "2026-05-24T12:00:00Z",
+          last_login_at: null,
+          config: {},
+        },
+      ]),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const users = await listAdminUsers("https://carapace.example.test");
+
+  assert.equal(calls[0].headers.get("Authorization"), null);
+  assert.equal(users[0].username, "thies");
+  assert.equal(users[0].roles[0], "admin");
+});
+
+test("getWebSocketTicket posts with cookie credentials", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
+    return new Response(JSON.stringify({ ticket: "ws-ticket-1" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  const ticket = await getWebSocketTicket("https://carapace.example.test", "");
+
+  assert.equal(ticket, "ws-ticket-1");
+  assert.equal(calls[0]?.method, "POST");
+  assert.equal(calls[0]?.credentials, "include");
+  assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/ws-ticket");
+});
+
+test("wsUrl includes client id and websocket ticket", () => {
+  assert.equal(
+    wsUrl("https://carapace.example.test", "session-1", "", "web tab", "ticket.1"),
+    "wss://carapace.example.test/api/chat/session-1?client_id=web+tab&ticket=ticket.1",
+  );
+});
+
+test("createAdminUser posts admin payload", async () => {
+  let capturedBody = "";
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    capturedBody = await request.text();
+    return new Response(
+      JSON.stringify({
+        username: "ada",
+        enabled: true,
+        token_version: 1,
+        display_name: "Ada",
+        email: null,
+        roles: [],
+        created_at: "2026-05-24T12:00:00Z",
+        updated_at: "2026-05-24T12:00:00Z",
+        password_changed_at: "2026-05-24T12:00:00Z",
+        last_login_at: null,
+        config: {},
+      }),
+      { status: 201, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const user = await createAdminUser("https://carapace.example.test", {
+    username: "ada",
+    password: "secret",
+    display_name: "Ada",
+  });
+
+  assert.equal(JSON.parse(capturedBody).username, "ada");
+  assert.equal(user.username, "ada");
+});
+
+test("updateAdminUser encodes username and surfaces backend errors", async () => {
+  let capturedUrl = "";
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    capturedUrl = request.url;
+    return new Response(JSON.stringify({ detail: "User not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  await assert.rejects(
+    () =>
+      updateAdminUser(
+        "https://carapace.example.test",
+        "ada lovelace",
+        { enabled: false },
+      ),
+    /User not found/,
+  );
+  assert.equal(
+    capturedUrl,
+    "https://carapace.example.test/api/admin/users/ada%20lovelace",
+  );
+});
+
+test("deleteAdminUser deletes the selected user", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
+    return new Response(null, { status: 204 });
+  });
+
+  await deleteAdminUser("https://carapace.example.test", "ada lovelace");
+
+  assert.equal(calls[0]?.method, "DELETE");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/admin/users/ada%20lovelace",
+  );
+  assert.equal(calls[0]?.headers.get("Authorization"), null);
+});
+
+test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
+    return new Response(
+      JSON.stringify({
+        username: "thies",
+        summary: { sessions: ["set owner for session-1"] },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const result = await upgradeAdminUserData("https://carapace.example.test", "thies");
+
+  assert.equal(calls[0]?.method, "POST");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/admin/users/thies/upgrade-data",
+  );
+  assert.equal(calls[0]?.headers.get("Authorization"), null);
+  assert.deepEqual(result.summary.sessions, ["set owner for session-1"]);
 });

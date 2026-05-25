@@ -44,7 +44,7 @@ def test_import_llm():
 
 
 def test_import_auth():
-    from carapace.auth import get_token  # noqa: F401
+    from carapace.auth import validate_bootstrap_admin_password  # noqa: F401
 
 
 def test_import_ws_models():

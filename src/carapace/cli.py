@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Annotated, Any
 
 import httpx
 import typer
@@ -18,6 +18,7 @@ from rich.table import Table
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
+from .upgrade import upgrade_data_dir
 
 load_dotenv()
 
@@ -38,32 +39,42 @@ def _fmt_dt(iso: str) -> str:
         return iso
 
 
-def _get_token(data_dir: str | None, token: str | None) -> str:
-    """Resolve bearer token from flag or env var."""
-    if token:
-        return token
-    env_token = os.environ.get("CARAPACE_TOKEN")
-    if env_token:
-        return env_token
-    console.print("[red]No auth token found. Set --token or CARAPACE_TOKEN.[/red]")
-    raise typer.Exit(1)
+def _login_client(server: str, username: str | None, password: str | None) -> httpx.Client:
+    resolved_username = username.strip() if username else console.input("Username: ").strip()
+    if not resolved_username:
+        console.print("[red]Username is required.[/red]")
+        raise typer.Exit(1)
+    resolved_password = password if password is not None else typer.prompt("Password", hide_input=True)
+    client = httpx.Client(base_url=server)
+    try:
+        resp = client.post("/api/auth/login", json={"username": resolved_username, "password": resolved_password})
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        client.close()
+        if exc.response.status_code == 401:
+            console.print("[red]Invalid username or password.[/red]")
+        else:
+            console.print(f"[red]Login failed: {exc.response.status_code}[/red]")
+        raise typer.Exit(1) from None
+    return client
 
 
-def _auth_headers(bearer: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {bearer}"}
+def _cookie_headers(client: httpx.Client) -> dict[str, str]:
+    cookie_header = "; ".join(f"{cookie.name}={cookie.value}" for cookie in client.cookies.jar)
+    return {"Cookie": cookie_header} if cookie_header else {}
 
 
-def _ws_url(server: str, session_id: str, bearer: str) -> str:
-    """Build WebSocket URL with token query param."""
+def _ws_url(server: str, session_id: str) -> str:
+    """Build WebSocket URL for a session."""
     base = server.replace("http://", "ws://").replace("https://", "wss://")
-    return f"{base}/api/chat/{session_id}?token={bearer}"
+    return f"{base}/api/chat/{session_id}"
 
 
-def _replay_history(server: str, session_id: str, headers: dict[str, str], limit: int) -> None:
+def _replay_history(client: httpx.Client, session_id: str, limit: int) -> None:
     """Fetch and display past conversation messages."""
     params = {} if limit < 0 else {"limit": limit}
     try:
-        resp = httpx.get(f"{server}/api/sessions/{session_id}/history", headers=headers, params=params)
+        resp = client.get(f"/api/sessions/{session_id}/history", params=params)
         resp.raise_for_status()
     except httpx.HTTPStatusError:
         return
@@ -514,21 +525,26 @@ async def _read_until_done(ws) -> None:
             return
 
 
-async def _connect_ws(ws_url: str, *, max_backoff: float = 30.0) -> websockets.asyncio.client.ClientConnection:
+async def _connect_ws(
+    ws_url: str,
+    *,
+    headers: dict[str, str],
+    max_backoff: float = 30.0,
+) -> websockets.asyncio.client.ClientConnection:
     """Connect to the WebSocket, retrying with exponential backoff on failure."""
     delay = 1.0
     while True:
         try:
-            return await websockets.asyncio.client.connect(ws_url)
+            return await websockets.asyncio.client.connect(ws_url, additional_headers=headers)
         except (OSError, ConnectionClosed, InvalidHandshake) as exc:
             console.print(f"[dim]Connection failed ({exc}), retrying in {delay:.0f}s…[/dim]")
             await asyncio.sleep(delay)
             delay = min(delay * 2, max_backoff)
 
 
-async def _chat_loop(ws_url: str) -> None:
+async def _chat_loop(ws_url: str, *, headers: dict[str, str]) -> None:
     """Connect to the server WebSocket and run the interactive REPL."""
-    ws = await _connect_ws(ws_url)
+    ws = await _connect_ws(ws_url, headers=headers)
     pending_message: str | None = None
     show_tool_events = True
     try:
@@ -565,7 +581,7 @@ async def _chat_loop(ws_url: str) -> None:
             except ConnectionClosed:
                 console.print("[dim]Server disconnected — reconnecting…[/dim]")
                 pending_message = user_input
-                ws = await _connect_ws(ws_url)
+                ws = await _connect_ws(ws_url, headers=headers)
                 console.print("[green]Reconnected.[/green]")
                 continue
 
@@ -573,7 +589,7 @@ async def _chat_loop(ws_url: str) -> None:
                 await _read_server_responses(ws, show_tool_events=show_tool_events)
             except ConnectionClosed:
                 console.print("[dim]Server disconnected while reading response — reconnecting…[/dim]")
-                ws = await _connect_ws(ws_url)
+                ws = await _connect_ws(ws_url, headers=headers)
                 console.print("[green]Reconnected.[/green]")
             except KeyboardInterrupt:
                 console.print("\n[yellow]Cancelling…[/yellow]")
@@ -721,16 +737,16 @@ async def _read_server_responses(ws, *, show_tool_events: bool = True) -> None:
 def chat(
     session: str | None = typer.Option(None, "--session", "-s", help="Resume a session by ID"),
     server: str = typer.Option(DEFAULT_SERVER, "--server", envvar="CARAPACE_SERVER", help="Server URL"),
-    data_dir: str | None = typer.Option(None, "--data-dir", "-d", help="Data directory (for token lookup)"),
-    token: str | None = typer.Option(None, "--token", envvar="CARAPACE_TOKEN", help="Bearer token"),
+    username: str | None = typer.Option(None, "--user", "-u", envvar="CARAPACE_USER", help="Username"),
+    password: str | None = typer.Option(None, "--password", envvar="CARAPACE_PASSWORD", help="Password"),
     list_sessions: bool = typer.Option(False, "--list", "-l", help="List existing sessions"),
     history: int = typer.Option(
         -1, "--history", "-H", help="Number of past messages to show on resume (-1 = all, 0 = none)"
     ),
 ):
     """Start an interactive chat session with the carapace server."""
-    bearer = _get_token(data_dir, token)
-    headers = _auth_headers(bearer)
+    client = _login_client(server, username, password)
+    headers = _cookie_headers(client)
 
     if list_sessions:
         sessions: list[dict[str, Any]] = []
@@ -741,7 +757,7 @@ def chat(
             if cursor is not None:
                 params["cursor"] = cursor
 
-            resp = httpx.get(f"{server}/api/sessions", headers=headers, params=params)
+            resp = client.get("/api/sessions", params=params)
             resp.raise_for_status()
             payload = resp.json()
 
@@ -777,12 +793,13 @@ def chat(
                     str(s.get("message_count", 0)),
                 )
             console.print(table)
+        client.close()
         raise typer.Exit()
 
     # Create or resume session
     if session:
         try:
-            resp = httpx.get(f"{server}/api/sessions/{session}", headers=headers)
+            resp = client.get(f"/api/sessions/{session}")
             resp.raise_for_status()
             session_data = resp.json()
             session_id = session_data["session_id"]
@@ -794,7 +811,7 @@ def chat(
                 console.print(f"[red]Server error: {exc.response.status_code}[/red]")
             raise typer.Exit(1) from None
     else:
-        resp = httpx.post(f"{server}/api/sessions", headers=headers)
+        resp = client.post("/api/sessions")
         resp.raise_for_status()
         session_data = resp.json()
         session_id = session_data["session_id"]
@@ -804,13 +821,31 @@ def chat(
     console.print()
 
     if session and history != 0:
-        _replay_history(server, session_id, headers, history)
+        _replay_history(client, session_id, history)
 
-    url = _ws_url(server, session_id, bearer)
+    url = _ws_url(server, session_id)
     try:
-        asyncio.run(_chat_loop(url))
+        asyncio.run(_chat_loop(url, headers=headers))
     except Exception as e:
         console.print(f"[red]Connection error: {e}[/red]")
+    finally:
+        client.close()
+
+
+@app.command("upgrade-data")
+def upgrade_data(
+    username: Annotated[str, typer.Option("--user", "-u", help="Stable username that owns existing data")],
+    data_dir: Annotated[Path, typer.Option("--data-dir", "-d", help="Data directory to upgrade")] = Path("data"),
+) -> None:
+    """Upgrade an existing single-user data directory to user-owned storage."""
+    summary = upgrade_data_dir(data_dir, username)
+    if not summary:
+        console.print("[green]Data directory already matched the new layout.[/green]")
+        return
+    for section, entries in summary.items():
+        console.print(f"[bold]{section}[/bold]")
+        for entry in entries:
+            console.print(f"  - {entry}")
 
 
 if __name__ == "__main__":

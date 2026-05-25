@@ -16,6 +16,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 import carapace.sandbox.state as sandbox_state
 import carapace.server as srv
 import carapace.server.jobs as server_jobs
+from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
@@ -25,7 +26,7 @@ from carapace.models.credentials import CredentialMetadata
 from carapace.models.jobs import JobDefinition
 from carapace.models.session import SessionBudget
 from carapace.notifications.presence import NotificationPresenceRegistry
-from carapace.notifications.store import NotificationStore, derive_owner_key
+from carapace.notifications.store import NotificationStore
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
@@ -41,16 +42,17 @@ _TEST_TOKEN = "test-bearer-token-for-server-tests"
 
 class _FakeSessionListCache:
     def __init__(self) -> None:
-        self._entries: dict[tuple[bool, bool], list[dict[str, object]]] = {}
+        self._entries: dict[tuple[str | None, bool, bool], list[dict[str, object]]] = {}
 
     async def get_session_infos(
         self,
         *,
+        user: str | None = None,
         include_archived: bool,
         include_message_count: bool,
         loader: Callable[[], list[dict[str, object]]],
     ) -> list[dict[str, object]]:
-        key = (include_archived, include_message_count)
+        key = (user, include_archived, include_message_count)
         cached = self._entries.get(key)
         if cached is not None:
             return cached
@@ -105,15 +107,13 @@ def _setup_server(tmp_path, monkeypatch):
     )
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
+    srv._auth_store = AuthStore(tmp_path, config.auth)
+    srv._auth_store.create_user(username="admin", password="admin-secret", display_name="Admin", roles=["admin"])
+    srv._auth_store.create_user(username="thies", password="secret", display_name="Thies")
     srv._notification_store = NotificationStore(tmp_path)
     srv._notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
     )
-
-
-@pytest.fixture()
-def bearer() -> str:
-    return _TEST_TOKEN
 
 
 @pytest.fixture()
@@ -122,8 +122,17 @@ def client() -> TestClient:
 
 
 @pytest.fixture()
-def auth_headers(bearer) -> dict[str, str]:
-    return {"Authorization": f"Bearer {bearer}"}
+def auth_headers() -> dict[str, str]:
+    auth_session = srv._auth_store.create_session(username="thies")
+    token = srv._auth_store.issue_session_token(auth_session)
+    return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
+
+
+@pytest.fixture()
+def admin_auth_headers() -> dict[str, str]:
+    auth_session = srv._auth_store.create_session(username="admin")
+    token = srv._auth_store.issue_session_token(auth_session)
+    return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
 
 
 # --- Auth ---
@@ -137,6 +146,124 @@ def test_no_auth_returns_401(client):
 def test_bad_token_returns_401(client):
     resp = client.get("/api/sessions", headers={"Authorization": "Bearer wrong"})
     assert resp.status_code == 401
+
+
+def test_login_sets_session_cookie(client):
+    resp = client.post("/api/auth/login", json={"username": "thies", "password": "secret"})
+
+    assert resp.status_code == 200
+    assert resp.json()["user"]["username"] == "thies"
+    assert resp.json()["user"]["roles"] == []
+    assert srv._config.auth.cookie.name in resp.cookies
+
+    meta_resp = client.get("/api/meta")
+
+    assert meta_resp.status_code == 200
+
+
+def test_logout_revokes_session_cookie(client):
+    login_resp = client.post("/api/auth/login", json={"username": "thies", "password": "secret"})
+    assert login_resp.status_code == 200
+
+    logout_resp = client.post("/api/auth/logout")
+
+    assert logout_resp.status_code == 204
+    assert srv._config.auth.cookie.name not in client.cookies
+
+    meta_resp = client.get("/api/meta")
+
+    assert meta_resp.status_code == 401
+
+
+def test_admin_user_management_requires_admin_role(client, auth_headers, admin_auth_headers):
+    unauthenticated_resp = client.get("/api/admin/users")
+    assert unauthenticated_resp.status_code == 401
+
+    non_admin_resp = client.get("/api/admin/users", headers=auth_headers)
+    assert non_admin_resp.status_code == 403
+
+    token_resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {_TEST_TOKEN}"})
+    assert token_resp.status_code == 401
+
+    create_resp = client.post(
+        "/api/admin/users",
+        headers=admin_auth_headers,
+        json={"username": "Ada", "password": "correct-horse-battery", "display_name": "Ada"},
+    )
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["username"] == "ada"
+
+    login_resp = client.post("/api/auth/login", json={"username": "ada", "password": "correct-horse-battery"})
+
+    assert login_resp.status_code == 200
+
+
+def test_admin_user_update_can_clear_email(client, admin_auth_headers):
+    create_resp = client.post(
+        "/api/admin/users",
+        headers=admin_auth_headers,
+        json={
+            "username": "Ada",
+            "password": "correct-horse-battery",
+            "display_name": "Ada",
+            "email": "ada@example.test",
+        },
+    )
+    assert create_resp.status_code == 201
+
+    update_resp = client.patch("/api/admin/users/ada", headers=admin_auth_headers, json={"email": None})
+
+    assert update_resp.status_code == 200
+    assert update_resp.json()["email"] is None
+
+
+def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):
+    disable_resp = client.patch("/api/admin/users/admin", headers=admin_auth_headers, json={"enabled": False})
+    demote_resp = client.patch("/api/admin/users/admin", headers=admin_auth_headers, json={"roles": []})
+
+    assert disable_resp.status_code == 400
+    assert disable_resp.json() == {"detail": "Cannot remove the last enabled admin"}
+    assert demote_resp.status_code == 400
+    assert demote_resp.json() == {"detail": "Cannot remove the last enabled admin"}
+
+
+def test_admin_user_delete_removes_other_user_and_revokes_sessions(client, admin_auth_headers):
+    user_session = srv._auth_store.create_session(username="thies")
+    user_token = srv._auth_store.issue_session_token(user_session)
+
+    delete_resp = client.delete("/api/admin/users/thies", headers=admin_auth_headers)
+
+    assert delete_resp.status_code == 204
+    assert srv._auth_store.get_user("thies") is None
+    assert srv._auth_store.validate_session_token(user_token) is None
+
+    login_resp = client.post("/api/auth/login", json={"username": "thies", "password": "secret"})
+    assert login_resp.status_code == 401
+
+
+def test_admin_user_delete_cannot_delete_current_user(client, admin_auth_headers):
+    delete_resp = client.delete("/api/admin/users/admin", headers=admin_auth_headers)
+
+    assert delete_resp.status_code == 400
+    assert delete_resp.json() == {"detail": "Cannot delete your own user"}
+    assert srv._auth_store.get_user("admin") is not None
+
+
+def test_admin_user_upgrade_data_uses_selected_user(client, admin_auth_headers):
+    state = srv._engine.session_mgr.create_session()
+
+    resp = client.post("/api/admin/users/thies/upgrade-data", headers=admin_auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["username"] == "thies"
+    assert srv._engine.session_mgr.load_meta(state.session_id).user == "thies"
+
+
+def test_admin_user_upgrade_data_requires_existing_user(client, admin_auth_headers):
+    resp = client.post("/api/admin/users/missing/upgrade-data", headers=admin_auth_headers)
+
+    assert resp.status_code == 404
 
 
 def test_meta_requires_auth(client):
@@ -225,8 +352,7 @@ def test_notification_preferences_patch_persists(client, auth_headers):
     assert patch_resp.status_code == 200
     assert patch_resp.json()["preferences"]["attended_turn_completed"] is False
 
-    owner_key = derive_owner_key(_TEST_TOKEN)
-    stored = srv._notification_store.list_subscriptions(owner_key=owner_key)
+    stored = srv._notification_store.list_subscriptions(user="thies")
     assert stored[0].notification_prefs.attended_turn_completed is False
 
 
@@ -281,6 +407,8 @@ def test_notification_test_endpoint_returns_502_when_delivery_fails(client, auth
 
 
 def test_notification_presence_updates_registry(client, auth_headers):
+    session_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    session_id = session_resp.json()["session_id"]
     create_resp = client.post(
         "/api/notifications/subscriptions",
         headers=auth_headers,
@@ -297,7 +425,7 @@ def test_notification_presence_updates_registry(client, auth_headers):
         f"/api/notifications/subscriptions/{subscription_id}/presence",
         headers=auth_headers,
         json={
-            "session_id": "session-1",
+            "session_id": session_id,
             "client_type": "web",
             "focus_state": "visible",
         },
@@ -305,15 +433,17 @@ def test_notification_presence_updates_registry(client, auth_headers):
 
     assert presence_resp.status_code == 200
     assert presence_resp.json() == {"heartbeat_received": True}
-    assert srv._notification_presence.is_session_actively_handled("session-1") is True
+    assert srv._notification_presence.is_session_actively_handled(session_id) is True
 
 
 def test_interactive_presence_endpoint_updates_registry(client, auth_headers):
+    session_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    session_id = session_resp.json()["session_id"]
     resp = client.post(
         "/api/notifications/presence",
         headers=auth_headers,
         json={
-            "session_id": "session-1",
+            "session_id": session_id,
             "source_id": "web-tab-1",
             "client_type": "web",
             "focus_state": "visible",
@@ -322,15 +452,17 @@ def test_interactive_presence_endpoint_updates_registry(client, auth_headers):
 
     assert resp.status_code == 200
     assert resp.json() == {"heartbeat_received": True}
-    assert srv._notification_presence.is_session_actively_handled("session-1") is True
+    assert srv._notification_presence.is_session_actively_handled(session_id) is True
 
 
 def test_interactive_presence_inactive_removes_registry_entry(client, auth_headers):
+    session_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    session_id = session_resp.json()["session_id"]
     client.post(
         "/api/notifications/presence",
         headers=auth_headers,
         json={
-            "session_id": "session-1",
+            "session_id": session_id,
             "source_id": "web-tab-1",
             "client_type": "web",
             "focus_state": "visible",
@@ -341,7 +473,7 @@ def test_interactive_presence_inactive_removes_registry_entry(client, auth_heade
         "/api/notifications/presence",
         headers=auth_headers,
         json={
-            "session_id": "session-1",
+            "session_id": session_id,
             "source_id": "web-tab-1",
             "client_type": "web",
             "focus_state": "inactive",
@@ -349,7 +481,7 @@ def test_interactive_presence_inactive_removes_registry_entry(client, auth_heade
     )
 
     assert resp.status_code == 200
-    assert srv._notification_presence.is_session_actively_handled("session-1") is False
+    assert srv._notification_presence.is_session_actively_handled(session_id) is False
 
 
 def test_interactive_presence_clears_pending_notifications(client, auth_headers):
@@ -612,7 +744,7 @@ def test_run_job_uses_existing_persistent_session(client, auth_headers, monkeypa
     submit_message = AsyncMock()
     monkeypatch.setattr(srv._engine, "submit_message", submit_message)
 
-    state = srv._engine.session_mgr.create_session(unattended=False)
+    state = srv._engine.session_mgr.create_session(user="thies", unattended=False)
     create_resp = client.post(
         "/api/jobs",
         headers=auth_headers,
@@ -671,6 +803,7 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
         JobDefinition.model_validate(
             {
                 "id": "daily-briefing",
+                "user": "thies",
                 "name": "Daily Briefing",
                 "prompt": "Summarize the day.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -692,6 +825,30 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_due_jobs_once_skips_ownerless_cron_jobs(monkeypatch) -> None:
+    submit_message = AsyncMock()
+    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
+
+    srv._jobs_store.create_job(
+        JobDefinition.model_validate(
+            {
+                "id": "legacy-ownerless",
+                "name": "Legacy Ownerless",
+                "prompt": "Summarize the day.",
+                "triggers": [{"expression": "* * * * *"}],
+            }
+        )
+    )
+    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
+    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
+
+    dispatched = await server_jobs._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
+
+    assert dispatched == 1
+    submit_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> None:
     submit_message = AsyncMock()
     monkeypatch.setattr(srv._engine, "submit_message", submit_message)
@@ -700,6 +857,7 @@ async def test_run_due_jobs_once_uses_fired_trigger_timezone(monkeypatch) -> Non
         JobDefinition.model_validate(
             {
                 "id": "timezone-ambiguous",
+                "user": "thies",
                 "name": "Timezone Ambiguous",
                 "prompt": "Summarize the day.",
                 "triggers": [
@@ -1661,9 +1819,20 @@ def test_ws_auth_required(client):
         pass
 
 
-def test_ws_session_not_found(client, bearer):
-    with pytest.raises(Exception), client.websocket_connect(f"/api/chat/doesnotexist?token={bearer}"):  # noqa: B017
+def test_ws_session_not_found(client, auth_headers):
+    with pytest.raises(Exception), client.websocket_connect("/api/chat/doesnotexist", headers=auth_headers):  # noqa: B017
         pass
+
+
+def test_ws_ticket_allows_cookie_free_websocket(client, auth_headers):
+    ticket_resp = client.post("/api/auth/ws-ticket", headers=auth_headers)
+    assert ticket_resp.status_code == 200
+    ticket = ticket_resp.json()["ticket"]
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+
+    with client.websocket_connect(f"/api/chat/{sid}?ticket={ticket}") as ws:
+        _consume_status(ws)
 
 
 def _consume_status(ws):
@@ -1673,11 +1842,11 @@ def _consume_status(ws):
     return msg
 
 
-def test_ws_help_command(client, auth_headers, bearer):
+def test_ws_help_command(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "message", "content": "/help"})
         echo = ws.receive_json()
@@ -1695,22 +1864,22 @@ def test_ws_help_command(client, auth_headers, bearer):
         assert "/memory" not in commands
 
 
-def test_ws_connection_updates_presence_registry(client, auth_headers, bearer):
+def test_ws_connection_updates_presence_registry(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=web-tab-1") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}?client_id=web-tab-1", headers=auth_headers) as ws:
         _consume_status(ws)
         assert srv._notification_presence.is_session_actively_handled(sid) is True
 
     assert srv._notification_presence.is_session_actively_handled(sid) is False
 
 
-def test_ws_blank_client_id_falls_back_to_generated_source_id(client, auth_headers, bearer):
+def test_ws_blank_client_id_falls_back_to_generated_source_id(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}&client_id=%20%20%20") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}?client_id=%20%20%20", headers=auth_headers) as ws:
         _consume_status(ws)
         entries = srv._notification_presence.list_presence(session_id=sid)
         assert len(entries) == 1
@@ -1732,11 +1901,11 @@ def test_list_commands_excludes_removed_commands(client, auth_headers):
     assert "/memory" not in commands
 
 
-def test_ws_session_command_for_web(client, auth_headers, bearer):
+def test_ws_session_command_for_web(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "message", "content": "/session"})
         echo = ws.receive_json()
@@ -1748,7 +1917,7 @@ def test_ws_session_command_for_web(client, auth_headers, bearer):
         assert msg["data"]["channel_type"] == "web"
 
 
-def test_ws_reset_to_turn_emits_ack(client, auth_headers, bearer):
+def test_ws_reset_to_turn_emits_ack(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
     srv._engine.session_mgr.save_events(
@@ -1770,7 +1939,7 @@ def test_ws_reset_to_turn_emits_ack(client, auth_headers, bearer):
         ],
     )
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "reset_to_turn", "event_index": 1})
         msg = ws.receive_json()
@@ -1784,18 +1953,18 @@ def test_ws_reset_to_turn_emits_ack(client, auth_headers, bearer):
     ]
 
 
-def test_ws_status_includes_budget_gauges_for_configured_defaults(client, auth_headers, bearer):
+def test_ws_status_includes_budget_gauges_for_configured_defaults(client, auth_headers):
     srv._engine.config.agent.default_session_budget = SessionBudget(input_tokens=1_000)
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         status = _consume_status(ws)
         assert status["usage"]["budget_gauges"][0]["key"] == "input"
         assert status["usage"]["budget_gauges"][0]["current_value"] == "0 tokens"
 
 
-def test_ws_status_includes_live_llm_activity_when_running(client, auth_headers, bearer):
+def test_ws_status_includes_live_llm_activity_when_running(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
     active = srv._engine.get_or_activate(sid)
@@ -1809,7 +1978,7 @@ def test_ws_status_includes_live_llm_activity_when_running(client, auth_headers,
     active.agent_task = MagicMock()
     active.agent_task.done.return_value = False
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         status = _consume_status(ws)
         assert status["llm_activity"]["request_id"] == "req-1"
         assert status["llm_activity"]["phase"] == "thinking"
@@ -1860,11 +2029,11 @@ def test_history_includes_assistant_final_status(client, auth_headers):
     assert history[1]["final_status"] == "success"
 
 
-def test_ws_budget_command_emits_status_refresh(client, auth_headers, bearer):
+def test_ws_budget_command_emits_status_refresh(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "message", "content": "/budget input 1000"})
         echo = ws.receive_json()
@@ -1877,11 +2046,11 @@ def test_ws_budget_command_emits_status_refresh(client, auth_headers, bearer):
         assert status["usage"]["budget_gauges"][0]["key"] == "input"
 
 
-def test_ws_skills_command(client, auth_headers, bearer):
+def test_ws_skills_command(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "message", "content": "/skills"})
         echo = ws.receive_json()
@@ -1891,7 +2060,7 @@ def test_ws_skills_command(client, auth_headers, bearer):
         assert msg["command"] == "skills"
 
 
-def test_ws_unknown_command_is_agent_message(client, auth_headers, bearer, monkeypatch):
+def test_ws_unknown_command_is_agent_message(client, auth_headers, monkeypatch):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
 
@@ -1917,7 +2086,7 @@ def test_ws_unknown_command_is_agent_message(client, auth_headers, bearer, monke
     monkeypatch.setattr(srv._engine, "_generate_title", AsyncMock(return_value="title"))
     monkeypatch.setattr("carapace.session.engine.run_agent_turn", _fake_run_turn)
 
-    with client.websocket_connect(f"/api/chat/{sid}?token={bearer}") as ws:
+    with client.websocket_connect(f"/api/chat/{sid}", headers=auth_headers) as ws:
         _consume_status(ws)
         ws.send_json({"type": "message", "content": "/tmp"})
         msg = ws.receive_json()

@@ -10,13 +10,16 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 
 import nio
+import yaml
 from loguru import logger
 
-from ...models.config import Config, MatrixChannelConfig, MatrixTokenFile
+from ...auth import normalize_username
+from ...models.config import Config, MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
 from ...models.skills import SkillInfo
 from ...notifications.presence import NotificationPresenceRegistry
 from ...sandbox.manager import SandboxManager
 from ...session import SessionEngine, SessionManager
+from ...session.manager import SessionMeta
 from ...ws_models import ApprovalResponse, CommandResult, EscalationResponse
 from .approval import (
     APPROVE_COMMANDS,
@@ -106,6 +109,7 @@ class MatrixChannel:
         self._sandbox_mgr = sandbox_mgr
         self._engine = engine
         self._presence_registry = presence_registry
+        self._owner_user: str | None = None
 
         self._client = cast(MatrixClientProtocol, nio.AsyncClient(config.homeserver, config.user_id))
 
@@ -137,7 +141,7 @@ class MatrixChannel:
     async def start(self) -> None:
         """Authenticate and start the sync loop."""
         data_dir = self._session_mgr.sessions_dir.parent
-        token_file = data_dir / "matrix_token.json"
+        token_file = data_dir / "matrix_token.yaml"
 
         await self._authenticate(token_file)
         logger.info(f"Matrix channel logged in as {self._config.user_id} on {self._config.homeserver}")
@@ -207,18 +211,24 @@ class MatrixChannel:
         """Return (access_token, device_id) from persisted file or env var, or ("", None)."""
         if token_file.exists():
             try:
-                stored = MatrixTokenFile.model_validate_json(token_file.read_text())
-                if stored.user_id != self._config.user_id:
-                    logger.warning(
-                        f"Matrix: persisted token belongs to {stored.user_id!r}, "
-                        f"but config has {self._config.user_id!r} — discarding stale token"
-                    )
-                    token_file.unlink(missing_ok=True)
-                else:
+                stored = self._load_persisted_token(token_file)
+                if stored is not None:
                     logger.debug("Matrix: using persisted access token")
+                    self._set_owner_user(stored.user)
                     return stored.access_token, stored.device_id
             except Exception as exc:
                 logger.warning(f"Matrix: could not read persisted token file: {exc}")
+
+        legacy_token_file = token_file.with_suffix(".json") if token_file.suffix in {".yaml", ".yml"} else None
+        if legacy_token_file is not None and legacy_token_file.exists():
+            try:
+                stored = self._load_persisted_token(legacy_token_file)
+                if stored is not None:
+                    logger.debug("Matrix: using persisted legacy access token")
+                    self._set_owner_user(stored.user)
+                    return stored.access_token, stored.device_id
+            except Exception as exc:
+                logger.warning(f"Matrix: could not read persisted legacy token file: {exc}")
 
         raw = self._config.token.resolve().get_secret_value() if self._config.token else ""
         if raw:
@@ -229,6 +239,35 @@ class MatrixChannel:
             return raw, device_id
 
         return "", None
+
+    def _load_persisted_token(self, token_file: Path) -> MatrixTokenFile | None:
+        if token_file.suffix in {".yaml", ".yml"}:
+            raw = yaml.safe_load(token_file.read_text(encoding="utf-8")) or {}
+            tokens_file = MatrixTokensFile.model_validate(raw)
+            for stored in tokens_file.tokens:
+                if stored.user_id == self._config.user_id:
+                    return stored
+            logger.warning(
+                f"Matrix: no persisted token for {self._config.user_id!r} in {token_file} — ignoring token file"
+            )
+            return None
+
+        stored = MatrixTokenFile.model_validate_json(token_file.read_text(encoding="utf-8"))
+        if stored.user_id != self._config.user_id:
+            logger.warning(
+                f"Matrix: persisted token belongs to {stored.user_id!r}, "
+                f"but config has {self._config.user_id!r} — discarding stale token"
+            )
+            token_file.unlink(missing_ok=True)
+            return None
+        return stored
+
+    def _set_owner_user(self, user: str | None) -> None:
+        if not user:
+            return
+        normalized = normalize_username(user)
+        if normalized:
+            self._owner_user = normalized
 
     async def _password_login(self, token_file: Path) -> None:
         """Log in with the configured password secret and persist the new token. Raises on failure."""
@@ -241,9 +280,18 @@ class MatrixChannel:
             raise RuntimeError(f"Matrix password login failed: {resp.message}")
 
         persisted = MatrixTokenFile(
-            access_token=resp.access_token, device_id=resp.device_id, user_id=self._config.user_id
+            access_token=resp.access_token,
+            device_id=resp.device_id,
+            user_id=self._config.user_id,
+            user=self._owner_user,
         )
-        token_file.write_text(persisted.model_dump_json())
+        if token_file.suffix in {".yaml", ".yml"}:
+            token_file.write_text(
+                yaml.safe_dump(MatrixTokensFile(tokens=[persisted]).model_dump(mode="json", exclude_none=True)),
+                encoding="utf-8",
+            )
+        else:
+            token_file.write_text(persisted.model_dump_json(exclude_none=True), encoding="utf-8")
         logger.info(f"Matrix: password login successful, token persisted to {token_file}")
 
     async def _authenticate(self, token_file: Path) -> None:
@@ -294,6 +342,7 @@ class MatrixChannel:
             return self._room_sessions[room_id]
         existing = self._session_mgr.find_session("matrix", room_id)
         if existing:
+            self._ensure_session_owner(existing)
             self._room_sessions[room_id] = existing
             logger.debug(f"Matrix: resuming session {existing} for room {room_id}")
         else:
@@ -301,11 +350,19 @@ class MatrixChannel:
                 "matrix",
                 room_id,
                 budget=self._engine.config.agent.default_session_budget,
+                user=self._owner_user,
                 private=False,
             )
             self._room_sessions[room_id] = state.session_id
             logger.info(f"Matrix: created session {state.session_id} for room {room_id}")
         return self._room_sessions[room_id]
+
+    def _ensure_session_owner(self, session_id: str) -> None:
+        if self._owner_user is None:
+            return
+        meta = self._session_mgr.load_meta(session_id)
+        if meta.user is None:
+            self._session_mgr.save_meta(session_id, SessionMeta(user=self._owner_user))
 
     def _is_allowed(self, room: nio.MatrixRoom, sender: str) -> bool:
         """Return True if the message should be processed."""
@@ -590,6 +647,7 @@ class MatrixChannel:
             "matrix",
             room_id,
             budget=self._engine.config.agent.default_session_budget,
+            user=self._owner_user,
             private=False,
         )
         self._room_sessions[room_id] = new_state.session_id

@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import contextlib
 from decimal import Decimal
-from typing import Any, Self
+from typing import Annotated, Any, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from pydantic_ai.messages import ModelMessage
 
+from ..auth import UserIdentity
 from ..models.session import SessionAttributes, SessionJobRunContext, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
+from ..session.manager import SessionMeta
 from .auth import verify_token
 from .history import _history_from_messages
 from .state import server_module
@@ -157,9 +159,16 @@ def _session_message_count(session_id: str) -> int:
     return sum(1 for message in history if message.role in {"user", "assistant"})
 
 
-def _compute_sorted_session_states(*, include_archived: bool) -> list[SessionState]:
+def _load_owned_state(session_id: str, user: UserIdentity) -> SessionState:
+    state = server._engine.session_mgr.load_state(session_id)
+    if state is None or not server._engine.session_mgr.is_owned_by(session_id, user.username):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return state
+
+
+def _compute_sorted_session_states(*, include_archived: bool, user: UserIdentity) -> list[SessionState]:
     states: list[SessionState] = []
-    for session_id in server._engine.session_mgr.list_sessions():
+    for session_id in server._engine.session_mgr.list_sessions(user=user.username):
         state = server._engine.session_mgr.load_state(session_id)
         if state is None:
             continue
@@ -177,9 +186,11 @@ def _compute_sorted_session_states(*, include_archived: bool) -> list[SessionSta
     return states
 
 
-def _build_session_list_items(*, include_archived: bool, include_message_count: bool) -> list[dict[str, Any]]:
+def _build_session_list_items(
+    *, include_archived: bool, include_message_count: bool, user: UserIdentity
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for state in _compute_sorted_session_states(include_archived=include_archived):
+    for state in _compute_sorted_session_states(include_archived=include_archived, user=user):
         session_info = _session_info_from_state(state, include_message_count=include_message_count)
         items.append(session_info.model_dump(mode="json"))
     return items
@@ -221,14 +232,17 @@ async def _list_session_page(
     include_archived: bool,
     limit: int | None,
     cursor: str | None,
+    user: UserIdentity,
 ) -> SessionListPage:
     offset = _parse_session_cursor(cursor)
     cached_items = await server._session_list_cache.get_session_infos(
+        user=user.username,
         include_archived=include_archived,
         include_message_count=include_message_count,
         loader=lambda: _build_session_list_items(
             include_archived=include_archived,
             include_message_count=include_message_count,
+            user=user,
         ),
     )
     page_items = cached_items[offset:] if limit is None else cached_items[offset : offset + limit]
@@ -243,14 +257,15 @@ async def _list_session_page(
 
 @router.post("/sessions", response_model=SessionInfo)
 async def create_session(
+    user: Annotated[UserIdentity, Depends(verify_token)],
     body: SessionCreateRequest | None = None,
-    _token: str = Depends(verify_token),
 ) -> SessionInfo:
     body = body or SessionCreateRequest()
     state = server._engine.session_mgr.create_session(
         body.channel_type,
         body.channel_ref,
         budget=server._engine.config.agent.default_session_budget,
+        user=user.username,
         private=False if body.private is None else body.private,
         unattended=False if body.unattended is None else body.unattended,
         ask_mode=False if body.ask_mode is None else body.ask_mode,
@@ -261,25 +276,24 @@ async def create_session(
 
 @router.get("/sessions", response_model=SessionListPage)
 async def list_sessions(
+    user: Annotated[UserIdentity, Depends(verify_token)],
     include_message_count: bool = False,
     include_archived: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = None,
-    _token: str = Depends(verify_token),
 ) -> SessionListPage:
     return await _list_session_page(
         include_message_count=include_message_count,
         include_archived=include_archived,
         limit=limit,
         cursor=cursor,
+        user=user,
     )
 
 
 @router.get("/sessions/{session_id}", response_model=SessionInfo)
-async def get_session(session_id: str, _token: str = Depends(verify_token)) -> SessionInfo:
-    state = server._engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def get_session(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> SessionInfo:
+    state = _load_owned_state(session_id, user)
     sandbox = server._engine.session_mgr.load_sandbox_snapshot(session_id)
     return SessionInfo.from_state(
         state,
@@ -293,11 +307,9 @@ async def get_session(session_id: str, _token: str = Depends(verify_token)) -> S
 async def update_session(
     session_id: str,
     body: SessionUpdateRequest,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> SessionInfo:
-    state = server._engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    state = _load_owned_state(session_id, user)
 
     next_attributes: SessionAttributes | None = None
     previous_attributes: SessionAttributes | None = None
@@ -398,11 +410,9 @@ async def update_session(
 async def fork_session(
     session_id: str,
     body: SessionForkRequest,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> SessionInfo:
-    state = server._engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    _load_owned_state(session_id, user)
 
     try:
         forked = server._engine.fork_session(
@@ -421,6 +431,7 @@ async def fork_session(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    server._engine.session_mgr.save_meta(forked.session_id, SessionMeta(user=user.username))
     return SessionInfo.from_state(
         forked,
         message_count=_session_message_count(forked.session_id),
@@ -431,11 +442,9 @@ async def fork_session(
 @router.post("/sessions/{session_id}/knowledge/commit", response_model=SessionArchiveCommitResponse)
 async def commit_session_knowledge(
     session_id: str,
-    _token: str = Depends(verify_token),
+    user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> SessionArchiveCommitResponse:
-    state = server._engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    state = _load_owned_state(session_id, user)
     if not server._session_archive.enabled:
         raise HTTPException(status_code=503, detail="Session archive is disabled")
     if state.attributes.private:
@@ -468,10 +477,8 @@ async def commit_session_knowledge(
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-async def delete_session(session_id: str, _token: str = Depends(verify_token)) -> None:
-    state = server._engine.session_mgr.load_state(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def delete_session(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> None:
+    state = _load_owned_state(session_id, user)
     server._engine.deactivate(session_id)
     await server._engine.sandbox_mgr.destroy_session(session_id)
     if server._session_archive.enabled and server._config.sessions.commit.delete_from_knowledge_on_session_delete:

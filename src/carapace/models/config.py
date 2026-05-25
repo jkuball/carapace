@@ -53,11 +53,19 @@ class Secret(BaseModel):
 
 
 class MatrixTokenFile(BaseModel):
-    """Schema for the persisted ``matrix_token.json`` file."""
+    """Schema for one persisted Matrix access token."""
 
     access_token: str
     device_id: str | None = None
     user_id: str | None = None
+    user: str | None = None
+
+
+class MatrixTokensFile(BaseModel):
+    """Schema for the persisted ``matrix_token.yaml`` file."""
+
+    version: int = 1
+    tokens: list[MatrixTokenFile] = []
 
 
 class MatrixChannelConfig(BaseModel):
@@ -86,6 +94,27 @@ class CronChannelConfig(BaseModel):
 class ChannelsConfig(BaseModel):
     matrix: MatrixChannelConfig = MatrixChannelConfig()
     cron: CronChannelConfig = CronChannelConfig()
+
+
+class UserConfig(BaseModel):
+    credentials: dict[str, Any] = {}
+    channels: ChannelsConfig = ChannelsConfig()
+    git: dict[str, Any] = {}
+    default_models: dict[str, str] = {}
+    budgets: dict[str, Any] = {}
+
+
+class JwtCookieConfig(BaseModel):
+    name: str = "carapace_session"
+    issuer: str = "carapace"
+    audience: str = "carapace-web"
+    ttl_seconds: int = Field(default=60 * 60 * 24 * 14, ge=60)
+    secure: bool = False
+    same_site: Literal["lax", "strict", "none"] = "lax"
+
+
+class AuthConfig(BaseModel):
+    cookie: JwtCookieConfig = JwtCookieConfig()
 
 
 class AvailableModelEntry(BaseModel):
@@ -325,6 +354,7 @@ class Config(BaseModel):
     carapace: CarapaceConfig = CarapaceConfig()
     cache: CacheConfig = CacheConfig()
     server: ServerConfig = ServerConfig()
+    auth: AuthConfig = AuthConfig()
     notifications: NotificationsConfig = NotificationsConfig()
     channels: ChannelsConfig = ChannelsConfig()
     agent: AgentConfig = AgentConfig()

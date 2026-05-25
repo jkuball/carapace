@@ -107,6 +107,16 @@ def test_list_sessions(tmp_path: Path):
     assert s2.session_id in sessions
 
 
+def test_list_sessions_filters_by_owner(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    alice = mgr.create_session(user="alice")
+    bob = mgr.create_session(user="bob")
+    mgr.create_session()
+
+    assert mgr.list_sessions(user="alice") == [alice.session_id]
+    assert mgr.list_sessions(user="bob") == [bob.session_id]
+
+
 def test_save_and_resume_state(tmp_path: Path):
     mgr = SessionManager(tmp_path)
     state = mgr.create_session()

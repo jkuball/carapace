@@ -2,25 +2,20 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { login, type AuthUserInfo } from "@/lib/api";
+import { defaultServer, normalizeServer } from "@/lib/server-url";
+import { getServer, getToken } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
-  onConnect: (server: string, token: string) => void;
-}
-
-function defaultServer(): string {
-  if (typeof window === "undefined") return "http://127.0.0.1:8321";
-  const url = new URL(window.location.origin);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    return `${url.protocol}//${url.hostname}:8321`;
-  }
-  return window.location.origin;
+  onConnect: (server: string, user: AuthUserInfo) => void;
 }
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {
   const t = useTranslations("connect");
-  const [server, setServer] = useState(defaultServer);
-  const [token, setToken] = useState("");
+  const [server, setServer] = useState(() => getServer() || defaultServer());
+  const [username, setUsername] = useState(getToken);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,16 +25,9 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
     setLoading(true);
 
     try {
-      const res = await fetch(`${server.replace(/\/$/, "")}/api/sessions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok)
-        throw new Error(
-          res.status === 401
-            ? t("errors.invalidToken")
-            : t("errors.serverError", { status: res.status }),
-        );
-      onConnect(server.replace(/\/$/, ""), token);
+      const normalizedServer = normalizeServer(server);
+      const user = await login(normalizedServer, username, password);
+      onConnect(normalizedServer, user);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.connectionFailed"));
     } finally {
@@ -83,20 +71,43 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
 
           <div className="space-y-1.5">
             <label
-              htmlFor="token"
+              htmlFor="username"
               className="text-xs font-medium text-muted-foreground"
             >
-              {t("tokenLabel")}
+              {t("usernameLabel")}
             </label>
             <input
-              id="token"
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={t("tokenPlaceholder")}
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder={t("usernamePlaceholder")}
               required
               className={cn(
-                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm font-mono",
+                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm",
+                "outline-none transition-colors",
+                "focus:ring-2 focus:ring-ring/30 focus:border-ring",
+                "placeholder:text-muted-foreground/50",
+              )}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="password"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              {t("passwordLabel")}
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("passwordPlaceholder")}
+              required
+              className={cn(
+                "w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base sm:text-sm",
                 "outline-none transition-colors",
                 "focus:ring-2 focus:ring-ring/30 focus:border-ring",
                 "placeholder:text-muted-foreground/50",
@@ -109,7 +120,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
 
         <button
           type="submit"
-          disabled={loading || !token}
+          disabled={loading || !username || !password}
           className={cn(
             "w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors",
             "bg-foreground text-background",

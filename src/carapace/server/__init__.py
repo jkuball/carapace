@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from .. import get_version
-from ..auth import get_token
+from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
 from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
@@ -41,7 +41,7 @@ from ..models.config import Config
 from ..notifications.presence import NotificationPresenceRegistry
 from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
-from ..notifications.store import NotificationStore, derive_owner_key
+from ..notifications.store import NotificationStore
 from ..notifications.vapid import ensure_vapid_config
 from ..sandbox.manager import SandboxManager
 from ..sandbox.proxy import ProxyServer
@@ -50,6 +50,7 @@ from ..session import SessionEngine, SessionManager
 from ..session.archive import SessionArchiveService
 from ..skills import SkillRegistry
 from ..usage import SessionBudgetExceededError
+from .auth import router as auth_router
 from .auth import verify_ws_token
 from .history import router as history_router
 from .jobs import _jobs_scheduler_loop
@@ -81,6 +82,7 @@ _jobs_scheduler: JobsScheduler
 _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
+_auth_store: AuthStore
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
 _APP_VERSION = get_version()
@@ -184,7 +186,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _jobs_scheduler, \
         _notification_store, \
         _notification_presence, \
-        _notification_router
+        _notification_router, \
+        _auth_store
 
     # 1. Load config
     config_path = get_config_path()
@@ -194,6 +197,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # 2. Bootstrap directories
     ensure_data_dir(_data_dir)
+    _auth_store = AuthStore(_data_dir, _config.auth)
+    if _auth_store.ensure_bootstrap_admin() is not None:
+        logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
 
     # 3. Git-backed knowledge store
     git_store = GitStore(
@@ -295,7 +301,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     _config.notifications = ensure_vapid_config(_config.notifications, _data_dir)
 
-    token = get_token()
     _notification_store = NotificationStore(_data_dir)
     _notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=_config.notifications.presence_ttl_seconds)
@@ -313,7 +318,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             max_payload_bytes=_config.notifications.max_payload_bytes,
             delivery_ttl_seconds=_config.notifications.delivery_ttl_seconds,
         ),
-        owner_key=derive_owner_key(token),
+        owner_key="",
+        owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
     )
 
     _engine = SessionEngine(
@@ -410,7 +416,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     logger.info(
         f"carapace server ready — model={_config.agent.model}, "
-        f"skills={len(skill_catalog)}, proxy_port={proxy_port}, token={token[:8]}…"
+        f"skills={len(skill_catalog)}, proxy_port={proxy_port}"
         + (f", matrix=on ({_config.channels.matrix.homeserver})" if _config.channels.matrix.enabled else "")
     )
     yield
@@ -519,12 +525,9 @@ def main() -> None:
     ensure_data_dir(data_dir)
     config = load_config(data_dir)
     _setup_logging(config.carapace.log_level)
-    token = get_token()
-
     logger.info(f"Starting carapace server on {config.server.host}:{config.server.port}")
     logger.info(f"Sandbox API on 0.0.0.0:{config.server.sandbox_port}")
     logger.info(f"Internal API on 127.0.0.1:{config.server.internal_port}")
-    logger.info(f"Bearer token: {token[:8]}…")
 
     uvicorn.run(
         "carapace.server:app",
@@ -589,6 +592,7 @@ router.include_router(jobs_router)
 router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
 router.include_router(websocket_router)
+router.include_router(auth_router)
 app.include_router(router)
 
 

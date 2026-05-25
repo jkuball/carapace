@@ -18,7 +18,8 @@ class NotificationPreferences(BaseModel):
 
 class NotificationSubscription(BaseModel):
     id: str
-    owner_key: str
+    owner_key: str = ""
+    user: str | None = None
     device_name: str = ""
     endpoint: str
     p256dh: str
@@ -34,8 +35,8 @@ class NotificationSubscription(BaseModel):
         if not self.id:
             raise ValueError("notification subscription id must not be empty")
         self.owner_key = self.owner_key.strip()
-        if not self.owner_key:
-            raise ValueError("notification subscription owner_key must not be empty")
+        if self.user is not None:
+            self.user = self.user.strip().lower() or None
         self.device_name = self.device_name.strip()
         self.endpoint = self.endpoint.strip()
         if not self.endpoint:
