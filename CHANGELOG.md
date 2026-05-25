@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.125.1 (2026-05-25)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.2.2
+  ([`dcb7264`](https://github.com/thiesgerken/carapace/commit/dcb726412522de4289db3eaacb90a9736ecf43af))
+
+- ⬆️ chore: upgrade nginx:alpine Docker digest to 8b1e787
+  ([`0e165d5`](https://github.com/thiesgerken/carapace/commit/0e165d5ad9d198f042f7af1044deaeecb3ffa4fb))
+
+- ⬆️ chore: upgrade katex to 0.17.0
+  ([`ffae414`](https://github.com/thiesgerken/carapace/commit/ffae4146b47ad14c6aba035da5dbd59d85f79728))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: retain revoked session audit trail
+  ([`12d5be2`](https://github.com/thiesgerken/carapace/commit/12d5be27f55ce72bfa1b4f0cc067197c2c609a4c))
+
 ## v0.125.0 (2026-05-25)
 
 
