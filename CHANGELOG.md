@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.125.3 (2026-05-25)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: reorder docker import statements for consistency
+  ([`d842148`](https://github.com/thiesgerken/carapace/commit/d8421487689957810f07c893996d60123f086557))
+
+- 🐛 fix: add reverse proxy to compose deployment
+  ([`d66d5f4`](https://github.com/thiesgerken/carapace/commit/d66d5f410a111214e1fc8f9a8fac0edb426fab31))
+
 ## v0.125.2 (2026-05-25)
 
 
