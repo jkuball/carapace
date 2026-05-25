@@ -124,6 +124,7 @@ export function Sidebar({
     ? sessions.filter((session) => session.attributes.archived)
     : [];
   const accountName = currentUser?.display_name?.trim() || currentUser?.username || t("account.unknown");
+  const accountUsername = currentUser?.username ?? t("account.unknown");
 
   useEffect(() => {
     const updateReferenceTime = (): void => {
@@ -603,13 +604,16 @@ export function Sidebar({
               aria-haspopup="menu"
               aria-expanded={accountMenuOpen}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-xs font-semibold transition-colors",
+                "inline-flex h-8 max-w-[9.5rem] items-center gap-2 rounded-full border border-border px-2 text-xs font-medium transition-colors",
                 activeView === "settings" || accountMenuOpen
                   ? "bg-accent text-accent-foreground"
                   : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              {accountInitial(currentUser)}
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+                {accountInitial(currentUser)}
+              </span>
+              <span className="truncate">{accountName}</span>
             </button>
 
             {accountMenuOpen ? (
@@ -625,8 +629,8 @@ export function Sidebar({
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium" title={accountName}>{accountName}</div>
-                      <div className="truncate text-xs text-muted-foreground" title={currentUser?.username ?? undefined}>
-                        {currentUser?.username ?? t("account.unknown")}
+                      <div className="truncate text-xs text-muted-foreground" title={accountUsername}>
+                        {accountUsername}
                       </div>
                     </div>
                   </div>
