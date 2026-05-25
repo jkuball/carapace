@@ -42,7 +42,7 @@ This starts:
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
-Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** → **Preferences** → **Manage users** to create your normal user. You can also use the admin API after logging in and storing the session cookie:
+Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** → **Platform** → **Users** to create your normal user. You can also use the admin API after logging in and storing the session cookie:
 
 ```bash
 curl -c carapace.cookies -X POST http://localhost:8321/api/auth/login \

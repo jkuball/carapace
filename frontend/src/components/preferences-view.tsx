@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { Globe2, ShieldCheck } from "lucide-react";
+import { Globe2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { useSyncExternalStore } from "react";
@@ -17,14 +16,12 @@ export function PreferencesView({
   embedded = false,
   server,
   token,
-  isAdmin,
   showArchivedSessions,
   onShowArchivedSessionsChange,
 }: {
   embedded?: boolean;
   server: string;
   token: string;
-  isAdmin: boolean;
   showArchivedSessions: boolean;
   onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
 }) {
@@ -149,25 +146,6 @@ export function PreferencesView({
             <NotificationSubscription server={server} token={token} />
           </div>
 
-          {isAdmin ? (
-            <div className="mt-4 rounded-2xl border border-border bg-background/88 p-4 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    {t("admin.label")}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{t("admin.description")}</p>
-                </div>
-                <Link
-                  href={`/admin/users?server=${encodeURIComponent(server)}`}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  {t("admin.open")}
-                </Link>
-              </div>
-            </div>
-          ) : null}
         </section>
       </div>
     </div>

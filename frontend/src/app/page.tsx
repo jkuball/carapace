@@ -128,8 +128,8 @@ function HomeContent() {
   })();
   const initialSettingsTab: SettingsTab = (() => {
     const tab = searchParams.get("tab");
-    if (tab === "jobs") {
-      return "jobs";
+    if (tab === "jobs" || tab === "platform-users") {
+      return tab;
     }
     return "preferences";
   })();
@@ -175,7 +175,7 @@ function HomeContent() {
     const params = new URLSearchParams();
     if (activeView === "settings") {
       params.set("view", "settings");
-      if (settingsTab === "jobs") {
+      if (settingsTab !== "preferences") {
         params.set("tab", settingsTab);
       }
     } else if (activeSessionId) {
@@ -555,7 +555,9 @@ function HomeContent() {
     if (activeView === "settings") {
       const viewTitle = settingsTab === "jobs"
         ? t("navigation.jobs")
-        : t("navigation.settings");
+        : settingsTab === "platform-users"
+          ? t("navigation.users")
+          : t("navigation.settings");
       document.title = `${viewTitle} • ${appTitle}`;
       return;
     }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check, DatabaseBackup, Loader2, Plus, RefreshCw, Save, ShieldCheck, UserPlus, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { createAdminUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
@@ -85,9 +85,15 @@ const iconButtonClassName = cn(
   "hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
 );
 
-export function AdminUsersPage() {
+interface AdminUsersPageProps {
+  embedded?: boolean;
+  server?: string;
+}
+
+export function AdminUsersPage({ embedded = false, server: serverProp }: AdminUsersPageProps = {}) {
   const t = useTranslations("admin");
   const [server, setServer] = useState(() => {
+    if (serverProp !== undefined) return normalizeServer(serverProp);
     if (typeof window === "undefined") return defaultServer();
     const params = new URLSearchParams(window.location.search);
     return normalizeServer(params.get("server") ?? getServer() ?? defaultServer());
@@ -102,13 +108,15 @@ export function AdminUsersPage() {
   const [upgradingUsername, setUpgradingUsername] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const loadedServerRef = useRef<string | null>(null);
+  const lockedServer = embedded && serverProp !== undefined;
 
   const selectedUser = useMemo(
     () => users.find((user) => user.username === selectedUsername) ?? null,
     [selectedUsername, users],
   );
 
-  async function refreshUsers(preferredUsername: string | "new" = selectedUsername, message?: string): Promise<void> {
+  const refreshUsers = useCallback(async (preferredUsername: string | "new" = selectedUsername, message?: string): Promise<void> => {
     const normalizedServer = normalizeServer(server);
     if (!normalizedServer) {
       setError(t("errors.missingCredentials"));
@@ -140,7 +148,15 @@ export function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedUsername, server, t]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    const normalizedServer = normalizeServer(server);
+    if (!normalizedServer || loadedServerRef.current === normalizedServer) return;
+    loadedServerRef.current = normalizedServer;
+    void refreshUsers(selectedUsername);
+  }, [embedded, refreshUsers, selectedUsername, server]);
 
   async function handleCreateUser(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -227,64 +243,42 @@ export function AdminUsersPage() {
   }
 
   const selectedIsNew = selectedUsername === "new";
+    const ContentElement = embedded ? "section" : "main";
 
-  return (
-    <div className="flex h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
-      <aside className="hidden w-72 shrink-0 border-r border-border bg-background/88 md:flex md:flex-col">
-        <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            {t("title")}
-          </div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">{server || t("serverPlaceholder")}</div>
-        </div>
-        <nav className="flex-1 p-3">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground"
-          >
-            <Users className="h-4 w-4" />
-            {t("users.title")}
-          </button>
-        </nav>
-        <div className="border-t border-border p-3">
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t("backToApp")}
-          </Link>
-        </div>
-      </aside>
-
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+  const mainContent = (
+      <ContentElement className={cn("flex min-w-0 flex-1 flex-col overflow-hidden", embedded && "bg-background/65")}>
         <header className="border-b border-border/80 bg-background/70 px-4 py-3 backdrop-blur sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:hidden">
+              <div className={cn(
+                "flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground",
+                !embedded && "md:hidden",
+              )}>
                 <ShieldCheck className="h-4 w-4" />
                 {t("title")}
               </div>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight md:mt-0">{t("users.title")}</h1>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("users.description")}</p>
             </div>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 void refreshUsers();
               }}
-              className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]"
+              className={cn("grid gap-2", lockedServer ? "sm:grid-cols-[auto]" : "sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]")}
             >
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-muted-foreground">{t("serverLabel")}</span>
-                <input
-                  type="url"
-                  value={server}
-                  onChange={(event) => setServer(event.target.value)}
-                  placeholder="http://127.0.0.1:8321"
-                  className={inputClassName}
-                />
-              </label>
+              {!lockedServer ? (
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">{t("serverLabel")}</span>
+                  <input
+                    type="url"
+                    value={server}
+                    onChange={(event) => setServer(event.target.value)}
+                    placeholder="http://127.0.0.1:8321"
+                    className={inputClassName}
+                  />
+                </label>
+              ) : null}
               <button
                 type="submit"
                 disabled={loading || !server.trim()}
@@ -545,7 +539,44 @@ export function AdminUsersPage() {
             )}
           </section>
         </div>
-      </main>
+        </ContentElement>
+  );
+
+  if (embedded) {
+    return mainContent;
+  }
+
+  return (
+    <div className="flex h-dvh overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
+      <aside className="hidden w-72 shrink-0 border-r border-border bg-background/88 md:flex md:flex-col">
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            {t("title")}
+          </div>
+          <div className="mt-1 truncate text-xs text-muted-foreground">{server || t("serverPlaceholder")}</div>
+        </div>
+        <nav className="flex-1 p-3">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-foreground"
+          >
+            <Users className="h-4 w-4" />
+            {t("users.title")}
+          </button>
+        </nav>
+        <div className="border-t border-border p-3">
+          <Link
+            href="/"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t("backToApp")}
+          </Link>
+        </div>
+      </aside>
+
+      {mainContent}
     </div>
   );
 }

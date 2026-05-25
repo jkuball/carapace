@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
+import { AdminUsersPage } from "@/components/admin-users-page";
 import { PreferencesView } from "@/components/preferences-view";
 import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import { SwitchRow } from "@/components/switch-row";
@@ -35,7 +36,7 @@ interface JobsViewProps {
   onTabChange: (tab: SettingsTab) => void;
 }
 
-export type SettingsTab = "jobs" | "preferences";
+export type SettingsTab = "jobs" | "platform-users" | "preferences";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -627,7 +628,16 @@ export function JobsView({
   const usePersistentSession = draft.persistent_session_id !== null;
   const hasPersistentSessionId = Boolean(draft.persistent_session_id?.trim());
   const defaultModelLabel = tRoot("commandResult.models.default");
-  const isJobsTab = activeTab === "jobs";
+  const effectiveActiveTab = activeTab === "platform-users" && !isAdmin ? "preferences" : activeTab;
+  const isJobsTab = effectiveActiveTab === "jobs";
+  const isPlatformUsersTab = effectiveActiveTab === "platform-users";
+  const isPreferencesTab = effectiveActiveTab === "preferences";
+  const tabButtonClassName = (selected: boolean): string => cn(
+    "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    selected
+      ? "relative z-10 -mb-px border-border bg-background text-foreground"
+      : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
@@ -640,42 +650,57 @@ export function JobsView({
           <div
             role="tablist"
             aria-label={t("settingsSections")}
-            className="flex items-end gap-1 border-b border-border/80"
+            className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-border/80"
           >
-            <button
-              id="settings-tab-preferences"
-              type="button"
-              role="tab"
-              aria-selected={!isJobsTab}
-              aria-controls="settings-panel-preferences"
-              tabIndex={!isJobsTab ? 0 : -1}
-              onClick={() => onTabChange("preferences")}
-              className={cn(
-                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                !isJobsTab
-                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
-              )}
-            >
-              {tRoot("navigation.preferences")}
-            </button>
-            <button
-              id="settings-tab-jobs"
-              type="button"
-              role="tab"
-              aria-selected={isJobsTab}
-              aria-controls="settings-panel-jobs"
-              tabIndex={isJobsTab ? 0 : -1}
-              onClick={() => onTabChange("jobs")}
-              className={cn(
-                "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                isJobsTab
-                  ? "relative z-10 -mb-px border-border bg-background text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
-              )}
-            >
-              {tRoot("navigation.jobs")}
-            </button>
+            <div className="flex items-end gap-1">
+              <span className="pb-2 pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {tRoot("navigation.personal")}
+              </span>
+              <button
+                id="settings-tab-preferences"
+                type="button"
+                role="tab"
+                aria-selected={isPreferencesTab}
+                aria-controls="settings-panel-preferences"
+                tabIndex={isPreferencesTab ? 0 : -1}
+                onClick={() => onTabChange("preferences")}
+                className={tabButtonClassName(isPreferencesTab)}
+              >
+                {tRoot("navigation.preferences")}
+              </button>
+              <button
+                id="settings-tab-jobs"
+                type="button"
+                role="tab"
+                aria-selected={isJobsTab}
+                aria-controls="settings-panel-jobs"
+                tabIndex={isJobsTab ? 0 : -1}
+                onClick={() => onTabChange("jobs")}
+                className={tabButtonClassName(isJobsTab)}
+              >
+                {tRoot("navigation.jobs")}
+              </button>
+            </div>
+
+            {isAdmin ? (
+              <div className="flex items-end gap-1 border-l border-border/80 pl-4">
+                <span className="pb-2 pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  {tRoot("navigation.platform")}
+                </span>
+                <button
+                  id="settings-tab-platform-users"
+                  type="button"
+                  role="tab"
+                  aria-selected={isPlatformUsersTab}
+                  aria-controls="settings-panel-platform-users"
+                  tabIndex={isPlatformUsersTab ? 0 : -1}
+                  onClick={() => onTabChange("platform-users")}
+                  className={tabButtonClassName(isPlatformUsersTab)}
+                >
+                  {tRoot("navigation.users")}
+                </button>
+              </div>
+            ) : null}
           </div>
 
         </div>
@@ -1229,6 +1254,15 @@ export function JobsView({
           </div>
         </section>
         </div>
+      ) : isPlatformUsersTab ? (
+        <div
+          id="settings-panel-platform-users"
+          role="tabpanel"
+          aria-labelledby="settings-tab-platform-users"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
+        >
+          <AdminUsersPage key={server} embedded server={server} />
+        </div>
       ) : (
         <div
           id="settings-panel-preferences"
@@ -1240,7 +1274,6 @@ export function JobsView({
             embedded
             server={server}
             token={token}
-            isAdmin={isAdmin}
             showArchivedSessions={showArchivedSessions}
             onShowArchivedSessionsChange={onShowArchivedSessionsChange}
           />

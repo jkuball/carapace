@@ -8,6 +8,9 @@
         "settings": "Einstellungen",
         "jobs": "Jobs",
         "preferences": "Allgemein",
+        "personal": "Persönlich",
+        "platform": "Plattform",
+        "users": "Benutzer",
         "disconnect": "Trennen",
         "github": "GitHub-Repository"
     },
@@ -37,6 +40,7 @@
         "serverPlaceholder": "Kein Server ausgewählt",
         "users": {
             "title": "Benutzer",
+            "description": "Globale Plattform-Konten, Rollen und Datenzuordnung.",
             "savedUsers": "Benutzer",
             "loading": "Benutzer werden geladen…",
             "empty": "Keine Benutzer gefunden",
@@ -94,7 +98,7 @@
     },
     "preferences": {
         "title": "Einstellungen",
-        "description": "Frontend-Einstellungen für Sprache und anderes app-weites Verhalten.",
+        "description": "Persönliche Einstellungen für diesen Browser und deine Nutzung.",
         "currentLocale": "Aktuelle Oberflächensprache: {locale}",
         "language": {
             "label": "Sprache",
@@ -120,11 +124,6 @@
                 "label": "Archivierte Chats anzeigen",
                 "description": "Wenn deaktiviert, werden archivierte Chats ausgeblendet und bei Session-Listen direkt nicht vom Server angefragt."
             }
-        },
-        "admin": {
-            "label": "Administration",
-            "description": "Lokale Benutzer verwalten und bestehende Daten zuordnen.",
-            "open": "Benutzer verwalten"
         },
         "notifications": {
             "title": "Push-Benachrichtigungen",

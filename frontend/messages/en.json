@@ -8,6 +8,9 @@
         "settings": "Settings",
         "jobs": "Jobs",
         "preferences": "Preferences",
+        "personal": "Personal",
+        "platform": "Platform",
+        "users": "Users",
         "disconnect": "Disconnect",
         "github": "GitHub repository"
     },
@@ -37,6 +40,7 @@
         "serverPlaceholder": "No server selected",
         "users": {
             "title": "Users",
+            "description": "Global platform accounts, roles, and data ownership.",
             "savedUsers": "Users",
             "loading": "Loading users…",
             "empty": "No users found",
@@ -94,7 +98,7 @@
     },
     "preferences": {
         "title": "Preferences",
-        "description": "Frontend settings for language and other app-level behavior.",
+        "description": "Personal settings for this browser and your account experience.",
         "currentLocale": "Current interface language: {locale}",
         "language": {
             "label": "Language",
@@ -120,11 +124,6 @@
                 "label": "Show archived chats",
                 "description": "When disabled, archived chats are hidden and session list requests exclude them."
             }
-        },
-        "admin": {
-            "label": "Administration",
-            "description": "Manage local users and assign existing data.",
-            "open": "Manage users"
         },
         "notifications": {
             "title": "Push notifications",
