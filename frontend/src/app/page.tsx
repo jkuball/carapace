@@ -10,7 +10,7 @@ import { NewSessionButton, type NewSessionOptions } from "@/components/new-sessi
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
-import { createSession, deleteSession, getCurrentUser, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
+import { AUTH_REQUIRED_EVENT, createSession, deleteSession, getCurrentUser, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
 import {
   clearConnection,
   getShowArchivedSessionsPreference,
@@ -292,6 +292,33 @@ function HomeContent() {
     };
   }, [connected, server, token]);
 
+  const requireLogin = useCallback(() => {
+    refreshRequestIdRef.current += 1;
+    loadingMoreSessionsRef.current = false;
+    failedLoadMoreCursorRef.current = null;
+    pendingSandboxUpdatesRef.current.clear();
+    setCurrentUser(null);
+    setRefreshingSessions(false);
+    setLoadingMoreSessions(false);
+    setSessionListInitialized(false);
+    setConnection({ connected: false, server: "", token: "" });
+    setServerVersion(null);
+    setSessions([]);
+    setSessionListCursor(null);
+    setSessionListHasMore(false);
+    setRequestedJobId(null);
+    setActiveSessionId(null);
+    setActiveView("chat");
+    setSidebarOpen(false);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener(AUTH_REQUIRED_EVENT, requireLogin);
+    return () => {
+      window.removeEventListener(AUTH_REQUIRED_EVENT, requireLogin);
+    };
+  }, [requireLogin]);
+
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -409,23 +436,8 @@ function HomeContent() {
     if (server) {
       void logout(server).catch(() => undefined);
     }
-    refreshRequestIdRef.current += 1;
-    loadingMoreSessionsRef.current = false;
-    failedLoadMoreCursorRef.current = null;
-    pendingSandboxUpdatesRef.current.clear();
     clearConnection();
-    setCurrentUser(null);
-    setRefreshingSessions(false);
-    setLoadingMoreSessions(false);
-    setSessionListInitialized(false);
-    setConnection({ connected: false, server: "", token: "" });
-    setServerVersion(null);
-    setSessions([]);
-    setSessionListCursor(null);
-    setSessionListHasMore(false);
-    setRequestedJobId(null);
-    setActiveSessionId(null);
-    setActiveView("chat");
+    requireLogin();
   }
 
   async function handleNewSession(options: NewSessionOptions = {}) {

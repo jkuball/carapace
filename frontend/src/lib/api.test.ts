@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AUTH_REQUIRED_EVENT,
   createAdminUser,
   deleteAdminUser,
   deleteNotificationSubscription,
   getWebSocketTicket,
   getCurrentUser,
   getVapidPublicKey,
+  login,
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
@@ -19,6 +21,7 @@ import {
 } from "./api";
 
 const originalFetch = globalThis.fetch;
+const originalWindow = globalThis.window;
 
 function setFetch(handler: typeof fetch): void {
   Object.defineProperty(globalThis, "fetch", {
@@ -34,7 +37,22 @@ test.afterEach(() => {
     writable: true,
     value: originalFetch,
   });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: originalWindow,
+  });
 });
+
+function setWindowTarget(): EventTarget {
+  const windowTarget = new EventTarget();
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: windowTarget,
+  });
+  return windowTarget;
+}
 
 test("getVapidPublicKey returns configured key", async () => {
   setFetch(
@@ -157,6 +175,38 @@ test("getCurrentUser parses authenticated user roles", async () => {
 
   assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/me");
   assert.deepEqual(user.roles, ["admin"]);
+});
+
+test("authenticated API 401 dispatches auth-required event", async () => {
+  const windowTarget = setWindowTarget();
+  let authRequiredEvents = 0;
+  windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
+    authRequiredEvents += 1;
+  });
+  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid session" }), { status: 401 }));
+
+  await assert.rejects(
+    () => getCurrentUser("https://carapace.example.test"),
+    /Invalid session/,
+  );
+
+  assert.equal(authRequiredEvents, 1);
+});
+
+test("login 401 does not dispatch auth-required event", async () => {
+  const windowTarget = setWindowTarget();
+  let authRequiredEvents = 0;
+  windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
+    authRequiredEvents += 1;
+  });
+  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid username or password" }), { status: 401 }));
+
+  await assert.rejects(
+    () => login("https://carapace.example.test", "thies", "wrong"),
+    /Invalid username or password/,
+  );
+
+  assert.equal(authRequiredEvents, 0);
 });
 
 test("admin user helpers use cookie auth and parse users", async () => {

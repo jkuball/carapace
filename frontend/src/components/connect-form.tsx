@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { login, type AuthUserInfo } from "@/lib/api";
 import { defaultServer, normalizeServer } from "@/lib/server-url";
+import { getServer, getToken } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
@@ -12,8 +13,8 @@ interface ConnectFormProps {
 
 export function ConnectForm({ onConnect }: ConnectFormProps) {
   const t = useTranslations("connect");
-  const [server, setServer] = useState(defaultServer);
-  const [username, setUsername] = useState("");
+  const [server, setServer] = useState(() => getServer() || defaultServer());
+  const [username, setUsername] = useState(getToken);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

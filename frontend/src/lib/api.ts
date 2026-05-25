@@ -14,11 +14,33 @@ import type {
 } from "./types";
 import { isRecord, readNumber, readString, readStringArray } from "./decoding";
 
+export const AUTH_REQUIRED_EVENT = "carapace:auth-required";
+
+function requestPath(input: RequestInfo | URL): string {
+  if (input instanceof Request) return new URL(input.url).pathname;
+  if (input instanceof URL) return input.pathname;
+  return new URL(input, "http://carapace.local").pathname;
+}
+
+function shouldEmitAuthRequired(input: RequestInfo | URL): boolean {
+  const path = requestPath(input);
+  return path !== "/api/auth/login" && path !== "/api/auth/logout";
+}
+
+function emitAuthRequired(input: RequestInfo | URL): void {
+  if (typeof window === "undefined" || !shouldEmitAuthRequired(input)) return;
+  window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+}
+
 async function fetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
-  return globalThis.fetch(input, { ...init, credentials: "include" });
+  const response = await globalThis.fetch(input, { ...init, credentials: "include" });
+  if (response.status === 401) {
+    emitAuthRequired(input);
+  }
+  return response;
 }
 
 function headers(_session: string): HeadersInit {
