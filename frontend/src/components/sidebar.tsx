@@ -620,7 +620,7 @@ export function Sidebar({
               <div
                 role="menu"
                 aria-label={t("account.menu")}
-                className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg"
+                className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg"
               >
                 <div className="border-b border-border/80 px-3 py-3">
                   <div className="flex min-w-0 items-center gap-2.5">

@@ -11,7 +11,7 @@
         "platform": "Admin",
         "users": "Users",
         "disconnect": "Disconnect",
-        "github": "GitHub repository"
+        "github": "thiesgerken/carapace"
     },
     "account": {
         "menu": "Account menu",
