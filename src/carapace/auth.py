@@ -157,17 +157,40 @@ class AuthStore:
         return self.load_users().users.get(normalize_username(username))
 
     def ensure_bootstrap_admin(self) -> AuthUser | None:
-        users_file = self.load_users()
-        if any(user.enabled and has_admin_role(user.roles) for user in users_file.users.values()):
-            return None
-        if ADMIN_USERNAME in users_file.users:
-            return None
-        return self.create_user(
-            username=ADMIN_USERNAME,
-            password=validate_bootstrap_admin_password(),
-            display_name="Administrator",
-            roles=[ADMIN_ROLE],
-        )
+        now = datetime.now(tz=UTC)
+        with self._lock:
+            users_file = self.load_users()
+            if any(user.enabled and has_admin_role(user.roles) for user in users_file.users.values()):
+                return None
+
+            password = validate_bootstrap_admin_password()
+            existing = users_file.users.get(ADMIN_USERNAME)
+            if existing is None:
+                user = AuthUser(
+                    password_hash=hash_password(password),
+                    display_name="Administrator",
+                    roles=[ADMIN_ROLE],
+                    created_at=now,
+                    updated_at=now,
+                    password_changed_at=now,
+                )
+            else:
+                payload = existing.model_dump(mode="python")
+                payload.update(
+                    {
+                        "password_hash": hash_password(password),
+                        "enabled": True,
+                        "display_name": existing.display_name or "Administrator",
+                        "roles": normalize_roles([*existing.roles, ADMIN_ROLE]),
+                        "token_version": existing.token_version + 1,
+                        "updated_at": now,
+                        "password_changed_at": now,
+                    }
+                )
+                user = AuthUser.model_validate(payload)
+            users_file.users[ADMIN_USERNAME] = user
+            self.save_users(users_file)
+            return user
 
     def create_user(
         self,

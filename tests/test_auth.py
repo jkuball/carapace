@@ -139,6 +139,24 @@ def test_ensure_bootstrap_admin_skips_when_another_admin_exists(
     assert store.get_user(ADMIN_USERNAME) is None
 
 
+def test_ensure_bootstrap_admin_repairs_disabled_admin_placeholder(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CARAPACE_TOKEN", "bootstrap-secret-123")
+    store = AuthStore(tmp_path, AuthConfig())
+    store.create_user(username=ADMIN_USERNAME, password="temporary-secret")
+    placeholder = store.update_user(ADMIN_USERNAME, {"enabled": False, "password_hash": ""})
+
+    created = store.ensure_bootstrap_admin()
+
+    assert created is not None
+    assert created.enabled is True
+    assert created.roles == [ADMIN_ROLE]
+    assert created.token_version == placeholder.token_version + 1
+    assert store.verify_password(ADMIN_USERNAME, "bootstrap-secret-123") is not None
+
+
 def test_disabled_users_cannot_login_or_keep_existing_sessions(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
     store.create_user(username="thies", password="secret")
