@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAdminUser,
+  deleteAdminUser,
   deleteNotificationSubscription,
   getCurrentUser,
   getVapidPublicKey,
@@ -141,9 +142,9 @@ test("sendTestNotification surfaces backend detail messages on failure", async (
 });
 
 test("getCurrentUser parses authenticated user roles", async () => {
-  let capturedRequest: Request | null = null;
+  const calls: Request[] = [];
   setFetch(async (input, init) => {
-    capturedRequest = new Request(input, init);
+    calls.push(new Request(input, init));
     return new Response(
       JSON.stringify({ username: "admin", display_name: "Admin", roles: ["admin"] }),
       { status: 200, headers: { "Content-Type": "application/json" } },
@@ -152,7 +153,7 @@ test("getCurrentUser parses authenticated user roles", async () => {
 
   const user = await getCurrentUser("https://carapace.example.test");
 
-  assert.equal(capturedRequest?.url, "https://carapace.example.test/api/auth/me");
+  assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/me");
   assert.deepEqual(user.roles, ["admin"]);
 });
 
@@ -247,10 +248,27 @@ test("updateAdminUser encodes username and surfaces backend errors", async () =>
   );
 });
 
-test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async () => {
-  let capturedRequest: Request | null = null;
+test("deleteAdminUser deletes the selected user", async () => {
+  const calls: Request[] = [];
   setFetch(async (input, init) => {
-    capturedRequest = new Request(input, init);
+    calls.push(new Request(input, init));
+    return new Response(null, { status: 204 });
+  });
+
+  await deleteAdminUser("https://carapace.example.test", "ada lovelace");
+
+  assert.equal(calls[0]?.method, "DELETE");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/admin/users/ada%20lovelace",
+  );
+  assert.equal(calls[0]?.headers.get("Authorization"), null);
+});
+
+test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    calls.push(new Request(input, init));
     return new Response(
       JSON.stringify({
         username: "thies",
@@ -262,11 +280,11 @@ test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async
 
   const result = await upgradeAdminUserData("https://carapace.example.test", "thies");
 
-  assert.equal(capturedRequest?.method, "POST");
+  assert.equal(calls[0]?.method, "POST");
   assert.equal(
-    capturedRequest?.url,
+    calls[0]?.url,
     "https://carapace.example.test/api/admin/users/thies/upgrade-data",
   );
-  assert.equal(capturedRequest?.headers.get("Authorization"), null);
+  assert.equal(calls[0]?.headers.get("Authorization"), null);
   assert.deepEqual(result.summary.sessions, ["set owner for session-1"]);
 });

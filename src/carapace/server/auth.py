@@ -152,6 +152,19 @@ def _assert_not_removing_last_admin(username: str, updates: dict[str, object]) -
         raise HTTPException(status_code=400, detail="Cannot remove the last enabled admin")
 
 
+def _assert_user_can_be_deleted(username: str, admin_user: UserIdentity) -> None:
+    normalized_username = normalize_username(username)
+    if normalized_username == normalize_username(admin_user.username):
+        raise HTTPException(status_code=400, detail="Cannot delete your own user")
+
+    existing = _auth_store().get_user(normalized_username)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if existing.enabled and has_admin_role(existing.roles) and len(_enabled_admin_usernames()) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot remove the last enabled admin")
+
+
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: Request, response: Response, body: LoginRequest) -> LoginResponse:
     store = _auth_store()
@@ -239,6 +252,20 @@ async def update_admin_user(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _user_response(username)
+
+
+@router.delete("/admin/users/{username}", status_code=204)
+async def delete_admin_user(
+    username: str,
+    admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
+) -> Response:
+    normalized_username = normalize_username(username)
+    _assert_user_can_be_deleted(normalized_username, admin_user)
+    try:
+        _auth_store().delete_user(normalized_username)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="User not found") from exc
+    return Response(status_code=204)
 
 
 @router.post("/admin/users/{username}/upgrade-data", response_model=AdminUserUpgradeResponse)

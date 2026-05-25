@@ -211,6 +211,16 @@ class AuthStore:
             self.save_users(users_file)
             return updated
 
+    def delete_user(self, username: str) -> None:
+        key = normalize_username(username)
+        with self._lock:
+            users_file = self.load_users()
+            if key not in users_file.users:
+                raise KeyError(key)
+            del users_file.users[key]
+            self.save_users(users_file)
+            self.revoke_user_sessions(key)
+
     def set_password(self, username: str, password: str) -> AuthUser:
         key = normalize_username(username)
         password_hash = hash_password(password)
@@ -285,6 +295,21 @@ class AuthStore:
             sessions_file.sessions[session_id] = session.model_copy(update={"revoked_at": datetime.now(tz=UTC)})
             self.save_sessions(sessions_file)
             return True
+
+    def revoke_user_sessions(self, username: str) -> int:
+        key = normalize_username(username)
+        now = datetime.now(tz=UTC)
+        revoked = 0
+        with self._lock:
+            sessions_file = self.load_sessions()
+            for session_id, session in sessions_file.sessions.items():
+                if session.user != key or session.revoked_at is not None:
+                    continue
+                sessions_file.sessions[session_id] = session.model_copy(update={"revoked_at": now})
+                revoked += 1
+            if revoked:
+                self.save_sessions(sessions_file)
+        return revoked
 
     def signing_secret(self) -> str:
         with self._lock:

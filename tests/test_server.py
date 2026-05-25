@@ -228,6 +228,28 @@ def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_h
     assert demote_resp.json() == {"detail": "Cannot remove the last enabled admin"}
 
 
+def test_admin_user_delete_removes_other_user_and_revokes_sessions(client, admin_auth_headers):
+    user_session = srv._auth_store.create_session(username="thies")
+    user_token = srv._auth_store.issue_session_token(user_session)
+
+    delete_resp = client.delete("/api/admin/users/thies", headers=admin_auth_headers)
+
+    assert delete_resp.status_code == 204
+    assert srv._auth_store.get_user("thies") is None
+    assert srv._auth_store.validate_session_token(user_token) is None
+
+    login_resp = client.post("/api/auth/login", json={"username": "thies", "password": "secret"})
+    assert login_resp.status_code == 401
+
+
+def test_admin_user_delete_cannot_delete_current_user(client, admin_auth_headers):
+    delete_resp = client.delete("/api/admin/users/admin", headers=admin_auth_headers)
+
+    assert delete_resp.status_code == 400
+    assert delete_resp.json() == {"detail": "Cannot delete your own user"}
+    assert srv._auth_store.get_user("admin") is not None
+
+
 def test_admin_user_upgrade_data_uses_selected_user(client, admin_auth_headers):
     state = srv._engine.session_mgr.create_session()
 

@@ -243,6 +243,22 @@ export async function updateAdminUser(
   return user;
 }
 
+export async function deleteAdminUser(
+  server: string,
+  username: string,
+): Promise<void> {
+  const res = await fetch(
+    `${server}/api/admin/users/${encodeURIComponent(username)}`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to delete user"));
+  }
+}
+
 export async function upgradeAdminUserData(
   server: string,
   username: string,
