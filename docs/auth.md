@@ -45,7 +45,11 @@ Usernames are normalized to lowercase and should be stable, hand-picked names fo
 
 ## Creating Users
 
-Set `CARAPACE_TOKEN` to a random admin token in the server environment, start the server, then create users through the admin API:
+Set `CARAPACE_TOKEN` to a random admin token in the server environment, then start the server. The token must be at least 16 characters long. If it is missing or too short, the server exits and prints a suggested 24-character replacement token.
+
+Open the web UI, follow **Manage users** on the login screen, and enter the server URL plus `CARAPACE_TOKEN`. The admin users page can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
+
+You can also create users through the admin API:
 
 ```bash
 curl -X POST http://localhost:8321/api/admin/users \
@@ -89,4 +93,4 @@ For an existing single-user instance, run:
 uv run carapace upgrade-data --user thies --data-dir data
 ```
 
-This creates a disabled placeholder user if needed, adds ownership metadata to sessions/jobs/notifications, moves `knowledge` to `knowledges/<user>`, and converts `matrix_token.json` and `sandbox_tokens.json` to YAML files with user fields. Set a real password through the admin API before using that user for normal login.
+This creates a disabled placeholder user if needed, adds ownership metadata to sessions/jobs/notifications, moves `knowledge` to `knowledges/<user>`, and converts `matrix_token.json` and `sandbox_tokens.json` to YAML files with user fields. Set a real password through the admin UI or admin API before using that user for normal login.

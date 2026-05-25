@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import string
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
@@ -17,6 +18,9 @@ from pydantic import BaseModel, Field, model_validator
 from .models.config import AuthConfig, UserConfig
 
 _password_hash = PasswordHash.recommended()
+ADMIN_TOKEN_MIN_LENGTH = 16
+ADMIN_TOKEN_SUGGESTED_LENGTH = 24
+_ADMIN_TOKEN_ALPHABET = string.ascii_letters + string.digits
 
 
 class UserIdentity(BaseModel):
@@ -358,9 +362,25 @@ def verify_password(password: str, password_hash: str) -> bool:
     return _password_hash.verify(password, password_hash)
 
 
-def get_token() -> str:
-    """Return the admin token from the CARAPACE_TOKEN environment variable."""
-    token = os.environ.get("CARAPACE_TOKEN", "").strip()
+def suggest_admin_token() -> str:
+    return "".join(secrets.choice(_ADMIN_TOKEN_ALPHABET) for _ in range(ADMIN_TOKEN_SUGGESTED_LENGTH))
+
+
+def validate_admin_token(token: str | None = None) -> str:
+    """Return a validated admin token or raise with a replacement suggestion."""
+    if token is None:
+        token = os.environ.get("CARAPACE_TOKEN", "")
+    token = token.strip()
     if not token:
         raise RuntimeError("CARAPACE_TOKEN environment variable is required but not set")
+    if len(token) < ADMIN_TOKEN_MIN_LENGTH:
+        raise RuntimeError(
+            "CARAPACE_TOKEN must be at least "
+            f"{ADMIN_TOKEN_MIN_LENGTH} characters long. Suggested replacement: {suggest_admin_token()}"
+        )
     return token
+
+
+def get_token() -> str:
+    """Return the admin token from the CARAPACE_TOKEN environment variable."""
+    return validate_admin_token()

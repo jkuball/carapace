@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from carapace.auth import (
+    ADMIN_TOKEN_MIN_LENGTH,
+    ADMIN_TOKEN_SUGGESTED_LENGTH,
     AuthSession,
     AuthStore,
     SessionsFile,
@@ -19,13 +21,13 @@ from carapace.models.config import AuthConfig, JwtCookieConfig, UserConfig
 
 
 def test_get_token_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CARAPACE_TOKEN", "test-token-123")
-    assert get_token() == "test-token-123"
+    monkeypatch.setenv("CARAPACE_TOKEN", "test-token-12345")
+    assert get_token() == "test-token-12345"
 
 
 def test_get_token_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CARAPACE_TOKEN", "  my-token  ")
-    assert get_token() == "my-token"
+    monkeypatch.setenv("CARAPACE_TOKEN", "  my-token-is-long  ")
+    assert get_token() == "my-token-is-long"
 
 
 def test_get_token_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,6 +40,17 @@ def test_get_token_raises_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "")
     with pytest.raises(RuntimeError, match="CARAPACE_TOKEN"):
         get_token()
+
+
+def test_get_token_raises_when_too_short_with_suggestion(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CARAPACE_TOKEN", "short")
+
+    with pytest.raises(RuntimeError, match=rf"at least {ADMIN_TOKEN_MIN_LENGTH} characters") as exc_info:
+        get_token()
+
+    suggestion = str(exc_info.value).split("Suggested replacement: ", maxsplit=1)[1]
+    assert len(suggestion) == ADMIN_TOKEN_SUGGESTED_LENGTH
+    assert suggestion.isalnum()
 
 
 def test_normalize_username_strips_and_lowercases() -> None:

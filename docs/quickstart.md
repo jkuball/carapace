@@ -18,7 +18,7 @@ Fill in the required values:
 ```env
 # Required
 ANTHROPIC_API_KEY=sk-ant-...
-CARAPACE_TOKEN=pick-a-secret-admin-token
+CARAPACE_TOKEN=pick-a-secret-admin-token-with-16-plus-chars
 
 # Optional — uncomment if needed
 # GOOGLE_API_KEY=...
@@ -26,7 +26,7 @@ CARAPACE_TOKEN=pick-a-secret-admin-token
 # CARAPACE_GIT_TOKEN=...
 ```
 
-`CARAPACE_TOKEN` is the admin/bootstrap token for managing users. Normal web UI, CLI, REST, and WebSocket access uses username/password login and an HttpOnly session cookie.
+`CARAPACE_TOKEN` is the admin/bootstrap token for managing users and must be at least 16 characters long. Normal web UI, CLI, REST, and WebSocket access uses username/password login and an HttpOnly session cookie.
 
 ## 2. Build and start
 
@@ -42,7 +42,7 @@ This starts:
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
-Create the first user with the admin token:
+Create the first user in the web UI by opening **Manage users** on the login screen, entering the server URL and admin token, and creating a user. You can also use the admin API:
 
 ```bash
 curl -X POST http://localhost:8321/api/admin/users \
@@ -144,7 +144,7 @@ If you already have data from a pre-user-auth version, assign it to a stable use
 uv run carapace upgrade-data --user thies --data-dir data
 ```
 
-The upgrade command adds ownership metadata to sessions, jobs, and notifications, moves `data/knowledge` to `data/knowledges/thies`, and converts Matrix/sandbox token JSON files to YAML with `user` fields. It creates a disabled placeholder user when needed; set a password through the admin API before logging in.
+The upgrade command adds ownership metadata to sessions, jobs, and notifications, moves `data/knowledge` to `data/knowledges/thies`, and converts Matrix/sandbox token JSON files to YAML with `user` fields. It creates a disabled placeholder user when needed; set a password through the admin UI or admin API before logging in.
 
 ## 6. Connect Matrix (optional)
 
