@@ -579,24 +579,21 @@ export function Sidebar({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <button
-          type="button"
-          onClick={onGoHome}
-          title={t("navigation.home")}
-          aria-label={t("navigation.home")}
-          className={cn(
-            "flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            activeView === "chat" && activeSessionId === null
-              ? "bg-accent text-accent-foreground"
-              : "hover:bg-muted",
-          )}
-        >
-          <span className="flex min-w-0 items-center gap-1.5 leading-none">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 leading-none">
             <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">{t("app.name")}</span>
-          </span>
+            <button
+              type="button"
+              onClick={onGoHome}
+              title={t("navigation.home")}
+              aria-label={t("navigation.home")}
+              className="cursor-pointer rounded-sm text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {t("app.name")}
+            </button>
+          </div>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
-        </button>
+        </div>
         <div className="flex items-center gap-0.5">
           <div ref={accountMenuRef} className="relative">
             <button
