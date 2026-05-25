@@ -51,6 +51,7 @@
             "empty": "No users found",
             "selectUser": "Select a user",
             "you": "You",
+            "admin": "Admin",
             "enabled": "Enabled",
             "disabled": "Disabled"
         },

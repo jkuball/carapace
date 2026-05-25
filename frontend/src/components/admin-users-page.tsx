@@ -378,6 +378,7 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                     const upgrading = upgradingUsername === user.username;
                     const isCurrentUser = user.username === visibleCurrentUsername;
                     const deleting = deletingUsername === user.username;
+                    const isAdminUser = user.roles.some((role) => role.trim().toLowerCase() === "admin");
                     return (
                       <div key={user.username} className="flex items-stretch gap-1">
                         <button
@@ -410,12 +411,22 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                                 {user.username}
                               </div>
                             </div>
-                            <span className={cn(
-                              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                              user.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-                            )}>
-                              {user.enabled ? t("users.enabled") : t("users.disabled")}
-                            </span>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                              <span className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                user.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                              )}>
+                                {user.enabled ? t("users.enabled") : t("users.disabled")}
+                              </span>
+                              {isAdminUser ? (
+                                <span className={cn(
+                                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                  selected ? "bg-accent-foreground/15 text-accent-foreground" : "bg-accent text-accent-foreground",
+                                )}>
+                                  {t("users.admin")}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </button>
                         <button
