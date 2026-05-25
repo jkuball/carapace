@@ -25,4 +25,14 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
 };
 
+if (process.env.NODE_ENV === "development") {
+  const backendUrl = (process.env.CARAPACE_BACKEND_URL?.trim() || "http://127.0.0.1:8321").replace(/\/$/, "");
+  nextConfig.rewrites = async () => [
+    {
+      source: "/api/:path*",
+      destination: `${backendUrl}/api/:path*`,
+    },
+  ];
+}
+
 export default nextConfig;

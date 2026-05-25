@@ -25,7 +25,7 @@
         }
     },
     "connect": {
-        "description": "Mit deinem Server verbinden",
+        "description": "Bei carapace anmelden",
         "serverLabel": "Server-URL",
         "usernameLabel": "Benutzername",
         "usernamePlaceholder": "thies",
@@ -89,7 +89,7 @@
             "upgraded": "Daten für {username} aktualisiert: {count} Änderungen."
         },
         "errors": {
-            "missingCredentials": "Server-URL ist erforderlich.",
+            "missingCredentials": "Aktueller Ursprung ist nicht verfügbar.",
             "load": "Benutzer konnten nicht geladen werden.",
             "create": "Benutzer konnte nicht angelegt werden.",
             "save": "Benutzer konnte nicht gespeichert werden.",

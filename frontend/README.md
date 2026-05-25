@@ -21,6 +21,8 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+The frontend calls the backend on the same origin. During `pnpm dev`, Next.js proxies `/api/*` to `CARAPACE_BACKEND_URL`, defaulting to `http://127.0.0.1:8321`, so start the carapace backend separately before signing in.
+
 ### Emoji Rendering
 
 The frontend bundles Twemoji SVG assets locally at build time and replaces emoji in rendered assistant markdown and session titles.
