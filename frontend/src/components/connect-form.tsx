@@ -2,11 +2,11 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { login } from "@/lib/api";
+import { login, type AuthUserInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface ConnectFormProps {
-  onConnect: (server: string, username: string) => void;
+  onConnect: (server: string, user: AuthUserInfo) => void;
 }
 
 function defaultServer(): string {
@@ -34,7 +34,7 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
     try {
       const normalizedServer = server.replace(/\/$/, "");
       const user = await login(normalizedServer, username, password);
-      onConnect(normalizedServer, user.username);
+      onConnect(normalizedServer, user);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.connectionFailed"));
     } finally {
@@ -137,12 +137,6 @@ export function ConnectForm({ onConnect }: ConnectFormProps) {
         >
           {loading ? t("connecting") : t("connect")}
         </button>
-        <a
-          href={`/admin/users?server=${encodeURIComponent(server.replace(/\/$/, ""))}`}
-          className="block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          {t("adminLink")}
-        </a>
       </form>
     </div>
   );

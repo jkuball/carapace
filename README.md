@@ -123,7 +123,7 @@ See [docs/security.md](docs/security.md), [docs/credentials.md](docs/credentials
 ```bash
 cp .env.example .env
 # fill in ANTHROPIC_API_KEY and CARAPACE_TOKEN
-# CARAPACE_TOKEN is the admin/bootstrap token, not the normal app login
+# CARAPACE_TOKEN is only the initial password for the bootstrap admin user
 
 docker compose build
 docker compose up -d
@@ -137,10 +137,7 @@ This starts:
 Optional CLI connection:
 
 ```bash
-curl -X POST http://localhost:8321/api/admin/users \
-  -H "Authorization: Bearer $CARAPACE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+# First login to the web UI as admin with CARAPACE_TOKEN, then create your normal user.
 
 uv run carapace --user thies --password change-me
 ```

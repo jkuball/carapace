@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from .. import get_version
-from ..auth import AuthStore, validate_admin_token
+from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
 from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
@@ -190,7 +190,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _auth_store
 
     # 1. Load config
-    validate_admin_token()
     config_path = get_config_path()
     _config = load_config()
     _data_dir = _resolve_data_dir(config_path, _config)
@@ -199,6 +198,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # 2. Bootstrap directories
     ensure_data_dir(_data_dir)
     _auth_store = AuthStore(_data_dir, _config.auth)
+    if _auth_store.ensure_bootstrap_admin() is not None:
+        logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
 
     # 3. Git-backed knowledge store
     git_store = GitStore(
@@ -523,7 +524,6 @@ def main() -> None:
     data_dir = get_data_dir()
     ensure_data_dir(data_dir)
     config = load_config(data_dir)
-    validate_admin_token()
     _setup_logging(config.carapace.log_level)
     logger.info(f"Starting carapace server on {config.server.host}:{config.server.port}")
     logger.info(f"Sandbox API on 0.0.0.0:{config.server.sandbox_port}")

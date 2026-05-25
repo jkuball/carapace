@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createAdminUser,
   deleteNotificationSubscription,
+  getCurrentUser,
   getVapidPublicKey,
   listAdminUsers,
   sendTestNotification,
@@ -139,7 +140,23 @@ test("sendTestNotification surfaces backend detail messages on failure", async (
   );
 });
 
-test("admin user helpers send bearer token and parse users", async () => {
+test("getCurrentUser parses authenticated user roles", async () => {
+  let capturedRequest: Request | null = null;
+  setFetch(async (input, init) => {
+    capturedRequest = new Request(input, init);
+    return new Response(
+      JSON.stringify({ username: "admin", display_name: "Admin", roles: ["admin"] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const user = await getCurrentUser("https://carapace.example.test");
+
+  assert.equal(capturedRequest?.url, "https://carapace.example.test/api/auth/me");
+  assert.deepEqual(user.roles, ["admin"]);
+});
+
+test("admin user helpers use cookie auth and parse users", async () => {
   const calls: Request[] = [];
   setFetch(async (input, init) => {
     const request = new Request(input, init);
@@ -164,12 +181,9 @@ test("admin user helpers send bearer token and parse users", async () => {
     );
   });
 
-  const users = await listAdminUsers(
-    "https://carapace.example.test",
-    "admin-token",
-  );
+  const users = await listAdminUsers("https://carapace.example.test");
 
-  assert.equal(calls[0].headers.get("Authorization"), "Bearer admin-token");
+  assert.equal(calls[0].headers.get("Authorization"), null);
   assert.equal(users[0].username, "thies");
   assert.equal(users[0].roles[0], "admin");
 });
@@ -197,15 +211,11 @@ test("createAdminUser posts admin payload", async () => {
     );
   });
 
-  const user = await createAdminUser(
-    "https://carapace.example.test",
-    "admin-token",
-    {
-      username: "ada",
-      password: "secret",
-      display_name: "Ada",
-    },
-  );
+  const user = await createAdminUser("https://carapace.example.test", {
+    username: "ada",
+    password: "secret",
+    display_name: "Ada",
+  });
 
   assert.equal(JSON.parse(capturedBody).username, "ada");
   assert.equal(user.username, "ada");
@@ -226,7 +236,6 @@ test("updateAdminUser encodes username and surfaces backend errors", async () =>
     () =>
       updateAdminUser(
         "https://carapace.example.test",
-        "admin-token",
         "ada lovelace",
         { enabled: false },
       ),
@@ -251,20 +260,13 @@ test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async
     );
   });
 
-  const result = await upgradeAdminUserData(
-    "https://carapace.example.test",
-    "admin-token",
-    "thies",
-  );
+  const result = await upgradeAdminUserData("https://carapace.example.test", "thies");
 
   assert.equal(capturedRequest?.method, "POST");
   assert.equal(
     capturedRequest?.url,
     "https://carapace.example.test/api/admin/users/thies/upgrade-data",
   );
-  assert.equal(
-    capturedRequest?.headers.get("Authorization"),
-    "Bearer admin-token",
-  );
+  assert.equal(capturedRequest?.headers.get("Authorization"), null);
   assert.deepEqual(result.summary.sessions, ["set owner for session-1"]);
 });

@@ -168,7 +168,7 @@ This map describes the Python modules under `src/carapace/`. It is meant as a na
 | -------------- | --------------------------------------------------------------------------------------------- |
 | `__init__.py`  | Package version helper (`get_version`).                                                       |
 | `__main__.py`  | `python -m carapace` entry point; delegates to the server CLI entry point.                    |
-| `auth.py`      | File-backed users, password hashing, signed session cookies, and admin token loading.         |
+| `auth.py`      | File-backed users, password hashing, signed session cookies, and bootstrap admin handling.    |
 | `bootstrap.py` | First-run data and knowledge directory seeding, including bundled knowledge files and skills. |
 | `cache.py`     | In-memory cache for paginated session-list responses.                                         |
 | `cli.py`       | Thin terminal client for REST and WebSocket session interaction.                              |
@@ -451,8 +451,6 @@ auth:
     ttl_seconds: 1209600
     secure: false
     same_site: lax
-  admin_token:
-    env: CARAPACE_TOKEN
 
 git:
   remote: https://gitea.example.com/user/knowledge.git

@@ -92,7 +92,6 @@ export function AdminUsersPage() {
     const params = new URLSearchParams(window.location.search);
     return normalizeServer(params.get("server") ?? getServer() ?? defaultServer());
   });
-  const [adminToken, setAdminToken] = useState("");
   const [users, setUsers] = useState<AdminUserInfo[]>([]);
   const [selectedUsername, setSelectedUsername] = useState<string | "new">("new");
   const [editDraft, setEditDraft] = useState<UserDraft | null>(null);
@@ -111,7 +110,7 @@ export function AdminUsersPage() {
 
   async function refreshUsers(preferredUsername: string | "new" = selectedUsername, message?: string): Promise<void> {
     const normalizedServer = normalizeServer(server);
-    if (!normalizedServer || !adminToken.trim()) {
+    if (!normalizedServer) {
       setError(t("errors.missingCredentials"));
       setNotice(null);
       return;
@@ -120,7 +119,7 @@ export function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const loadedUsers = await listAdminUsers(normalizedServer, adminToken.trim());
+      const loadedUsers = await listAdminUsers(normalizedServer);
       setServer(normalizedServer);
       setUsers(loadedUsers);
       if (preferredUsername === "new") {
@@ -146,7 +145,7 @@ export function AdminUsersPage() {
   async function handleCreateUser(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const normalizedServer = normalizeServer(server);
-    if (!normalizedServer || !adminToken.trim()) {
+    if (!normalizedServer) {
       setError(t("errors.missingCredentials"));
       setNotice(null);
       return;
@@ -155,7 +154,7 @@ export function AdminUsersPage() {
     setCreating(true);
     setError(null);
     try {
-      const created = await createAdminUser(normalizedServer, adminToken.trim(), {
+      const created = await createAdminUser(normalizedServer, {
         username: createDraft.username.trim(),
         password: createDraft.password,
         display_name: createDraft.displayName.trim(),
@@ -176,7 +175,7 @@ export function AdminUsersPage() {
     event.preventDefault();
     if (selectedUser === null || editDraft === null) return;
     const normalizedServer = normalizeServer(server);
-    if (!normalizedServer || !adminToken.trim()) {
+    if (!normalizedServer) {
       setError(t("errors.missingCredentials"));
       setNotice(null);
       return;
@@ -185,7 +184,7 @@ export function AdminUsersPage() {
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateAdminUser(normalizedServer, adminToken.trim(), selectedUser.username, {
+      const updated = await updateAdminUser(normalizedServer, selectedUser.username, {
         display_name: editDraft.displayName.trim(),
         email: editDraft.email.trim() || null,
         roles: rolesFromText(editDraft.roles),
@@ -203,7 +202,7 @@ export function AdminUsersPage() {
 
   async function handleUpgradeUser(username: string): Promise<void> {
     const normalizedServer = normalizeServer(server);
-    if (!normalizedServer || !adminToken.trim()) {
+    if (!normalizedServer) {
       setError(t("errors.missingCredentials"));
       setNotice(null);
       return;
@@ -216,7 +215,7 @@ export function AdminUsersPage() {
     setError(null);
     setNotice(null);
     try {
-      const result = await upgradeAdminUserData(normalizedServer, adminToken.trim(), username);
+      const result = await upgradeAdminUserData(normalizedServer, username);
       const changedCount = Object.values(result.summary).reduce((total, entries) => total + entries.length, 0);
       await refreshUsers(result.username, t("notices.upgraded", { username: result.username, count: changedCount }));
     } catch (upgradeError) {
@@ -274,7 +273,7 @@ export function AdminUsersPage() {
                 event.preventDefault();
                 void refreshUsers();
               }}
-              className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_minmax(12rem,1fr)_auto] lg:w-[42rem]"
+              className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] lg:w-[28rem]"
             >
               <label className="space-y-1">
                 <span className="text-xs font-medium text-muted-foreground">{t("serverLabel")}</span>
@@ -286,19 +285,9 @@ export function AdminUsersPage() {
                   className={inputClassName}
                 />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-muted-foreground">{t("adminTokenLabel")}</span>
-                <input
-                  type="password"
-                  value={adminToken}
-                  onChange={(event) => setAdminToken(event.target.value)}
-                  placeholder={t("adminTokenPlaceholder")}
-                  className={inputClassName}
-                />
-              </label>
               <button
                 type="submit"
-                disabled={loading || !server.trim() || !adminToken.trim()}
+                disabled={loading || !server.trim()}
                 className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -326,7 +315,7 @@ export function AdminUsersPage() {
                   title={t("actions.refresh")}
                   aria-label={t("actions.refresh")}
                   className={iconButtonClassName}
-                  disabled={loading || !server.trim() || !adminToken.trim()}
+                  disabled={loading || !server.trim()}
                 >
                   <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                 </button>
@@ -397,7 +386,7 @@ export function AdminUsersPage() {
                           title={t("actions.upgradeUser", { username: user.username })}
                           aria-label={t("actions.upgradeUser", { username: user.username })}
                           className={iconButtonClassName}
-                          disabled={upgradingUsername !== null || loading || !server.trim() || !adminToken.trim()}
+                          disabled={upgradingUsername !== null || loading || !server.trim()}
                         >
                           {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseBackup className="h-4 w-4" />}
                         </button>
@@ -467,7 +456,7 @@ export function AdminUsersPage() {
 
                 <button
                   type="submit"
-                  disabled={creating || !createDraft.username.trim() || !createDraft.password || !server.trim() || !adminToken.trim()}
+                  disabled={creating || !createDraft.username.trim() || !createDraft.password || !server.trim()}
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
@@ -535,7 +524,7 @@ export function AdminUsersPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="submit"
-                    disabled={saving || !server.trim() || !adminToken.trim()}
+                    disabled={saving || !server.trim()}
                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

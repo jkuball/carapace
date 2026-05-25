@@ -7,8 +7,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from carapace.auth import (
-    ADMIN_TOKEN_MIN_LENGTH,
-    ADMIN_TOKEN_SUGGESTED_LENGTH,
+    ADMIN_ROLE,
+    ADMIN_USERNAME,
+    BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH,
+    BOOTSTRAP_ADMIN_PASSWORD_SUGGESTED_LENGTH,
     AuthSession,
     AuthStore,
     SessionsFile,
@@ -45,11 +47,11 @@ def test_get_token_raises_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_get_token_raises_when_too_short_with_suggestion(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "short")
 
-    with pytest.raises(RuntimeError, match=rf"at least {ADMIN_TOKEN_MIN_LENGTH} characters") as exc_info:
+    with pytest.raises(RuntimeError, match=rf"at least {BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH} characters") as exc_info:
         get_token()
 
     suggestion = str(exc_info.value).split("Suggested replacement: ", maxsplit=1)[1]
-    assert len(suggestion) == ADMIN_TOKEN_SUGGESTED_LENGTH
+    assert len(suggestion) == BOOTSTRAP_ADMIN_PASSWORD_SUGGESTED_LENGTH
     assert suggestion.isalnum()
 
 
@@ -78,7 +80,7 @@ def test_create_user_normalizes_persists_and_verifies_password(tmp_path) -> None
         password="secret",
         display_name=" Thies Gerken ",
         email=" thies@example.com ",
-        roles=[" admin ", ""],
+        roles=[" Admin ", ""],
         config=config,
     )
 
@@ -104,6 +106,21 @@ def test_create_user_rejects_empty_and_duplicate_normalized_usernames(tmp_path) 
 
     with pytest.raises(ValueError, match="already exists"):
         store.create_user(username=" thies ", password="secret")
+
+
+def test_ensure_bootstrap_admin_creates_admin_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CARAPACE_TOKEN", "bootstrap-secret-123")
+    store = AuthStore(tmp_path, AuthConfig())
+
+    created = store.ensure_bootstrap_admin()
+    repeated = store.ensure_bootstrap_admin()
+
+    assert created is not None
+    assert repeated is None
+    assert store.verify_password(ADMIN_USERNAME, "bootstrap-secret-123") is not None
+    admin = store.get_user(ADMIN_USERNAME)
+    assert admin is not None
+    assert admin.roles == [ADMIN_ROLE]
 
 
 def test_disabled_users_cannot_login_or_keep_existing_sessions(tmp_path) -> None:

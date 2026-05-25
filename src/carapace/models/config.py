@@ -115,7 +115,6 @@ class JwtCookieConfig(BaseModel):
 
 class AuthConfig(BaseModel):
     cookie: JwtCookieConfig = JwtCookieConfig()
-    admin_token: Secret | None = Secret(env="CARAPACE_TOKEN")
 
 
 class AvailableModelEntry(BaseModel):

@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from ..auth import AuthStore, UserIdentity, get_token, normalize_username
+from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
 from ..models.config import UserConfig
 from ..upgrade import upgrade_data_dir
 from .state import server_module
@@ -14,7 +13,6 @@ from .state import server_module
 server = server_module()
 
 router = APIRouter()
-_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class LoginRequest(BaseModel):
@@ -124,21 +122,34 @@ async def verify_ws_token(websocket: WebSocket) -> UserIdentity:
     return await current_ws_user(websocket)
 
 
-async def verify_admin_token(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
-) -> str:
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin token required")
-    try:
-        expected = get_token()
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin token is not configured",
-        ) from exc
-    if credentials.credentials != expected:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin token")
-    return credentials.credentials
+async def verify_admin_user(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdentity:
+    if not has_admin_role(user.roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    return user
+
+
+def _enabled_admin_usernames() -> set[str]:
+    return {
+        username
+        for username, user in _auth_store().load_users().users.items()
+        if user.enabled and has_admin_role(user.roles)
+    }
+
+
+def _assert_not_removing_last_admin(username: str, updates: dict[str, object]) -> None:
+    normalized_username = normalize_username(username)
+    enabled_admins = _enabled_admin_usernames()
+    if normalized_username not in enabled_admins or len(enabled_admins) > 1:
+        return
+
+    existing = _auth_store().get_user(normalized_username)
+    if existing is None:
+        return
+
+    next_enabled = updates.get("enabled", existing.enabled)
+    next_roles = updates.get("roles", existing.roles)
+    if next_enabled is False or not (isinstance(next_roles, list) and has_admin_role(next_roles)):
+        raise HTTPException(status_code=400, detail="Cannot remove the last enabled admin")
 
 
 @router.post("/auth/login", response_model=LoginResponse)
@@ -184,7 +195,7 @@ async def me(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdenti
 
 
 @router.get("/admin/users", response_model=list[AdminUserResponse])
-async def list_admin_users(_admin_token: Annotated[str, Depends(verify_admin_token)]) -> list[AdminUserResponse]:
+async def list_admin_users(_admin_user: Annotated[UserIdentity, Depends(verify_admin_user)]) -> list[AdminUserResponse]:
     users = _auth_store().load_users().users
     return [_user_response(username) for username in sorted(users)]
 
@@ -192,7 +203,7 @@ async def list_admin_users(_admin_token: Annotated[str, Depends(verify_admin_tok
 @router.post("/admin/users", response_model=AdminUserResponse, status_code=201)
 async def create_admin_user(
     body: AdminUserCreateRequest,
-    _admin_token: Annotated[str, Depends(verify_admin_token)],
+    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserResponse:
     try:
         _auth_store().create_user(
@@ -212,11 +223,13 @@ async def create_admin_user(
 async def update_admin_user(
     username: str,
     body: AdminUserUpdateRequest,
-    _admin_token: Annotated[str, Depends(verify_admin_token)],
+    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserResponse:
     updates = body.model_dump(exclude_unset=True)
     password = updates.pop("password", None)
     try:
+        if updates:
+            _assert_not_removing_last_admin(username, updates)
         if updates:
             _auth_store().update_user(username, updates)
         if password is not None:
@@ -231,7 +244,7 @@ async def update_admin_user(
 @router.post("/admin/users/{username}/upgrade-data", response_model=AdminUserUpgradeResponse)
 async def upgrade_admin_user_data(
     username: str,
-    _admin_token: Annotated[str, Depends(verify_admin_token)],
+    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserUpgradeResponse:
     normalized_username = normalize_username(username)
     if _auth_store().get_user(normalized_username) is None:

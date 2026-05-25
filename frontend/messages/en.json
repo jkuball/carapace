@@ -25,7 +25,6 @@
         "passwordPlaceholder": "Password",
         "connect": "Connect",
         "connecting": "Connecting…",
-        "adminLink": "Manage users",
         "errors": {
             "serverError": "Server error: {status}",
             "connectionFailed": "Connection failed"
@@ -36,8 +35,6 @@
         "backToApp": "Back to app",
         "serverLabel": "Server URL",
         "serverPlaceholder": "No server selected",
-        "adminTokenLabel": "Admin token",
-        "adminTokenPlaceholder": "CARAPACE_TOKEN",
         "users": {
             "title": "Users",
             "savedUsers": "Users",
@@ -79,7 +76,7 @@
             "upgraded": "Upgraded data for {username}: {count} changes."
         },
         "errors": {
-            "missingCredentials": "Server URL and admin token are required.",
+            "missingCredentials": "Server URL is required.",
             "load": "Failed to load users.",
             "create": "Failed to create user.",
             "save": "Failed to save user.",
@@ -123,6 +120,11 @@
                 "label": "Show archived chats",
                 "description": "When disabled, archived chats are hidden and session list requests exclude them."
             }
+        },
+        "admin": {
+            "label": "Administration",
+            "description": "Manage local users and assign existing data.",
+            "open": "Manage users"
         },
         "notifications": {
             "title": "Push notifications",

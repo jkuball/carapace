@@ -10,7 +10,7 @@ import { NewSessionButton, type NewSessionOptions } from "@/components/new-sessi
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
-import { createSession, deleteSession, getServerMeta, getSession, listSessions, logout, updateSession } from "@/lib/api";
+import { createSession, deleteSession, getCurrentUser, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
 import {
   clearConnection,
   getShowArchivedSessionsPreference,
@@ -138,6 +138,7 @@ function HomeContent() {
     server: "",
     token: "",
   });
+  const [currentUser, setCurrentUser] = useState<AuthUserInfo | null>(null);
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
@@ -162,6 +163,7 @@ function HomeContent() {
   const pendingSandboxUpdatesRef = useRef(new Map<string, SessionInfo["sandbox"]>());
 
   const { connected, server, token } = connection;
+  const isAdmin = currentUser?.roles.includes("admin") ?? false;
   const loading = creatingSession || refreshingSessions;
   const hasActiveSessionLoaded = activeSessionId != null
     && sessions.some((session) => session.session_id === activeSessionId);
@@ -270,6 +272,29 @@ function HomeContent() {
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
+      if (!connected || !server) {
+        if (!cancelled) setCurrentUser(null);
+        return;
+      }
+
+      void getCurrentUser(server)
+        .then((user) => {
+          if (!cancelled) setCurrentUser(user);
+        })
+        .catch(() => {
+          if (!cancelled) setCurrentUser(null);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [connected, server, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
       if (!connected || !server || !token) {
         if (!cancelled) {
           setServerVersion(null);
@@ -364,7 +389,7 @@ function HomeContent() {
     };
   }, [activeSessionId, connected, hasActiveSessionLoaded, server, sessionListInitialized, token]);
 
-  function handleConnect(srv: string, tok: string) {
+  function handleConnect(srv: string, user: AuthUserInfo) {
     refreshRequestIdRef.current += 1;
     loadingMoreSessionsRef.current = false;
     failedLoadMoreCursorRef.current = null;
@@ -375,8 +400,9 @@ function HomeContent() {
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
-    saveConnection(srv, tok);
-    setConnection({ connected: true, server: srv, token: tok });
+    saveConnection(srv, user.username);
+    setCurrentUser(user);
+    setConnection({ connected: true, server: srv, token: user.username });
   }
 
   function handleDisconnect() {
@@ -388,6 +414,7 @@ function HomeContent() {
     failedLoadMoreCursorRef.current = null;
     pendingSandboxUpdatesRef.current.clear();
     clearConnection();
+    setCurrentUser(null);
     setRefreshingSessions(false);
     setLoadingMoreSessions(false);
     setSessionListInitialized(false);
@@ -618,6 +645,7 @@ function HomeContent() {
           <JobsView
             server={server}
             token={token}
+            isAdmin={isAdmin}
             sessions={sessions}
             showArchivedSessions={showArchivedSessions}
             onShowArchivedSessionsChange={handleShowArchivedSessionsChange}

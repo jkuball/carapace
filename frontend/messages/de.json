@@ -25,7 +25,6 @@
         "passwordPlaceholder": "Passwort",
         "connect": "Verbinden",
         "connecting": "Verbinde…",
-        "adminLink": "Benutzer verwalten",
         "errors": {
             "serverError": "Serverfehler: {status}",
             "connectionFailed": "Verbindung fehlgeschlagen"
@@ -36,8 +35,6 @@
         "backToApp": "Zurück zur App",
         "serverLabel": "Server-URL",
         "serverPlaceholder": "Kein Server ausgewählt",
-        "adminTokenLabel": "Admin-Token",
-        "adminTokenPlaceholder": "CARAPACE_TOKEN",
         "users": {
             "title": "Benutzer",
             "savedUsers": "Benutzer",
@@ -79,7 +76,7 @@
             "upgraded": "Daten für {username} aktualisiert: {count} Änderungen."
         },
         "errors": {
-            "missingCredentials": "Server-URL und Admin-Token sind erforderlich.",
+            "missingCredentials": "Server-URL ist erforderlich.",
             "load": "Benutzer konnten nicht geladen werden.",
             "create": "Benutzer konnte nicht angelegt werden.",
             "save": "Benutzer konnte nicht gespeichert werden.",
@@ -123,6 +120,11 @@
                 "label": "Archivierte Chats anzeigen",
                 "description": "Wenn deaktiviert, werden archivierte Chats ausgeblendet und bei Session-Listen direkt nicht vom Server angefragt."
             }
+        },
+        "admin": {
+            "label": "Administration",
+            "description": "Lokale Benutzer verwalten und bestehende Daten zuordnen.",
+            "open": "Benutzer verwalten"
         },
         "notifications": {
             "title": "Push-Benachrichtigungen",

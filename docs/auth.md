@@ -1,6 +1,6 @@
 # Authentication
 
-carapace uses file-backed users and HttpOnly session cookies for the normal web, CLI, REST, and WebSocket API. The old `CARAPACE_TOKEN` bearer token is no longer accepted by normal app endpoints. It remains an admin/bootstrap token for user management only.
+carapace uses file-backed users and HttpOnly session cookies for the web UI, CLI, REST, WebSocket API, and admin API. `CARAPACE_TOKEN` is only used as the initial password for the bootstrap `admin` user when that user does not exist yet.
 
 ## Files
 
@@ -45,15 +45,19 @@ Usernames are normalized to lowercase and should be stable, hand-picked names fo
 
 ## Creating Users
 
-Set `CARAPACE_TOKEN` to a random admin token in the server environment, then start the server. The token must be at least 16 characters long. If it is missing or too short, the server exits and prints a suggested 24-character replacement token.
+Set `CARAPACE_TOKEN` to a random bootstrap password in the server environment, then start the server. If `auth/users.yaml` does not contain an `admin` user, carapace creates one with the `admin` role and this password. The password must be at least 16 characters long. If it is missing or too short while the bootstrap user is needed, the server exits and prints a suggested 24-character replacement.
 
-Open the web UI, follow **Manage users** on the login screen, and enter the server URL plus `CARAPACE_TOKEN`. The admin users page can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
+Log in as `admin` with that bootstrap password. In **Settings** → **Preferences**, admin users see a **Manage users** button. The admin users page can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
 
-You can also create users through the admin API:
+You can also create users through the admin API after logging in and storing the session cookie:
 
 ```bash
+curl -c carapace.cookies -X POST http://localhost:8321/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"'"$CARAPACE_TOKEN"'"}'
+
 curl -X POST http://localhost:8321/api/admin/users \
-  -H "Authorization: Bearer $CARAPACE_TOKEN" \
+  -b carapace.cookies \
   -H "Content-Type: application/json" \
   -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
 ```

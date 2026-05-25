@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 interface JobsViewProps {
   server: string;
   token: string;
+  isAdmin: boolean;
   sessions: SessionInfo[];
   showArchivedSessions: boolean;
   onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
@@ -133,6 +134,7 @@ function toKebabCaseId(value: string): string {
 export function JobsView({
   server,
   token,
+  isAdmin,
   sessions,
   showArchivedSessions,
   onShowArchivedSessionsChange,
@@ -1238,6 +1240,7 @@ export function JobsView({
             embedded
             server={server}
             token={token}
+            isAdmin={isAdmin}
             showArchivedSessions={showArchivedSessions}
             onShowArchivedSessionsChange={onShowArchivedSessionsChange}
           />

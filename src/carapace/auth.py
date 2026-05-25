@@ -18,9 +18,11 @@ from pydantic import BaseModel, Field, model_validator
 from .models.config import AuthConfig, UserConfig
 
 _password_hash = PasswordHash.recommended()
-ADMIN_TOKEN_MIN_LENGTH = 16
-ADMIN_TOKEN_SUGGESTED_LENGTH = 24
-_ADMIN_TOKEN_ALPHABET = string.ascii_letters + string.digits
+ADMIN_ROLE = "admin"
+ADMIN_USERNAME = "admin"
+BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH = 16
+BOOTSTRAP_ADMIN_PASSWORD_SUGGESTED_LENGTH = 24
+_BOOTSTRAP_ADMIN_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 
 
 class UserIdentity(BaseModel):
@@ -48,7 +50,7 @@ class AuthUser(BaseModel):
     def _normalize(self) -> AuthUser:
         self.display_name = self.display_name.strip()
         self.email = self.email.strip() or None if self.email is not None else None
-        self.roles = [role.strip() for role in self.roles if role.strip()]
+        self.roles = normalize_roles(self.roles)
         if self.token_version < 1:
             raise ValueError("token_version must be >= 1")
         return self
@@ -151,6 +153,16 @@ class AuthStore:
 
     def get_user(self, username: str) -> AuthUser | None:
         return self.load_users().users.get(normalize_username(username))
+
+    def ensure_bootstrap_admin(self) -> AuthUser | None:
+        if self.get_user(ADMIN_USERNAME) is not None:
+            return None
+        return self.create_user(
+            username=ADMIN_USERNAME,
+            password=get_token(),
+            display_name="Administrator",
+            roles=[ADMIN_ROLE],
+        )
 
     def create_user(
         self,
@@ -350,6 +362,14 @@ def normalize_username(username: str) -> str:
     return username.strip().lower()
 
 
+def normalize_roles(roles: list[str]) -> list[str]:
+    return [role.strip().lower() for role in roles if role.strip()]
+
+
+def has_admin_role(roles: list[str]) -> bool:
+    return ADMIN_ROLE in normalize_roles(roles)
+
+
 def hash_password(password: str) -> str:
     if not password:
         raise ValueError("password must not be empty")
@@ -362,25 +382,28 @@ def verify_password(password: str, password_hash: str) -> bool:
     return _password_hash.verify(password, password_hash)
 
 
-def suggest_admin_token() -> str:
-    return "".join(secrets.choice(_ADMIN_TOKEN_ALPHABET) for _ in range(ADMIN_TOKEN_SUGGESTED_LENGTH))
+def suggest_bootstrap_admin_password() -> str:
+    return "".join(
+        secrets.choice(_BOOTSTRAP_ADMIN_PASSWORD_ALPHABET) for _ in range(BOOTSTRAP_ADMIN_PASSWORD_SUGGESTED_LENGTH)
+    )
 
 
-def validate_admin_token(token: str | None = None) -> str:
-    """Return a validated admin token or raise with a replacement suggestion."""
-    if token is None:
-        token = os.environ.get("CARAPACE_TOKEN", "")
-    token = token.strip()
-    if not token:
+def validate_bootstrap_admin_password(password: str | None = None) -> str:
+    """Return a validated bootstrap admin password or raise with a replacement suggestion."""
+    if password is None:
+        password = os.environ.get("CARAPACE_TOKEN", "")
+    password = password.strip()
+    if not password:
         raise RuntimeError("CARAPACE_TOKEN environment variable is required but not set")
-    if len(token) < ADMIN_TOKEN_MIN_LENGTH:
+    if len(password) < BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH:
         raise RuntimeError(
             "CARAPACE_TOKEN must be at least "
-            f"{ADMIN_TOKEN_MIN_LENGTH} characters long. Suggested replacement: {suggest_admin_token()}"
+            f"{BOOTSTRAP_ADMIN_PASSWORD_MIN_LENGTH} characters long. "
+            f"Suggested replacement: {suggest_bootstrap_admin_password()}"
         )
-    return token
+    return password
 
 
 def get_token() -> str:
-    """Return the admin token from the CARAPACE_TOKEN environment variable."""
-    return validate_admin_token()
+    """Return the bootstrap admin password from the CARAPACE_TOKEN environment variable."""
+    return validate_bootstrap_admin_password()

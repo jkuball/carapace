@@ -108,16 +108,12 @@ def _setup_server(tmp_path, monkeypatch):
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
     srv._auth_store = AuthStore(tmp_path, config.auth)
+    srv._auth_store.create_user(username="admin", password="admin-secret", display_name="Admin", roles=["admin"])
     srv._auth_store.create_user(username="thies", password="secret", display_name="Thies")
     srv._notification_store = NotificationStore(tmp_path)
     srv._notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
     )
-
-
-@pytest.fixture()
-def bearer() -> str:
-    return _TEST_TOKEN
 
 
 @pytest.fixture()
@@ -128,6 +124,13 @@ def client() -> TestClient:
 @pytest.fixture()
 def auth_headers() -> dict[str, str]:
     auth_session = srv._auth_store.create_session(username="thies")
+    token = srv._auth_store.issue_session_token(auth_session)
+    return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
+
+
+@pytest.fixture()
+def admin_auth_headers() -> dict[str, str]:
+    auth_session = srv._auth_store.create_session(username="admin")
     token = srv._auth_store.issue_session_token(auth_session)
     return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
 
@@ -150,6 +153,7 @@ def test_login_sets_session_cookie(client):
 
     assert resp.status_code == 200
     assert resp.json()["user"]["username"] == "thies"
+    assert resp.json()["user"]["roles"] == []
     assert srv._config.auth.cookie.name in resp.cookies
 
     meta_resp = client.get("/api/meta")
@@ -171,15 +175,19 @@ def test_logout_revokes_session_cookie(client):
     assert meta_resp.status_code == 401
 
 
-def test_admin_user_management_uses_admin_token_only(client):
+def test_admin_user_management_requires_admin_role(client, auth_headers, admin_auth_headers):
     unauthenticated_resp = client.get("/api/admin/users")
-
     assert unauthenticated_resp.status_code == 401
 
-    admin_headers = {"Authorization": f"Bearer {_TEST_TOKEN}"}
+    non_admin_resp = client.get("/api/admin/users", headers=auth_headers)
+    assert non_admin_resp.status_code == 403
+
+    token_resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {_TEST_TOKEN}"})
+    assert token_resp.status_code == 401
+
     create_resp = client.post(
         "/api/admin/users",
-        headers=admin_headers,
+        headers=admin_auth_headers,
         json={"username": "Ada", "password": "correct-horse-battery", "display_name": "Ada"},
     )
 
@@ -191,11 +199,10 @@ def test_admin_user_management_uses_admin_token_only(client):
     assert login_resp.status_code == 200
 
 
-def test_admin_user_update_can_clear_email(client):
-    admin_headers = {"Authorization": f"Bearer {_TEST_TOKEN}"}
+def test_admin_user_update_can_clear_email(client, admin_auth_headers):
     create_resp = client.post(
         "/api/admin/users",
-        headers=admin_headers,
+        headers=admin_auth_headers,
         json={
             "username": "Ada",
             "password": "correct-horse-battery",
@@ -205,34 +212,34 @@ def test_admin_user_update_can_clear_email(client):
     )
     assert create_resp.status_code == 201
 
-    update_resp = client.patch("/api/admin/users/ada", headers=admin_headers, json={"email": None})
+    update_resp = client.patch("/api/admin/users/ada", headers=admin_auth_headers, json={"email": None})
 
     assert update_resp.status_code == 200
     assert update_resp.json()["email"] is None
 
 
-def test_admin_user_management_returns_503_when_admin_token_is_unset(client, monkeypatch):
-    monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
+def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):
+    disable_resp = client.patch("/api/admin/users/admin", headers=admin_auth_headers, json={"enabled": False})
+    demote_resp = client.patch("/api/admin/users/admin", headers=admin_auth_headers, json={"roles": []})
 
-    resp = client.get("/api/admin/users", headers={"Authorization": "Bearer anything"})
+    assert disable_resp.status_code == 400
+    assert disable_resp.json() == {"detail": "Cannot remove the last enabled admin"}
+    assert demote_resp.status_code == 400
+    assert demote_resp.json() == {"detail": "Cannot remove the last enabled admin"}
 
-    assert resp.status_code == 503
-    assert resp.json() == {"detail": "Admin token is not configured"}
 
-
-def test_admin_user_upgrade_data_uses_selected_user(client, bearer):
+def test_admin_user_upgrade_data_uses_selected_user(client, admin_auth_headers):
     state = srv._engine.session_mgr.create_session()
-    headers = {"Authorization": f"Bearer {bearer}"}
 
-    resp = client.post("/api/admin/users/thies/upgrade-data", headers=headers)
+    resp = client.post("/api/admin/users/thies/upgrade-data", headers=admin_auth_headers)
 
     assert resp.status_code == 200
     assert resp.json()["username"] == "thies"
     assert srv._engine.session_mgr.load_meta(state.session_id).user == "thies"
 
 
-def test_admin_user_upgrade_data_requires_existing_user(client, bearer):
-    resp = client.post("/api/admin/users/missing/upgrade-data", headers={"Authorization": f"Bearer {bearer}"})
+def test_admin_user_upgrade_data_requires_existing_user(client, admin_auth_headers):
+    resp = client.post("/api/admin/users/missing/upgrade-data", headers=admin_auth_headers)
 
     assert resp.status_code == 404
 

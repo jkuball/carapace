@@ -18,7 +18,7 @@ Fill in the required values:
 ```env
 # Required
 ANTHROPIC_API_KEY=sk-ant-...
-CARAPACE_TOKEN=pick-a-secret-admin-token-with-16-plus-chars
+CARAPACE_TOKEN=pick-a-bootstrap-admin-password
 
 # Optional — uncomment if needed
 # GOOGLE_API_KEY=...
@@ -26,7 +26,7 @@ CARAPACE_TOKEN=pick-a-secret-admin-token-with-16-plus-chars
 # CARAPACE_GIT_TOKEN=...
 ```
 
-`CARAPACE_TOKEN` is the admin/bootstrap token for managing users and must be at least 16 characters long. Normal web UI, CLI, REST, and WebSocket access uses username/password login and an HttpOnly session cookie.
+If no `admin` user exists yet, `CARAPACE_TOKEN` becomes that user's initial password and must be at least 16 characters long. After startup, normal web UI, CLI, REST, WebSocket, and admin access uses username/password login and an HttpOnly session cookie.
 
 ## 2. Build and start
 
@@ -42,11 +42,15 @@ This starts:
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
-Create the first user in the web UI by opening **Manage users** on the login screen, entering the server URL and admin token, and creating a user. You can also use the admin API:
+Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** → **Preferences** → **Manage users** to create your normal user. You can also use the admin API after logging in and storing the session cookie:
 
 ```bash
+curl -c carapace.cookies -X POST http://localhost:8321/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"'"$CARAPACE_TOKEN"'"}'
+
 curl -X POST http://localhost:8321/api/admin/users \
-  -H "Authorization: Bearer $CARAPACE_TOKEN" \
+  -b carapace.cookies \
   -H "Content-Type: application/json" \
   -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
 ```

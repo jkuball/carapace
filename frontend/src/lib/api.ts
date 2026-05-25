@@ -28,13 +28,6 @@ function headers(_session: string): HeadersInit {
   };
 }
 
-function adminHeaders(adminToken: string): HeadersInit {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${adminToken}`,
-  };
-}
-
 async function readErrorMessage(
   res: Response,
   fallback: string,
@@ -58,6 +51,7 @@ export interface ServerMeta {
 export interface AuthUserInfo {
   username: string;
   display_name: string | null;
+  roles: string[];
 }
 
 export interface AdminUserInfo {
@@ -138,6 +132,17 @@ function decodeAdminUsers(raw: unknown): AdminUserInfo[] {
     .filter((item): item is AdminUserInfo => item !== null);
 }
 
+function decodeAuthUser(raw: unknown): AuthUserInfo | null {
+  if (!isRecord(raw)) return null;
+  const username = readString(raw, "username");
+  if (!username) return null;
+  return {
+    username,
+    display_name: readString(raw, "display_name") ?? null,
+    roles: readStringArray(raw, "roles") ?? [],
+  };
+}
+
 export async function login(
   server: string,
   username: string,
@@ -155,14 +160,25 @@ export async function login(
   if (!isRecord(body) || !isRecord(body.user)) {
     throw new Error("Invalid login response");
   }
-  const parsedUsername = readString(body.user, "username");
-  if (!parsedUsername) {
+  const user = decodeAuthUser(body.user);
+  if (user === null) {
     throw new Error("Invalid login response");
   }
-  return {
-    username: parsedUsername,
-    display_name: readString(body.user, "display_name") ?? null,
-  };
+  return user;
+}
+
+export async function getCurrentUser(server: string): Promise<AuthUserInfo> {
+  const res = await fetch(`${server}/api/auth/me`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to fetch current user"));
+  }
+  const user = decodeAuthUser(await res.json());
+  if (user === null) {
+    throw new Error("Invalid user response");
+  }
+  return user;
 }
 
 export async function logout(server: string): Promise<void> {
@@ -175,12 +191,9 @@ export async function logout(server: string): Promise<void> {
   }
 }
 
-export async function listAdminUsers(
-  server: string,
-  adminToken: string,
-): Promise<AdminUserInfo[]> {
+export async function listAdminUsers(server: string): Promise<AdminUserInfo[]> {
   const res = await fetch(`${server}/api/admin/users`, {
-    headers: adminHeaders(adminToken),
+    headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, "Failed to list users"));
@@ -190,12 +203,11 @@ export async function listAdminUsers(
 
 export async function createAdminUser(
   server: string,
-  adminToken: string,
   body: AdminUserCreateInput,
 ): Promise<AdminUserInfo> {
   const res = await fetch(`${server}/api/admin/users`, {
     method: "POST",
-    headers: adminHeaders(adminToken),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -210,7 +222,6 @@ export async function createAdminUser(
 
 export async function updateAdminUser(
   server: string,
-  adminToken: string,
   username: string,
   body: AdminUserUpdateInput,
 ): Promise<AdminUserInfo> {
@@ -218,7 +229,7 @@ export async function updateAdminUser(
     `${server}/api/admin/users/${encodeURIComponent(username)}`,
     {
       method: "PATCH",
-      headers: adminHeaders(adminToken),
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
   );
@@ -234,14 +245,13 @@ export async function updateAdminUser(
 
 export async function upgradeAdminUserData(
   server: string,
-  adminToken: string,
   username: string,
 ): Promise<AdminDataUpgradeResult> {
   const res = await fetch(
     `${server}/api/admin/users/${encodeURIComponent(username)}/upgrade-data`,
     {
       method: "POST",
-      headers: adminHeaders(adminToken),
+      headers: { "Content-Type": "application/json" },
     },
   );
   if (!res.ok) {
