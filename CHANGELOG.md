@@ -1,6 +1,117 @@
 # CHANGELOG
 
 
+## v0.124.0 (2026-05-25)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: repair disabled bootstrap admin
+  ([`a9841ca`](https://github.com/thiesgerken/carapace/commit/a9841ca77fcf14461500fb599bea8c73eb2c5e13))
+
+- 🐛 fix: return to login on auth expiry
+  ([`c1a466a`](https://github.com/thiesgerken/carapace/commit/c1a466a3da08d6ef2f2dc85a3b085195416a46cf))
+
+- 🐛 fix: skip bootstrap when admins exist
+  ([`594c06c`](https://github.com/thiesgerken/carapace/commit/594c06c55658bb3dca040765a074b27655f5793f))
+
+- 🐛 fix: address multi-user auth review comments
+  ([`5e57678`](https://github.com/thiesgerken/carapace/commit/5e576781512db46d3812ac6795bb70a05c909139))
+
+- 🐛 fix: address auth ownership review comments
+  ([`7cdb506`](https://github.com/thiesgerken/carapace/commit/7cdb5068a53045aa0a4eb54b74bf60f40e075dc0))
+
+- 🐛 fix: clean up code formatting and improve readability in API functions
+  ([`56a75e0`](https://github.com/thiesgerken/carapace/commit/56a75e01f8ea06f879535fd91442401795ba927c))
+
+- 🐛 fix: handle auth review edge cases
+  ([`c9bed88`](https://github.com/thiesgerken/carapace/commit/c9bed882b6f669911ca181e68bc8c42e3d8f194b))
+
+- 🐛 fix: address multi-user review feedback
+  ([`4ed57aa`](https://github.com/thiesgerken/carapace/commit/4ed57aad16306459b424c2a38ea6e8d9f22c2fcd))
+
+### 💄 UI/UX
+
+
+- 💄 style: make account logout icon-only
+  ([`33d1680`](https://github.com/thiesgerken/carapace/commit/33d16808c73b4e64c701cc1ae5ad74587627c07a))
+
+- 💄 style: show admin user badge
+  ([`16acbd8`](https://github.com/thiesgerken/carapace/commit/16acbd85f16896219c3788c49788ba42500693ba))
+
+- 💄 style: separate account name from avatar
+  ([`aa85168`](https://github.com/thiesgerken/carapace/commit/aa8516866329d39ba7f80b0aa8a9f9754c7c4f15))
+
+- 💄 style: show account name in header
+  ([`d14f016`](https://github.com/thiesgerken/carapace/commit/d14f0164a257dd97147cca350fefb48be414e7c8))
+
+- 💄 style: simplify account menu header
+  ([`924db2a`](https://github.com/thiesgerken/carapace/commit/924db2ac4baab2012f9660d530b23b100694be87))
+
+- 💄 style: narrow home navigation target
+  ([`e6eb50f`](https://github.com/thiesgerken/carapace/commit/e6eb50fb660925f4c57f83e3f3eecfcb47c51697))
+
+- 💄 style: polish account menu
+  ([`356b9ac`](https://github.com/thiesgerken/carapace/commit/356b9ac61ced96712e949cc9e072e4a8f8fa4334))
+
+- 💄 style: make brand navigate home
+  ([`39217a6`](https://github.com/thiesgerken/carapace/commit/39217a66f5c361b97ef365cb48cb460a2e68fd13))
+
+- 💄 style: add account menu avatar
+  ([`8e96466`](https://github.com/thiesgerken/carapace/commit/8e96466f5d49710eea09df58d3012cda2cf98a7f))
+
+- 💄 style: simplify users settings tab
+  ([`857267d`](https://github.com/thiesgerken/carapace/commit/857267dee326814d4de21374f5f2e1455be7e9c5))
+
+- 💄 style: mark current admin user
+  ([`abbf424`](https://github.com/thiesgerken/carapace/commit/abbf42476eee45103621b8e800963589be2885ff))
+
+- 💄 style: simplify admin settings labels
+  ([`b71240b`](https://github.com/thiesgerken/carapace/commit/b71240b9a802604d33e7ffb156b5be05b8bb2723))
+
+### Other
+
+
+- 📝 docs: update admin user management docs
+  ([`74f74e3`](https://github.com/thiesgerken/carapace/commit/74f74e3d428025ef409ad9f850cc54d8678f8c2f))
+
+- 🔐 security: gate admin UI by user role
+  ([`95a5284`](https://github.com/thiesgerken/carapace/commit/95a5284a72ebc4843ca006b033c35ac852b169c7))
+
+- 🔐 security: require stronger admin token
+  ([`b2e8e52`](https://github.com/thiesgerken/carapace/commit/b2e8e5261725e663fb3e052b2af035c31498230d))
+
+### 🗑️ Deprecations
+
+
+- 🗑️ remove standalone admin portal
+  ([`8984a4d`](https://github.com/thiesgerken/carapace/commit/8984a4dc19b0e4239ed800ddef503dd62dc8a86d))
+
+### ✨ Features
+
+
+- ✨ feat: add admin user deletion
+  ([`6f06272`](https://github.com/thiesgerken/carapace/commit/6f062723d3dccdd3ebc4078f1fdd4239805d78f4))
+
+- ✨ feat: embed platform admin settings
+  ([`5d32374`](https://github.com/thiesgerken/carapace/commit/5d323744fe061da5fa3f753046199bab1b17af25))
+
+- ✨ feat: add admin data upgrade action
+  ([`18327a6`](https://github.com/thiesgerken/carapace/commit/18327a6cd5bb900642031e8b6cafaeb781a8bfd0))
+
+- ✨ feat: add admin users page
+  ([`83ef362`](https://github.com/thiesgerken/carapace/commit/83ef362e216528468cf063be10a78637511d0f70))
+
+- ✨ feat: add multi-user cookie auth
+  ([`9637ae7`](https://github.com/thiesgerken/carapace/commit/9637ae789bdd5c31469fd79619d4db45a01d566a))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: remove get_token auth shim
+  ([`0999785`](https://github.com/thiesgerken/carapace/commit/099978544737103067b6c90fc99c9f6746e987ef))
+
 ## v0.123.3 (2026-05-24)
 
 
