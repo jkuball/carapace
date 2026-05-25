@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.125.0 (2026-05-25)
+
+
+### ✨ Features
+
+
+- ✨ feat: use same-origin frontend backend
+  ([`6c0c799`](https://github.com/thiesgerken/carapace/commit/6c0c799f609b67929d7c6f71baaebffaeefd2ecb))
+
 ## v0.124.0 (2026-05-25)
 
 
