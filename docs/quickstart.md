@@ -26,7 +26,7 @@ CARAPACE_TOKEN=pick-a-bootstrap-admin-password
 # CARAPACE_GIT_TOKEN=...
 ```
 
-If no `admin` user exists yet, `CARAPACE_TOKEN` becomes that user's initial password and must be at least 16 characters long. After startup, normal web UI, CLI, REST, WebSocket, and admin access uses username/password login and an HttpOnly session cookie.
+If no enabled admin user exists yet, `CARAPACE_TOKEN` becomes the bootstrap `admin` user's initial password and must be at least 16 characters long. After startup, normal web UI, CLI, REST, WebSocket, and admin access uses username/password login and an HttpOnly session cookie.
 
 ## 2. Build and start
 

@@ -81,7 +81,7 @@ All images default to the chart's `appVersion` tag, which is kept in sync with t
 
 | What                   | How                                                                                                                         |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user. |
+| **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists. |
 | **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                 |
 | **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                               |
 | **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                               |

@@ -1,6 +1,6 @@
 # Authentication
 
-carapace uses file-backed users and HttpOnly session cookies for the web UI, CLI, REST, WebSocket API, and admin API. `CARAPACE_TOKEN` is only used as the initial password for the bootstrap `admin` user when that user does not exist yet.
+carapace uses file-backed users and HttpOnly session cookies for the web UI, CLI, REST, WebSocket API, and admin API. `CARAPACE_TOKEN` is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists yet.
 
 ## Files
 
@@ -45,9 +45,9 @@ Usernames are normalized to lowercase and should be stable, hand-picked names fo
 
 ## Creating Users
 
-Set `CARAPACE_TOKEN` to a random bootstrap password in the server environment, then start the server. If `auth/users.yaml` does not contain an `admin` user, carapace creates one with the `admin` role and this password. The password must be at least 16 characters long. If it is missing or too short while the bootstrap user is needed, the server exits and prints a suggested 24-character replacement.
+Set `CARAPACE_TOKEN` to a random bootstrap password in the server environment, then start the server. If `auth/users.yaml` does not contain any enabled user with the `admin` role, carapace creates an `admin` user with this password. The password must be at least 16 characters long. If it is missing or too short while the bootstrap user is needed, the server exits and prints a suggested 24-character replacement.
 
-Log in as `admin` with that bootstrap password. In **Settings**, admin users see an **Admin** group with a **Users** tab. The users panel can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
+Log in as `admin` with that bootstrap password. In **Settings**, admin users see an **Admin** group with a **Users** tab. There is no standalone admin portal; user management lives inside Settings. The users panel can create users, edit passwords and profile fields, enable or disable users, and assign existing single-user data to a selected user.
 
 You can also create users through the admin API after logging in and storing the session cookie:
 
