@@ -74,7 +74,6 @@
             "loading": "Lädt…",
             "refresh": "Benutzer aktualisieren",
             "new": "Neuer Benutzer",
-            "upgradeUser": "Daten für {username} upgraden",
             "deleteUser": "{username} löschen",
             "create": "Benutzer anlegen",
             "creating": "Lege an…",
@@ -85,20 +84,17 @@
             "loaded": "Benutzer geladen.",
             "created": "{username} angelegt.",
             "saved": "{username} gespeichert.",
-            "deleted": "{username} gelöscht.",
-            "upgraded": "Daten für {username} aktualisiert: {count} Änderungen."
+            "deleted": "{username} gelöscht."
         },
         "errors": {
             "missingCredentials": "Aktueller Ursprung ist nicht verfügbar.",
             "load": "Benutzer konnten nicht geladen werden.",
             "create": "Benutzer konnte nicht angelegt werden.",
             "save": "Benutzer konnte nicht gespeichert werden.",
-            "delete": "Benutzer konnte nicht gelöscht werden.",
-            "upgrade": "Benutzerdaten konnten nicht aktualisiert werden."
+            "delete": "Benutzer konnte nicht gelöscht werden."
         },
         "confirm": {
-            "deleteUser": "{username} löschen? Bestehende Daten dieses Benutzers bleiben erhalten.",
-            "upgradeUser": "Bestehende Daten mit {username} aktualisieren?"
+            "deleteUser": "{username} löschen? Bestehende Daten dieses Benutzers bleiben erhalten."
         },
         "meta": {
             "tokenVersion": "Token v{version}",

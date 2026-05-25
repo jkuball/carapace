@@ -31,7 +31,6 @@ Each subscription records:
 
 - `id`
 - `user`
-- `owner_key` (legacy, optional)
 - `device_name`
 - `endpoint`
 - `p256dh`
@@ -41,7 +40,7 @@ Each subscription records:
 - `last_heartbeat`
 - `expires_at`
 
-`user` is the normalized authenticated username. Legacy subscriptions with only `owner_key` still parse, but normal authenticated APIs list and update subscriptions owned by the current user.
+`user` is the normalized authenticated username. Notification APIs list and update subscriptions owned by the current user.
 
 Default per-device preferences:
 

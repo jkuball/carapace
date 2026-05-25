@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
 from ..models.session import SessionAttributes, SessionBudget, SessionState
@@ -24,7 +24,15 @@ from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
 
 
 class SessionMeta(BaseModel):
-    user: str | None = None
+    user: str
+
+    @field_validator("user", mode="before")
+    @classmethod
+    def _normalize_user(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("session user must not be empty")
+        return normalized
 
 
 def _to_yaml_safe(value: Any) -> Any:
@@ -77,7 +85,7 @@ class SessionManager:
         channel_ref: str = "",
         budget: SessionBudget | None = None,
         *,
-        user: str | None = None,
+        user: str,
         private: bool = False,
         unattended: bool = False,
         ask_mode: bool = False,
@@ -104,15 +112,14 @@ class SessionManager:
         )
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
-        if user is not None:
-            self.save_meta(session_id, SessionMeta(user=user))
+        self.save_meta(session_id, SessionMeta(user=user))
         self._save_state(state)
         return state
 
     def load_meta(self, session_id: str) -> SessionMeta:
         meta_path = self.sessions_dir / session_id / "meta.yaml"
         if not meta_path.exists():
-            return SessionMeta()
+            raise FileNotFoundError(f"Session {session_id} has no owner metadata")
         self._log_disk_read("session metadata", meta_path, session_id=session_id)
         with open(meta_path) as f:
             raw = yaml.safe_load(f) or {}

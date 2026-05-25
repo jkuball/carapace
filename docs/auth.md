@@ -83,18 +83,7 @@ Changing a password increments `token_version`, which invalidates older cookies 
 User ownership is stored close to existing runtime files instead of changing the main directory structure:
 
 - `sessions/<session_id>/meta.yaml` contains `user: <username>`.
-- `jobs.yaml` job entries contain optional `user`.
-- notification subscription YAML files contain optional `user`.
-- legacy records without a user still parse, but authenticated app APIs hide them until migration assigns an owner.
+- `jobs.yaml` job entries contain `user: <username>`.
+- notification subscription YAML files contain `user: <username>`.
 
-The knowledge repo migration moves `data/knowledge` to `data/knowledges/<username>`. Runtime use of per-user knowledge directories is tracked separately from this first auth/storage migration.
-
-## Upgrading Existing Data
-
-For an existing single-user instance, run:
-
-```bash
-uv run carapace upgrade-data --user thies --data-dir data
-```
-
-This creates a disabled placeholder user if needed, adds ownership metadata to sessions/jobs/notifications, moves `knowledge` to `knowledges/<user>`, and converts `matrix_token.json` and `sandbox_tokens.json` to YAML files with user fields. Set a real password through the admin UI or admin API before using that user for normal login.
+Records without an owner are invalid in the current data model.

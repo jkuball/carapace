@@ -35,7 +35,7 @@ from tests.session_helpers import (
 def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session(budget=SessionBudget(input_tokens=1_000))
+        state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=1_000))
         sid = state.session_id
         sub = _FakeSubscriber()
         engine.subscribe(sid, sub)
@@ -76,7 +76,7 @@ def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
 def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
         engine.get_or_activate(sid)
 
         async def _run() -> None:
@@ -93,7 +93,7 @@ def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
 def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
         sub = _FakeSubscriber()
         engine.subscribe(sid, sub)
 
@@ -164,7 +164,7 @@ def test_evaluate_with_usage_limit_exceeded_escalates_to_user(tmp_path: Path):
 def test_generate_title_skips_when_budget_exhausted(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session(budget=SessionBudget(input_tokens=100))
+        state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=100))
         active = engine.get_or_activate(state.session_id)
         active.usage_tracker.models["test-model"] = ModelUsage(input_tokens=120)
 
@@ -181,7 +181,7 @@ def test_generate_title_skips_when_budget_exhausted(tmp_path: Path):
 def test_generate_title_persists_usage_and_broadcasts_usage(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session(budget=SessionBudget(cost_usd=Decimal("5.00")))
+        state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(cost_usd=Decimal("5.00")))
         sid = state.session_id
         active = engine.get_or_activate(sid)
         sub = _FakeSubscriber()
@@ -213,7 +213,7 @@ def test_generate_title_persists_usage_and_broadcasts_usage(tmp_path: Path):
 def test_generate_title_records_titler_request_log(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
         started_at = datetime.now(tz=UTC)
@@ -259,7 +259,7 @@ def test_generate_title_records_titler_request_log(tmp_path: Path):
 def test_handle_slash_command_inactive_session(tmp_path: Path):
     """handle_slash_command returns None for a session that isn't active."""
     engine = _make_engine(tmp_path)
-    state = engine.session_mgr.create_session()
+    state = engine.session_mgr.create_session(user="thies")
 
     async def _run() -> None:
         assert await engine.handle_slash_command(state.session_id, "/session") is None
@@ -271,7 +271,7 @@ def test_handle_slash_command_reload(tmp_path: Path):
     """handle_slash_command /reload calls reset_session and returns success."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
 
@@ -289,7 +289,7 @@ def test_handle_slash_command_model_sets_all_three(tmp_path: Path):
     """``/model NAME`` applies the same id to agent, sentinel, and title."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
 
@@ -311,7 +311,7 @@ def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Pa
     """``/model sentinel NAME`` mirrors target-first slash commands like ``/budget``."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
 
@@ -331,7 +331,7 @@ def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
     """``/model all NAME`` explicitly targets the all-model path."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
 
@@ -352,7 +352,7 @@ def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Pat
     """Legacy ``/model-role`` aliases are no longer accepted."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
 
@@ -367,7 +367,7 @@ def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Pat
 def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
 
@@ -401,7 +401,7 @@ def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
 def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
 
     state.agent_model_name = "openai:missing-agent"
     state.sentinel_model_name = "openai:missing-sentinel"
@@ -526,7 +526,7 @@ def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tm
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    sid = engine.session_mgr.create_session().session_id
+    sid = engine.session_mgr.create_session(user="thies").session_id
     latest_messages = [
         ModelRequest(parts=[UserPromptPart(content="hello")]),
         ModelResponse(
@@ -573,7 +573,7 @@ def test_save_user_message_on_failure_appends_cancelled_parallel_tool_results(tm
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    sid = engine.session_mgr.create_session().session_id
+    sid = engine.session_mgr.create_session(user="thies").session_id
     engine.session_mgr.save_events(
         sid,
         [

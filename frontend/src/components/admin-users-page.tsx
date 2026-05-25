@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, DatabaseBackup, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { createAdminUser, deleteAdminUser, getCurrentUser, listAdminUsers, updateAdminUser, upgradeAdminUserData, type AdminUserInfo } from "@/lib/api";
+import { createAdminUser, deleteAdminUser, getCurrentUser, listAdminUsers, updateAdminUser, type AdminUserInfo } from "@/lib/api";
 import { normalizeServer } from "@/lib/server-url";
 import { getServer } from "@/lib/storage";
 import { cn } from "@/lib/utils";
@@ -89,7 +89,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [upgradingUsername, setUpgradingUsername] = useState<string | null>(null);
   const [deletingUsername, setDeletingUsername] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -215,32 +214,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
     }
   }
 
-  async function handleUpgradeUser(username: string): Promise<void> {
-    const normalizedServer = normalizeServer(server);
-    if (!normalizedServer) {
-      setError(t("errors.missingCredentials"));
-      setNotice(null);
-      return;
-    }
-    if (!window.confirm(t("confirm.upgradeUser", { username }))) {
-      return;
-    }
-
-    setUpgradingUsername(username);
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await upgradeAdminUserData(normalizedServer, username);
-      const changedCount = Object.values(result.summary).reduce((total, entries) => total + entries.length, 0);
-      await refreshUsers(result.username, t("notices.upgraded", { username: result.username, count: changedCount }));
-    } catch (upgradeError) {
-      setError(upgradeError instanceof Error ? upgradeError.message : t("errors.upgrade"));
-      setNotice(null);
-    } finally {
-      setUpgradingUsername(null);
-    }
-  }
-
   async function handleDeleteUser(username: string): Promise<void> {
     const normalizedServer = normalizeServer(server);
     if (!normalizedServer) {
@@ -351,7 +324,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                 <div className="space-y-2">
                   {users.map((user) => {
                     const selected = selectedUsername === user.username;
-                    const upgrading = upgradingUsername === user.username;
                     const isCurrentUser = user.username === visibleCurrentUsername;
                     const deleting = deletingUsername === user.username;
                     const isAdminUser = user.roles.some((role) => role.trim().toLowerCase() === "admin");
@@ -405,16 +377,6 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                             </div>
                           </div>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleUpgradeUser(user.username)}
-                          title={t("actions.upgradeUser", { username: user.username })}
-                          aria-label={t("actions.upgradeUser", { username: user.username })}
-                          className={iconButtonClassName}
-                          disabled={upgradingUsername !== null || loading || !server.trim()}
-                        >
-                          {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseBackup className="h-4 w-4" />}
-                        </button>
                         {!isCurrentUser ? (
                           <button
                             type="button"
@@ -422,7 +384,7 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                             title={t("actions.deleteUser", { username: user.username })}
                             aria-label={t("actions.deleteUser", { username: user.username })}
                             className={cn(iconButtonClassName, "hover:bg-destructive/10 hover:text-destructive")}
-                            disabled={deletingUsername !== null || upgradingUsername !== null || loading || !server.trim()}
+                            disabled={deletingUsername !== null || loading || !server.trim()}
                           >
                             {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </button>

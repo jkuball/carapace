@@ -58,7 +58,7 @@ class MatrixTokenFile(BaseModel):
     access_token: str
     device_id: str | None = None
     user_id: str | None = None
-    user: str | None = None
+    user: str
 
 
 class MatrixTokensFile(BaseModel):

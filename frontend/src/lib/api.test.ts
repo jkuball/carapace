@@ -12,7 +12,6 @@ import {
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
-  upgradeAdminUserData,
   wsUrl,
 } from "./api";
 import {
@@ -340,28 +339,4 @@ test("deleteAdminUser deletes the selected user", async () => {
     "https://carapace.example.test/api/admin/users/ada%20lovelace",
   );
   assert.equal(calls[0]?.headers.get("Authorization"), null);
-});
-
-test("upgradeAdminUserData posts to the selected user's upgrade endpoint", async () => {
-  const calls: Request[] = [];
-  setFetch(async (input, init) => {
-    calls.push(new Request(input, init));
-    return new Response(
-      JSON.stringify({
-        username: "thies",
-        summary: { sessions: ["set owner for session-1"] },
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
-  });
-
-  const result = await upgradeAdminUserData("https://carapace.example.test", "thies");
-
-  assert.equal(calls[0]?.method, "POST");
-  assert.equal(
-    calls[0]?.url,
-    "https://carapace.example.test/api/admin/users/thies/upgrade-data",
-  );
-  assert.equal(calls[0]?.headers.get("Authorization"), null);
-  assert.deepEqual(result.summary.sessions, ["set owner for session-1"]);
 });

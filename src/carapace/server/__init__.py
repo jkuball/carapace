@@ -318,7 +318,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             max_payload_bytes=_config.notifications.max_payload_bytes,
             delivery_ttl_seconds=_config.notifications.delivery_ttl_seconds,
         ),
-        owner_key="",
         owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
     )
 

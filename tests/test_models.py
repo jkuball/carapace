@@ -42,11 +42,10 @@ def test_config_defaults():
     assert ids == {"anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5"}
 
 
-def test_notification_subscription_allows_empty_legacy_owner_key() -> None:
+def test_notification_subscription_normalizes_user() -> None:
     subscription = NotificationSubscription.model_validate(
         {
             "id": "sub-1",
-            "owner_key": " ",
             "user": " Thies ",
             "endpoint": "https://push.example.test/sub-1",
             "p256dh": "key",
@@ -56,7 +55,6 @@ def test_notification_subscription_allows_empty_legacy_owner_key() -> None:
         }
     )
 
-    assert subscription.owner_key == ""
     assert subscription.user == "thies"
 
 
@@ -93,6 +91,7 @@ def test_job_definition_rejects_persistent_session_for_unattended_job() -> None:
         JobDefinition.model_validate(
             {
                 "id": "morning-briefing",
+                "user": "thies",
                 "name": "Morning Briefing",
                 "prompt": "Summarize the day.",
                 "unattended": True,
@@ -105,6 +104,7 @@ def test_job_definition_accepts_attended_persistent_session() -> None:
     job = JobDefinition.model_validate(
         {
             "id": "team-planning",
+            "user": "thies",
             "name": "Team Planning",
             "prompt": "Continue planning.",
             "unattended": False,
@@ -119,6 +119,7 @@ def test_job_definition_rejects_model_overrides_for_persistent_session() -> None
         JobDefinition.model_validate(
             {
                 "id": "team-planning",
+                "user": "thies",
                 "name": "Team Planning",
                 "prompt": "Continue planning.",
                 "unattended": False,
@@ -133,6 +134,7 @@ def test_job_definition_rejects_session_mode_overrides_for_persistent_session() 
         JobDefinition.model_validate(
             {
                 "id": "team-planning",
+                "user": "thies",
                 "name": "Team Planning",
                 "prompt": "Continue planning.",
                 "unattended": False,
@@ -147,6 +149,7 @@ def test_job_definition_rejects_conflicting_session_modes() -> None:
         JobDefinition.model_validate(
             {
                 "id": "daily-briefing",
+                "user": "thies",
                 "name": "Daily Briefing",
                 "prompt": "Summarize the day.",
                 "ask_mode": True,
@@ -164,6 +167,7 @@ def test_job_definition_normalizes_optional_model_overrides() -> None:
             "agent_model_name": "  openai:gpt-5.4  ",
             "sentinel_model_name": "   ",
             "title_model_name": " openai:gpt-5.4-mini ",
+            "user": "thies",
         }
     )
 
@@ -177,8 +181,8 @@ def test_jobs_file_rejects_duplicate_job_ids() -> None:
         JobsFile.model_validate(
             {
                 "jobs": [
-                    {"id": "daily", "name": "Daily", "prompt": "First."},
-                    {"id": "daily", "name": "Daily Again", "prompt": "Second."},
+                    {"id": "daily", "user": "thies", "name": "Daily", "prompt": "First."},
+                    {"id": "daily", "user": "thies", "name": "Daily Again", "prompt": "Second."},
                 ]
             }
         )

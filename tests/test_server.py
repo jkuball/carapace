@@ -250,22 +250,6 @@ def test_admin_user_delete_cannot_delete_current_user(client, admin_auth_headers
     assert srv._auth_store.get_user("admin") is not None
 
 
-def test_admin_user_upgrade_data_uses_selected_user(client, admin_auth_headers):
-    state = srv._engine.session_mgr.create_session()
-
-    resp = client.post("/api/admin/users/thies/upgrade-data", headers=admin_auth_headers)
-
-    assert resp.status_code == 200
-    assert resp.json()["username"] == "thies"
-    assert srv._engine.session_mgr.load_meta(state.session_id).user == "thies"
-
-
-def test_admin_user_upgrade_data_requires_existing_user(client, admin_auth_headers):
-    resp = client.post("/api/admin/users/missing/upgrade-data", headers=admin_auth_headers)
-
-    assert resp.status_code == 404
-
-
 def test_meta_requires_auth(client):
     resp = client.get("/api/meta")
     assert resp.status_code in (401, 403)
@@ -822,30 +806,6 @@ async def test_run_due_jobs_once_dispatches_cron_jobs(monkeypatch) -> None:
     assert session_id
     assert "triggered automatically" in message
     assert "* * * * *" in message
-
-
-@pytest.mark.asyncio
-async def test_run_due_jobs_once_skips_ownerless_cron_jobs(monkeypatch) -> None:
-    submit_message = AsyncMock()
-    monkeypatch.setattr(srv._engine, "submit_message", submit_message)
-
-    srv._jobs_store.create_job(
-        JobDefinition.model_validate(
-            {
-                "id": "legacy-ownerless",
-                "name": "Legacy Ownerless",
-                "prompt": "Summarize the day.",
-                "triggers": [{"expression": "* * * * *"}],
-            }
-        )
-    )
-    start = datetime(2026, 5, 9, 10, 0, tzinfo=UTC)
-    assert srv._jobs_scheduler.collect_due_runs(now=start) == []
-
-    dispatched = await server_jobs._run_due_jobs_once(now=start + timedelta(minutes=1, seconds=5))
-
-    assert dispatched == 1
-    submit_message.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1509,7 +1469,7 @@ def test_delete_session_still_succeeds_when_archive_cleanup_fails(client, auth_h
 
 @pytest.mark.asyncio
 async def test_autosave_skips_state_load_errors_and_continues(monkeypatch) -> None:
-    eligible = srv._engine.session_mgr.create_session(private=False)
+    eligible = srv._engine.session_mgr.create_session(user="thies", private=False)
     cutoff_age = datetime.now(tz=UTC) - timedelta(hours=srv._config.sessions.commit.autosave_inactivity_hours + 1)
 
     eligible_state = srv._engine.session_mgr.load_state(eligible.session_id)
@@ -1541,8 +1501,8 @@ async def test_autosave_skips_state_load_errors_and_continues(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_autosave_skips_sessions_already_committed_since_last_activity() -> None:
-    stale = srv._engine.session_mgr.create_session(private=False)
-    eligible = srv._engine.session_mgr.create_session(private=False)
+    stale = srv._engine.session_mgr.create_session(user="thies", private=False)
+    eligible = srv._engine.session_mgr.create_session(user="thies", private=False)
     cutoff_age = datetime.now(tz=UTC) - timedelta(hours=srv._config.sessions.commit.autosave_inactivity_hours + 1)
 
     stale_state = srv._engine.session_mgr.load_state(stale.session_id)
@@ -1567,7 +1527,7 @@ async def test_autosave_skips_sessions_already_committed_since_last_activity() -
 
 @pytest.mark.asyncio
 async def test_autosave_passes_runtime_agent_guard(monkeypatch) -> None:
-    eligible = srv._engine.session_mgr.create_session(private=False)
+    eligible = srv._engine.session_mgr.create_session(user="thies", private=False)
     cutoff_age = datetime.now(tz=UTC) - timedelta(hours=srv._config.sessions.commit.autosave_inactivity_hours + 1)
 
     eligible_state = srv._engine.session_mgr.load_state(eligible.session_id)

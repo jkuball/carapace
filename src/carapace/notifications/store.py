@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,10 +8,6 @@ from threading import RLock
 import yaml
 
 from .models import NotificationPreferences, NotificationSubscription
-
-
-def derive_owner_key(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class NotificationStore:
@@ -39,7 +34,6 @@ class NotificationStore:
     def list_subscriptions(
         self,
         *,
-        owner_key: str | None = None,
         user: str | None = None,
     ) -> list[NotificationSubscription]:
         with self._lock:
@@ -47,20 +41,13 @@ class NotificationStore:
                 NotificationSubscription.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
                 for path in sorted(self._dir.glob("*.yaml"))
             ]
-        if owner_key is None:
-            if user is None:
-                return subscriptions
-            return [subscription for subscription in subscriptions if subscription.user == user]
-        return [subscription for subscription in subscriptions if subscription.owner_key == owner_key]
+        if user is None:
+            return subscriptions
+        return [subscription for subscription in subscriptions if subscription.user == user]
 
-    def find_by_endpoint(
-        self, *, owner_key: str = "", user: str | None = None, endpoint: str
-    ) -> NotificationSubscription | None:
+    def find_by_endpoint(self, *, user: str, endpoint: str) -> NotificationSubscription | None:
         normalized_endpoint = endpoint.strip()
-        normalized_owner_key = owner_key or None
-        if normalized_owner_key is None and user is None:
-            return None
-        for subscription in self.list_subscriptions(owner_key=normalized_owner_key, user=user):
+        for subscription in self.list_subscriptions(user=user):
             if subscription.endpoint == normalized_endpoint:
                 return subscription
         return None
@@ -93,8 +80,7 @@ class NotificationStore:
     def upsert_subscription(
         self,
         *,
-        owner_key: str = "",
-        user: str | None = None,
+        user: str,
         endpoint: str,
         p256dh: str,
         auth: str,
@@ -104,11 +90,10 @@ class NotificationStore:
         now: datetime | None = None,
     ) -> NotificationSubscription:
         current = now or datetime.now(tz=UTC)
-        existing = self.find_by_endpoint(owner_key=owner_key, user=user, endpoint=endpoint)
+        existing = self.find_by_endpoint(user=user, endpoint=endpoint)
         if existing is None:
             subscription = NotificationSubscription(
                 id=uuid.uuid4().hex,
-                owner_key=owner_key,
                 user=user,
                 device_name=device_name,
                 endpoint=endpoint,

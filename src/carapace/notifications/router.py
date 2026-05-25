@@ -77,13 +77,11 @@ class NotificationRouter:
         store: NotificationStore,
         presence: NotificationPresenceRegistry,
         sender: NotificationSender,
-        owner_key: str,
-        owner_for_session: Callable[[str], str | None] | None = None,
+        owner_for_session: Callable[[str], str],
     ) -> None:
         self._store = store
         self._presence = presence
         self._sender = sender
-        self._owner_key = owner_key
         self._owner_for_session = owner_for_session
 
     async def dispatch_escalation(
@@ -218,13 +216,7 @@ class NotificationRouter:
         return delivery
 
     def _subscriptions_for_session(self, session_id: str) -> list[NotificationSubscription]:
-        if self._owner_for_session is None:
-            return self._store.list_subscriptions(owner_key=self._owner_key)
-
         owner = self._owner_for_session(session_id)
-        if owner is None:
-            logger.warning(f"Notification skipped session={session_id} reason=missing_owner")
-            return []
         return self._store.list_subscriptions(user=owner)
 
 

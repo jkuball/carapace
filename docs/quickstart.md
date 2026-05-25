@@ -137,19 +137,9 @@ Notes:
 - If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
 - The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
 - Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
-- Notification subscriptions are grouped by the authenticated username. Legacy `owner_key` values still parse for older files.
+- Notification subscriptions are grouped by the authenticated username.
 
-## 5. Upgrade an existing single-user data directory
-
-If you already have data from a pre-user-auth version, assign it to a stable username before normal use:
-
-```bash
-uv run carapace upgrade-data --user thies --data-dir data
-```
-
-The upgrade command adds ownership metadata to sessions, jobs, and notifications, moves `data/knowledge` to `data/knowledges/thies`, and converts Matrix/sandbox token JSON files to YAML with `user` fields. It creates a disabled placeholder user when needed; set a password through the admin UI or admin API before logging in.
-
-## 6. Connect Matrix (optional)
+## 5. Connect Matrix (optional)
 
 Create a Matrix account for carapace on your homeserver, then add to `data/config.yaml`:
 
@@ -171,7 +161,7 @@ Set `CARAPACE_MATRIX_PASSWORD` in your `.env` and restart. carapace will join th
 
 `allowed_rooms` and `allowed_users` are mandatory — without them the bot ignores all messages. This prevents accidental exposure if someone invites the bot to a public room.
 
-## 7. Set up credentials
+## 6. Set up credentials
 
 carapace can fetch credentials from a password manager on demand. The agent does not have blanket access — every credential request is evaluated by the sentinel agent and requires explicit user approval the first time it is used in a session. Credentials are intended to be consumed inside the sandbox (auto-injected via skill config or fetched with `ccred`) and must never be echoed or logged. Two backends are available.
 
@@ -257,7 +247,7 @@ credentials:
       #   - "deadbeef-..."
 ```
 
-## 8. Personalise
+## 7. Personalise
 
 Edit the workspace files in the knowledge repo to shape carapace's behaviour. With the default config, these live under `data/knowledge/`:
 

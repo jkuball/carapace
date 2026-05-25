@@ -82,6 +82,7 @@ def _make_channel(tmp_path: Path, **config_kwargs: Any) -> Any:
     # Replace the nio client with a mock
     channel._client = AsyncMock(spec=nio.AsyncClient)
     channel._client.user_id = "@carapace:example.com"
+    channel._owner_user = "thies"
     return channel
 
 
@@ -120,7 +121,7 @@ def test_find_session_returns_none_when_empty(tmp_path: Path):
 
 def test_find_session_returns_matching_session(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    s = mgr.create_session("matrix", "!room:example.com")
+    s = mgr.create_session("matrix", "!room:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") == s.session_id
 
 
@@ -152,7 +153,7 @@ def test_matrix_session_created_with_token_owner(tmp_path: Path):
 
 def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path):
     ch = _make_channel(tmp_path)
-    existing = ch._session_mgr.create_session("matrix", "!room:example.com")
+    existing = ch._session_mgr.create_session("matrix", "!room:example.com", user="thies")
     ch._owner_user = "thies"
 
     session_id = ch._get_or_create_session("!room:example.com")
@@ -163,20 +164,20 @@ def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path):
 
 def test_find_session_ignores_different_channel(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    mgr.create_session("cli", "!room:example.com")
+    mgr.create_session("cli", "!room:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") is None
 
 
 def test_find_session_ignores_different_ref(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    mgr.create_session("matrix", "!other:example.com")
+    mgr.create_session("matrix", "!other:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") is None
 
 
 def test_find_session_returns_most_recent(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    s1 = mgr.create_session("matrix", "!room:example.com")
-    s2 = mgr.create_session("matrix", "!room:example.com")
+    s1 = mgr.create_session("matrix", "!room:example.com", user="thies")
+    s2 = mgr.create_session("matrix", "!room:example.com", user="thies")
     result = mgr.find_session("matrix", "!room:example.com")
     # Should return one of them; both are valid. s2 was created last.
     assert result in {s1.session_id, s2.session_id}
@@ -197,7 +198,7 @@ def test_get_or_create_session_creates_new(tmp_path: Path):
 
 def test_get_or_create_session_resumes_existing(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    existing = mgr.create_session("matrix", "!room:example.com")
+    existing = mgr.create_session("matrix", "!room:example.com", user="thies")
 
     ch = _make_channel(tmp_path)
     sid = ch._get_or_create_session("!room:example.com")
@@ -687,39 +688,37 @@ def test_format_domain_escalation():
 # ---------------------------------------------------------------------------
 
 
-def test_load_token_returns_persisted_token(tmp_path: Path):
+def test_load_token_returns_persisted_yaml_token(tmp_path: Path):
     """Persisted token with matching user_id is accepted."""
     ch = _make_channel(tmp_path)
-    token_file = tmp_path / "matrix_token.json"
-    persisted = MatrixTokenFile(access_token="tok_good", device_id="DEV1", user_id="@carapace:example.com")
-    token_file.write_text(persisted.model_dump_json())
+    token_file = tmp_path / "matrix_token.yaml"
+    persisted = MatrixTokenFile(
+        access_token="tok_good",
+        device_id="DEV1",
+        user_id="@carapace:example.com",
+        user="thies",
+    )
+    token_file.write_text(yaml.safe_dump(MatrixTokensFile(tokens=[persisted]).model_dump(mode="json")))
     token, device_id = ch._load_token(token_file)
     assert token == "tok_good"
     assert device_id == "DEV1"
 
 
 def test_load_token_discards_stale_user_id(tmp_path: Path):
-    """Persisted token for a different user_id is discarded and the file deleted."""
+    """Persisted token for a different user_id is ignored."""
     ch = _make_channel(tmp_path)
-    token_file = tmp_path / "matrix_token.json"
-    persisted = MatrixTokenFile(access_token="tok_old", device_id="DEV1", user_id="@other:example.com")
-    token_file.write_text(persisted.model_dump_json())
+    token_file = tmp_path / "matrix_token.yaml"
+    persisted = MatrixTokenFile(
+        access_token="tok_old",
+        device_id="DEV1",
+        user_id="@other:example.com",
+        user="thies",
+    )
+    token_file.write_text(yaml.safe_dump(MatrixTokensFile(tokens=[persisted]).model_dump(mode="json")))
     token, device_id = ch._load_token(token_file)
     assert token == ""
     assert device_id is None
-    assert not token_file.exists(), "stale token file should be deleted"
-
-
-def test_load_token_discards_legacy_file_without_user_id(tmp_path: Path):
-    """Legacy token files (no user_id field) are discarded so a fresh login stores the user_id."""
-    ch = _make_channel(tmp_path)
-    token_file = tmp_path / "matrix_token.json"
-    persisted = MatrixTokenFile(access_token="tok_legacy", device_id="DEV2")
-    token_file.write_text(persisted.model_dump_json())
-    token, device_id = ch._load_token(token_file)
-    assert token == ""
-    assert device_id is None
-    assert not token_file.exists(), "legacy token file should be deleted"
+    assert token_file.exists()
 
 
 @pytest.mark.anyio
@@ -727,7 +726,7 @@ async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pyte
     """After password login the persisted file includes the configured user_id."""
 
     ch = _make_channel(tmp_path, password=Secret(raw="secret"))
-    token_file = tmp_path / "matrix_token.json"
+    token_file = tmp_path / "matrix_token.yaml"
 
     login_resp = MagicMock()
     login_resp.access_token = "tok_new"
@@ -736,7 +735,8 @@ async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pyte
 
     await ch._password_login(token_file)
 
-    stored = MatrixTokenFile.model_validate_json(token_file.read_text())
+    stored = MatrixTokensFile.model_validate(yaml.safe_load(token_file.read_text(encoding="utf-8"))).tokens[0]
     assert stored.access_token == "tok_new"
     assert stored.device_id == "DEV_NEW"
     assert stored.user_id == "@carapace:example.com"
+    assert stored.user == "thies"

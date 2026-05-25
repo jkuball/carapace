@@ -74,7 +74,6 @@
             "loading": "Loading…",
             "refresh": "Refresh users",
             "new": "New user",
-            "upgradeUser": "Upgrade data for {username}",
             "deleteUser": "Delete {username}",
             "create": "Create user",
             "creating": "Creating…",
@@ -85,20 +84,17 @@
             "loaded": "Users loaded.",
             "created": "Created {username}.",
             "saved": "Saved {username}.",
-            "deleted": "Deleted {username}.",
-            "upgraded": "Upgraded data for {username}: {count} changes."
+            "deleted": "Deleted {username}."
         },
         "errors": {
             "missingCredentials": "Current origin is unavailable.",
             "load": "Failed to load users.",
             "create": "Failed to create user.",
             "save": "Failed to save user.",
-            "delete": "Failed to delete user.",
-            "upgrade": "Failed to upgrade user data."
+            "delete": "Failed to delete user."
         },
         "confirm": {
-            "deleteUser": "Delete {username}? Existing data owned by this user is not deleted.",
-            "upgradeUser": "Upgrade existing data using {username}?"
+            "deleteUser": "Delete {username}? Existing data owned by this user is not deleted."
         },
         "meta": {
             "tokenVersion": "Token v{version}",
