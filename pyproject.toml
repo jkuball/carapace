@@ -28,6 +28,7 @@ dependencies = [
     "pywebpush>=2,<3",
     "joserfc>=1.6.5",
     "pwdlib[argon2]>=0.3.0",
+    "types-docker>=7.1.0.20260518",
 ]
 
 [project.scripts]
