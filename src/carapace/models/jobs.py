@@ -42,9 +42,8 @@ class JobCronTrigger(BaseModel):
         return self
 
 
-class JobDefinition(BaseModel):
+class JobDefinitionInput(BaseModel):
     id: str
-    user: str | None = None
     name: str
     enabled: bool = True
     triggers: Annotated[list[JobCronTrigger], Field(default_factory=list)]
@@ -59,7 +58,7 @@ class JobDefinition(BaseModel):
     title_model_name: str | None = None
 
     @model_validator(mode="after")
-    def _validate_job(self) -> JobDefinition:
+    def _validate_job(self) -> JobDefinitionInput:
         def normalize_optional_model_name(value: str | None) -> str | None:
             if value is None:
                 return None
@@ -69,9 +68,6 @@ class JobDefinition(BaseModel):
         self.id = self.id.strip()
         if not self.id:
             raise ValueError("job id must not be empty")
-
-        if self.user is not None:
-            self.user = self.user.strip().lower() or None
 
         self.name = self.name.strip()
         if not self.name:
@@ -101,6 +97,17 @@ class JobDefinition(BaseModel):
         if any((self.agent_model_name, self.sentinel_model_name, self.title_model_name)):
             raise ValueError("job model overrides cannot be used with persistent_session_id")
         self.persistent_session_id = persistent_session_id
+        return self
+
+
+class JobDefinition(JobDefinitionInput):
+    user: str
+
+    @model_validator(mode="after")
+    def _validate_owner(self) -> JobDefinition:
+        self.user = self.user.strip().lower()
+        if not self.user:
+            raise ValueError("job user must not be empty")
         return self
 
 

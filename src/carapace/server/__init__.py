@@ -211,8 +211,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Pull from external remote if configured
     if _config.git.remote:
-        git_token = _config.git.token.resolve().get_secret_value() if _config.git.token else None
-        await git_store.add_remote(_config.git.remote, git_token)
+        await git_store.add_remote(_config.git.remote, _config.git.token)
         try:
             summary = await git_store.pull_from_remote()
             logger.info(f"Pulled from remote: {summary}")
@@ -318,7 +317,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             max_payload_bytes=_config.notifications.max_payload_bytes,
             delivery_ttl_seconds=_config.notifications.delivery_ttl_seconds,
         ),
-        owner_key="",
         owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
     )
 
@@ -398,33 +396,41 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     archive_task = asyncio.create_task(_session_archive_loop())
     jobs_task = asyncio.create_task(_jobs_scheduler_loop())
 
-    matrix_channel = None
-    if _config.channels.matrix.enabled:
+    matrix_channels = []
+    matrix_user_configs = [
+        (username, user.config.channels.matrix)
+        for username, user in sorted(_auth_store.load_users().users.items())
+        if user.enabled and user.config.channels.matrix.enabled
+    ]
+    if matrix_user_configs:
         from ..channels.matrix import MatrixChannel
 
-        matrix_channel = MatrixChannel(
-            config=_config.channels.matrix,
-            full_config=_config,
-            session_mgr=session_mgr,
-            skill_catalog=skill_catalog,
-            agent_model=agent_model,
-            sandbox_mgr=_sandbox_mgr,
-            engine=_engine,
-            presence_registry=_notification_presence,
-        )
-        await matrix_channel.start()
+        for username, matrix_config in matrix_user_configs:
+            matrix_channel = MatrixChannel(
+                config=matrix_config,
+                full_config=_config,
+                session_mgr=session_mgr,
+                skill_catalog=skill_catalog,
+                agent_model=agent_model,
+                sandbox_mgr=_sandbox_mgr,
+                engine=_engine,
+                owner_user=username,
+                presence_registry=_notification_presence,
+            )
+            await matrix_channel.start()
+            matrix_channels.append(matrix_channel)
 
     logger.info(
         f"carapace server ready — model={_config.agent.model}, "
         f"skills={len(skill_catalog)}, proxy_port={proxy_port}"
-        + (f", matrix=on ({_config.channels.matrix.homeserver})" if _config.channels.matrix.enabled else "")
+        + (f", matrix=on ({len(matrix_channels)} user channel(s))" if matrix_channels else "")
     )
     yield
     logger.info("Server shutting down…")
     cleanup_task.cancel()
     archive_task.cancel()
     jobs_task.cancel()
-    if matrix_channel:
+    for matrix_channel in matrix_channels:
         await matrix_channel.stop()
     sandbox_server.should_exit = True
     internal_server.should_exit = True

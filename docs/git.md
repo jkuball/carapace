@@ -12,34 +12,25 @@ Add a `git` section to your `config.yaml`:
 git:
   remote: https://gitea.example.com/team/knowledge.git
   branch: main
-  token:
-    env: CARAPACE_GIT_TOKEN
+  token: ghp_xxxxxxxxxxxx
 ```
 
-| Field    | Default                                     | Description                                                                                                                            |
-| -------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `remote` | `""` (none)                                 | URL of the upstream Git remote. Leave empty for local-only mode.                                                                       |
-| `branch` | `"main"`                                    | Remote branch to fetch from and push to. **Must already exist on the remote.** The local knowledge repo always uses `main` internally. |
-| `author` | `"carapace Session %s <%s@carapace.local>"` | Commit author template. `%s` is replaced with the session ID.                                                                          |
-| `token`  | `null`                                      | Authentication token for the remote (see below).                                                                                       |
+| Field    | Default                    | Description                                                                                                                            |
+| -------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `remote` | `""` (none)                | URL of the upstream Git remote. Leave empty for local-only mode.                                                                       |
+| `branch` | `"main"`                   | Remote branch to fetch from and push to. **Must already exist on the remote.** The local knowledge repo always uses `main` internally. |
+| `author` | `"carapace <carapace@%h>"` | Commit author template. `%s` is replaced with the session ID, `%h` with the hostname.                                                  |
+| `token`  | `null`                     | Authentication token for the remote (see below).                                                                                       |
 
 ### Authentication
 
-The `token` field accepts three forms via the `Secret` model:
+The `token` field accepts a literal token string:
 
 ```yaml
-# Read from an environment variable (recommended)
-token:
-  env: CARAPACE_GIT_TOKEN
-
-# Read from a file
-token:
-  file: /run/secrets/git-token
-
-# Inline value (not recommended for production)
-token:
-  raw: ghp_xxxxxxxxxxxx
+token: ghp_xxxxxxxxxxxx
 ```
+
+It does not support `env` or `file` indirection. Git remote credentials belong to the configured knowledge owner and must not let user-owned config read arbitrary server environment variables or files.
 
 The token is embedded as `x-access-token:<token>` in the remote URL for HTTPS authentication. If no token is configured, the remote is added without credentials (suitable for public repos or SSH URLs).
 

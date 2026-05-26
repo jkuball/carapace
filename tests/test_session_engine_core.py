@@ -49,7 +49,7 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    state = engine.session_mgr.create_session()
+    state = engine.session_mgr.create_session(user="thies")
     sid = state.session_id
     active = engine.get_or_activate(sid)
     active.state.context_grants[skill_name] = ContextGrant(
@@ -104,7 +104,7 @@ def test_record_tool_call_event_reuses_sentinel_row_for_user_decision(tmp_path: 
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    sid = engine.session_mgr.create_session().session_id
+    sid = engine.session_mgr.create_session(user="thies").session_id
 
     initial_tool_id = engine._record_tool_call_event(
         sid,
@@ -143,7 +143,7 @@ def test_record_tool_call_event_reuses_proxy_domain_row_for_queued_reviewing_and
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    sid = engine.session_mgr.create_session().session_id
+    sid = engine.session_mgr.create_session(user="thies").session_id
 
     queued_tool_id = engine._record_tool_call_event(
         sid,
@@ -194,7 +194,12 @@ def test_fork_session_copies_transcript_and_security_context(tmp_path: Path) -> 
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    source = engine.session_mgr.create_session(channel_type="matrix", channel_ref="!room:example.com", private=True)
+    source = engine.session_mgr.create_session(
+        user="thies",
+        channel_type="matrix",
+        channel_ref="!room:example.com",
+        private=True,
+    )
     sid = source.session_id
     active = engine.get_or_activate(sid)
     active.state.title = "Original title"
@@ -275,7 +280,7 @@ def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_p
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    source = engine.session_mgr.create_session(unattended=True)
+    source = engine.session_mgr.create_session(user="thies", unattended=True)
     sid = source.session_id
     engine.get_or_activate(sid)
     engine.session_mgr.append_events(
@@ -325,7 +330,7 @@ def test_fork_session_normalizes_unattended_history_with_thinking_parts(tmp_path
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    source = engine.session_mgr.create_session(unattended=True)
+    source = engine.session_mgr.create_session(user="thies", unattended=True)
     sid = source.session_id
     engine.get_or_activate(sid)
     engine.session_mgr.append_events(
@@ -376,7 +381,7 @@ def test_handle_token_chunk_promotes_activity_and_broadcasts(tmp_path: Path) -> 
         with _patch_sentinel():
             engine = _make_engine(tmp_path)
 
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
         subscriber = _FakeSubscriber()
@@ -413,7 +418,7 @@ def test_handle_thinking_token_chunk_updates_buffer_and_broadcasts(tmp_path: Pat
         with _patch_sentinel():
             engine = _make_engine(tmp_path)
 
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
         subscriber = _FakeSubscriber()
@@ -450,7 +455,7 @@ def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path:
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
 
-    sid = engine.session_mgr.create_session().session_id
+    sid = engine.session_mgr.create_session(user="thies").session_id
 
     reviewing_tool_id = engine._record_tool_call_event(
         sid,
@@ -555,7 +560,7 @@ def test_user_message_from_self(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         origin = _FakeSubscriber()
@@ -582,7 +587,7 @@ def test_user_message_no_origin(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub_a = _FakeSubscriber()
@@ -611,7 +616,7 @@ def test_submit_message_clears_pending_turn_notifications(tmp_path: Path):
         engine._notification_router.clear_notifications = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
         )
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
         active.pending_notifications = {"done:test:1:attended_turn_completed": {"sub-1"}}
@@ -645,7 +650,7 @@ def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
         engine._notification_router.clear_notifications = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
         )
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
         callback = engine._make_escalation_cb(active)
 
@@ -678,7 +683,7 @@ def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Pat
         engine._notification_router.dispatch_turn_outcome = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
         )
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
         engine.session_mgr.append_events(sid, [{"role": "user", "content": "hello"}])
 
@@ -704,7 +709,7 @@ def test_finalize_failed_turn_dispatches_unattended_failure_notification(tmp_pat
         engine._notification_router.dispatch_turn_outcome = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
         )
-        sid = engine.session_mgr.create_session(unattended=True).session_id
+        sid = engine.session_mgr.create_session(user="thies", unattended=True).session_id
         active = engine.get_or_activate(sid)
         engine.session_mgr.append_events(sid, [{"role": "user", "content": "run"}])
 

@@ -3,8 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime
-from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 import httpx
 import typer
@@ -18,7 +17,6 @@ from rich.table import Table
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .payloads import dict_of_dicts, dict_or_empty, list_of_dicts, string_dict
-from .upgrade import upgrade_data_dir
 
 load_dotenv()
 
@@ -26,6 +24,11 @@ app = typer.Typer(help="carapace -- security-first personal AI agent")
 console = Console()
 
 DEFAULT_SERVER = "http://127.0.0.1:8321"
+
+
+@app.callback()
+def main() -> None:
+    """carapace -- security-first personal AI agent."""
 
 
 def _fmt_dt(iso: str) -> str:
@@ -830,22 +833,6 @@ def chat(
         console.print(f"[red]Connection error: {e}[/red]")
     finally:
         client.close()
-
-
-@app.command("upgrade-data")
-def upgrade_data(
-    username: Annotated[str, typer.Option("--user", "-u", help="Stable username that owns existing data")],
-    data_dir: Annotated[Path, typer.Option("--data-dir", "-d", help="Data directory to upgrade")] = Path("data"),
-) -> None:
-    """Upgrade an existing single-user data directory to user-owned storage."""
-    summary = upgrade_data_dir(data_dir, username)
-    if not summary:
-        console.print("[green]Data directory already matched the new layout.[/green]")
-        return
-    for section, entries in summary.items():
-        console.print(f"[bold]{section}[/bold]")
-        for entry in entries:
-            console.print(f"  - {entry}")
 
 
 if __name__ == "__main__":

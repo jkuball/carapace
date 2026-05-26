@@ -22,7 +22,7 @@ from carapace.usage import LlmRequestState
 
 def test_create_session(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     assert len(state.session_id) == 25  # 2026-03-08-10-22-abcd1234
     assert state.channel_type == "cli"
     assert state.attributes == SessionAttributes()
@@ -31,7 +31,7 @@ def test_create_session(tmp_path: Path):
 def test_create_session_persists_budget(tmp_path: Path):
     mgr = SessionManager(tmp_path)
     budget = SessionBudget(input_tokens=1_000, cost_usd=Decimal("5.00"), tool_calls=4)
-    state = mgr.create_session(budget=budget)
+    state = mgr.create_session(user="thies", budget=budget)
 
     resumed = mgr.resume_session(state.session_id)
     assert resumed is not None
@@ -42,7 +42,7 @@ def test_create_session_persists_budget(tmp_path: Path):
 
 def test_create_session_persists_private_attribute(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session(private=True)
+    state = mgr.create_session(user="thies", private=True)
 
     resumed = mgr.resume_session(state.session_id)
     assert resumed is not None
@@ -51,7 +51,7 @@ def test_create_session_persists_private_attribute(tmp_path: Path):
 
 def test_create_session_persists_access_modes(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session(ask_mode=True)
+    state = mgr.create_session(user="thies", ask_mode=True)
 
     resumed = mgr.resume_session(state.session_id)
     assert resumed is not None
@@ -61,7 +61,7 @@ def test_create_session_persists_access_modes(tmp_path: Path) -> None:
 
 def test_resume_session(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     resumed = mgr.resume_session(state.session_id)
     assert resumed is not None
     assert resumed.session_id == state.session_id
@@ -69,7 +69,7 @@ def test_resume_session(tmp_path: Path):
 
 def test_update_events_timestamps_inserted_and_replaced_entries(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     mgr.save_events(
         state.session_id,
         [
@@ -100,8 +100,8 @@ def test_resume_nonexistent(tmp_path: Path):
 
 def test_list_sessions(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    s1 = mgr.create_session()
-    s2 = mgr.create_session()
+    s1 = mgr.create_session(user="thies")
+    s2 = mgr.create_session(user="thies")
     sessions = mgr.list_sessions()
     assert s1.session_id in sessions
     assert s2.session_id in sessions
@@ -111,15 +111,24 @@ def test_list_sessions_filters_by_owner(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
     alice = mgr.create_session(user="alice")
     bob = mgr.create_session(user="bob")
-    mgr.create_session()
+    mgr.create_session(user="thies")
 
     assert mgr.list_sessions(user="alice") == [alice.session_id]
     assert mgr.list_sessions(user="bob") == [bob.session_id]
 
 
+def test_list_sessions_filters_by_owner_skips_missing_meta(tmp_path: Path) -> None:
+    mgr = SessionManager(tmp_path)
+    alice = mgr.create_session(user="alice")
+    legacy = mgr.create_session(user="alice")
+    (tmp_path / "sessions" / legacy.session_id / "meta.yaml").unlink()
+
+    assert mgr.list_sessions(user="alice") == [alice.session_id]
+
+
 def test_save_and_resume_state(tmp_path: Path):
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     state.context_grants["my-skill"] = ContextGrant(
         skill_name="my-skill",
         domains={"example.com"},
@@ -137,7 +146,7 @@ def test_session_manager_calls_on_change_for_state_mutations(tmp_path: Path) -> 
     changed: list[str] = []
     mgr = SessionManager(tmp_path, on_change=lambda: changed.append("changed"))
 
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     state.title = "Renamed"
     mgr.save_state(state)
     assert mgr.delete_session(state.session_id) is True
@@ -147,7 +156,7 @@ def test_session_manager_calls_on_change_for_state_mutations(tmp_path: Path) -> 
 
 def test_save_and_load_llm_request_state(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     activity = LlmRequestState(
         request_id="req-1",
         source="agent",
@@ -169,7 +178,7 @@ def test_save_and_load_llm_request_state(tmp_path: Path) -> None:
 
 def test_save_and_load_sandbox_snapshot(tmp_path: Path) -> None:
     mgr = SessionManager(tmp_path)
-    state = mgr.create_session()
+    state = mgr.create_session(user="thies")
     snapshot = SessionSandboxSnapshot(
         exists=True,
         runtime="kubernetes",

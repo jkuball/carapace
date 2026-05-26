@@ -11,7 +11,7 @@ from carapace.notifications.models import NotificationPreferences, Notifications
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.notifications.router import NotificationDeliveryResult, NotificationPayload, NotificationRouter
 from carapace.notifications.sender import WebPushSender
-from carapace.notifications.store import NotificationStore, derive_owner_key
+from carapace.notifications.store import NotificationStore
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
 
 
@@ -26,7 +26,7 @@ def test_notification_subscription_defaults_last_heartbeat() -> None:
     subscription = NotificationSubscription.model_validate(
         {
             "id": "sub-1",
-            "owner_key": "owner-1",
+            "user": "thies",
             "endpoint": "https://push.example.test/sub-1",
             "p256dh": "p256dh",
             "auth": "auth",
@@ -38,20 +38,13 @@ def test_notification_subscription_defaults_last_heartbeat() -> None:
     assert subscription.last_heartbeat == subscribed_at
 
 
-def test_derive_owner_key_is_stable() -> None:
-    token = "very-static-token"
-    assert derive_owner_key(token) == derive_owner_key(token)
-    assert derive_owner_key(token) != derive_owner_key("other-token")
-
-
-def test_notification_store_upsert_and_list_by_owner(tmp_path) -> None:
+def test_notification_store_upsert_and_list_by_user(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime(2026, 5, 12, tzinfo=UTC)
-    owner_key = derive_owner_key("token-1")
     prefs = NotificationPreferences(attended_turn_completed=False)
 
     created = store.upsert_subscription(
-        owner_key=owner_key,
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -62,7 +55,7 @@ def test_notification_store_upsert_and_list_by_owner(tmp_path) -> None:
     )
 
     updated = store.upsert_subscription(
-        owner_key=owner_key,
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-2",
         auth="auth-2",
@@ -76,7 +69,7 @@ def test_notification_store_upsert_and_list_by_owner(tmp_path) -> None:
     assert updated.device_name == "Phone 2"
     assert updated.p256dh == "key-2"
     assert updated.notification_prefs.unattended_turn_completed is True
-    assert [subscription.id for subscription in store.list_subscriptions(owner_key=owner_key)] == [created.id]
+    assert [subscription.id for subscription in store.list_subscriptions(user="thies")] == [created.id]
 
 
 def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> None:
@@ -84,7 +77,7 @@ def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> N
     now = datetime(2026, 5, 12, tzinfo=UTC)
     endpoint = "https://push.example.test/shared"
     created = store.upsert_subscription(
-        owner_key=derive_owner_key("token-1"),
+        user="thies",
         endpoint=endpoint,
         p256dh="key-1",
         auth="auth-1",
@@ -94,9 +87,10 @@ def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> N
         now=now,
     )
 
-    assert store.find_by_endpoint(endpoint=endpoint) is None
+    assert store.find_by_endpoint(user="ada", endpoint=endpoint) is None
 
-    ownerless = store.upsert_subscription(
+    other_user = store.upsert_subscription(
+        user="ada",
         endpoint=endpoint,
         p256dh="key-2",
         auth="auth-2",
@@ -106,14 +100,14 @@ def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> N
         now=now + timedelta(hours=1),
     )
 
-    assert ownerless.id != created.id
+    assert other_user.id != created.id
 
 
 def test_notification_store_cleanup_expired(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime(2026, 5, 12, tzinfo=UTC)
     subscription = store.upsert_subscription(
-        owner_key=derive_owner_key("token-1"),
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -179,10 +173,9 @@ def test_presence_registry_cli_entry_is_active_until_stale() -> None:
 async def test_notification_router_dispatch_turn_outcome_filters_by_preference_and_presence(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     sender = AsyncMock()
-    owner_key = derive_owner_key("token-1")
     now = datetime.now(tz=UTC)
     matching_subscription = store.upsert_subscription(
-        owner_key=owner_key,
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -192,7 +185,7 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         now=now,
     )
     store.upsert_subscription(
-        owner_key=owner_key,
+        user="thies",
         endpoint="https://push.example.test/sub-2",
         p256dh="key-2",
         auth="auth-2",
@@ -207,7 +200,7 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
         store=store,
         presence=presence,
         sender=sender,
-        owner_key=owner_key,
+        owner_for_session=lambda _session_id: "thies",
     )
 
     delivery = await router.dispatch_turn_outcome(
@@ -247,11 +240,10 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
     sender.send_batch.assert_not_awaited()
 
 
-async def test_notification_router_skips_ownerless_session_when_owner_resolver_is_configured(tmp_path) -> None:
+async def test_notification_router_filters_by_session_owner(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime.now(tz=UTC)
     store.upsert_subscription(
-        owner_key="",
         user="alice",
         endpoint="https://push.example.test/alice",
         p256dh="key-1",
@@ -262,7 +254,6 @@ async def test_notification_router_skips_ownerless_session_when_owner_resolver_i
         now=now,
     )
     store.upsert_subscription(
-        owner_key="",
         user="bob",
         endpoint="https://push.example.test/bob",
         p256dh="key-2",
@@ -278,29 +269,27 @@ async def test_notification_router_skips_ownerless_session_when_owner_resolver_i
         store=store,
         presence=NotificationPresenceRegistry(ttl=timedelta(seconds=60)),
         sender=sender,
-        owner_key="",
-        owner_for_session=lambda _session_id: None,
+        owner_for_session=lambda _session_id: "alice",
     )
 
     delivery = await router.dispatch_turn_outcome(
-        session_id="ownerless-session",
+        session_id="alice-session",
         assistant_event_index=3,
         kind="attended_turn_completed",
         title="Session Update",
         body="Assistant turn completed",
     )
 
-    assert delivery == NotificationDeliveryResult(attempted_subscription_ids=set(), delivered_subscription_ids=set())
-    sender.send_batch.assert_not_awaited()
+    assert delivery.attempted_subscription_ids == {store.list_subscriptions(user="alice")[0].id}
+    sender.send_batch.assert_awaited_once()
 
 
 async def test_notification_router_dispatch_test_targets_single_subscription(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     sender = AsyncMock()
-    owner_key = derive_owner_key("token-1")
     now = datetime.now(tz=UTC)
     subscription = store.upsert_subscription(
-        owner_key=owner_key,
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -320,7 +309,7 @@ async def test_notification_router_dispatch_test_targets_single_subscription(tmp
         store=store,
         presence=presence,
         sender=sender,
-        owner_key=owner_key,
+        owner_for_session=lambda _session_id: "thies",
     )
 
     delivered = await router.dispatch_test(subscription=subscription)
@@ -337,7 +326,7 @@ async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     now = datetime.now(tz=UTC)
     subscription = store.upsert_subscription(
-        owner_key=derive_owner_key("token-1"),
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -382,7 +371,7 @@ async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
 async def test_web_push_sender_skips_oversized_payload(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     subscription = store.upsert_subscription(
-        owner_key=derive_owner_key("token-1"),
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",
@@ -460,7 +449,7 @@ def test_ensure_vapid_config_accepts_legacy_raw_private_key(tmp_path) -> None:
 async def test_web_push_sender_passes_parsed_vapid_key_to_pywebpush(tmp_path) -> None:
     store = NotificationStore(tmp_path)
     subscription = store.upsert_subscription(
-        owner_key=derive_owner_key("token-1"),
+        user="thies",
         endpoint="https://push.example.test/sub-1",
         p256dh="key-1",
         auth="auth-1",

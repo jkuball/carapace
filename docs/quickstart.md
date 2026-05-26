@@ -22,8 +22,6 @@ CARAPACE_TOKEN=pick-a-bootstrap-admin-password
 
 # Optional — uncomment if needed
 # GOOGLE_API_KEY=...
-# CARAPACE_MATRIX_PASSWORD=...
-# CARAPACE_GIT_TOKEN=...
 ```
 
 If no enabled admin user exists yet, `CARAPACE_TOKEN` becomes the bootstrap `admin` user's initial password and must be at least 16 characters long. After startup, normal web UI, CLI, REST, WebSocket, and admin access uses username/password login and an HttpOnly session cookie.
@@ -137,21 +135,11 @@ Notes:
 - If `vapid_subject` is omitted, carapace uses `mailto:carapace@localhost`.
 - The public key is derived from the private key and exposed through `/api/config/vapid-public-key`.
 - Delivery also requires at least one client subscription registered through the `/api/notifications/*` endpoints.
-- Notification subscriptions are grouped by the authenticated username. Legacy `owner_key` values still parse for older files.
+- Notification subscriptions are grouped by the authenticated username.
 
-## 5. Upgrade an existing single-user data directory
+## 5. Connect Matrix (optional)
 
-If you already have data from a pre-user-auth version, assign it to a stable username before normal use:
-
-```bash
-uv run carapace upgrade-data --user thies --data-dir data
-```
-
-The upgrade command adds ownership metadata to sessions, jobs, and notifications, moves `data/knowledge` to `data/knowledges/thies`, and converts Matrix/sandbox token JSON files to YAML with `user` fields. It creates a disabled placeholder user when needed; set a password through the admin UI or admin API before logging in.
-
-## 6. Connect Matrix (optional)
-
-Create a Matrix account for carapace on your homeserver, then add to `data/config.yaml`:
+Create a Matrix account for carapace on your homeserver, then add Matrix settings to the owning user's config (`config.channels.matrix` in the user record):
 
 ```yaml
 channels:
@@ -159,19 +147,18 @@ channels:
     enabled: true
     homeserver: https://matrix.example.com
     user_id: "@carapace:example.com"
-    password:
-      env: CARAPACE_MATRIX_PASSWORD
+    password: "change-me"
     allowed_rooms:
       - "!roomid:example.com"
     allowed_users:
       - "@you:example.com"
 ```
 
-Set `CARAPACE_MATRIX_PASSWORD` in your `.env` and restart. carapace will join the allowed rooms and respond to messages from allowed users. Sessions are created per-room.
+Restart carapace after changing the user config. carapace starts one Matrix channel per enabled user config, joins the allowed rooms, and responds to messages from allowed users. Sessions are created per-room and owned by that user.
 
 `allowed_rooms` and `allowed_users` are mandatory — without them the bot ignores all messages. This prevents accidental exposure if someone invites the bot to a public room.
 
-## 7. Set up credentials
+## 6. Set up credentials
 
 carapace can fetch credentials from a password manager on demand. The agent does not have blanket access — every credential request is evaluated by the sentinel agent and requires explicit user approval the first time it is used in a session. Credentials are intended to be consumed inside the sandbox (auto-injected via skill config or fetched with `ccred`) and must never be echoed or logged. Two backends are available.
 
@@ -257,7 +244,7 @@ credentials:
       #   - "deadbeef-..."
 ```
 
-## 8. Personalise
+## 7. Personalise
 
 Edit the workspace files in the knowledge repo to shape carapace's behaviour. With the default config, these live under `data/knowledge/`:
 

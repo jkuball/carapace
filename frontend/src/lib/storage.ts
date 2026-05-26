@@ -2,7 +2,6 @@ import { normalizeServer } from "./server-url";
 
 const SERVER_KEY = "carapace_server";
 const USERNAME_KEY = "carapace_username";
-const LEGACY_TOKEN_KEY = "carapace_token";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
 const SHOW_ARCHIVED_SESSIONS_KEY = "carapace_show_archived_sessions";
 const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
@@ -26,13 +25,11 @@ export function getToken(): string {
 export function saveConnection(username: string) {
   localStorage.removeItem(SERVER_KEY);
   localStorage.setItem(USERNAME_KEY, username);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function clearConnection() {
   localStorage.removeItem(SERVER_KEY);
   localStorage.removeItem(USERNAME_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function hasConnection(): boolean {

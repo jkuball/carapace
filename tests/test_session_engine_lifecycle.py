@@ -21,7 +21,7 @@ def test_subscribe_duplicate_prevention(tmp_path: Path):
     """Subscribing the same subscriber twice does not duplicate it."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -36,7 +36,7 @@ def test_subscribe_duplicate_prevention(tmp_path: Path):
 def test_get_active_returns_none_before_activation(tmp_path: Path):
     """get_active returns None for a session that hasn't been activated."""
     engine = _make_engine(tmp_path)
-    state = engine.session_mgr.create_session()
+    state = engine.session_mgr.create_session(user="thies")
     assert engine.get_active(state.session_id) is None
 
 
@@ -44,7 +44,7 @@ def test_get_or_activate_loads_session(tmp_path: Path):
     """get_or_activate loads the session from disk and makes it active."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         assert engine.get_active(sid) is None
@@ -65,7 +65,7 @@ def test_deactivate_removes_session(tmp_path: Path):
     """deactivate removes the session from active memory."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         engine.get_or_activate(sid)
@@ -85,7 +85,7 @@ def test_unsubscribe_removes_subscriber(tmp_path: Path):
     """unsubscribe removes the subscriber from the list."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -102,7 +102,7 @@ def test_unsubscribe_nonexistent_is_safe(tmp_path: Path):
     """Unsubscribing a subscriber that was never added does not raise."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         engine.get_or_activate(sid)
@@ -113,7 +113,7 @@ def test_unsubscribe_saves_usage_when_last(tmp_path: Path):
     """Usage is persisted to disk when the last subscriber disconnects."""
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -134,7 +134,7 @@ def test_submit_message_busy_broadcasts_error(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -161,7 +161,7 @@ def test_submit_cancel_stops_task(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         engine.subscribe(sid, _FakeSubscriber())
@@ -182,7 +182,7 @@ def test_submit_cancel_persists_interruption_marker(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -224,7 +224,7 @@ def test_submit_cancel_persists_interrupted_llm_request_log(tmp_path: Path):
 
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         engine.subscribe(sid, _FakeSubscriber())
@@ -285,7 +285,7 @@ def test_submit_cancel_noop_when_inactive(tmp_path: Path):
 def test_retry_latest_turn_rewinds_and_restarts(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session()
+        state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
         sub = _FakeSubscriber()
@@ -357,7 +357,7 @@ def test_retry_latest_turn_rewinds_and_restarts(tmp_path: Path):
 def test_retry_latest_turn_after_failure_uses_terminal_marker_history(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
 
         engine.session_mgr.save_events(
             sid,
@@ -411,7 +411,7 @@ def test_retry_latest_turn_after_failure_uses_terminal_marker_history(tmp_path: 
 def test_reset_to_turn_rewinds_later_turns(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
 
         engine.session_mgr.save_events(
             sid,
@@ -454,7 +454,7 @@ def test_reset_to_turn_rewinds_later_turns(tmp_path: Path):
 def test_reset_to_turn_rejects_unknown_target(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)
-        sid = engine.session_mgr.create_session().session_id
+        sid = engine.session_mgr.create_session(user="thies").session_id
         sub = _FakeSubscriber()
         engine.subscribe(sid, sub)
 

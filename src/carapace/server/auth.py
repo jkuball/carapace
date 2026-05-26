@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from pydantic import BaseModel
 
 from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
-from ..models.config import UserConfig
-from ..upgrade import upgrade_data_dir
+from ..models.user import UserConfig
 from .state import server_module
 
 server = server_module()
@@ -58,11 +57,6 @@ class AdminUserResponse(BaseModel):
     password_changed_at: str
     last_login_at: str | None = None
     config: UserConfig
-
-
-class AdminUserUpgradeResponse(BaseModel):
-    username: str
-    summary: dict[str, list[str]]
 
 
 def _auth_store() -> AuthStore:
@@ -288,24 +282,3 @@ async def delete_admin_user(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="User not found") from exc
     return Response(status_code=204)
-
-
-@router.post("/admin/users/{username}/upgrade-data", response_model=AdminUserUpgradeResponse)
-async def upgrade_admin_user_data(
-    username: str,
-    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
-) -> AdminUserUpgradeResponse:
-    normalized_username = normalize_username(username)
-    if _auth_store().get_user(normalized_username) is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    data_dir = getattr(server, "_data_dir", None)
-    if data_dir is None:
-        raise HTTPException(status_code=503, detail="Data directory is not initialized")
-    try:
-        summary = upgrade_data_dir(data_dir, normalized_username)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    session_list_cache = getattr(server, "_session_list_cache", None)
-    if session_list_cache is not None:
-        session_list_cache.invalidate_sync()
-    return AdminUserUpgradeResponse(username=normalized_username, summary=dict(summary))

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ..auth import UserIdentity
 from ..jobs import build_job_run_message
-from ..models.jobs import JobDefinition, JobsFile
+from ..models.jobs import JobDefinition, JobDefinitionInput, JobsFile
 from ..models.session import SessionJobRunContext
 from .auth import verify_token
 from .sessions import SessionInfo, _session_info_from_state
@@ -80,8 +80,6 @@ async def _run_job_definition(
         raise ValueError(detail)
 
     if job.persistent_session_id is None:
-        if job.user is None:
-            raise_job_conflict("Job has no owner; run the data upgrade first")
         state = server._engine.session_mgr.create_session(
             channel_type="job",
             channel_ref=f"job:{job.id}",
@@ -98,7 +96,7 @@ async def _run_job_definition(
         created_new_session = True
     else:
         state = server._engine.session_mgr.load_state(job.persistent_session_id)
-        if state is None or job.user is None or not server._engine.session_mgr.is_owned_by(state.session_id, job.user):
+        if state is None or not server._engine.session_mgr.is_owned_by(state.session_id, job.user):
             raise_job_conflict("Configured persistent session was not found")
         if state.attributes.unattended:
             raise_job_conflict("Configured persistent session must be attended")
@@ -156,12 +154,12 @@ async def list_jobs(user: Annotated[UserIdentity, Depends(verify_token)]) -> Job
 
 @router.post("/jobs", response_model=JobDefinition, status_code=201)
 async def create_job(
-    body: JobDefinition,
+    body: JobDefinitionInput,
     user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> JobDefinition:
-    body = body.model_copy(update={"user": user.username})
+    job = JobDefinition.model_validate({**body.model_dump(mode="json"), "user": user.username})
     try:
-        return server._jobs_store.create_job(body)
+        return server._jobs_store.create_job(job)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -177,7 +175,7 @@ async def get_job(job_id: str, user: Annotated[UserIdentity, Depends(verify_toke
 @router.put("/jobs/{job_id}", response_model=JobDefinition)
 async def update_job(
     job_id: str,
-    body: JobDefinition,
+    body: JobDefinitionInput,
     user: Annotated[UserIdentity, Depends(verify_token)],
 ) -> JobDefinition:
     if body.id != job_id:
@@ -185,9 +183,9 @@ async def update_job(
     existing = server._jobs_store.get_job_for_user(job_id, user.username)
     if existing is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    body = body.model_copy(update={"user": user.username})
+    job = JobDefinition.model_validate({**body.model_dump(mode="json"), "user": user.username})
     try:
-        return server._jobs_store.update_job(job_id, body)
+        return server._jobs_store.update_job(job_id, job)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Job not found") from exc
 

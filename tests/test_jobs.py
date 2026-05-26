@@ -8,7 +8,7 @@ from carapace.models.jobs import JobDefinition
 
 def test_jobs_store_roundtrip(tmp_path):
     store = JobsStore(tmp_path)
-    job = JobDefinition(id="daily", name="Daily", prompt="Summarize.")
+    job = JobDefinition(user="thies", id="daily", name="Daily", prompt="Summarize.")
 
     store.create_job(job)
 
@@ -18,7 +18,7 @@ def test_jobs_store_roundtrip(tmp_path):
 
 
 def test_build_job_run_message_includes_trigger_context_and_payload():
-    job = JobDefinition(id="daily", name="Daily", prompt="Summarize.")
+    job = JobDefinition(user="thies", id="daily", name="Daily", prompt="Summarize.")
 
     message = build_job_run_message(
         job,
@@ -37,7 +37,7 @@ def test_build_job_run_message_includes_trigger_context_and_payload():
 
 
 def test_build_job_run_message_manual_trigger():
-    job = JobDefinition(id="report", name="Report", prompt="Generate report.")
+    job = JobDefinition(user="thies", id="report", name="Report", prompt="Generate report.")
 
     message = build_job_run_message(
         job,
@@ -53,7 +53,7 @@ def test_build_job_run_message_manual_trigger():
 
 
 def test_build_job_run_message_cron_trigger():
-    job = JobDefinition(id="nightly", name="Nightly", prompt="Archive old items.")
+    job = JobDefinition(user="thies", id="nightly", name="Nightly", prompt="Archive old items.")
 
     message = build_job_run_message(
         job,
@@ -78,6 +78,7 @@ def test_jobs_scheduler_skips_first_scan(tmp_path):
         JobDefinition.model_validate(
             {
                 "id": "daily",
+                "user": "thies",
                 "name": "Daily",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -97,6 +98,7 @@ def test_jobs_scheduler_collects_due_runs_once_per_window(tmp_path):
         JobDefinition.model_validate(
             {
                 "id": "daily",
+                "user": "thies",
                 "name": "Daily",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -123,6 +125,7 @@ def test_jobs_scheduler_collects_due_run_on_exact_now_boundary(tmp_path):
         JobDefinition.model_validate(
             {
                 "id": "daily",
+                "user": "thies",
                 "name": "Daily",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -147,6 +150,7 @@ def test_jobs_scheduler_does_not_duplicate_run_near_exact_boundary(tmp_path):
         JobDefinition.model_validate(
             {
                 "id": "daily",
+                "user": "thies",
                 "name": "Daily",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -170,6 +174,7 @@ def test_jobs_scheduler_does_not_regress_checkpoint_when_clock_moves_backwards(t
         JobDefinition.model_validate(
             {
                 "id": "daily",
+                "user": "thies",
                 "name": "Daily",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "* * * * *"}],
@@ -206,6 +211,7 @@ def test_jobs_scheduler_honors_trigger_timezone(tmp_path):
         JobDefinition.model_validate(
             {
                 "id": "berlin-morning",
+                "user": "thies",
                 "name": "Berlin Morning",
                 "prompt": "Summarize.",
                 "triggers": [{"expression": "0 9 * * *", "timezone": "Europe/Berlin"}],

@@ -3,13 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NotificationClientType = Literal["web", "matrix", "cli"]
 NotificationFocusState = Literal["visible", "hidden", "inactive"]
 
 
 class NotificationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     escalation_pending: bool = True
     attended_turn_completed: bool = True
     unattended_turn_completed: bool = False
@@ -18,8 +20,7 @@ class NotificationPreferences(BaseModel):
 
 class NotificationSubscription(BaseModel):
     id: str
-    owner_key: str = ""
-    user: str | None = None
+    user: str
     device_name: str = ""
     endpoint: str
     p256dh: str
@@ -34,9 +35,9 @@ class NotificationSubscription(BaseModel):
         self.id = self.id.strip()
         if not self.id:
             raise ValueError("notification subscription id must not be empty")
-        self.owner_key = self.owner_key.strip()
-        if self.user is not None:
-            self.user = self.user.strip().lower() or None
+        self.user = self.user.strip().lower()
+        if not self.user:
+            raise ValueError("notification subscription user must not be empty")
         self.device_name = self.device_name.strip()
         self.endpoint = self.endpoint.strip()
         if not self.endpoint:
@@ -55,6 +56,8 @@ class NotificationSubscription(BaseModel):
 
 
 class NotificationsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = True
     presence_ttl_seconds: int = 60
     subscription_ttl_days: int = 30

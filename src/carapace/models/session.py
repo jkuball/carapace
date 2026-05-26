@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .skills import ContextGrant
 
 
 class SessionBudget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: Decimal | None = None

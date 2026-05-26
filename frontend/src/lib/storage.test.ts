@@ -115,9 +115,8 @@ test.afterEach(() => {
   }
 });
 
-test("connection helpers use same-origin server and clear legacy state", () => {
+test("connection helpers use same-origin server and username state", () => {
   localStorage.setItem("carapace_server", "https://old.example.test");
-  localStorage.setItem("carapace_token", "legacy-token");
 
   assert.equal(getServer(), "https://carapace.example.test");
   assert.equal(localStorage.getItem("carapace_server"), null);
@@ -129,7 +128,6 @@ test("connection helpers use same-origin server and clear legacy state", () => {
   assert.equal(getToken(), "thies");
   assert.equal(hasConnection(), true);
   assert.equal(localStorage.getItem("carapace_server"), null);
-  assert.equal(localStorage.getItem("carapace_token"), null);
 
   clearConnection();
 
