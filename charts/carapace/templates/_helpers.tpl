@@ -46,3 +46,25 @@ Bitwarden CLI sidecar image with tag defaulting to appVersion
 {{- define "carapace.bitwardenImage" -}}
 {{ .Values.bitwarden.image.registry }}/{{ .Values.bitwarden.image.repository }}:{{ .Values.bitwarden.image.tag | default .Chart.AppVersion }}
 {{- end }}
+
+{{/*
+Bitwarden nginx proxy image
+*/}}
+{{- define "carapace.bitwardenNginxImage" -}}
+{{ .Values.bitwarden.nginx.image.registry }}/{{ .Values.bitwarden.nginx.image.repository }}:{{ .Values.bitwarden.nginx.image.tag }}
+{{- end }}
+
+{{/*
+Standalone Bitwarden resource name for one instance.
+*/}}
+{{- define "carapace.bitwardenStandaloneName" -}}
+{{- $root := .root -}}
+{{- $instance := .instance -}}
+{{- if $instance.fullnameOverride -}}
+{{ $instance.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else if and $instance.standalone $instance.standalone.fullnameOverride -}}
+{{ $instance.standalone.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else -}}
+{{ printf "%s-bitwarden-%s" $root.Release.Name $instance.name | trunc 63 | trimSuffix "-" }}
+{{- end -}}
+{{- end }}

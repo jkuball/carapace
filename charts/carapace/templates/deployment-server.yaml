@@ -143,6 +143,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
       {{- range .Values.bitwarden.instances }}
+      {{- if ne (.mode | default "sidecar") "standalone" }}
         - name: {{ .name }}
           image: {{ include "carapace.bitwardenImage" $ }}
           imagePullPolicy: {{ $.Values.bitwarden.image.pullPolicy }}
@@ -191,6 +192,7 @@ spec:
                 - curl -sS -f -o /dev/null -X POST --connect-timeout 10 --max-time 60 http://127.0.0.1:{{ .port | default 8087 }}/sync
             periodSeconds: 120
             timeoutSeconds: 65
+          {{- end }}
       {{- end }}
       volumes:
         - name: data
@@ -203,14 +205,18 @@ spec:
       {{- end }}
       {{- if $.Values.bitwarden.persistence.enabled }}
       {{- range .Values.bitwarden.instances }}
+      {{- if ne (.mode | default "sidecar") "standalone" }}
         - name: bitwarden-data-{{ .name }}
           persistentVolumeClaim:
             claimName: {{ $.Release.Name }}-bitwarden-{{ .name }}
       {{- end }}
       {{- end }}
+      {{- end }}
       {{- range .Values.bitwarden.instances }}
+      {{- if ne (.mode | default "sidecar") "standalone" }}
         - name: bitwarden-creds-{{ .name }}
           secret:
             secretName: {{ .existingSecret }}
             defaultMode: 0400
+      {{- end }}
       {{- end }}

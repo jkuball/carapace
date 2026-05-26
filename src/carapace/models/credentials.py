@@ -35,11 +35,26 @@ class FileCredentialBackendConfig(ConfigModel):
     hide: list[str] = []
 
 
+class BasicAuthConfig(ConfigModel):
+    """HTTP Basic Auth credentials for a credential backend proxy."""
+
+    username: str
+    password: str | None = None
+
+    @model_validator(mode="after")
+    def _normalize(self) -> BasicAuthConfig:
+        self.username = self.username.strip()
+        if not self.username:
+            raise ValueError("basic_auth.username must not be empty")
+        return self
+
+
 class BitwardenCredentialBackendConfig(ConfigModel):
     """Configuration for a Bitwarden/Vaultwarden credential backend."""
 
     type: Literal["bitwarden"] = "bitwarden"
     url: str = "http://127.0.0.1:8087"
+    basic_auth: BasicAuthConfig | None = None
     expose: list[str] = []
     hide: list[str] = []
 

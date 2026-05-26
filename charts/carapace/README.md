@@ -79,12 +79,12 @@ All images default to the chart's `appVersion` tag, which is kept in sync with t
 
 ### Required configuration
 
-| What                   | How                                                                                                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| What                   | How                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists. |
-| **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                 |
-| **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                               |
-| **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                               |
+| **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                                                            |
+| **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                                                                          |
+| **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                                                                          |
 
 ### Injecting secrets and environment variables
 
@@ -137,7 +137,7 @@ Replace `carapace-redis` with `<release>-redis` when your Helm release name is n
 
 ### Bitwarden / Vaultwarden credential backend
 
-To use a Bitwarden-compatible vault (including Vaultwarden) as a credential backend, the chart can inject one or more `bw serve` sidecar containers into the server Pod. Each sidecar shares the Pod's network namespace, so carapace reaches it at `127.0.0.1:<port>`. Because `bw serve` only listens on localhost, no NetworkPolicy is needed to protect it — unlike a standalone deployment where the unauthenticated API would be reachable cluster-wide.
+To use a Bitwarden-compatible vault (including Vaultwarden) as a credential backend, the chart can inject one or more `bw serve` sidecar containers into the server Pod, or deploy them as standalone companion Pods behind an nginx Basic Auth proxy. Sidecars share the Pod's network namespace, so carapace reaches them at `127.0.0.1:<port>`. Standalone instances are useful for per-user credential backend URLs and are protected by Basic Auth plus a NetworkPolicy that only allows ingress from the carapace server Pod.
 
 The sidecar image (`carapace-bitwarden-cli`) is built as part of the carapace release and bundles the Bitwarden CLI. On startup it logs in, unlocks the vault, and starts `bw serve`. The liveness probe periodically calls `/sync` to keep the vault data fresh.
 
@@ -196,6 +196,41 @@ The `url` defaults to `http://127.0.0.1:8087`, which works out of the box with t
 
 Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8088). Each instance gets its own sidecar container, its own Kubernetes Secret, and (when persistence is enabled) its own PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer an ephemeral sidecar.
 
+For a standalone Bitwarden proxy, set `mode: standalone`. The Bitwarden CLI still binds to localhost inside its Pod, while nginx exposes a protected service port for carapace. Create the Basic Auth Secret separately; it must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`.
+
+```yaml
+bitwarden:
+  persistence:
+    finalizers:
+      - kubernetes.io/pvc-protection
+  instances:
+    - name: vaultwarden
+      mode: standalone
+      fullnameOverride: carapace-bitwarden
+      port: 8087
+      servePort: 8088
+      serverUrl: https://vault.example.com
+      existingSecret: carapace-bw-personal
+      basicAuth:
+        existingSecret: carapace-bitwarden-basic-auth
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+
+config:
+  credentials:
+    backends:
+      personal:
+        type: bitwarden
+        url: http://carapace-bitwarden:8087
+        basic_auth:
+          username: carapace
+          password: change-me
+```
+
 ### Key values
 
 | Value                                    | Default                          | Description                                                        |
@@ -224,10 +259,12 @@ Multiple instances are supported — just add more entries with different names 
 | `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                    |
 | `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                  |
 | `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli sidecar image tag                                    |
+| `bitwarden.nginx.image.tag`              | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy             |
 | `bitwarden.persistence.enabled`          | `true`                           | Create a PVC per sidecar for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
 | `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden sidecar PVC                                 |
 | `bitwarden.persistence.storageClassName` | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                    |
-| `bitwarden.instances`                    | `[]`                             | List of `bw serve` sidecars (see above)                            |
+| `bitwarden.persistence.finalizers`       | `[]`                             | Finalizers for Bitwarden PVCs                                      |
+| `bitwarden.instances`                    | `[]`                             | List of `bw serve` sidecar or standalone instances (see above)     |
 
 See [values.yaml](values.yaml) for the complete reference.
 

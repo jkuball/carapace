@@ -22,7 +22,7 @@ from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
-from carapace.models.credentials import CredentialMetadata
+from carapace.models.credentials import BasicAuthConfig, BitwardenCredentialBackendConfig, CredentialMetadata
 from carapace.models.jobs import JobDefinition
 from carapace.models.session import SessionBudget
 from carapace.models.user import UserConfig
@@ -89,6 +89,7 @@ def _setup_server(tmp_path, monkeypatch):
     srv._data_dir = tmp_path
     srv._config = config
     srv._credential_registry = cred_reg
+    srv._user_credential_registries = {}
     srv._engine = SessionEngine(
         config=config,
         data_dir=tmp_path,
@@ -256,6 +257,58 @@ def test_admin_user_update_can_clear_email(client, admin_auth_headers):
 
     assert update_resp.status_code == 200
     assert update_resp.json()["email"] is None
+
+
+def test_admin_user_config_redacts_and_preserves_backend_password(client, admin_auth_headers):
+    create_resp = client.post(
+        "/api/admin/users",
+        headers=admin_auth_headers,
+        json={
+            "username": "Ada",
+            "password": "correct-horse-battery",
+            "display_name": "Ada",
+            "config": {
+                "credentials": {
+                    "backends": {
+                        "vault": {
+                            "type": "bitwarden",
+                            "url": "http://carapace-bitwarden:8087",
+                            "basic_auth": {"username": "ada", "password": "proxy-password"},
+                        }
+                    }
+                }
+            },
+        },
+    )
+
+    assert create_resp.status_code == 201
+    backend = create_resp.json()["config"]["credentials"]["backends"]["vault"]
+    assert backend["basic_auth"] == {"username": "ada"}
+
+    update_resp = client.patch(
+        "/api/admin/users/ada",
+        headers=admin_auth_headers,
+        json={
+            "config": {
+                "credentials": {
+                    "backends": {
+                        "vault": {
+                            "type": "bitwarden",
+                            "url": "http://carapace-bitwarden:8087",
+                            "basic_auth": {"username": "ada"},
+                        }
+                    }
+                }
+            }
+        },
+    )
+
+    assert update_resp.status_code == 200
+    user = srv._auth_store.get_user("ada")
+    assert user is not None
+    stored_backend = user.config.credentials.backends["vault"]
+    assert isinstance(stored_backend, BitwardenCredentialBackendConfig)
+    assert stored_backend.basic_auth == BasicAuthConfig(username="ada", password="proxy-password")
 
 
 def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):

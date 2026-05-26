@@ -29,7 +29,14 @@ users:
     password_changed_at: "2026-05-24T12:00:00Z"
     last_login_at: null
     config:
-      credentials: {}
+      credentials:
+        backends:
+          vault:
+            type: bitwarden
+            url: http://carapace-bitwarden:8087
+            basic_auth:
+              username: thies
+              password: user-specific-random-proxy-password
       channels:
         matrix:
           enabled: false
@@ -42,6 +49,8 @@ users:
 ```
 
 Usernames are normalized to lowercase and should be stable, hand-picked names for the self-hosted users of an instance.
+Per-user credential backend secrets are stored in `users.yaml`; API responses redact backend proxy passwords, and updates
+that omit an existing proxy password keep the stored value.
 
 ## Creating Users
 

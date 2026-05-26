@@ -26,7 +26,12 @@ class BitwardenBackend:
         self._name = name
         self._cfg = cfg
         self._base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
+        auth = None
+        if cfg.basic_auth is not None:
+            if cfg.basic_auth.password is None:
+                raise ValueError(f"Bitwarden backend {name!r} basic_auth.password is required")
+            auth = httpx.BasicAuth(cfg.basic_auth.username, cfg.basic_auth.password)
+        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0, auth=auth)
 
     async def _get(
         self,

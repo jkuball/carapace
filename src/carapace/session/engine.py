@@ -13,7 +13,7 @@ import asyncio
 import base64
 import contextlib
 import secrets
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -27,6 +27,7 @@ from pydantic_ai.models import Model
 
 from ..agent.deps import Deps
 from ..agent.loop import run_agent_turn as _run_agent_turn
+from ..credentials import SessionCredentialRegistry
 from ..git.store import GitStore
 from ..models.config import Config
 from ..models.credentials import CredentialRegistryProtocol
@@ -117,6 +118,7 @@ class SessionEngine(
         agent_model: Model | None,
         sandbox_mgr: SandboxManager,
         credential_registry: CredentialRegistryProtocol,
+        credential_registry_for_session: Callable[[str], Awaitable[CredentialRegistryProtocol]] | None = None,
         model_factory: Callable[[str], Model] | None = None,
         notification_router: NotificationRouter | None = None,
     ) -> None:
@@ -130,6 +132,7 @@ class SessionEngine(
         self._sandbox_mgr = sandbox_mgr
         self._model_factory = model_factory
         self._credential_registry = credential_registry
+        self._credential_registry_for_session = credential_registry_for_session
         self._notification_router = notification_router
         self._active: dict[str, ActiveSession] = {}
         self._llm_semaphore = asyncio.Semaphore(config.agent.max_parallel_llm)
@@ -138,6 +141,19 @@ class SessionEngine(
         sandbox_mgr.set_activated_skills_callback(self._get_activated_skills)
         sandbox_mgr.set_skill_activation_inputs_callback(self._skill_activation_inputs)
         sandbox_mgr.set_skill_command_aliases_callback(self._skill_command_aliases)
+
+    async def _resolve_credential_registry(self, session_id: str) -> CredentialRegistryProtocol:
+        if self._credential_registry_for_session is None:
+            return self._credential_registry
+        return await self._credential_registry_for_session(session_id)
+
+    def _session_credential_registry(self, session_id: str) -> CredentialRegistryProtocol:
+        if self._credential_registry_for_session is None:
+            return self._credential_registry
+        return SessionCredentialRegistry(
+            session_id=session_id,
+            resolve_registry=self._resolve_credential_registry,
+        )
 
     # -- public access to file I/O manager --
 
@@ -294,7 +310,7 @@ class SessionEngine(
                 value = None
             try:
                 if value is None:
-                    value = await self._credential_registry.fetch(decl.vault_path)
+                    value = await self._session_credential_registry(session_id).fetch(decl.vault_path)
                     self._sandbox_mgr.cache_credential(session_id, decl.vault_path, value)
             except KeyError:
                 logger.warning(f"Credential {decl.vault_path} not found in vault during re-injection")
@@ -450,7 +466,7 @@ class SessionEngine(
             llm_usage_limits=lambda: self._remaining_aux_usage_limits(active),
             sandbox=self._sandbox_mgr,
             activated_skills=[],
-            credential_registry=self._credential_registry,
+            credential_registry=self._session_credential_registry(session_id),
         )
 
     async def submit_message(

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketException, status
 from pydantic import BaseModel
 
 from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
+from ..models.credentials import BitwardenCredentialBackendConfig
 from ..models.user import UserConfig
 from .state import server_module
 
@@ -19,8 +20,16 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class PublicUserIdentity(BaseModel):
+    username: str
+    display_name: str = ""
+    email: str | None = None
+    roles: list[str] = []
+    config: dict[str, Any] = {}
+
+
 class LoginResponse(BaseModel):
-    user: UserIdentity
+    user: PublicUserIdentity
 
 
 class WebSocketTicketResponse(BaseModel):
@@ -56,7 +65,50 @@ class AdminUserResponse(BaseModel):
     updated_at: str
     password_changed_at: str
     last_login_at: str | None = None
-    config: UserConfig
+    config: dict[str, Any]
+
+
+def _redact_user_config(config: UserConfig) -> dict[str, Any]:
+    payload = config.model_dump(mode="json", exclude_none=True)
+    backends = payload.get("credentials", {}).get("backends", {})
+    if isinstance(backends, dict):
+        for backend in backends.values():
+            if not isinstance(backend, dict):
+                continue
+            basic_auth = backend.get("basic_auth")
+            if isinstance(basic_auth, dict):
+                basic_auth.pop("password", None)
+    return payload
+
+
+def _public_identity(user: UserIdentity) -> PublicUserIdentity:
+    return PublicUserIdentity(
+        username=user.username,
+        display_name=user.display_name,
+        email=user.email,
+        roles=user.roles,
+        config=_redact_user_config(user.config),
+    )
+
+
+def _config_with_preserved_backend_passwords(username: str | None, config: UserConfig) -> UserConfig:
+    merged = config.model_copy(deep=True)
+    existing_user = _auth_store().get_user(username) if username is not None else None
+    existing_config = existing_user.config if existing_user is not None else None
+
+    for backend_name, backend in merged.credentials.backends.items():
+        if not isinstance(backend, BitwardenCredentialBackendConfig) or backend.basic_auth is None:
+            continue
+        if backend.basic_auth.password is not None:
+            continue
+        existing_backend = None
+        if existing_config is not None:
+            existing_backend = existing_config.credentials.backends.get(backend_name)
+        if isinstance(existing_backend, BitwardenCredentialBackendConfig) and existing_backend.basic_auth is not None:
+            backend.basic_auth.password = existing_backend.basic_auth.password
+        if backend.basic_auth.password is None:
+            raise ValueError(f"basic_auth.password is required for credential backend {backend_name!r}")
+    return merged
 
 
 def _auth_store() -> AuthStore:
@@ -87,7 +139,7 @@ def _user_response(username: str) -> AdminUserResponse:
         updated_at=user.updated_at.isoformat(),
         password_changed_at=user.password_changed_at.isoformat(),
         last_login_at=user.last_login_at.isoformat() if user.last_login_at is not None else None,
-        config=user.config,
+        config=_redact_user_config(user.config),
     )
 
 
@@ -187,7 +239,7 @@ async def login(request: Request, response: Response, body: LoginRequest) -> Log
         samesite=cookie.same_site,
         path="/",
     )
-    return LoginResponse(user=user.identity(username))
+    return LoginResponse(user=_public_identity(user.identity(username)))
 
 
 @router.post("/auth/logout", status_code=204)
@@ -204,9 +256,9 @@ async def logout(
     return response
 
 
-@router.get("/auth/me", response_model=UserIdentity)
-async def me(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdentity:
-    return user
+@router.get("/auth/me", response_model=PublicUserIdentity)
+async def me(user: Annotated[UserIdentity, Depends(current_user)]) -> PublicUserIdentity:
+    return _public_identity(user)
 
 
 @router.post("/auth/ws-ticket", response_model=WebSocketTicketResponse)
@@ -241,7 +293,7 @@ async def create_admin_user(
             display_name=body.display_name,
             email=body.email,
             roles=body.roles,
-            config=body.config,
+            config=_config_with_preserved_backend_passwords(None, body.config),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -254,8 +306,10 @@ async def update_admin_user(
     body: AdminUserUpdateRequest,
     _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserResponse:
-    updates = body.model_dump(exclude_unset=True)
-    password = updates.pop("password", None)
+    updates = body.model_dump(exclude_unset=True, exclude={"config", "password"})
+    password = body.password if "password" in body.model_fields_set else None
+    if "config" in body.model_fields_set and body.config is not None:
+        updates["config"] = _config_with_preserved_backend_passwords(username, body.config)
     try:
         if updates:
             _assert_not_removing_last_admin(username, updates)

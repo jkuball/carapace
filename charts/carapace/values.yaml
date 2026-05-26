@@ -130,12 +130,27 @@ bitwarden:
     repository: thiesgerken/carapace-bitwarden-cli
     tag: "" # defaults to appVersion
     pullPolicy: IfNotPresent
+  nginx:
+    image:
+      registry: docker.io
+      repository: library/nginx
+      tag: 1.31.1@sha256:0a0818182f39b9853d2b259d5a18a2e02808f05e2221bea43725aaea6ee94a86
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 5m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
   # -- One PVC per bitwarden instance; stores CLI device/session data so redeploys do not
   # trigger a fresh login (and provider "new device" emails). Disable for ephemeral sidecars.
   persistence:
     enabled: true
     size: 256Mi
     storageClassName: ""
+    # -- Finalizers to protect Bitwarden CLI data PVCs from accidental deletion.
+    finalizers: []
   instances: []
 
 # -- Extra environment variables injected into the server container
