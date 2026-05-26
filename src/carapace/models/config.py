@@ -231,15 +231,6 @@ class SandboxConfig(BaseSettings):
     cleanup_orphans_on_startup: bool = True
 
 
-class GitConfig(ConfigModel):
-    """Git-backed knowledge store configuration."""
-
-    remote: str = ""  # optional external remote URL
-    branch: str = "main"  # remote branch to fetch/push (local is always "main")
-    author: str = "carapace <carapace@%h>"  # %s → session ID, %h → hostname
-    token: str | None = None
-
-
 class SessionCommitConfig(ConfigModel):
     enabled: bool = True
     path_prefix: str = "sessions"
@@ -309,7 +300,6 @@ class Config(ConfigModel):
     agent: AgentConfig = AgentConfig()
     sessions: SessionsConfig = SessionsConfig()
     sandbox: SandboxConfig = SandboxConfig()
-    git: GitConfig = GitConfig()
     credentials: CredentialsConfig = CredentialsConfig()
     data_dir: str = "."  # resolved relative to config file location
     knowledge_dir: str = "./knowledge"  # resolved relative to config file location

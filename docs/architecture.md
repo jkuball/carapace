@@ -442,10 +442,6 @@ auth:
     secure: false
     same_site: lax
 
-git:
-  remote: https://gitea.example.com/user/knowledge.git
-  token: ghp_xxxxxxxxxxxx
-
 knowledge_dir: ./knowledge
 
 sandbox:

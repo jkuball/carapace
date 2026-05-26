@@ -7,6 +7,7 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from ..git.store import GitStore
 from ..jobs import JobsScheduler, JobsStore
 from ..llm import make_model_factory
 from ..models.config import Config
+from ..models.user import DEFAULT_GIT_AUTHOR, DEFAULT_GIT_BRANCH, UserGitConfig
 from ..notifications.presence import NotificationPresenceRegistry
 from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
@@ -83,6 +85,38 @@ _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 _auth_store: AuthStore
+
+
+@dataclass(frozen=True)
+class KnowledgeGitConfig:
+    owner: str | None = None
+    remote: str = ""
+    branch: str = DEFAULT_GIT_BRANCH
+    author: str = DEFAULT_GIT_AUTHOR
+    token: str | None = None
+
+
+def _select_knowledge_git_config(auth_store: AuthStore) -> KnowledgeGitConfig:
+    configured: list[tuple[str, UserGitConfig]] = []
+    for username, user in sorted(auth_store.load_users().users.items()):
+        if user.enabled and user.config.git.remote:
+            configured.append((username, user.config.git))
+
+    if not configured:
+        return KnowledgeGitConfig()
+    if len(configured) > 1:
+        owners = ", ".join(username for username, _ in configured)
+        raise RuntimeError(f"knowledge Git remote is configured for multiple enabled users: {owners}")
+
+    owner, git = configured[0]
+    return KnowledgeGitConfig(
+        owner=owner,
+        remote=git.remote,
+        branch=git.branch,
+        author=git.author,
+        token=git.token,
+    )
+
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
 _APP_VERSION = get_version()
@@ -200,24 +234,28 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _auth_store = AuthStore(_data_dir, _config.auth)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
+    knowledge_git = _select_knowledge_git_config(_auth_store)
 
     # 3. Git-backed knowledge store
     git_store = GitStore(
         knowledge_dir,
-        remote_branch=_config.git.branch,
-        author=_config.git.author,
+        remote_branch=knowledge_git.branch,
+        author=knowledge_git.author,
     )
     await git_store.ensure_repo()
 
     # Pull from external remote if configured
-    if _config.git.remote:
-        await git_store.add_remote(_config.git.remote, _config.git.token)
+    if knowledge_git.remote:
+        logger.info(f"Using knowledge Git remote from user {knowledge_git.owner}")
+        await git_store.add_remote(knowledge_git.remote, knowledge_git.token)
         try:
             summary = await git_store.pull_from_remote()
             logger.info(f"Pulled from remote: {summary}")
         except RuntimeError as exc:
             logger.error(str(exc))
             raise SystemExit(1) from exc
+    else:
+        await git_store.remove_remote()
 
     # Bootstrap knowledge files (after pull so we don't override remote content)
     seeded = ensure_knowledge_dir(knowledge_dir)
@@ -227,7 +265,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         except RuntimeError as exc:
             logger.warning(f"Bootstrap knowledge seed commit failed: {exc}")
         else:
-            if committed and _config.git.remote:
+            if committed and git_store.remote_configured:
                 await git_store.push_to_remote()
 
     if _config.carapace.logfire_token:
@@ -284,7 +322,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         idle_timeout_minutes=_config.sandbox.idle_timeout_minutes,
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
-        git_author=_config.git.author,
+        git_author=knowledge_git.author,
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 
@@ -348,7 +386,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         default_branch="main",
         api_port=_config.server.internal_port,
         verify_session_token=_sandbox_mgr.verify_session_token,
-        on_push_success=git_store.push_to_remote if _config.git.remote else None,
+        on_push_success=git_store.push_to_remote if git_store.remote_configured else None,
     )
 
     proxy = ProxyServer(

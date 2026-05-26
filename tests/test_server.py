@@ -25,6 +25,7 @@ from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models.credentials import CredentialMetadata
 from carapace.models.jobs import JobDefinition
 from carapace.models.session import SessionBudget
+from carapace.models.user import UserConfig
 from carapace.notifications.presence import NotificationPresenceRegistry
 from carapace.notifications.store import NotificationStore
 from carapace.notifications.vapid import derive_vapid_public_key, ensure_vapid_config
@@ -119,6 +120,45 @@ def _setup_server(tmp_path, monkeypatch):
 @pytest.fixture()
 def client() -> TestClient:
     return TestClient(app)
+
+
+def test_select_knowledge_git_config_uses_single_enabled_user(tmp_path) -> None:
+    store = AuthStore(tmp_path / "git-owner", srv._config.auth)
+    store.create_user(
+        username="Thies",
+        password="secret",
+        config=UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": " https://gitea.example.com/team/knowledge.git ",
+                    "branch": " dev ",
+                    "author": " Thies <thies@example.com> ",
+                    "token": " token-value ",
+                }
+            }
+        ),
+    )
+
+    selected = srv._select_knowledge_git_config(store)
+
+    assert selected.owner == "thies"
+    assert selected.remote == "https://gitea.example.com/team/knowledge.git"
+    assert selected.branch == "dev"
+    assert selected.author == "Thies <thies@example.com>"
+    assert selected.token == "token-value"
+
+
+def test_select_knowledge_git_config_rejects_multiple_enabled_user_remotes(tmp_path) -> None:
+    store = AuthStore(tmp_path / "git-owners", srv._config.auth)
+    for username in ("alice", "bob"):
+        store.create_user(
+            username=username,
+            password="secret",
+            config=UserConfig.model_validate({"git": {"remote": f"https://gitea.example.com/{username}.git"}}),
+        )
+
+    with pytest.raises(RuntimeError, match="multiple enabled users"):
+        srv._select_knowledge_git_config(store)
 
 
 @pytest.fixture()

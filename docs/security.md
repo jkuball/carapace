@@ -163,7 +163,7 @@ Like tool calls and proxy domains, the sentinel can escalate a git push to the u
 
 If a push is denied, `git push` fails in the sandbox with a descriptive error message from the sentinel.
 
-If an external remote is configured (`git.remote` in config), a successful push from the sandbox is automatically forwarded to the remote. Users can also trigger this manually with the `/push` slash command.
+If an external remote is configured (`config.git.remote` in the owning user record), a successful push from the sandbox is automatically forwarded to the remote. Users can also trigger this manually with the `/push` slash command.
 
 If the sentinel escalates a domain request, it is forwarded to the user through their channel (WebSocket, Matrix).
 
