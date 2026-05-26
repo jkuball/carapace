@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.126.1 (2026-05-26)
+
+
+### Other
+
+
+- force ci
+  ([`bf8ebb0`](https://github.com/thiesgerken/carapace/commit/bf8ebb06fe670c68330a5b648fcdf5f0a19049c9))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: force a release
+  ([`5b40c04`](https://github.com/thiesgerken/carapace/commit/5b40c04ebf74d890f36bf738bf97917403366245))
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: migrate Git configuration to user records and remove global Git settings
+  ([`4dfc589`](https://github.com/thiesgerken/carapace/commit/4dfc589229b5b83b0019fe27e0fed92237ce616f))
+
 ## v0.126.0 (2026-05-26)
 
 
