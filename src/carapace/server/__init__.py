@@ -781,6 +781,10 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
 
     try:
         credential_registry = await _credential_registry_for_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=403, detail="Session owner is not configured") from None
+
+    try:
         meta = await credential_registry.fetch_metadata(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
