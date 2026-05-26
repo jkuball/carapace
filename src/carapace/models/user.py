@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from .matrix import MatrixChannelConfig
+
+DEFAULT_GIT_BRANCH = "main"
+DEFAULT_GIT_AUTHOR = "carapace <carapace@%h>"
 
 
 class UserConfigModel(BaseModel):
@@ -17,9 +20,18 @@ class UserChannelsConfig(UserConfigModel):
 
 class UserGitConfig(UserConfigModel):
     remote: str = ""
-    branch: str = "main"
-    author: str = "carapace <carapace@%h>"
+    branch: str = DEFAULT_GIT_BRANCH
+    author: str = DEFAULT_GIT_AUTHOR
     token: str | None = None
+
+    @model_validator(mode="after")
+    def _normalize(self) -> UserGitConfig:
+        self.remote = self.remote.strip()
+        self.branch = self.branch.strip() or DEFAULT_GIT_BRANCH
+        self.author = self.author.strip() or DEFAULT_GIT_AUTHOR
+        if self.token is not None:
+            self.token = self.token.strip() or None
+        return self
 
 
 class UserConfig(UserConfigModel):

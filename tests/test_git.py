@@ -232,6 +232,15 @@ class TestGitStoreRemote:
         _, url = await store._run("remote", "get-url", "origin")
         assert "new.com" in url
 
+    async def test_remove_remote(self, store: GitStore):
+        await store.add_remote("https://example.com/repo.git", token="tok123")
+        assert store.remote_configured is True
+
+        await store.remove_remote()
+
+        assert store.remote_configured is False
+        assert not await store.has_remote()
+
     async def test_pull_no_remote_fails(self, store: GitStore):
         with pytest.raises(RuntimeError, match="fetch failed"):
             await store.pull_from_remote()

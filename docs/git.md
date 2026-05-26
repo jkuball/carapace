@@ -6,14 +6,19 @@ Optionally, you can connect an **upstream remote** so the knowledge repo is sync
 
 ## Configuration
 
-Add a `git` section to your `config.yaml`:
+Add a `git` section to the owning user record in `$CARAPACE_DATA_DIR/auth/users.yaml`:
 
 ```yaml
-git:
-  remote: https://gitea.example.com/team/knowledge.git
-  branch: main
-  token: ghp_xxxxxxxxxxxx
+users:
+  thies:
+    config:
+      git:
+        remote: https://gitea.example.com/team/knowledge.git
+        branch: main
+        token: ghp_xxxxxxxxxxxx
 ```
+
+The knowledge repo is still a single shared server repo. Because of that, at most one enabled user may configure a non-empty `config.git.remote`; startup fails if multiple enabled users define one.
 
 | Field    | Default                    | Description                                                                                                                            |
 | -------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -36,14 +41,14 @@ The token is embedded as `x-access-token:<token>` in the remote URL for HTTPS au
 
 ## Remote branch
 
-The `branch` setting in the git config refers exclusively to the **remote** branch. The `branch` setting controls which **remote** branch carapace fetches from and pushes to. It does **not** affect the local knowledge repo, which always uses a `main` branch internally. This means you can point carapace at any branch on the remote (e.g. `dev`, `production`) without changing how sandboxes or the agent interact with the repo locally.
+The `branch` setting in the owning user's git config refers exclusively to the **remote** branch. The `branch` setting controls which **remote** branch carapace fetches from and pushes to. It does **not** affect the local knowledge repo, which always uses a `main` branch internally. This means you can point carapace at any branch on the remote (e.g. `dev`, `production`) without changing how sandboxes or the agent interact with the repo locally.
 
 The configured branch **must already exist** on the upstream remote before carapace connects to it. carapace does not create remote branches — it performs `git fetch origin <branch>` and `git merge --ff-only origin/<branch>`, both of which fail if the branch doesn't exist.
 
 If you're starting from scratch:
 
 1. Create the remote repository and its default branch (most hosting providers do this automatically).
-2. Set `branch` in `config.yaml` to match the remote branch you want to use (e.g. `main`, `dev`).
+2. Set `config.git.branch` in the owning user record to match the remote branch you want to use (e.g. `main`, `dev`).
 3. Start carapace — it will push the initial bootstrap commit to that branch.
 
 ## What happens on first start
@@ -62,7 +67,7 @@ If the pull encounters a merge conflict (i.e. local and remote have diverged and
 
 ## Adding a remote to an existing instance
 
-If you've been running carapace without a remote and later add `git.remote` to the config:
+If you've been running carapace without a remote and later add `config.git.remote` to the owning user record:
 
 1. **Restart the server.** On startup it registers the remote, pulls (fast-forward only), and pushes any local-only commits upstream.
 2. **Running sessions are unaffected.** Their sandboxes already have a `/workspace` clone from before the remote was added. They continue working normally — agent pushes go to the server's local knowledge repo.
@@ -105,7 +110,7 @@ This makes it easy to trace which session produced which commit in the upstream 
 
 ## Local-only mode
 
-If `git.remote` is not set (or is an empty string), carapace runs in local-only mode:
+If no enabled user has `config.git.remote` set (or it is an empty string), carapace runs in local-only mode:
 
 - The knowledge repo is still Git-backed (for the sandbox clone workflow and security-gated pushes).
 - `/pull` and `/push` return "No external remote configured."

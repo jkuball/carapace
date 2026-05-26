@@ -106,6 +106,11 @@ class GitStore:
         self.remote_branch = remote_branch
         self.author_template = author
         self._index_lock = asyncio.Lock()
+        self._remote_configured = False
+
+    @property
+    def remote_configured(self) -> bool:
+        return self._remote_configured
 
     async def _run(self, *args: str, cwd: Path | None = None) -> tuple[int, str]:
         """Run a git command and return ``(exit_code, combined_output)``."""
@@ -237,7 +242,16 @@ class GitStore:
             await self._run("remote", "set-url", "origin", authed_url)
         else:
             await self._run("remote", "add", "origin", authed_url)
+        self._remote_configured = True
         logger.info(f"Git remote origin set to {url}")
+
+    async def remove_remote(self) -> None:
+        """Remove the ``origin`` remote when upstream sync is disabled."""
+        code, _ = await self._run("remote", "get-url", "origin")
+        if code == 0:
+            await self._run("remote", "remove", "origin")
+            logger.info("Git remote origin removed")
+        self._remote_configured = False
 
     async def push_to_remote(self) -> None:
         """Push the local branch to the configured remote branch."""

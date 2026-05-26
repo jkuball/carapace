@@ -62,7 +62,7 @@ def test_load_config_rejects_unknown_nested_config_key(tmp_path: Path):
         load_config(tmp_path)
 
 
-def test_load_config_rejects_git_secret_source_object(tmp_path: Path):
+def test_load_config_rejects_global_git_config(tmp_path: Path):
     (tmp_path / "config.yaml").write_text(
         "git:\n  remote: https://gitea.example.com/team/knowledge.git\n  token:\n    env: CARAPACE_GIT_TOKEN\n"
     )

@@ -210,7 +210,7 @@ class SessionCommandMixin:
 
     async def _handle_push_command(self) -> dict[str, Any]:
         """Handle the ``/push`` slash command — push to external remote."""
-        if not self._config.git.remote:
+        if not self._git_store.remote_configured:
             return {"command": "push", "data": {"message": "No external remote configured."}}
         try:
             await self._git_store.push_to_remote()
@@ -220,7 +220,7 @@ class SessionCommandMixin:
 
     async def _handle_pull_command(self) -> dict[str, Any]:
         """Handle the ``/pull`` slash command — pull from external remote."""
-        if not self._config.git.remote:
+        if not self._git_store.remote_configured:
             return {"command": "pull", "data": {"message": "No external remote configured."}}
         try:
             summary = await self._git_store.pull_from_remote()
