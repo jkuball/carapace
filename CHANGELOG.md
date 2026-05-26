@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.126.0 (2026-05-26)
+
+
+### Other
+
+
+- refactor user configuration and remove secret source objects for Git and Matrix settings
+  ([`3262305`](https://github.com/thiesgerken/carapace/commit/32623053816dfaa7b3c0951e90f38659eb4213b5))
+
+- readd port mapping for carapace service in docker-compose
+  ([`73db07a`](https://github.com/thiesgerken/carapace/commit/73db07a3d9dee9575ba475cb48b9a3b33e586749))
+
+- adjust roadmap
+  ([`f811707`](https://github.com/thiesgerken/carapace/commit/f8117073138ad863bf0688b15a587a53eb1b15b7))
+
+### ✨ Features
+
+
+- ✨ feat: remove upgrade-data-to-user functionality, make user non-optional everywhere
+  ([`a377742`](https://github.com/thiesgerken/carapace/commit/a377742ec8ddbab50f1a17ae214632bba05179c8))
+
 ## v0.125.4 (2026-05-25)
 
 
