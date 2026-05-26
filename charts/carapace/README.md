@@ -194,9 +194,9 @@ config:
 
 The `url` defaults to `http://127.0.0.1:8087`, which works out of the box with the sidecar. Override it if `bw serve` runs elsewhere (e.g. a separate Service).
 
-Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8088). Each instance gets its own sidecar container, its own Kubernetes Secret, and (when persistence is enabled) its own PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer an ephemeral sidecar.
+Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8089). Each instance gets its own sidecar container, its own Kubernetes Secret, and (when persistence is enabled) its own PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer an ephemeral sidecar.
 
-For a standalone Bitwarden proxy, set `mode: standalone`. The Bitwarden CLI still binds to localhost inside its Pod, while nginx exposes a protected service port for carapace. Create the Basic Auth Secret separately; it must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`.
+For a standalone Bitwarden proxy, set `mode: standalone`. The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its Pod, while nginx exposes the configured service port for carapace. The service port must not be `8088`. Create the Basic Auth Secret separately; it must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`.
 
 ```yaml
 bitwarden:
@@ -208,7 +208,6 @@ bitwarden:
       mode: standalone
       fullnameOverride: carapace-bitwarden
       port: 8087
-      servePort: 8088
       serverUrl: https://vault.example.com
       existingSecret: carapace-bw-personal
       basicAuth:

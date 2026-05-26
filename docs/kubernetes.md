@@ -147,7 +147,7 @@ config:
         url: http://127.0.0.1:8087
 ```
 
-For multi-user deployments, prefer standalone instances. Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI still binds to localhost inside its own Pod; nginx exposes the service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod.
+For multi-user deployments, prefer standalone instances. Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI still binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port must not be `8088`.
 
 Create the proxy auth Secret separately. It must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`:
 
@@ -171,7 +171,6 @@ bitwarden:
       mode: standalone
       fullnameOverride: carapace-bitwarden-alice
       port: 8087
-      servePort: 8088
       serverUrl: https://vault.example.com
       existingSecret: carapace-bw-alice
       basicAuth:

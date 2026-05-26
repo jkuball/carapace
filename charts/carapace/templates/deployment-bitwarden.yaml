@@ -1,8 +1,11 @@
 {{- range .Values.bitwarden.instances }}
 {{- if eq (.mode | default "sidecar") "standalone" }}
 {{- $name := include "carapace.bitwardenStandaloneName" (dict "root" $ "instance" .) }}
-{{- $servePort := .servePort | default 8088 }}
+{{- $servePort := 8088 }}
 {{- $servicePort := .port | default 8087 }}
+{{- if eq (int $servicePort) $servePort }}
+{{- fail (printf "bitwarden standalone instance %q cannot use port %d because it is reserved for internal bw serve traffic" .name $servePort) }}
+{{- end }}
 {{- $basicAuth := .basicAuth | default dict }}
 {{- $basicAuthEnabled := true }}
 {{- if hasKey $basicAuth "enabled" }}
