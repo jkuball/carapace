@@ -79,12 +79,12 @@ All images default to the chart's `appVersion` tag, which is kept in sync with t
 
 ### Required configuration
 
-| What                   | How                                                                                                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| What                   | How                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists. |
-| **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                 |
-| **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                               |
-| **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                               |
+| **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                                                            |
+| **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                                                                          |
+| **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                                                                          |
 
 ### Injecting secrets and environment variables
 
@@ -137,11 +137,11 @@ Replace `carapace-redis` with `<release>-redis` when your Helm release name is n
 
 ### Bitwarden / Vaultwarden credential backend
 
-To use a Bitwarden-compatible vault (including Vaultwarden) as a credential backend, the chart can inject one or more `bw serve` sidecar containers into the server Pod. Each sidecar shares the Pod's network namespace, so carapace reaches it at `127.0.0.1:<port>`. Because `bw serve` only listens on localhost, no NetworkPolicy is needed to protect it — unlike a standalone deployment where the unauthenticated API would be reachable cluster-wide.
+To use a Bitwarden-compatible vault (including Vaultwarden) as a credential backend, the chart can deploy one or more standalone Bitwarden CLI companion Pods behind nginx Basic Auth proxies. Each instance gets its own Service, Secret, and optional PVC, which makes it a good fit for per-user credential backend URLs. The chart also creates a NetworkPolicy that only allows ingress from the carapace server Pod.
 
-The sidecar image (`carapace-bitwarden-cli`) is built as part of the carapace release and bundles the Bitwarden CLI. On startup it logs in, unlocks the vault, and starts `bw serve`. The liveness probe periodically calls `/sync` to keep the vault data fresh.
+The Bitwarden CLI image (`carapace-bitwarden-cli`) is built as part of the carapace release and bundles the Bitwarden CLI. On startup it logs in, unlocks the vault, and starts `bw serve`. The liveness probe periodically calls `/sync` to keep the vault data fresh.
 
-1. **Create a Secret** with Bitwarden CLI credentials. The chart mounts it read-only at `/run/secrets/bitwarden`; the sidecar entrypoint reads keys from files when the matching env vars are unset (see [`bitwarden-cli/README.md`](../../bitwarden-cli/README.md)).
+1. **Create a Secret** with Bitwarden CLI credentials. The chart mounts it read-only at `/run/secrets/bitwarden`; the Bitwarden CLI entrypoint reads keys from files when the matching env vars are unset (see [`bitwarden-cli/README.md`](../../bitwarden-cli/README.md)).
 
 ```bash
 kubectl create secret generic carapace-bw-personal -n carapace \
@@ -162,17 +162,28 @@ Supported **Secret** keys (each becomes a file name under the mount):
 | `BW_CLIENTID`        | no       | API key client ID (generate in Bitwarden web UI → Account Settings → Keys) |
 | `BW_CLIENTSECRET`    | no       | API key client secret                                                      |
 
-When both `BW_CLIENTID` and `BW_CLIENTSECRET` are present, the sidecar uses API key login (required if 2FA is enabled). Otherwise it uses password login and needs `BW_EMAIL` in the Secret. The master password is needed in both cases. As the project readme mentions, it is recommended to use a dedicated user for carapace and share entries to it instead of using your account directly.
+When both `BW_CLIENTID` and `BW_CLIENTSECRET` are present, the Bitwarden CLI uses API key login (required if 2FA is enabled). Otherwise it uses password login and needs `BW_EMAIL` in the Secret. The master password is needed in both cases. As the project readme mentions, it is recommended to use a dedicated user for carapace and share entries to it instead of using your account directly.
 
-2. **Enable the sidecar** in your values:
+2. **Create a Basic Auth Secret** for nginx. It must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`.
+
+```bash
+htpasswd -nB carapace > /tmp/carapace-bitwarden-htpasswd
+kubectl create secret generic carapace-bitwarden-basic-auth -n carapace \
+  --from-file=htpasswd=/tmp/carapace-bitwarden-htpasswd
+```
+
+3. **Enable a Bitwarden instance** in your values:
 
 ```yaml
 bitwarden:
   instances:
-    - name: bw-personal
+    - name: personal
+      fullnameOverride: carapace-bitwarden
       port: 8087
       serverUrl: https://vault.example.com
       existingSecret: carapace-bw-personal
+      basicAuth:
+        existingSecret: carapace-bitwarden-basic-auth
       resources:
         requests:
           cpu: 50m
@@ -181,7 +192,7 @@ bitwarden:
           memory: 256Mi
 ```
 
-3. **Configure the matching credential backend** in your application config:
+4. **Configure the matching credential backend** in your application config or user config:
 
 ```yaml
 config:
@@ -189,12 +200,15 @@ config:
     backends:
       personal:
         type: bitwarden
-        url: http://127.0.0.1:8087
+        url: http://carapace-bitwarden:8087
+        basic_auth:
+          username: carapace
+          password: change-me
 ```
 
-The `url` defaults to `http://127.0.0.1:8087`, which works out of the box with the sidecar. Override it if `bw serve` runs elsewhere (e.g. a separate Service).
+Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8089). Each instance gets its own companion Pod, Kubernetes Secret, Service, Basic Auth proxy, and (when persistence is enabled) PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer ephemeral Bitwarden CLI data.
 
-Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8088). Each instance gets its own sidecar container, its own Kubernetes Secret, and (when persistence is enabled) its own PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer an ephemeral sidecar.
+The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its Pod, while nginx exposes the configured service port for carapace. The service port must not be `8088`.
 
 ### Key values
 
@@ -223,11 +237,13 @@ Multiple instances are supported — just add more entries with different names 
 | `redis.resources`                        | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                     |
 | `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                    |
 | `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                  |
-| `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli sidecar image tag                                    |
-| `bitwarden.persistence.enabled`          | `true`                           | Create a PVC per sidecar for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
-| `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden sidecar PVC                                 |
+| `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli image tag                                            |
+| `bitwarden.nginx.image.tag`              | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy             |
+| `bitwarden.persistence.enabled`          | `true`                           | Create a PVC per instance for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
+| `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden instance PVC                                |
 | `bitwarden.persistence.storageClassName` | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                    |
-| `bitwarden.instances`                    | `[]`                             | List of `bw serve` sidecars (see above)                            |
+| `bitwarden.persistence.finalizers`       | `[]`                             | Finalizers for Bitwarden PVCs                                      |
+| `bitwarden.instances`                    | `[]`                             | List of standalone `bw serve` proxy instances (see above)          |
 
 See [values.yaml](values.yaml) for the complete reference.
 

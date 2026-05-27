@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from .credentials import CredentialsConfig
 from .matrix import MatrixChannelConfig
 
 DEFAULT_GIT_BRANCH = "main"
@@ -35,8 +34,8 @@ class UserGitConfig(UserConfigModel):
 
 
 class UserConfig(UserConfigModel):
-    credentials: dict[str, Any] = {}
+    credentials: CredentialsConfig = CredentialsConfig()
     channels: UserChannelsConfig = UserChannelsConfig()
     git: UserGitConfig = UserGitConfig()
     default_models: dict[str, str] = {}
-    budgets: dict[str, Any] = {}
+    budgets: dict[str, object] = {}

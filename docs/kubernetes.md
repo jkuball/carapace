@@ -32,6 +32,8 @@ Inject additional config via `extraEnv` (inline values) or `envFrom` (external S
 
 Session-list caching requires Redis. The Helm chart deploys an in-cluster Redis by default; if you disable it, point carapace at an external Redis instance instead.
 
+Kubernetes credential backends can be deployed through the Helm chart too. For Bitwarden/Vaultwarden, the chart runs separately addressable vault proxies protected by HTTP Basic Auth and NetworkPolicy.
+
 See the [chart README](../charts/carapace/README.md) for installation details and the full values reference.
 
 ## Architecture
@@ -114,6 +116,67 @@ config:
 The Helm chart deploys an in-cluster Redis by default. Its Service name is `<release>-redis`, so a typical URL is `redis://<release>-redis:6379/0`. If you set `redis.enabled=false`, you must provide an external Redis URL via `config.cache.redis_url` or `CARAPACE_CACHE_REDIS_URL`.
 
 > **Important:** Always pin the sandbox image to a specific version tag (e.g. `:0.25.1`). Using `:latest` in production can lead to version mismatches between the server and sandbox image.
+
+### Bitwarden / Vaultwarden credential backends
+
+The chart can run Bitwarden CLI (`bw serve`) instances for the `bitwarden` credential backend. Each instance uses a Kubernetes Secret containing Bitwarden login material, mounted as files under `/run/secrets/bitwarden`:
+
+```bash
+kubectl create secret generic carapace-bw-personal -n carapace \
+  --from-literal=BW_CLIENTID=user.xxxxxxxx-... \
+  --from-literal=BW_CLIENTSECRET=xxxxxxxxxxxx \
+  --from-literal=BW_MASTER_PASSWORD=your-master-password \
+  --from-literal=BW_EMAIL=you@example.com
+```
+
+Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port must not be `8088`.
+
+Create the proxy auth Secret separately. It must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`:
+
+```bash
+htpasswd -nB alice > /tmp/carapace-bitwarden-alice-htpasswd
+kubectl create secret generic carapace-bitwarden-alice-basic-auth -n carapace \
+  --from-file=htpasswd=/tmp/carapace-bitwarden-alice-htpasswd
+```
+
+Then enable an instance with user-specific names in the Helm values:
+
+```yaml
+bitwarden:
+  persistence:
+    enabled: true
+    size: 256Mi
+    finalizers:
+      - kubernetes.io/pvc-protection
+  instances:
+    - name: vaultwarden-alice
+      fullnameOverride: carapace-bitwarden-alice
+      port: 8087
+      serverUrl: https://vault.example.com
+      existingSecret: carapace-bw-alice
+      basicAuth:
+        existingSecret: carapace-bitwarden-alice-basic-auth
+```
+
+Configure the matching Bitwarden backend on the user record, for example in `auth/users.yaml` or through the admin API:
+
+```yaml
+users:
+  alice:
+    config:
+      credentials:
+        backends:
+          vault:
+            type: bitwarden
+            url: http://carapace-bitwarden-alice:8087
+            basic_auth:
+              username: alice
+              password: user-specific-random-proxy-password
+```
+
+Keep the username/password in the carapace user config aligned with the htpasswd entry in the proxy Secret. carapace redacts the proxy password from admin API responses, but the local `auth/users.yaml` still stores it so the server can authenticate to nginx.
+
+See [credentials.md](credentials.md) for backend behavior, exposure controls, and credential access auditing.
 
 ### Auto-detection
 

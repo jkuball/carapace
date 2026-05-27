@@ -77,6 +77,7 @@ _config: Config
 _engine: SessionEngine
 _git_handler: GitHttpHandler
 _credential_registry: CredentialRegistry
+_user_credential_registries: dict[str, tuple[str, CredentialRegistry]]
 _session_archive: SessionArchiveService
 _session_list_cache: SessionListCache
 _jobs_store: JobsStore
@@ -156,6 +157,43 @@ def _create_sandbox_runtime(config: Config, data_dir: Path) -> ContainerRuntime:
     )
 
 
+def _credential_config_fingerprint(username: str) -> tuple[str, bool]:
+    user = _auth_store.get_user(username)
+    if user is None:
+        raise KeyError(username)
+    user_credentials = user.config.credentials
+    if user_credentials.backends:
+        return user_credentials.model_dump_json(exclude_none=True), True
+    return _config.credentials.model_dump_json(exclude_none=True), False
+
+
+async def _credential_registry_for_user(username: str) -> CredentialRegistry:
+    fingerprint, is_user_specific = _credential_config_fingerprint(username)
+    if not is_user_specific:
+        return _credential_registry
+
+    cached = _user_credential_registries.get(username)
+    if cached is not None:
+        cached_fingerprint, cached_registry = cached
+        if cached_fingerprint == fingerprint:
+            return cached_registry
+        await cached_registry.close()
+
+    user = _auth_store.get_user(username)
+    if user is None:
+        raise KeyError(username)
+    registry = await build_credential_registry(user.config.credentials, _data_dir)
+    _user_credential_registries[username] = (fingerprint, registry)
+    if registry.backend_names:
+        logger.info(f"Credential backends for user {username!r}: {', '.join(registry.backend_names)}")
+    return registry
+
+
+async def _credential_registry_for_session(session_id: str) -> CredentialRegistry:
+    meta = _engine.session_mgr.load_meta(session_id)
+    return await _credential_registry_for_user(meta.user)
+
+
 async def _idle_cleanup_loop(sandbox_mgr: SandboxManager) -> None:
     """Periodically clean up idle sandbox containers."""
     while True:
@@ -214,6 +252,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _engine, \
         _git_handler, \
         _credential_registry, \
+        _user_credential_registries, \
         _session_archive, \
         _session_list_cache, \
         _jobs_store, \
@@ -333,6 +372,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             logger.info(f"Cleaned up {removed} orphaned sandbox(es)")
 
     _credential_registry = await build_credential_registry(_config.credentials, _data_dir)
+    _user_credential_registries = {}
     if _credential_registry.backend_names:
         logger.info(f"Credential backends: {', '.join(_credential_registry.backend_names)}")
 
@@ -368,6 +408,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         agent_model=agent_model,
         sandbox_mgr=_sandbox_mgr,
         credential_registry=_credential_registry,
+        credential_registry_for_session=_credential_registry_for_session,
         model_factory=model_factory,
         notification_router=_notification_router,
     )
@@ -480,6 +521,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await internal_task
     await proxy.stop()
     await _credential_registry.close()
+    for _, registry in _user_credential_registries.values():
+        await registry.close()
     await _sandbox_mgr.cleanup_all()
     await _session_list_cache.close()
     price_updater.stop()
@@ -700,7 +743,12 @@ async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]
     if active.security is None:
         raise HTTPException(status_code=403, detail="Session not initialized")
 
-    items = await _credential_registry.list(q)
+    try:
+        credential_registry = await _credential_registry_for_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=403, detail="Session owner is not configured") from None
+
+    items = await credential_registry.list(q)
     paths = [i.vault_path for i in items]
     names = [i.name for i in items]
     explanation = f"Sandbox listed credential metadata (query={q!r}, {len(paths)} item(s))"
@@ -732,7 +780,12 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        meta = await _credential_registry.fetch_metadata(vault_path)
+        credential_registry = await _credential_registry_for_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=403, detail="Session owner is not configured") from None
+
+    try:
+        meta = await credential_registry.fetch_metadata(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
 
@@ -793,7 +846,7 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
             return Response(status_code=403, content="Credential access denied")
 
     try:
-        value = await _credential_registry.fetch(vault_path)
+        value = await credential_registry.fetch(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import assert_never
 
@@ -8,6 +9,7 @@ from loguru import logger
 from ..models.credentials import (
     BitwardenCredentialBackendConfig,
     CredentialMetadata,
+    CredentialRegistryProtocol,
     CredentialsConfig,
     FileCredentialBackendConfig,
 )
@@ -60,6 +62,31 @@ class CredentialRegistry:
         """Close all managed credential backends."""
         for backend in self._backends.values():
             await backend.close()
+
+
+class SessionCredentialRegistry:
+    """Credential registry view bound to one session owner."""
+
+    def __init__(
+        self,
+        *,
+        session_id: str,
+        resolve_registry: Callable[[str], Awaitable[CredentialRegistryProtocol]],
+    ) -> None:
+        self._session_id = session_id
+        self._resolve_registry = resolve_registry
+
+    async def _registry(self) -> CredentialRegistryProtocol:
+        return await self._resolve_registry(self._session_id)
+
+    async def fetch(self, vault_path: str) -> str:
+        return await (await self._registry()).fetch(vault_path)
+
+    async def fetch_metadata(self, vault_path: str) -> CredentialMetadata:
+        return await (await self._registry()).fetch_metadata(vault_path)
+
+    async def list(self, query: str = "") -> list[CredentialMetadata]:
+        return await (await self._registry()).list(query)
 
 
 async def build_credential_registry(config: CredentialsConfig, data_dir: Path) -> CredentialRegistry:

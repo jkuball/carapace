@@ -14,6 +14,7 @@ from carapace.credentials import (
     is_exposed,
 )
 from carapace.models.credentials import (
+    BasicAuthConfig,
     BitwardenCredentialBackendConfig,
     CredentialMetadata,
     CredentialsConfig,
@@ -31,6 +32,30 @@ def test_credential_metadata_defaults():
     assert meta.vault_path == "dev/gmail"
     assert meta.name == "Gmail"
     assert meta.description == ""
+
+
+def test_bitwarden_backend_basic_auth_requires_password() -> None:
+    cfg = BitwardenCredentialBackendConfig(basic_auth=BasicAuthConfig(username="carapace"))
+
+    with pytest.raises(ValueError, match=r"basic_auth\.password"):
+        BitwardenBackend(name="bw", base_url="http://bitwarden.local", cfg=cfg)
+
+
+def test_bitwarden_backend_configures_basic_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("carapace.credentials.bitwarden.httpx.AsyncClient", FakeAsyncClient)
+    cfg = BitwardenCredentialBackendConfig(
+        basic_auth=BasicAuthConfig(username="carapace", password="proxy-password"),
+    )
+
+    BitwardenBackend(name="bw", base_url="http://bitwarden.local", cfg=cfg)
+
+    assert isinstance(captured["auth"], httpx.BasicAuth)
 
 
 def test_credential_metadata_with_description():

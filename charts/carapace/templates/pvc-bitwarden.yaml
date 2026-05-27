@@ -5,6 +5,10 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ $.Release.Name }}-bitwarden-{{ .name }}
+  {{- with $.Values.bitwarden.persistence.finalizers }}
+  finalizers:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "carapace.labels" $ | nindent 4 }}
     app.kubernetes.io/component: bitwarden

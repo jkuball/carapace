@@ -8,12 +8,12 @@ from .protocol import is_exposed, require_exposed
 
 
 class BitwardenBackend:
-    """Talks to an external ``bw serve`` instance (sidecar / companion container).
+    """Talks to an external ``bw serve`` instance (companion container / Pod).
 
     Expects ``bw serve`` to already be running at *base_url* — carapace does not
     manage the process lifecycle.  In Docker Compose the ``bw serve`` container
     shares the network namespace via ``network_mode: service:carapace``; in
-    Kubernetes it runs as a sidecar in the same Pod.
+    Kubernetes the Helm chart runs it as a companion Pod behind an nginx proxy.
     """
 
     def __init__(
@@ -26,7 +26,12 @@ class BitwardenBackend:
         self._name = name
         self._cfg = cfg
         self._base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
+        auth = None
+        if cfg.basic_auth is not None:
+            if cfg.basic_auth.password is None:
+                raise ValueError(f"Bitwarden backend {name!r} basic_auth.password is required")
+            auth = httpx.BasicAuth(cfg.basic_auth.username, cfg.basic_auth.password)
+        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0, auth=auth)
 
     async def _get(
         self,
