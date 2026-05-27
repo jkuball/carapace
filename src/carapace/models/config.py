@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_serializer, 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..notifications.models import NotificationsConfig
-from .credentials import CredentialsConfig
 from .session import SessionBudget
 
 
@@ -300,6 +299,5 @@ class Config(ConfigModel):
     agent: AgentConfig = AgentConfig()
     sessions: SessionsConfig = SessionsConfig()
     sandbox: SandboxConfig = SandboxConfig()
-    credentials: CredentialsConfig = CredentialsConfig()
     data_dir: str = "."  # resolved relative to config file location
     knowledge_dir: str = "./knowledge"  # resolved relative to config file location

@@ -113,7 +113,6 @@ config: {}
 #     instances:
 #       - name: personal
 #         fullnameOverride: carapace-bitwarden-personal
-#         port: 8087
 #         serverUrl: https://vault.example.com
 #         existingSecret: carapace-bw-personal
 #         basicAuth:

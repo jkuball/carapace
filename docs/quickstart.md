@@ -49,7 +49,7 @@ curl -c carapace.cookies -X POST http://localhost:3001/api/auth/login \
 curl -X POST http://localhost:3001/api/admin/users \
   -b carapace.cookies \
   -H "Content-Type: application/json" \
-  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+  -d '{"username":"alice","password":"change-me","display_name":"Alice"}'
 ```
 
 The web UI uses the same origin for frontend and API requests, so it only prompts for username and password on first connect.
@@ -59,7 +59,7 @@ See [auth.md](auth.md) for the full user-file format, admin API, and session-coo
 ## 3. Connect via CLI (optional)
 
 ```bash
-uv run carapace --user thies --password change-me
+uv run carapace --user alice --password change-me
 ```
 
 You can also set `CARAPACE_USER` and `CARAPACE_PASSWORD` for the CLI.
@@ -162,7 +162,11 @@ Restart carapace after changing the user config. carapace starts one Matrix chan
 
 carapace can fetch credentials from a password manager on demand. The agent does not have blanket access — every credential request is evaluated by the sentinel agent and requires explicit user approval the first time it is used in a session. Credentials are intended to be consumed inside the sandbox (auto-injected via skill config or fetched with `ccred`) and must never be echoed or logged. Two backends are available.
 
-### File backend (simple)
+### File backend (local trusted users only)
+
+The file backend is disabled by default because its configured path is read by the server process. Only enable it with
+`CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true` when the users who can influence credential backend config are
+trustworthy.
 
 Create a `.env`-format secrets file:
 
@@ -171,14 +175,17 @@ echo "github-token=ghp_xxxxxxxxxxxx" > data/secrets.env
 echo "smtp-password=myapppassword" >> data/secrets.env
 ```
 
-Add to `data/config.yaml`:
+Add the backend to your user config in `data/auth/users.yaml`:
 
 ```yaml
-credentials:
-  backends:
-    dev:
-      type: file
-      # path defaults to <data_dir>/secrets.env
+users:
+  alice:
+    config:
+      credentials:
+        backends:
+          dev:
+            type: file
+            # path defaults to <data_dir>/secrets.env
 ```
 
 Credentials are accessible as `dev/github-token`, `dev/smtp-password`, etc.
@@ -215,14 +222,20 @@ docker compose up -d --scale bw=1
 
 Startup messages from the entrypoint go to the **`bw` container** — use `docker compose logs -f bw` (not only `carapace`). Without a TTY, stdout is often block-buffered and lines can appear late or only after exit; this stack allocates a TTY for `bw` and logs progress to stderr so `docker compose logs` shows them as they run. The `bitwarden-cli-data` volume keeps Bitwarden CLI login/device state and the cached server URL across container recreation; removing that volume applies `BW_SERVER_URL` from scratch on the next start.
 
-3. Add to `data/config.yaml`:
+3. Add the backend to your user config in `data/auth/users.yaml`:
 
 ```yaml
-credentials:
-  backends:
-    personal:
-      type: bitwarden
-      # url defaults to http://127.0.0.1:8087
+users:
+  alice:
+    config:
+      credentials:
+        backends:
+          personal:
+            type: bitwarden
+            # url defaults to http://127.0.0.1:8087
+            basic_auth:
+              username: alice
+              password: user-specific-random-proxy-password
 ```
 
 Credentials are accessible by their Bitwarden UUID: `personal/9742101e-68b8-4a07-b5b1-...`. Look up UUIDs in the Bitwarden web UI or via `bw list items`.
@@ -232,16 +245,22 @@ Credentials are accessible by their Bitwarden UUID: `personal/9742101e-68b8-4a07
 By default, all credentials in a backend are accessible (subject to sentinel + user approval). To restrict which credentials carapace can see:
 
 ```yaml
-credentials:
-  backends:
-    personal:
-      type: bitwarden
-      expose: # allowlist — only these UUIDs are accessible
-        - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
-        - "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-      # OR:
-      # hide:  # blocklist — these UUIDs are excluded
-      #   - "deadbeef-..."
+users:
+  alice:
+    config:
+      credentials:
+        backends:
+          personal:
+            type: bitwarden
+            basic_auth:
+              username: alice
+              password: user-specific-random-proxy-password
+            expose: # allowlist — only these UUIDs are accessible
+              - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
+              - "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            # OR:
+            # hide:  # blocklist — these UUIDs are excluded
+            #   - "deadbeef-..."
 ```
 
 ## 7. Personalise

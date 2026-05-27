@@ -71,6 +71,15 @@ def test_load_config_rejects_global_git_config(tmp_path: Path):
         load_config(tmp_path)
 
 
+def test_load_config_rejects_global_credentials_config(tmp_path: Path):
+    (tmp_path / "config.yaml").write_text(
+        "credentials:\n  backends:\n    vault:\n      type: bitwarden\n      url: http://127.0.0.1:8087\n"
+    )
+
+    with pytest.raises(ValidationError):
+        load_config(tmp_path)
+
+
 def test_load_workspace_file_missing(tmp_path: Path):
     result = load_workspace_file(tmp_path, "SECURITY.md")
     assert result == ""

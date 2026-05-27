@@ -17,12 +17,12 @@ One `users.yaml` entry looks like this:
 ```yaml
 version: 1
 users:
-  thies:
+  alice:
     password_hash: "$argon2id$v=19$..."
     enabled: true
     token_version: 1
-    display_name: Thies
-    email: thies@example.com
+    display_name: Alice
+    email: alice@example.com
     roles: []
     created_at: "2026-05-24T12:00:00Z"
     updated_at: "2026-05-24T12:00:00Z"
@@ -35,7 +35,7 @@ users:
             type: bitwarden
             url: http://carapace-bitwarden:8087
             basic_auth:
-              username: thies
+              username: alice
               password: user-specific-random-proxy-password
       channels:
         matrix:
@@ -68,13 +68,13 @@ curl -c carapace.cookies -X POST http://localhost:8321/api/auth/login \
 curl -X POST http://localhost:8321/api/admin/users \
   -b carapace.cookies \
   -H "Content-Type: application/json" \
-  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+  -d '{"username":"alice","password":"change-me","display_name":"Alice"}'
 ```
 
 The web UI logs in with username and password. The CLI does the same:
 
 ```bash
-uv run carapace --user thies --password change-me
+uv run carapace --user alice --password change-me
 ```
 
 You can also set `CARAPACE_USER` and `CARAPACE_PASSWORD` for the CLI.

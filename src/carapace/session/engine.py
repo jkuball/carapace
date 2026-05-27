@@ -117,8 +117,7 @@ class SessionEngine(
         skill_catalog: list[SkillInfo],
         agent_model: Model | None,
         sandbox_mgr: SandboxManager,
-        credential_registry: CredentialRegistryProtocol,
-        credential_registry_for_session: Callable[[str], Awaitable[CredentialRegistryProtocol]] | None = None,
+        credential_registry_for_session: Callable[[str], Awaitable[CredentialRegistryProtocol]],
         model_factory: Callable[[str], Model] | None = None,
         notification_router: NotificationRouter | None = None,
     ) -> None:
@@ -131,7 +130,6 @@ class SessionEngine(
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._model_factory = model_factory
-        self._credential_registry = credential_registry
         self._credential_registry_for_session = credential_registry_for_session
         self._notification_router = notification_router
         self._active: dict[str, ActiveSession] = {}
@@ -143,13 +141,9 @@ class SessionEngine(
         sandbox_mgr.set_skill_command_aliases_callback(self._skill_command_aliases)
 
     async def _resolve_credential_registry(self, session_id: str) -> CredentialRegistryProtocol:
-        if self._credential_registry_for_session is None:
-            return self._credential_registry
         return await self._credential_registry_for_session(session_id)
 
     def _session_credential_registry(self, session_id: str) -> CredentialRegistryProtocol:
-        if self._credential_registry_for_session is None:
-            return self._credential_registry
         return SessionCredentialRegistry(
             session_id=session_id,
             resolve_registry=self._resolve_credential_registry,

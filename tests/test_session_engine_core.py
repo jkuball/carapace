@@ -46,8 +46,11 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
         "---\n"
     )
 
+    mock_reg = AsyncMock(spec=CredentialRegistryProtocol)
+    mock_reg.fetch = AsyncMock(return_value="secret-value")
+
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, credential_registry=mock_reg)
 
     state = engine.session_mgr.create_session(user="thies")
     sid = state.session_id
@@ -63,10 +66,6 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
             ),
         ],
     )
-
-    mock_reg = AsyncMock(spec=CredentialRegistryProtocol)
-    mock_reg.fetch = AsyncMock(return_value="secret-value")
-    engine._credential_registry = mock_reg
 
     result = await engine._skill_activation_inputs(sid, skill_name)
     assert result.environment == {"API_KEY": "secret-value"}

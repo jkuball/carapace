@@ -13,6 +13,7 @@ from carapace.credentials import (
     build_credential_registry,
     is_exposed,
 )
+from carapace.credentials.registry import FILE_CREDENTIAL_BACKEND_ENV, file_credential_backend_allowed_from_env
 from carapace.models.credentials import (
     BasicAuthConfig,
     BitwardenCredentialBackendConfig,
@@ -56,6 +57,29 @@ def test_bitwarden_backend_configures_basic_auth(monkeypatch: pytest.MonkeyPatch
     BitwardenBackend(name="bw", base_url="http://bitwarden.local", cfg=cfg)
 
     assert isinstance(captured["auth"], httpx.BasicAuth)
+
+
+def test_file_backend_env_switch_defaults_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(FILE_CREDENTIAL_BACKEND_ENV, raising=False)
+    assert file_credential_backend_allowed_from_env() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+def test_file_backend_env_switch_accepts_true_values(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv(FILE_CREDENTIAL_BACKEND_ENV, value)
+    assert file_credential_backend_allowed_from_env() is True
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "FALSE", "no", "off"])
+def test_file_backend_env_switch_accepts_false_values(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv(FILE_CREDENTIAL_BACKEND_ENV, value)
+    assert file_credential_backend_allowed_from_env() is False
+
+
+def test_file_backend_env_switch_rejects_invalid_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(FILE_CREDENTIAL_BACKEND_ENV, "sometimes")
+    with pytest.raises(ValueError, match=FILE_CREDENTIAL_BACKEND_ENV):
+        file_credential_backend_allowed_from_env()
 
 
 def test_credential_metadata_with_description():
@@ -375,35 +399,54 @@ def test_registry_backend_names(file_backend: FileVaultBackend) -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_registry_file_backend(tmp_path: Path) -> None:
+async def test_build_registry_file_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(FILE_CREDENTIAL_BACKEND_ENV, "true")
     env = _write_env(tmp_path, "token=abc\n")
-    config = CredentialsConfig(backends={"dev": FileCredentialBackendConfig(type="file", path=str(env))})
+    config = CredentialsConfig(
+        backends={"dev": FileCredentialBackendConfig(type="file", path=str(env))},
+    )
     reg = await build_credential_registry(config, tmp_path)
     assert "dev" in reg.backend_names
 
 
 @pytest.mark.asyncio
-async def test_build_registry_unknown_type(tmp_path: Path) -> None:
+async def test_build_registry_file_backend_disabled_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(FILE_CREDENTIAL_BACKEND_ENV, raising=False)
     config = CredentialsConfig(
         backends={"x": FileCredentialBackendConfig(type="file", path=str(tmp_path / "missing.env"))}
     )
     reg = await build_credential_registry(config, tmp_path)
-    assert "x" in reg.backend_names
+    assert "x" not in reg.backend_names
+
+
+@pytest.mark.asyncio
+async def test_build_registry_file_backend_respects_server_override(tmp_path: Path) -> None:
+    env = _write_env(tmp_path, "token=abc\n")
+    config = CredentialsConfig(
+        backends={"dev": FileCredentialBackendConfig(type="file", path=str(env))},
+    )
+    reg = await build_credential_registry(config, tmp_path, file_backend_allowed=False)
+    assert "dev" not in reg.backend_names
 
 
 @pytest.mark.asyncio
 async def test_build_registry_default_path(tmp_path: Path) -> None:
     (tmp_path / "secrets.env").write_text("k=v\n")
     config = CredentialsConfig(backends={"dev": FileCredentialBackendConfig(type="file")})
-    reg = await build_credential_registry(config, tmp_path)
+    reg = await build_credential_registry(config, tmp_path, file_backend_allowed=True)
     assert "dev" in reg.backend_names
 
 
 @pytest.mark.asyncio
 async def test_build_registry_relative_path_under_data_dir(tmp_path: Path) -> None:
     (tmp_path / "secrets.env").write_text("k=v\n")
-    config = CredentialsConfig(backends={"dev": FileCredentialBackendConfig(type="file", path="secrets.env")})
-    reg = await build_credential_registry(config, tmp_path)
+    config = CredentialsConfig(
+        backends={"dev": FileCredentialBackendConfig(type="file", path="secrets.env")},
+    )
+    reg = await build_credential_registry(config, tmp_path, file_backend_allowed=True)
     assert await reg.fetch("dev/k") == "v"
 
 

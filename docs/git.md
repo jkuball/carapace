@@ -10,7 +10,7 @@ Add a `git` section to the owning user record in `$CARAPACE_DATA_DIR/auth/users.
 
 ```yaml
 users:
-  thies:
+  alice:
     config:
       git:
         remote: https://gitea.example.com/team/knowledge.git
