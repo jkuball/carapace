@@ -49,7 +49,7 @@ curl -c carapace.cookies -X POST http://localhost:3001/api/auth/login \
 curl -X POST http://localhost:3001/api/admin/users \
   -b carapace.cookies \
   -H "Content-Type: application/json" \
-  -d '{"username":"thies","password":"change-me","display_name":"Thies"}'
+  -d '{"username":"alice","password":"change-me","display_name":"Alice"}'
 ```
 
 The web UI uses the same origin for frontend and API requests, so it only prompts for username and password on first connect.
@@ -59,7 +59,7 @@ See [auth.md](auth.md) for the full user-file format, admin API, and session-coo
 ## 3. Connect via CLI (optional)
 
 ```bash
-uv run carapace --user thies --password change-me
+uv run carapace --user alice --password change-me
 ```
 
 You can also set `CARAPACE_USER` and `CARAPACE_PASSWORD` for the CLI.
@@ -179,7 +179,7 @@ Add the backend to your user config in `data/auth/users.yaml`:
 
 ```yaml
 users:
-  thies:
+  alice:
     config:
       credentials:
         backends:
@@ -226,7 +226,7 @@ Startup messages from the entrypoint go to the **`bw` container** — use `docke
 
 ```yaml
 users:
-  thies:
+  alice:
     config:
       credentials:
         backends:
@@ -234,7 +234,7 @@ users:
             type: bitwarden
             # url defaults to http://127.0.0.1:8087
             basic_auth:
-              username: thies
+              username: alice
               password: user-specific-random-proxy-password
 ```
 
@@ -246,14 +246,14 @@ By default, all credentials in a backend are accessible (subject to sentinel + u
 
 ```yaml
 users:
-  thies:
+  alice:
     config:
       credentials:
         backends:
           personal:
             type: bitwarden
             basic_auth:
-              username: thies
+              username: alice
               password: user-specific-random-proxy-password
             expose: # allowlist — only these UUIDs are accessible
               - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"

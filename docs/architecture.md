@@ -470,7 +470,7 @@ owner before listing or fetching credentials:
 
 ```yaml
 users:
-  thies:
+  alice:
     config:
       credentials:
         backends:
@@ -478,7 +478,7 @@ users:
             type: bitwarden
             url: http://127.0.0.1:8087
             basic_auth:
-              username: thies
+              username: alice
               password: user-specific-random-proxy-password
             expose:
               - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"

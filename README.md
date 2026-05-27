@@ -136,7 +136,7 @@ Optional CLI connection:
 ```bash
 # First login to the web UI as admin with CARAPACE_TOKEN, then create your normal user.
 
-uv run carapace --user thies --password change-me
+uv run carapace --user alice --password change-me
 ```
 
 The web UI uses the same username/password login and stores the session in an HttpOnly cookie.

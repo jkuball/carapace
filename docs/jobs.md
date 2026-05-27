@@ -151,7 +151,7 @@ Example manual run:
 curl -c carapace-cookie.jar \
   -H "Content-Type: application/json" \
   http://localhost:8321/api/auth/login \
-  -d '{"username":"thies","password":"change-me"}'
+  -d '{"username":"alice","password":"change-me"}'
 
 curl -X POST \
   -b carapace-cookie.jar \

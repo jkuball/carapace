@@ -211,38 +211,38 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 
 ### Key values
 
-| Value                                    | Default                          | Description                                                        |
-| ---------------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| `image.registry`                         | `ghcr.io`                        | Server image registry                                              |
-| `image.repository`                       | `thiesgerken/carapace`           | Server image repository                                            |
-| `image.tag`                              | `""` (appVersion)                | Server image tag                                                   |
-| `frontend.enabled`                       | `true`                           | Deploy the Next.js frontend                                        |
-| `frontend.image.tag`                     | `""` (appVersion)                | Frontend image tag                                                 |
-| `sandbox.image.tag`                      | `""` (appVersion)                | Sandbox base image tag                                             |
-| `sandbox.sandboxesName`                  | `null` (`<release>-sandboxes`)   | `Sandboxes` CR name; set `""` to use the Deployment as owner       |
-| `ingress.enabled`                        | `true`                           | Create a Gateway API HTTPRoute                                     |
-| `ingress.hostname`                       | `carapace.example.com`           | Ingress hostname                                                   |
-| `ingress.parentRefs`                     | `[{name: default-gateway}]`      | Gateway parent references                                          |
-| `ingress.annotations`                    | `{}`                             | Extra annotations on the HTTPRoute                                 |
-| `persistence.storageClassName`           | `""` (cluster default)           | StorageClass for the RWX PVC                                       |
-| `persistence.size`                       | `10Gi`                           | PVC size                                                           |
-| `persistence.finalizers`                 | `[]`                             | PVC finalizers (e.g. `kubernetes.io/pvc-protection`)               |
-| `config`                                 | `{}`                             | Application config (mounted as `/data/config.yaml` via ConfigMap)  |
-| `priorityClassName`                      | `""`                             | PriorityClass for all pods (server, frontend, sandbox)             |
-| `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                     |
-| `extraEnv`                               | `[]`                             | Extra env vars for the server container                            |
-| `redis.enabled`                          | `true`                           | Deploy the bundled Redis required for session-list cache           |
-| `redis.image.tag`                        | `7-alpine`                       | Redis image tag                                                    |
-| `redis.resources`                        | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                     |
-| `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                    |
-| `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                  |
-| `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli image tag                                            |
-| `bitwarden.nginx.image.tag`              | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy             |
+| Value                                    | Default                          | Description                                                         |
+| ---------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `image.registry`                         | `ghcr.io`                        | Server image registry                                               |
+| `image.repository`                       | `thiesgerken/carapace`           | Server image repository                                             |
+| `image.tag`                              | `""` (appVersion)                | Server image tag                                                    |
+| `frontend.enabled`                       | `true`                           | Deploy the Next.js frontend                                         |
+| `frontend.image.tag`                     | `""` (appVersion)                | Frontend image tag                                                  |
+| `sandbox.image.tag`                      | `""` (appVersion)                | Sandbox base image tag                                              |
+| `sandbox.sandboxesName`                  | `null` (`<release>-sandboxes`)   | `Sandboxes` CR name; set `""` to use the Deployment as owner        |
+| `ingress.enabled`                        | `true`                           | Create a Gateway API HTTPRoute                                      |
+| `ingress.hostname`                       | `carapace.example.com`           | Ingress hostname                                                    |
+| `ingress.parentRefs`                     | `[{name: default-gateway}]`      | Gateway parent references                                           |
+| `ingress.annotations`                    | `{}`                             | Extra annotations on the HTTPRoute                                  |
+| `persistence.storageClassName`           | `""` (cluster default)           | StorageClass for the RWX PVC                                        |
+| `persistence.size`                       | `10Gi`                           | PVC size                                                            |
+| `persistence.finalizers`                 | `[]`                             | PVC finalizers (e.g. `kubernetes.io/pvc-protection`)                |
+| `config`                                 | `{}`                             | Application config (mounted as `/data/config.yaml` via ConfigMap)   |
+| `priorityClassName`                      | `""`                             | PriorityClass for all pods (server, frontend, sandbox)              |
+| `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                      |
+| `extraEnv`                               | `[]`                             | Extra env vars for the server container                             |
+| `redis.enabled`                          | `true`                           | Deploy the bundled Redis required for session-list cache            |
+| `redis.image.tag`                        | `7-alpine`                       | Redis image tag                                                     |
+| `redis.resources`                        | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
+| `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |
+| `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |
+| `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli image tag                                             |
+| `bitwarden.nginx.image.tag`              | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy              |
 | `bitwarden.persistence.enabled`          | `true`                           | Create a PVC per instance for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
-| `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden instance PVC                                |
-| `bitwarden.persistence.storageClassName` | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                    |
-| `bitwarden.persistence.finalizers`       | `[]`                             | Finalizers for Bitwarden PVCs                                      |
-| `bitwarden.instances`                    | `[]`                             | List of standalone `bw serve` proxy instances (see above)          |
+| `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden instance PVC                                 |
+| `bitwarden.persistence.storageClassName` | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                     |
+| `bitwarden.persistence.finalizers`       | `[]`                             | Finalizers for Bitwarden PVCs                                       |
+| `bitwarden.instances`                    | `[]`                             | List of standalone `bw serve` proxy instances (see above)           |
 
 See [values.yaml](values.yaml) for the complete reference.
 
