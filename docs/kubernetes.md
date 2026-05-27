@@ -129,7 +129,7 @@ kubectl create secret generic carapace-bw-personal -n carapace \
   --from-literal=BW_EMAIL=you@example.com
 ```
 
-Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port must not be `8088`.
+Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port defaults to `80` and must not be `8088`.
 
 Create the proxy auth Secret separately. It must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`:
 
@@ -151,7 +151,6 @@ bitwarden:
   instances:
     - name: vaultwarden-alice
       fullnameOverride: carapace-bitwarden-alice
-      port: 8087
       serverUrl: https://vault.example.com
       existingSecret: carapace-bw-alice
       basicAuth:
@@ -168,7 +167,7 @@ users:
         backends:
           vault:
             type: bitwarden
-            url: http://carapace-bitwarden-alice:8087
+            url: http://carapace-bitwarden-alice
             basic_auth:
               username: alice
               password: user-specific-random-proxy-password

@@ -179,7 +179,6 @@ bitwarden:
   instances:
     - name: personal
       fullnameOverride: carapace-bitwarden
-      port: 8087
       serverUrl: https://vault.example.com
       existingSecret: carapace-bw-personal
       basicAuth:
@@ -200,15 +199,15 @@ config:
     backends:
       personal:
         type: bitwarden
-        url: http://carapace-bitwarden:8087
+        url: http://carapace-bitwarden
         basic_auth:
           username: carapace
           password: change-me
 ```
 
-Multiple instances are supported — just add more entries with different names and ports (e.g. `personal` on 8087, `work` on 8089). Each instance gets its own companion Pod, Kubernetes Secret, Service, Basic Auth proxy, and (when persistence is enabled) PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer ephemeral Bitwarden CLI data.
+Multiple instances are supported — just add more entries with different names and ports. Each instance gets its own companion Pod, Kubernetes Secret, Service, Basic Auth proxy, and (when persistence is enabled) PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer ephemeral Bitwarden CLI data.
 
-The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its Pod, while nginx exposes the configured service port for carapace. The service port must not be `8088`.
+The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its Pod, while nginx exposes the configured service port for carapace. The service port defaults to `80` and must not be `8088`.
 
 ### Key values
 

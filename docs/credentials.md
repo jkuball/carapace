@@ -26,7 +26,7 @@ users:
             path: ./data/secrets.env
           personal:
             type: bitwarden
-            url: http://127.0.0.1:8087
+            url: http://carapace-bitwarden-thies
             basic_auth:
               username: thies
               password: user-specific-random-proxy-password
