@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.128.0 (2026-05-27)
+
+
+### Other
+
+
+- thies -> alice
+  ([`95e439f`](https://github.com/thiesgerken/carapace/commit/95e439f7c8c61b28d3776bb39f36120c7e0477d7))
+
+- 8087 -> 80
+  ([`fca7b68`](https://github.com/thiesgerken/carapace/commit/fca7b68a2603605ff3e81ca1ee59991306a73daf))
+
+### ✨ Features
+
+
+- ✨ feat: no global credential config + disable file cred backend by default
+  ([`a98e9eb`](https://github.com/thiesgerken/carapace/commit/a98e9eb556710d9f81c84884d094b5c8eb4c634d))
+
 ## v0.127.0 (2026-05-27)
 
 
