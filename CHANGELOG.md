@@ -1,6 +1,46 @@
 # CHANGELOG
 
 
+## v0.127.0 (2026-05-27)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade redis:8-alpine Docker digest to ad0a6ef
+  ([`882f9ef`](https://github.com/thiesgerken/carapace/commit/882f9ef150b829dfb59a35daf99284b1a4285f08))
+
+- ⬆️ chore: upgrade pnpm to 11.3.0
+  ([`6140c72`](https://github.com/thiesgerken/carapace/commit/6140c72ea8b4b9b12ff4658381f6fe83ddb19f2f))
+
+### Other
+
+
+- remove sidecar mode
+  ([`f5eb3e1`](https://github.com/thiesgerken/carapace/commit/f5eb3e1bce5708abea70ba2a1e25144f7cbe2061))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: separate KeyError handling in fetch_credential to return 403 for missing user vs 404 for missing credential
+  ([`27c08a5`](https://github.com/thiesgerken/carapace/commit/27c08a541759e6e924fa068e9a428bb19a29e1cd))
+
+- 🐛 fix: Update Bitwarden proxy configuration to enforce port restrictions for standalone instances
+  ([`cbfdf25`](https://github.com/thiesgerken/carapace/commit/cbfdf252336baf8347c9b57911a968917a2c46e2))
+
+### ✨ Features
+
+
+- ✨ feat: Add support for standalone Bitwarden instances with HTTP Basic Auth
+  ([`02ed3be`](https://github.com/thiesgerken/carapace/commit/02ed3befb01324e569f1519fca66f4bca57da152))
+
+  - Introduced new Helm template for Bitwarden deployment in standalone mode, including Nginx proxy configuration.
+  - Updated values.yaml to include configuration for Nginx image and Bitwarden instances.
+  - Enhanced Bitwarden backend to support HTTP Basic Auth for user-specific configurations.
+  - Implemented credential registry handling for user-specific sessions.
+  - Added tests for Bitwarden backend authentication and user configuration redaction.
+  - Updated documentation to reflect changes in credential backend configuration and usage.
+
 ## v0.126.1 (2026-05-26)
 
 
