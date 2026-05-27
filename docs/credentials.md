@@ -12,21 +12,8 @@ In short: credentials are consumed inside the sandbox, not returned to the user-
 
 ## Backends
 
-Backends are configured in `config.yaml` under `credentials.backends`:
-
-```yaml
-credentials:
-  backends:
-    dev:
-      type: file
-      path: ./data/secrets.env
-    personal:
-      type: bitwarden
-      url: http://127.0.0.1:8087
-```
-
-In multi-user deployments, prefer configuring credential backends on the user record instead of the global
-`config.yaml`, so each user can point at their own vault proxy and authentication boundary:
+Backends are configured on each user record under `config.credentials`. Sessions use the credential backends owned by
+their session user.
 
 ```yaml
 users:
@@ -34,17 +21,28 @@ users:
     config:
       credentials:
         backends:
-          vault:
+          dev:
+            type: file
+            path: ./data/secrets.env
+          personal:
             type: bitwarden
-            url: http://carapace-bitwarden:8087
+            url: http://127.0.0.1:8087
             basic_auth:
               username: thies
               password: user-specific-random-proxy-password
 ```
 
+The file backend is disabled by default. Enable it with `CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true` only when the
+users who can influence credential backend configuration are trustworthy: a file backend path is read by the server
+process and can point at arbitrary files the backend can access.
+
+Each user can point at their own vault proxy and authentication boundary. Admin API responses redact backend proxy
+passwords, and updates that omit an existing proxy password keep the stored value.
+
 Supported backend types:
 
-- `file`: reads `key=value` pairs from a secrets file (`path` defaults to `<data_dir>/secrets.env`).
+- `file`: reads `key=value` pairs from a secrets file (`path` defaults to `<data_dir>/secrets.env`). This backend is
+  ignored unless `CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true` is set on the server process.
 - `bitwarden`: talks to an externally managed `bw serve` endpoint (typically a companion container or a separate Pod behind a proxy). The Docker Compose `bw` service uses env vars such as `BW_SERVER_URL` (vault base URL for the CLI login). Empty `BW_SERVER_URL` is applied as US cloud via `bw config server bitwarden.com` when it first differs from the value stored under the Bitwarden CLI data directory (`$BW_DATA_DIR/carapace-state/`, e.g. on a Docker volume or Kubernetes PVC); the Bitwarden CLI process only logs out and re-runs `bw config server` when that env changes. See `docs/quickstart.md` for the full Docker Compose variable list.
 
 For a standalone Kubernetes `bw serve` Pod, keep `bw serve` bound to localhost inside that Pod and expose an nginx
@@ -61,15 +59,21 @@ Each credential is addressed by `vault_path` as `<backend>/<id>`, for example:
 Each backend can restrict visible credentials:
 
 ```yaml
-credentials:
-  backends:
-    personal:
-      type: bitwarden
-      expose:
-        - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
-      # or:
-      # hide:
-      #   - "deadbeef-..."
+users:
+  thies:
+    config:
+      credentials:
+        backends:
+          personal:
+            type: bitwarden
+            basic_auth:
+              username: thies
+              password: user-specific-random-proxy-password
+            expose:
+              - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
+            # or:
+            # hide:
+            #   - "deadbeef-..."
 ```
 
 - `expose`: allowlist mode (only listed IDs are accessible)

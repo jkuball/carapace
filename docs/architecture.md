@@ -465,20 +465,26 @@ Session commit settings control how conversation histories are copied into the k
 
 LLM API keys are provided as standard environment variables (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.) — not through the config file.
 
-Credential backends are configured under `credentials.backends`:
+Credential backends are configured per user under `config.credentials`. Sandbox credential requests resolve the session
+owner before listing or fetching credentials:
 
 ```yaml
-credentials:
-  backends:
-    dev:
-      type: file
-      path: ./data/secrets.env
-    personal:
-      type: bitwarden
-      url: http://127.0.0.1:8087
-      expose:
-        - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
+users:
+  thies:
+    config:
+      credentials:
+        backends:
+          personal:
+            type: bitwarden
+            url: http://127.0.0.1:8087
+            basic_auth:
+              username: thies
+              password: user-specific-random-proxy-password
+            expose:
+              - "9742101e-68b8-4a07-b5b1-9578b5f88e6f"
 ```
+
+File credential backends are ignored unless `CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true` is set on the server process.
 
 ### Secrets
 

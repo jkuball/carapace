@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import assert_never
@@ -16,6 +17,20 @@ from ..models.credentials import (
 from .bitwarden import BitwardenBackend
 from .file import FileVaultBackend
 from .protocol import VaultBackend
+
+FILE_CREDENTIAL_BACKEND_ENV = "CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND"
+_TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+_FALSE_ENV_VALUES = {"", "0", "false", "no", "off"}
+
+
+def file_credential_backend_allowed_from_env() -> bool:
+    raw = os.environ.get(FILE_CREDENTIAL_BACKEND_ENV, "")
+    normalized = raw.strip().lower()
+    if normalized in _TRUE_ENV_VALUES:
+        return True
+    if normalized in _FALSE_ENV_VALUES:
+        return False
+    raise ValueError(f"{FILE_CREDENTIAL_BACKEND_ENV} must be a boolean value (true/false, yes/no, on/off, or 1/0)")
 
 
 class CredentialRegistry:
@@ -89,12 +104,26 @@ class SessionCredentialRegistry:
         return await (await self._registry()).list(query)
 
 
-async def build_credential_registry(config: CredentialsConfig, data_dir: Path) -> CredentialRegistry:
+async def build_credential_registry(
+    config: CredentialsConfig,
+    data_dir: Path,
+    *,
+    file_backend_allowed: bool | None = None,
+) -> CredentialRegistry:
     """Create a :class:`CredentialRegistry` from the ``credentials`` config block."""
+    is_file_backend_allowed = (
+        file_credential_backend_allowed_from_env() if file_backend_allowed is None else file_backend_allowed
+    )
     registry = CredentialRegistry()
     for name, cfg in config.backends.items():
         match cfg:
             case FileCredentialBackendConfig():
+                if not is_file_backend_allowed:
+                    logger.warning(
+                        f"File credential backend '{name}' is disabled; set {FILE_CREDENTIAL_BACKEND_ENV}=true "
+                        "only when credential backend configs are managed by trusted users"
+                    )
+                    continue
                 if cfg.path:
                     raw = Path(cfg.path)
                     path = raw if raw.is_absolute() else data_dir / raw

@@ -84,11 +84,14 @@ def _setup_server(tmp_path, monkeypatch):
     sandbox_mgr.destroy_session = AsyncMock()
 
     cred_reg = CredentialRegistry()
+
+    async def credential_registry_for_session(_session_id: str) -> CredentialRegistry:
+        return cred_reg
+
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
     srv._data_dir = tmp_path
     srv._config = config
-    srv._credential_registry = cred_reg
     srv._user_credential_registries = {}
     srv._engine = SessionEngine(
         config=config,
@@ -99,7 +102,7 @@ def _setup_server(tmp_path, monkeypatch):
         skill_catalog=skill_catalog,
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
-        credential_registry=cred_reg,
+        credential_registry_for_session=credential_registry_for_session,
     )
     srv._session_archive = SessionArchiveService(
         knowledge_dir=tmp_path,
@@ -1836,7 +1839,7 @@ def test_sandbox_list_credentials_audit(client, auth_headers, monkeypatch):
 
     mock_reg = MagicMock()
     mock_reg.list = AsyncMock(return_value=[CredentialMetadata(vault_path="dev/key", name="key", description="test")])
-    monkeypatch.setattr(srv, "_credential_registry", mock_reg, raising=False)
+    monkeypatch.setattr(srv, "_credential_registry_for_session", AsyncMock(return_value=mock_reg), raising=False)
     srv._engine.sandbox_mgr.verify_session_token.side_effect = lambda s, t: s == sid and t == "secret"
     srv._engine.sandbox_mgr.mark_credential_notified.return_value = False
 
