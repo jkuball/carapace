@@ -41,7 +41,7 @@ Sandbox owner name. Nil means use the release default, empty string means Deploy
 {{- end }}
 
 {{/*
-Bitwarden CLI sidecar image with tag defaulting to appVersion
+Bitwarden CLI image with tag defaulting to appVersion
 */}}
 {{- define "carapace.bitwardenImage" -}}
 {{ .Values.bitwarden.image.registry }}/{{ .Values.bitwarden.image.repository }}:{{ .Values.bitwarden.image.tag | default .Chart.AppVersion }}
@@ -62,8 +62,6 @@ Standalone Bitwarden resource name for one instance.
 {{- $instance := .instance -}}
 {{- if $instance.fullnameOverride -}}
 {{ $instance.fullnameOverride | trunc 63 | trimSuffix "-" }}
-{{- else if and $instance.standalone $instance.standalone.fullnameOverride -}}
-{{ $instance.standalone.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else -}}
 {{ printf "%s-bitwarden-%s" $root.Release.Name $instance.name | trunc 63 | trimSuffix "-" }}
 {{- end -}}

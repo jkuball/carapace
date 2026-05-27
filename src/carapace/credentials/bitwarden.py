@@ -8,12 +8,12 @@ from .protocol import is_exposed, require_exposed
 
 
 class BitwardenBackend:
-    """Talks to an external ``bw serve`` instance (sidecar / companion container).
+    """Talks to an external ``bw serve`` instance (companion container / Pod).
 
     Expects ``bw serve`` to already be running at *base_url* — carapace does not
     manage the process lifecycle.  In Docker Compose the ``bw serve`` container
     shares the network namespace via ``network_mode: service:carapace``; in
-    Kubernetes it runs as a sidecar in the same Pod.
+    Kubernetes the Helm chart runs it as a companion Pod behind an nginx proxy.
     """
 
     def __init__(

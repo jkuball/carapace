@@ -1,5 +1,4 @@
 {{- range .Values.bitwarden.instances }}
-{{- if eq (.mode | default "sidecar") "standalone" }}
 {{- $name := include "carapace.bitwardenStandaloneName" (dict "root" $ "instance" .) }}
 {{- $servePort := 8088 }}
 {{- $servicePort := .port | default 8087 }}
@@ -226,6 +225,5 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $servicePort }}
-{{- end }}
 {{- end }}
 {{- end }}

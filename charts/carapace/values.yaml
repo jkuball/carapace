@@ -99,23 +99,25 @@ resetAssets: false
 #         enabled: true
 config: {}
 
-# -- Bitwarden CLI sidecar(s) for Bitwarden-compatible credential backends.
-# Each entry spawns a sidecar container running `bw serve` in the server Pod,
-# sharing the network namespace so carapace reaches it at 127.0.0.1:<port>.
+# -- Standalone Bitwarden CLI proxy instance(s) for Bitwarden-compatible credential backends.
+# Each entry spawns a companion Pod running `bw serve` behind an nginx Basic Auth proxy.
 # The matching credential backend in config.yaml should use type: bitwarden
-# with url set to http://127.0.0.1:<port>.
+# with url set to http://<release>-bitwarden-<name>:<port> or fullnameOverride:<port>.
 #
 # Example:
 #   bitwarden:
 #     persistence:
-#       enabled: true   # set false for ephemeral sidecar (no PVC)
+#       enabled: true   # set false for ephemeral Bitwarden CLI data (no PVC)
 #       size: 256Mi
 #       storageClassName: ""
 #     instances:
-#       - name: bw-personal
+#       - name: personal
+#         fullnameOverride: carapace-bitwarden-personal
 #         port: 8087
 #         serverUrl: https://vault.example.com
 #         existingSecret: carapace-bw-personal
+#         basicAuth:
+#           existingSecret: carapace-bitwarden-personal-basic-auth
 #         # The Secret is mounted as files under /run/secrets/bitwarden (e.g. BW_MASTER_PASSWORD;
 #         # BW_CLIENTID + BW_CLIENTSECRET for API key login, or BW_EMAIL for password-only login).
 #         resources:
@@ -144,7 +146,7 @@ bitwarden:
         cpu: 100m
         memory: 64Mi
   # -- One PVC per bitwarden instance; stores CLI device/session data so redeploys do not
-  # trigger a fresh login (and provider "new device" emails). Disable for ephemeral sidecars.
+  # trigger a fresh login (and provider "new device" emails). Disable for ephemeral instances.
   persistence:
     enabled: true
     size: 256Mi

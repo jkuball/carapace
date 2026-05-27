@@ -45,7 +45,7 @@ users:
 Supported backend types:
 
 - `file`: reads `key=value` pairs from a secrets file (`path` defaults to `<data_dir>/secrets.env`).
-- `bitwarden`: talks to an externally managed `bw serve` endpoint (typically sidecar/companion container or a separate Pod behind a proxy). The Docker Compose `bw` service uses env vars such as `BW_SERVER_URL` (vault base URL for the CLI login). Empty `BW_SERVER_URL` is applied as US cloud via `bw config server bitwarden.com` when it first differs from the value stored under the sidecar data directory (`$BW_DATA_DIR/carapace-state/`, e.g. on a Docker volume or Kubernetes PVC); the sidecar only logs out and re-runs `bw config server` when that env changes. See `docs/quickstart.md` for the full sidecar variable list.
+- `bitwarden`: talks to an externally managed `bw serve` endpoint (typically a companion container or a separate Pod behind a proxy). The Docker Compose `bw` service uses env vars such as `BW_SERVER_URL` (vault base URL for the CLI login). Empty `BW_SERVER_URL` is applied as US cloud via `bw config server bitwarden.com` when it first differs from the value stored under the Bitwarden CLI data directory (`$BW_DATA_DIR/carapace-state/`, e.g. on a Docker volume or Kubernetes PVC); the Bitwarden CLI process only logs out and re-runs `bw config server` when that env changes. See `docs/quickstart.md` for the full Docker Compose variable list.
 
 For a standalone Kubernetes `bw serve` Pod, keep `bw serve` bound to localhost inside that Pod and expose an nginx
 proxy with HTTP Basic Auth. Configure the matching `basic_auth` block on the user's Bitwarden backend. carapace redacts

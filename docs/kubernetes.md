@@ -32,7 +32,7 @@ Inject additional config via `extraEnv` (inline values) or `envFrom` (external S
 
 Session-list caching requires Redis. The Helm chart deploys an in-cluster Redis by default; if you disable it, point carapace at an external Redis instance instead.
 
-Kubernetes credential backends can be deployed through the Helm chart too. For Bitwarden/Vaultwarden, use the default sidecar mode when a backend only needs localhost access from the server pod. Use `mode: standalone` when you want a separately addressable, per-user vault proxy protected by HTTP Basic Auth and NetworkPolicy.
+Kubernetes credential backends can be deployed through the Helm chart too. For Bitwarden/Vaultwarden, the chart runs separately addressable vault proxies protected by HTTP Basic Auth and NetworkPolicy.
 
 See the [chart README](../charts/carapace/README.md) for installation details and the full values reference.
 
@@ -129,25 +129,7 @@ kubectl create secret generic carapace-bw-personal -n carapace \
   --from-literal=BW_EMAIL=you@example.com
 ```
 
-Use a sidecar when carapace can reach the backend on localhost:
-
-```yaml
-bitwarden:
-  instances:
-    - name: bw-personal
-      port: 8087
-      serverUrl: https://vault.example.com
-      existingSecret: carapace-bw-personal
-
-config:
-  credentials:
-    backends:
-      personal:
-        type: bitwarden
-        url: http://127.0.0.1:8087
-```
-
-For multi-user deployments, prefer standalone instances. Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI still binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port must not be `8088`.
+Each user can get a separate Service, Basic Auth boundary, Secret, and PVC. The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside its own Pod; nginx exposes the configured service port and the chart creates a NetworkPolicy that only allows ingress from the carapace server Pod. The service port must not be `8088`.
 
 Create the proxy auth Secret separately. It must contain an htpasswd file named `htpasswd` unless you override `basicAuth.secretKey`:
 
@@ -157,7 +139,7 @@ kubectl create secret generic carapace-bitwarden-alice-basic-auth -n carapace \
   --from-file=htpasswd=/tmp/carapace-bitwarden-alice-htpasswd
 ```
 
-Then enable a standalone instance with user-specific names in the Helm values:
+Then enable an instance with user-specific names in the Helm values:
 
 ```yaml
 bitwarden:
@@ -168,7 +150,6 @@ bitwarden:
       - kubernetes.io/pvc-protection
   instances:
     - name: vaultwarden-alice
-      mode: standalone
       fullnameOverride: carapace-bitwarden-alice
       port: 8087
       serverUrl: https://vault.example.com
