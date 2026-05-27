@@ -170,6 +170,11 @@ def _credential_config_fingerprint(username: str) -> tuple[str, bool]:
 async def _credential_registry_for_user(username: str) -> CredentialRegistry:
     fingerprint, is_user_specific = _credential_config_fingerprint(username)
     if not is_user_specific:
+        cached = _user_credential_registries.get(username)
+        if cached is not None:
+            _, cached_registry = cached
+            await cached_registry.close()
+            del _user_credential_registries[username]
         return _credential_registry
 
     cached = _user_credential_registries.get(username)
@@ -745,7 +750,7 @@ async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]
 
     try:
         credential_registry = await _credential_registry_for_session(session_id)
-    except KeyError:
+    except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=403, detail="Session owner is not configured") from None
 
     items = await credential_registry.list(q)
@@ -781,7 +786,7 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
 
     try:
         credential_registry = await _credential_registry_for_session(session_id)
-    except KeyError:
+    except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=403, detail="Session owner is not configured") from None
 
     try:
