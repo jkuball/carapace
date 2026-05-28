@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from ..auth import AuthStore, UserIdentity, normalize_username
@@ -101,7 +102,6 @@ class UserSettingsResponse(SettingsModel):
     server_defaults: ServerDefaults
     available_models: list[dict[str, Any]]
     settings: PublicUserSettings
-    restart_required: list[str] = []
 
 
 class MatrixSettingsPatch(SettingsModel):
@@ -300,7 +300,33 @@ async def _invalidate_user_credential_registry(username: str) -> None:
     await registry.close()
 
 
-def _settings_response(username: str, *, restart_required: list[str] | None = None) -> UserSettingsResponse:
+async def _reload_matrix_settings(username: str, config: UserConfig) -> None:
+    manager = getattr(server, "_matrix_channel_manager", None)
+    if manager is None:
+        raise HTTPException(status_code=503, detail="Matrix runtime is not initialized")
+    try:
+        await manager.reload_user(username, config)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(f"Matrix settings reload failed for user {username!r}")
+        raise HTTPException(status_code=500, detail=f"Matrix settings saved, but reload failed: {exc}") from exc
+
+
+async def _reload_git_settings() -> None:
+    runtime = getattr(server, "_knowledge_git_runtime", None)
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="Git runtime is not initialized")
+    try:
+        await runtime.apply_config(server._select_knowledge_git_config(_auth_store()))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Knowledge Git settings reload failed")
+        raise HTTPException(status_code=500, detail=f"Git settings saved, but reload failed: {exc}") from exc
+
+
+def _settings_response(username: str) -> UserSettingsResponse:
     user = _auth_store().get_user(username)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -325,7 +351,6 @@ def _settings_response(username: str, *, restart_required: list[str] | None = No
             credentials=_public_credentials(config.credentials),
             git=_public_git(config.git),
         ),
-        restart_required=restart_required or [],
     )
 
 
@@ -386,8 +411,9 @@ async def update_user_settings(
         raise HTTPException(status_code=404, detail="User not found")
 
     next_config = stored_user.config.model_copy(deep=True)
-    restart_required: list[str] = []
     credentials_changed = False
+    matrix_changed = body.matrix is not None
+    git_changed = body.git is not None
 
     if "default_models" in body.model_fields_set:
         next_config.default_models = body.default_models or UserDefaultModelsConfig()
@@ -398,7 +424,6 @@ async def update_user_settings(
 
     if body.matrix is not None:
         _apply_matrix_patch(next_config, body.matrix)
-        restart_required.append("matrix")
 
     if "credentials" in body.model_fields_set:
         credentials = body.credentials or CredentialsConfig()
@@ -409,7 +434,6 @@ async def update_user_settings(
     if body.git is not None:
         _apply_git_patch(next_config, body.git)
         _assert_git_remote_owner(user.username, next_config)
-        restart_required.append("git")
 
     try:
         _auth_store().update_user(user.username, {"config": next_config})
@@ -419,4 +443,9 @@ async def update_user_settings(
     if credentials_changed:
         await _invalidate_user_credential_registry(user.username)
 
-    return _settings_response(user.username, restart_required=restart_required)
+    if matrix_changed:
+        await _reload_matrix_settings(user.username, next_config)
+    if git_changed:
+        await _reload_git_settings()
+
+    return _settings_response(user.username)

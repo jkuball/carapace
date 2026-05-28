@@ -228,9 +228,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       const response = await updateUserSettings(server, token, body);
       setSettings(response);
       setDraft(draftFromSettings(response));
-      setNotice(response.restart_required.length > 0
-        ? `Saved. Restart required: ${response.restart_required.join(", ")}.`
-        : "Saved.");
+      setNotice("Saved.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to update user settings");
       setNotice(null);

@@ -310,6 +310,16 @@ class SandboxManager:
         """Register a callback to retrieve command aliases for a skill."""
         self._skill_command_aliases_cb = cb
 
+    def set_git_author(self, git_author: str) -> None:
+        self._git_author = git_author
+        self._session_lifecycle.set_git_author(git_author)
+
+    async def refresh_git_identities(self) -> None:
+        for session_id, session in self._sessions.items():
+            if not await self._runtime.is_running(session.container_id):
+                continue
+            await self._session_lifecycle.setup_git_identity(session.container_id, session_id)
+
     async def _get_skill_activation_inputs(self, session_id: str, skill_name: str) -> SkillActivationInputs:
         if self._skill_activation_inputs_cb is None:
             return SkillActivationInputs()

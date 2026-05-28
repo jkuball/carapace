@@ -795,7 +795,6 @@ export interface UserSettingsResponseInfo {
   };
   available_models: AvailableModelInfo[];
   settings: UserSettingsInfo;
-  restart_required: string[];
 }
 
 export interface UserSettingsPatchInput {
@@ -946,7 +945,6 @@ function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
       credentials: decodeCredentialsSettings(settings.credentials),
       git: decodeGitSettings(settings.git),
     },
-    restart_required: readStringArray(raw, "restart_required") ?? [],
   };
 }
 

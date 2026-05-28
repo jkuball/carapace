@@ -416,7 +416,6 @@ test("user settings helpers decode write-only status and patch payloads", async 
             token_set: true,
           },
         },
-        restart_required: ["matrix"],
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
@@ -434,7 +433,7 @@ test("user settings helpers decode write-only status and patch payloads", async 
 
   assert.equal(settings.settings.matrix.password_set, true);
   assert.equal(settings.settings.credentials.backends.vault?.type, "bitwarden");
-  assert.equal(patched.restart_required[0], "matrix");
+  assert.equal(patched.settings.git.token_set, true);
   assert.equal(
     calls[0]?.url,
     "https://carapace.example.test/api/user/settings",

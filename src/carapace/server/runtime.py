@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
+
+from loguru import logger
+
+from ..auth import normalize_username
+from ..git.store import GitStore
+from ..models.user import DEFAULT_GIT_AUTHOR, DEFAULT_GIT_BRANCH, UserConfig
+from ..sandbox.manager import SandboxManager
+
+
+@dataclass(frozen=True)
+class KnowledgeGitConfig:
+    owner: str | None = None
+    remote: str = ""
+    branch: str = DEFAULT_GIT_BRANCH
+    author: str = DEFAULT_GIT_AUTHOR
+    token: str | None = None
+
+
+class MatrixChannelHandle(Protocol):
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
+
+
+type MatrixChannelFactory = Callable[[str, UserConfig], MatrixChannelHandle]
+
+
+class MatrixChannelManager:
+    def __init__(self, channel_factory: MatrixChannelFactory) -> None:
+        self._channel_factory = channel_factory
+        self._channels: dict[str, MatrixChannelHandle] = {}
+        self._lock = asyncio.Lock()
+
+    @property
+    def channel_count(self) -> int:
+        return len(self._channels)
+
+    async def reload_user(self, username: str, user_config: UserConfig) -> None:
+        normalized_username = normalize_username(username)
+        if not normalized_username:
+            raise ValueError("Matrix channel owner user must not be empty")
+
+        async with self._lock:
+            current = self._channels.get(normalized_username)
+            if not user_config.channels.matrix.enabled:
+                if current is not None:
+                    await current.stop()
+                    del self._channels[normalized_username]
+                return
+
+            replacement = self._channel_factory(normalized_username, user_config)
+            await replacement.start()
+            self._channels[normalized_username] = replacement
+
+            if current is None:
+                return
+            try:
+                await current.stop()
+            except Exception as exc:
+                logger.warning(f"Matrix channel reload for {normalized_username!r}: old channel stop failed: {exc}")
+
+    async def stop_all(self) -> None:
+        async with self._lock:
+            channels = list(self._channels.items())
+            self._channels.clear()
+        for username, channel in channels:
+            try:
+                await channel.stop()
+            except Exception as exc:
+                logger.warning(f"Matrix channel stop for {username!r} failed: {exc}")
+
+
+class KnowledgeGitRuntime:
+    def __init__(
+        self,
+        *,
+        git_store: GitStore,
+        sandbox_mgr: SandboxManager,
+        current_config: KnowledgeGitConfig | None = None,
+    ) -> None:
+        self._git_store = git_store
+        self._sandbox_mgr = sandbox_mgr
+        self._config = current_config or KnowledgeGitConfig()
+        self._lock = asyncio.Lock()
+
+    @property
+    def config(self) -> KnowledgeGitConfig:
+        return self._config
+
+    async def apply_config(self, config: KnowledgeGitConfig) -> None:
+        async with self._lock:
+            self._config = config
+            self._git_store.remote_branch = config.branch
+            self._git_store.author_template = config.author
+            self._sandbox_mgr.set_git_author(config.author)
+
+            if config.remote:
+                logger.info(f"Using knowledge Git remote from user {config.owner}")
+                await self._git_store.add_remote(config.remote, config.token)
+                summary = await self._git_store.pull_from_remote()
+                logger.info(f"Pulled from remote: {summary}")
+            else:
+                await self._git_store.remove_remote()
+
+            await self._sandbox_mgr.refresh_git_identities()
+
+    async def push_if_configured(self) -> None:
+        if self._git_store.remote_configured:
+            await self._git_store.push_to_remote()
