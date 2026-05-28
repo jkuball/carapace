@@ -13,6 +13,7 @@ from ..auth import UserIdentity
 from ..models.session import SessionAttributes, SessionJobRunContext, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
 from ..session.manager import SessionMeta
+from ..user_defaults import apply_user_model_defaults, effective_user_budget
 from .auth import verify_token
 from .history import _history_from_messages
 from .state import server_module
@@ -264,13 +265,15 @@ async def create_session(
     state = server._engine.session_mgr.create_session(
         body.channel_type,
         body.channel_ref,
-        budget=server._engine.config.agent.default_session_budget,
+        budget=effective_user_budget(server._engine.config, user.config),
         user=user.username,
         private=False if body.private is None else body.private,
         unattended=False if body.unattended is None else body.unattended,
         ask_mode=False if body.ask_mode is None else body.ask_mode,
         yolo_mode=False if body.yolo_mode is None else body.yolo_mode,
     )
+    apply_user_model_defaults(state, user.config)
+    server._engine.session_mgr.save_state(state)
     return SessionInfo.from_state(state)
 
 

@@ -4,7 +4,7 @@ import httpx
 from loguru import logger
 
 from ..models.credentials import BitwardenCredentialBackendConfig, CredentialMetadata
-from .protocol import is_exposed, require_exposed
+from .protocol import CredentialBackendError, is_exposed, require_exposed
 
 
 class BitwardenBackend:
@@ -44,12 +44,14 @@ class BitwardenBackend:
             if params is not None:
                 return await self._client.get(path, params=params)
             return await self._client.get(path)
-        except httpx.RequestError:
-            logger.exception(
-                f"Bitwarden backend {self._name!r}: vault HTTP request failed ({operation}) — "
-                f"target {self._base_url}{path}. Is `bw serve` running and reachable from this process?"
+        except httpx.RequestError as exc:
+            message = (
+                f"Bitwarden credential backend {self._name!r} is unreachable at {self._base_url} "
+                f"while trying to {operation}. Check that the `bw serve` sidecar or proxy is running, "
+                "unlocked, and reachable from the Carapace server."
             )
-            raise
+            logger.exception(f"{message} Request target: {self._base_url}{path}")
+            raise CredentialBackendError(message) from exc
 
     def _vault_path(self, uuid: str) -> str:
         return f"{self._name}/{uuid}"

@@ -7,6 +7,7 @@ import pytest
 
 from carapace.credentials import (
     BitwardenBackend,
+    CredentialBackendError,
     CredentialRegistry,
     FileVaultBackend,
     VaultBackend,
@@ -484,6 +485,17 @@ class _FakeBitwardenClient:
         self.closed = True
 
 
+class _FailingBitwardenClient:
+    def __init__(self, exc: httpx.RequestError) -> None:
+        self._exc = exc
+
+    async def get(self, path: str, params: dict[str, str] | None = None) -> _FakeResponse:
+        raise self._exc
+
+    async def aclose(self) -> None:
+        pass
+
+
 @pytest.mark.asyncio
 async def test_bitwarden_fetch_success() -> None:
     backend = BitwardenBackend(name="bw", base_url="http://bitwarden.local", cfg=BitwardenCredentialBackendConfig())
@@ -516,6 +528,21 @@ async def test_bitwarden_fetch_respects_expose_allowlist() -> None:
 
     with pytest.raises(KeyError):
         await backend.fetch("blocked-id")
+
+
+@pytest.mark.asyncio
+async def test_bitwarden_fetch_connection_error_has_clear_message() -> None:
+    request = httpx.Request("GET", "http://bitwarden.local/object/password/id-1")
+    backend = BitwardenBackend(name="bw", base_url="http://bitwarden.local", cfg=BitwardenCredentialBackendConfig())
+    backend._client = _FailingBitwardenClient(httpx.ConnectError("All connection attempts failed", request=request))  # type: ignore[assignment]
+
+    with pytest.raises(CredentialBackendError) as exc_info:
+        await backend.fetch("id-1")
+
+    message = str(exc_info.value)
+    assert "Bitwarden credential backend 'bw' is unreachable" in message
+    assert "Check that the `bw serve` sidecar or proxy is running" in message
+    assert "All connection attempts failed" not in message
 
 
 @pytest.mark.asyncio

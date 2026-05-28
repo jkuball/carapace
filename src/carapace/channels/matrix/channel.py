@@ -17,9 +17,11 @@ from ...auth import normalize_username
 from ...models.config import Config
 from ...models.matrix import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
 from ...models.skills import SkillInfo
+from ...models.user import UserConfig
 from ...notifications.presence import NotificationPresenceRegistry
 from ...sandbox.manager import SandboxManager
 from ...session import SessionEngine, SessionManager
+from ...user_defaults import apply_user_model_defaults, effective_user_budget
 from ...ws_models import ApprovalResponse, CommandResult, EscalationResponse
 from .approval import (
     APPROVE_COMMANDS,
@@ -100,6 +102,7 @@ class MatrixChannel:
         sandbox_mgr: SandboxManager,
         engine: SessionEngine,
         owner_user: str,
+        owner_config: UserConfig | None = None,
         presence_registry: NotificationPresenceRegistry | None = None,
     ) -> None:
         self._config = config
@@ -111,6 +114,7 @@ class MatrixChannel:
         self._engine = engine
         self._presence_registry = presence_registry
         self._owner_user = normalize_username(owner_user)
+        self._owner_config = owner_config.model_copy(deep=True) if owner_config is not None else UserConfig()
         if not self._owner_user:
             raise ValueError("Matrix channel owner user must not be empty")
 
@@ -330,10 +334,12 @@ class MatrixChannel:
             state = self._session_mgr.create_session(
                 "matrix",
                 room_id,
-                budget=self._engine.config.agent.default_session_budget,
+                budget=effective_user_budget(self._engine.config, self._owner_config),
                 user=self._require_owner_user(),
                 private=False,
             )
+            apply_user_model_defaults(state, self._owner_config)
+            self._session_mgr.save_state(state)
             self._room_sessions[room_id] = state.session_id
             logger.info(f"Matrix: created session {state.session_id} for room {room_id}")
         return self._room_sessions[room_id]
@@ -625,10 +631,12 @@ class MatrixChannel:
         new_state = self._session_mgr.create_session(
             "matrix",
             room_id,
-            budget=self._engine.config.agent.default_session_budget,
+            budget=effective_user_budget(self._engine.config, self._owner_config),
             user=self._require_owner_user(),
             private=False,
         )
+        apply_user_model_defaults(new_state, self._owner_config)
+        self._session_mgr.save_state(new_state)
         self._room_sessions[room_id] = new_state.session_id
         await self._note_presence(room_id, new_state.session_id)
         # Clear any stale room-level pending approval

@@ -12,6 +12,7 @@ from ..auth import UserIdentity
 from ..jobs import build_job_run_message
 from ..models.jobs import JobDefinition, JobDefinitionInput, JobsFile
 from ..models.session import SessionJobRunContext
+from ..user_defaults import apply_job_model_defaults, effective_user_budget
 from .auth import verify_token
 from .sessions import SessionInfo, _session_info_from_state
 from .state import server_module
@@ -80,19 +81,26 @@ async def _run_job_definition(
         raise ValueError(detail)
 
     if job.persistent_session_id is None:
+        job_user = server._auth_store.get_user(job.user)
+        if job_user is None:
+            raise_job_conflict("Job owner was not found")
         state = server._engine.session_mgr.create_session(
             channel_type="job",
             channel_ref=f"job:{job.id}",
-            budget=server._engine.config.agent.default_session_budget,
+            budget=effective_user_budget(server._engine.config, job_user.config),
             user=job.user,
             private=job.private,
             unattended=job.unattended,
             ask_mode=job.ask_mode,
             yolo_mode=job.yolo_mode,
         )
-        state.agent_model_name = job.agent_model_name
-        state.sentinel_model_name = job.sentinel_model_name
-        state.title_model_name = job.title_model_name
+        apply_job_model_defaults(
+            state,
+            job_user.config,
+            agent_model_name=job.agent_model_name,
+            sentinel_model_name=job.sentinel_model_name,
+            title_model_name=job.title_model_name,
+        )
         created_new_session = True
     else:
         state = server._engine.session_mgr.load_state(job.persistent_session_id)

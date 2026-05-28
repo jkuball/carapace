@@ -20,6 +20,9 @@ users:
 
 The knowledge repo is still a single shared server repo. Because of that, at most one enabled user may configure a non-empty `config.git.remote`; startup fails if multiple enabled users define one.
 
+The owning user can also manage these fields from the web UI under Settings -> Account. The token field is write-only:
+responses report `token_set`, but never return the token value.
+
 | Field    | Default                    | Description                                                                                                                            |
 | -------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `remote` | `""` (none)                | URL of the upstream Git remote. Leave empty for local-only mode.                                                                       |

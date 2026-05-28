@@ -5,6 +5,7 @@ import {
   createAdminUser,
   deleteAdminUser,
   deleteNotificationSubscription,
+  getUserSettings,
   getWebSocketTicket,
   getCurrentUser,
   getVapidPublicKey,
@@ -12,6 +13,7 @@ import {
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
+  updateUserSettings,
   wsUrl,
 } from "./api";
 import {
@@ -165,7 +167,11 @@ test("getCurrentUser parses authenticated user roles", async () => {
   setFetch(async (input, init) => {
     calls.push(new Request(input, init));
     return new Response(
-      JSON.stringify({ username: "admin", display_name: "Admin", roles: ["admin"] }),
+      JSON.stringify({
+        username: "admin",
+        display_name: "Admin",
+        roles: ["admin"],
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   });
@@ -182,7 +188,12 @@ test("authenticated API 401 dispatches auth-required event", async () => {
   windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
     authRequiredEvents += 1;
   });
-  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid session" }), { status: 401 }));
+  setFetch(
+    async () =>
+      new Response(JSON.stringify({ detail: "Invalid session" }), {
+        status: 401,
+      }),
+  );
 
   await assert.rejects(
     () => getCurrentUser("https://carapace.example.test"),
@@ -198,7 +209,12 @@ test("login 401 does not dispatch auth-required event", async () => {
   windowTarget.addEventListener(AUTH_REQUIRED_EVENT, () => {
     authRequiredEvents += 1;
   });
-  setFetch(async () => new Response(JSON.stringify({ detail: "Invalid username or password" }), { status: 401 }));
+  setFetch(
+    async () =>
+      new Response(JSON.stringify({ detail: "Invalid username or password" }), {
+        status: 401,
+      }),
+  );
 
   await assert.rejects(
     () => login("https://carapace.example.test", "thies", "wrong"),
@@ -255,12 +271,21 @@ test("getWebSocketTicket posts with cookie credentials", async () => {
   assert.equal(ticket, "ws-ticket-1");
   assert.equal(calls[0]?.method, "POST");
   assert.equal(calls[0]?.credentials, "include");
-  assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/ws-ticket");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/auth/ws-ticket",
+  );
 });
 
 test("wsUrl includes client id and websocket ticket", () => {
   assert.equal(
-    wsUrl("https://carapace.example.test", "session-1", "", "web tab", "ticket.1"),
+    wsUrl(
+      "https://carapace.example.test",
+      "session-1",
+      "",
+      "web tab",
+      "ticket.1",
+    ),
     "wss://carapace.example.test/api/chat/session-1?client_id=web+tab&ticket=ticket.1",
   );
 });
@@ -311,11 +336,9 @@ test("updateAdminUser encodes username and surfaces backend errors", async () =>
 
   await assert.rejects(
     () =>
-      updateAdminUser(
-        "https://carapace.example.test",
-        "ada lovelace",
-        { enabled: false },
-      ),
+      updateAdminUser("https://carapace.example.test", "ada lovelace", {
+        enabled: false,
+      }),
     /User not found/,
   );
   assert.equal(
@@ -339,4 +362,85 @@ test("deleteAdminUser deletes the selected user", async () => {
     "https://carapace.example.test/api/admin/users/ada%20lovelace",
   );
   assert.equal(calls[0]?.headers.get("Authorization"), null);
+});
+
+test("user settings helpers decode write-only status and patch payloads", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    calls.push(request);
+    return new Response(
+      JSON.stringify({
+        capabilities: {
+          credentials: { bitwarden: true, file: false },
+        },
+        server_defaults: {
+          models: {
+            agent: "anthropic:default",
+            sentinel: "anthropic:guard",
+            title: "anthropic:title",
+          },
+          budget: {},
+        },
+        available_models: [
+          { id: "anthropic:default", provider: "anthropic", name: "default" },
+        ],
+        settings: {
+          default_models: { agent: "anthropic:default" },
+          default_budget: { tool_calls: 3, cost_usd: "1.50" },
+          matrix: {
+            enabled: true,
+            homeserver: "https://matrix.example.test",
+            user_id: "@bot:example.test",
+            device_name: "carapace",
+            password_set: true,
+            token_set: true,
+            allowed_rooms: [],
+            allowed_users: ["@thies:example.test"],
+          },
+          credentials: {
+            backends: {
+              vault: {
+                type: "bitwarden",
+                url: "http://carapace-bitwarden:8087",
+                basic_auth: { username: "thies", password_set: true },
+                expose: [],
+                hide: [],
+              },
+            },
+          },
+          git: {
+            remote: "https://git.example.test/repo.git",
+            branch: "main",
+            author: "carapace",
+            token_set: true,
+          },
+        },
+        restart_required: ["matrix"],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const settings = await getUserSettings("https://carapace.example.test", "");
+  const patched = await updateUserSettings(
+    "https://carapace.example.test",
+    "",
+    {
+      default_budget: { tool_calls: 4 },
+      git: { clear_token: true },
+    },
+  );
+
+  assert.equal(settings.settings.matrix.password_set, true);
+  assert.equal(settings.settings.credentials.backends.vault?.type, "bitwarden");
+  assert.equal(patched.restart_required[0], "matrix");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/user/settings",
+  );
+  assert.equal(calls[1]?.method, "PATCH");
+  assert.deepEqual(JSON.parse(await calls[1]!.text()).git, {
+    clear_token: true,
+  });
 });

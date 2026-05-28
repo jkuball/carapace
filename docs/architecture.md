@@ -410,6 +410,10 @@ agent:
   max_parallel_llm: 2
 ```
 
+Users can override the default agent, sentinel, and title models plus their default session budget from the web UI under
+Settings -> Account. Those defaults apply to newly created web, Matrix, and non-persistent job sessions; existing
+sessions keep their current model overrides and budget.
+
 Additional configuration sections:
 
 ```yaml

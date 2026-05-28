@@ -39,6 +39,10 @@ process and can point at arbitrary files the backend can access.
 Each user can point at their own vault proxy and authentication boundary. Admin API responses redact backend proxy
 passwords, and updates that omit an existing proxy password keep the stored value.
 
+Users can also manage their own credential backends from the web UI under Settings -> Account. Password fields are
+write-only there: responses report whether a password is configured, but never return the stored value. The file
+backend is only accepted when `CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true` is set on the server process.
+
 Supported backend types:
 
 - `file`: reads `key=value` pairs from a secrets file (`path` defaults to `<data_dir>/secrets.env`). This backend is

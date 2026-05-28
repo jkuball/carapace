@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from .credentials import CredentialsConfig
 from .matrix import MatrixChannelConfig
+from .session import SessionBudget
 
 DEFAULT_GIT_BRANCH = "main"
 DEFAULT_GIT_AUTHOR = "carapace <carapace@%h>"
@@ -33,9 +34,23 @@ class UserGitConfig(UserConfigModel):
         return self
 
 
+class UserDefaultModelsConfig(UserConfigModel):
+    agent: str | None = None
+    sentinel: str | None = None
+    title: str | None = None
+
+    @field_validator("agent", "sentinel", "title", mode="before")
+    @classmethod
+    def _normalize_model_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class UserConfig(UserConfigModel):
     credentials: CredentialsConfig = CredentialsConfig()
     channels: UserChannelsConfig = UserChannelsConfig()
     git: UserGitConfig = UserGitConfig()
-    default_models: dict[str, str] = {}
-    budgets: dict[str, object] = {}
+    default_models: UserDefaultModelsConfig = UserDefaultModelsConfig()
+    budgets: SessionBudget = SessionBudget()

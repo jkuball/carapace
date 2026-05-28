@@ -33,7 +33,7 @@ from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
 from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
-from ..credentials import CredentialRegistry, build_credential_registry
+from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..git.http import GitHttpHandler
 from ..git.store import GitStore
 from ..jobs import JobsScheduler, JobsStore
@@ -61,6 +61,7 @@ from .notifications import _set_notification_presence as _set_notification_prese
 from .notifications import router as notifications_router
 from .session_sandbox import router as session_sandbox_router
 from .sessions import router as sessions_router
+from .user_settings import router as user_settings_router
 from .websocket import ServerMeta as ServerMeta
 from .websocket import VapidPublicKeyResponse as VapidPublicKeyResponse
 from .websocket import WebSocketSubscriber as WebSocketSubscriber
@@ -486,6 +487,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 sandbox_mgr=_sandbox_mgr,
                 engine=_engine,
                 owner_user=username,
+                owner_config=_auth_store.load_users().users[username].config,
                 presence_registry=_notification_presence,
             )
             await matrix_channel.start()
@@ -669,6 +671,7 @@ router.include_router(history_router)
 router.include_router(jobs_router)
 router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
+router.include_router(user_settings_router)
 router.include_router(websocket_router)
 router.include_router(auth_router)
 app.include_router(router)
@@ -723,6 +726,10 @@ def _authenticate_sandbox(auth: str | None) -> str | None:
     return None
 
 
+def _credential_backend_unavailable(exc: CredentialBackendError) -> Response:
+    return Response(status_code=503, content=str(exc), media_type="text/plain")
+
+
 @sandbox_app.get("/credentials")
 async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]]:
     """List/search available credentials (metadata only, no values)."""
@@ -739,7 +746,10 @@ async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]
     except KeyError:
         raise HTTPException(status_code=403, detail="Session owner is not configured") from None
 
-    items = await credential_registry.list(q)
+    try:
+        items = await credential_registry.list(q)
+    except CredentialBackendError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     paths = [i.vault_path for i in items]
     names = [i.name for i in items]
     explanation = f"Sandbox listed credential metadata (query={q!r}, {len(paths)} item(s))"
@@ -779,6 +789,8 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         meta = await credential_registry.fetch_metadata(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
+    except CredentialBackendError as exc:
+        return _credential_backend_unavailable(exc)
 
     active = _engine.get_or_activate(session_id)
 
@@ -840,6 +852,8 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         value = await credential_registry.fetch(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
+    except CredentialBackendError as exc:
+        return _credential_backend_unavailable(exc)
 
     return Response(content=value, media_type="text/plain")
 

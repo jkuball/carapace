@@ -16,6 +16,7 @@ from carapace.models.config import (
 )
 from carapace.models.jobs import JobCronTrigger, JobDefinition, JobsFile
 from carapace.models.session import SessionBudget, SessionState
+from carapace.models.user import UserConfig
 from carapace.notifications.models import (
     NotificationsConfig,
     NotificationSubscription,
@@ -208,6 +209,21 @@ def test_session_budget_accepts_tool_call_limit() -> None:
     budget = SessionBudget(tool_calls=7)
     assert budget.tool_calls == 7
     assert budget.has_any_limit is True
+
+
+def test_user_config_types_default_models_and_budget() -> None:
+    config = UserConfig.model_validate(
+        {
+            "default_models": {"agent": " anthropic:test ", "sentinel": "", "title": None},
+            "budgets": {"cost_usd": "1.25", "tool_calls": 5},
+        }
+    )
+
+    assert config.default_models.agent == "anthropic:test"
+    assert config.default_models.sentinel is None
+    assert config.default_models.title is None
+    assert config.budgets.cost_usd == Decimal("1.25")
+    assert config.budgets.tool_calls == 5
 
 
 def test_available_model_entry_shorthand_string():

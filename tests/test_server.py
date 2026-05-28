@@ -19,7 +19,7 @@ import carapace.server.jobs as server_jobs
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
-from carapace.credentials import CredentialRegistry
+from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models.credentials import BasicAuthConfig, BitwardenCredentialBackendConfig, CredentialMetadata
@@ -312,6 +312,87 @@ def test_admin_user_config_redacts_and_preserves_backend_password(client, admin_
     stored_backend = user.config.credentials.backends["vault"]
     assert isinstance(stored_backend, BitwardenCredentialBackendConfig)
     assert stored_backend.basic_auth == BasicAuthConfig(username="ada", password="proxy-password")
+
+
+def test_user_settings_redacts_write_only_fields(client, auth_headers):
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "credentials": {
+                        "backends": {
+                            "vault": {
+                                "type": "bitwarden",
+                                "url": "http://carapace-bitwarden:8087",
+                                "basic_auth": {"username": "thies", "password": "proxy-password"},
+                            }
+                        }
+                    },
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "matrix-password",
+                            "token": "matrix-token",
+                        }
+                    },
+                    "git": {
+                        "remote": "https://gitea.example.test/thies/knowledge.git",
+                        "token": "git-token",
+                    },
+                }
+            )
+        },
+    )
+
+    resp = client.get("/api/user/settings", headers=auth_headers)
+
+    assert resp.status_code == 200
+    settings = resp.json()["settings"]
+    assert settings["matrix"]["password_set"] is True
+    assert settings["matrix"]["token_set"] is True
+    assert "password" not in settings["matrix"]
+    assert "token" not in settings["matrix"]
+    assert settings["git"]["token_set"] is True
+    assert "token" not in settings["git"]
+    basic_auth = settings["credentials"]["backends"]["vault"]["basic_auth"]
+    assert basic_auth == {"username": "thies", "password_set": True}
+
+
+def test_user_settings_apply_defaults_to_new_sessions(client, auth_headers):
+    patch_resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_models": {"agent": srv._config.agent.model},
+            "default_budget": {"tool_calls": 3, "cost_usd": "1.50"},
+        },
+    )
+    assert patch_resp.status_code == 200
+
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+
+    assert create_resp.status_code == 200
+    state = srv._engine.session_mgr.load_state(create_resp.json()["session_id"])
+    assert state is not None
+    assert state.agent_model_name == srv._config.agent.model
+    assert state.budget.tool_calls == 3
+    assert state.budget.cost_usd == Decimal("1.50")
+
+
+def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):
+    monkeypatch.delenv("CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND", raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"credentials": {"backends": {"dev": {"type": "file", "path": "secrets.env"}}}},
+    )
+
+    assert resp.status_code == 400
+    assert "disabled" in resp.json()["detail"]
 
 
 def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):
@@ -1865,6 +1946,40 @@ def test_sandbox_list_credentials_audit(client, auth_headers, monkeypatch):
     text = audit_path.read_text()
     assert "credential_access" in text
     assert "auto_allowed" in text
+
+
+def test_sandbox_list_credentials_backend_error_returns_503(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    mock_reg = MagicMock()
+    mock_reg.list = AsyncMock(side_effect=CredentialBackendError("Bitwarden backend unavailable"))
+    monkeypatch.setattr(srv, "_credential_registry_for_session", AsyncMock(return_value=mock_reg), raising=False)
+    srv._engine.sandbox_mgr.verify_session_token.side_effect = lambda s, t: s == sid and t == "secret"
+
+    basic = base64.b64encode(f"{sid}:secret".encode()).decode()
+    sb_client = TestClient(sandbox_app)
+    resp = sb_client.get("/credentials", headers={"Authorization": f"Basic {basic}"})
+
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Bitwarden backend unavailable"}
+
+
+def test_sandbox_fetch_credential_backend_error_returns_503(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    mock_reg = MagicMock()
+    mock_reg.fetch_metadata = AsyncMock(side_effect=CredentialBackendError("Bitwarden backend unavailable"))
+    monkeypatch.setattr(srv, "_credential_registry_for_session", AsyncMock(return_value=mock_reg), raising=False)
+    srv._engine.sandbox_mgr.verify_session_token.side_effect = lambda s, t: s == sid and t == "secret"
+
+    basic = base64.b64encode(f"{sid}:secret".encode()).decode()
+    sb_client = TestClient(sandbox_app)
+    resp = sb_client.get("/credentials/bw/id-1", headers={"Authorization": f"Basic {basic}"})
+
+    assert resp.status_code == 503
+    assert resp.text == "Bitwarden backend unavailable"
 
 
 # --- WebSocket: basic slash commands ---
