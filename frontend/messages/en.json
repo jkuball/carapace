@@ -85,10 +85,8 @@
             "addUser": "Add user, Enter or comma",
             "addIdentifier": "Add identifier, Enter or comma"
         },
-        "hints": {
-            "filePath": "Relative paths are resolved from the server working directory."
-        },
         "tooltips": {
+            "filePath": "Relative paths are resolved from the server working directory.",
             "expose": "Allow only these credential identifiers from this backend. Leave empty to allow everything except hidden entries.",
             "hide": "Deny these credential identifiers from this backend. Ignored when Expose is set."
         },

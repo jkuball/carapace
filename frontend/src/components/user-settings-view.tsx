@@ -538,19 +538,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, help, children }: { label: string; hint?: string; help?: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {label}
+        {help ? (
+          <span
+            title={help}
+            aria-label={help}
+            className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </span>
       {children}
       {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
 }
 
-function TextInput({ label, hint, value, onChange }: { label: string; hint?: string; value: string; onChange: (value: string) => void }) {
+function TextInput({ label, hint, help, value, onChange }: { label: string; hint?: string; help?: string; value: string; onChange: (value: string) => void }) {
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint} help={help}>
       <input value={value} onChange={(event) => onChange(event.target.value)} className={inputClassName} />
     </Field>
   );
@@ -768,7 +779,7 @@ function CredentialBackendEditor({
           <TextInput label={t("fields.name")} value={backend.name} onChange={(name) => onChange({ name })} />
           <TextInput
             label={t("fields.path")}
-            hint={t("hints.filePath")}
+            help={t("tooltips.filePath")}
             value={backend.path}
             onChange={(path) => onChange({ path })}
           />

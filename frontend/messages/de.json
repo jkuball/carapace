@@ -85,10 +85,8 @@
             "addUser": "Benutzer hinzufügen, Enter oder Komma",
             "addIdentifier": "Kennung hinzufügen, Enter oder Komma"
         },
-        "hints": {
-            "filePath": "Relative Pfade werden vom Arbeitsverzeichnis des Servers aus aufgelöst."
-        },
         "tooltips": {
+            "filePath": "Relative Pfade werden vom Arbeitsverzeichnis des Servers aus aufgelöst.",
             "expose": "Nur diese Zugangsdaten-Kennungen aus diesem Backend erlauben. Leer lassen, um alles außer ausgeblendeten Einträgen zu erlauben.",
             "hide": "Diese Zugangsdaten-Kennungen aus diesem Backend verweigern. Wird ignoriert, wenn Freigeben gesetzt ist."
         },
