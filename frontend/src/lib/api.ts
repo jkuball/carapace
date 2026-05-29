@@ -780,10 +780,7 @@ export interface UserSettingsInfo {
 
 export interface UserSettingsResponseInfo {
   capabilities: {
-    credentials: {
-      bitwarden: boolean;
-      file: boolean;
-    };
+    file_credential_backend: boolean;
   };
   server_defaults: {
     models: {
@@ -912,9 +909,6 @@ function decodeGitSettings(raw: unknown): GitSettingsInfo {
 function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
   if (!isRecord(raw)) throw new Error("Invalid settings response");
   const capabilities = isRecord(raw.capabilities) ? raw.capabilities : {};
-  const credentialCapabilities = isRecord(capabilities.credentials)
-    ? capabilities.credentials
-    : {};
   const serverDefaults = isRecord(raw.server_defaults)
     ? raw.server_defaults
     : {};
@@ -924,10 +918,10 @@ function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
   const settings = isRecord(raw.settings) ? raw.settings : {};
   return {
     capabilities: {
-      credentials: {
-        bitwarden: readBoolean(credentialCapabilities, "bitwarden", true),
-        file: readBoolean(credentialCapabilities, "file"),
-      },
+      file_credential_backend: readBoolean(
+        capabilities,
+        "file_credential_backend",
+      ),
     },
     server_defaults: {
       models: {

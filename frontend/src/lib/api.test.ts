@@ -372,7 +372,7 @@ test("user settings helpers decode write-only status and patch payloads", async 
     return new Response(
       JSON.stringify({
         capabilities: {
-          credentials: { bitwarden: true, file: false },
+          file_credential_backend: false,
         },
         server_defaults: {
           models: {

@@ -254,7 +254,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
     );
   }
 
-  const fileBackendText = settings.capabilities.credentials.file
+  const fileBackendText = settings.capabilities.file_credential_backend
     ? `file backend enabled by ${FILE_CREDENTIAL_BACKEND_ENV}`
     : `file backend disabled by ${FILE_CREDENTIAL_BACKEND_ENV}`;
 

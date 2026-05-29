@@ -27,13 +27,8 @@ class SettingsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class CredentialSettingsCapabilities(SettingsModel):
-    bitwarden: bool = True
-    file: bool = False
-
-
 class UserSettingsCapabilities(SettingsModel):
-    credentials: CredentialSettingsCapabilities
+    file_credential_backend: bool = False
 
 
 class ServerDefaultModels(SettingsModel):
@@ -178,7 +173,7 @@ def _file_backend_allowed() -> bool:
 
 def _capabilities() -> UserSettingsCapabilities:
     return UserSettingsCapabilities(
-        credentials=CredentialSettingsCapabilities(file=_file_backend_allowed()),
+        file_credential_backend=_file_backend_allowed(),
     )
 
 
