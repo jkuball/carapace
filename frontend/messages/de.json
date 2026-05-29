@@ -19,6 +19,107 @@
         "unknown": "Unbekannter Benutzer",
         "logout": "Abmelden"
     },
+    "accountSettings": {
+        "status": {
+            "loading": "Einstellungen werden geladen",
+            "unavailable": "Einstellungen sind nicht verfügbar",
+            "configured": "konfiguriert",
+            "notSet": "nicht gesetzt"
+        },
+        "notices": {
+            "saved": "Gespeichert."
+        },
+        "errors": {
+            "load": "Benutzereinstellungen konnten nicht geladen werden",
+            "save": "Benutzereinstellungen konnten nicht aktualisiert werden",
+            "credentialsInvalid": "Zugangsdaten-Backend-Einstellungen sind ungültig",
+            "credentialNameRequired": "Name des Zugangsdaten-Backends ist erforderlich",
+            "credentialNameNoSlash": "Zugangsdaten-Backend-Name {name} darf kein / enthalten",
+            "credentialNameDuplicate": "Zugangsdaten-Backend-Name {name} wird bereits verwendet",
+            "fileBackendDisabled": "Dateibasierte Zugangsdaten-Backends sind auf diesem Server deaktiviert",
+            "basicAuthUsernameRequired": "Basic-Auth-Benutzername ist für {name} erforderlich",
+            "basicAuthPasswordRequired": "Basic-Auth-Passwort ist für {name} erforderlich",
+            "matrixPasswordRequired": "Matrix-Passwort ist erforderlich, wenn Matrix aktiviert ist"
+        },
+        "sections": {
+            "defaultModels": "Standardmodelle",
+            "defaultBudgets": "Standardbudgets",
+            "matrix": "Matrix",
+            "credentials": "Zugangsdaten",
+            "gitRemote": "Git-Remote"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Titel",
+            "inputTokens": "Input-Tokens",
+            "outputTokens": "Output-Tokens",
+            "costUsd": "Kosten USD",
+            "toolCalls": "Tool-Aufrufe",
+            "enabled": "Aktiviert",
+            "homeserver": "Homeserver",
+            "userId": "Benutzer-ID",
+            "deviceName": "Gerätename",
+            "password": "Passwort",
+            "allowedRooms": "Erlaubte Räume",
+            "allowedUsers": "Erlaubte Benutzer",
+            "remote": "Remote",
+            "branch": "Branch",
+            "author": "Autor",
+            "token": "Token",
+            "name": "Name",
+            "path": "Pfad",
+            "url": "URL",
+            "basicAuth": "Basic Auth",
+            "basicAuthUsername": "Basic-Auth-Benutzername",
+            "basicAuthPassword": "Basic-Auth-Passwort",
+            "expose": "Freigeben",
+            "hide": "Ausblenden"
+        },
+        "defaults": {
+            "serverDefault": "Serverstandard"
+        },
+        "placeholders": {
+            "unlimited": "Unbegrenzt",
+            "addRoom": "Raum hinzufügen, Enter oder Komma",
+            "addUser": "Benutzer hinzufügen, Enter oder Komma",
+            "addIdentifier": "Kennung hinzufügen, Enter oder Komma"
+        },
+        "hints": {
+            "filePath": "Relative Pfade werden vom Arbeitsverzeichnis des Servers aus aufgelöst."
+        },
+        "tooltips": {
+            "expose": "Nur diese Zugangsdaten-Kennungen aus diesem Backend erlauben. Leer lassen, um alles außer ausgeblendeten Einträgen zu erlauben.",
+            "hide": "Diese Zugangsdaten-Kennungen aus diesem Backend verweigern. Wird ignoriert, wenn Freigeben gesetzt ist."
+        },
+        "actions": {
+            "save": "Speichern",
+            "saving": "Speichert",
+            "addBitwarden": "Bitwarden",
+            "addFile": "Datei",
+            "clearValue": "Wert löschen",
+            "remove": "Entfernen",
+            "removeValue": "{value} entfernen",
+            "removeBackend": "Backend entfernen",
+            "removeBackendAria": "{name} entfernen"
+        },
+        "empty": {
+            "credentials": "Keine Zugangsdaten-Backends konfiguriert"
+        },
+        "credentials": {
+            "backendFallback": "Zugangsdaten-Backend",
+            "types": {
+                "file": {
+                    "label": "Datei",
+                    "description": "Lokale Zugangsdatendatei"
+                },
+                "bitwarden": {
+                    "label": "Bitwarden",
+                    "description": "Passwortmanager-Proxy"
+                }
+            }
+        }
+    },
     "home": {
         "empty": {
             "description": "Wähle eine Sitzung aus oder starte eine neue"

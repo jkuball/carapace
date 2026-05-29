@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, Loader2, Save } from "lucide-react";
+import { Check, CircleHelp, FileText, KeyRound, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   getUserSettings,
   updateUserSettings,
   type AvailableModelInfo,
+  type CredentialBackendSettingsInfo,
   type CredentialsSettingsInfo,
   type MatrixSettingsInfo,
   type SessionBudgetSettings,
@@ -23,10 +25,7 @@ interface UserSettingsDraft {
   budget: Record<keyof Required<SessionBudgetSettings>, string>;
   matrix: MatrixSettingsInfo;
   matrixPassword: string;
-  matrixToken: string;
-  clearMatrixPassword: boolean;
-  clearMatrixToken: boolean;
-  credentialsJson: string;
+  credentials: CredentialBackendDraft[];
   git: {
     remote: string;
     branch: string;
@@ -37,13 +36,36 @@ interface UserSettingsDraft {
   clearGitToken: boolean;
 }
 
+type CredentialBackendDraftType = "file" | "bitwarden";
+
+interface CredentialBackendDraft {
+  id: string;
+  name: string;
+  type: CredentialBackendDraftType;
+  path: string;
+  url: string;
+  expose: string;
+  hide: string;
+  basicAuthEnabled: boolean;
+  basicAuthUsername: string;
+  basicAuthPassword: string;
+  basicAuthPasswordSet: boolean;
+}
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 const inputClassName = cn(
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm",
   "outline-none transition-colors placeholder:text-muted-foreground/50",
   "focus:border-ring focus:ring-2 focus:ring-ring/30",
 );
 
-const FILE_CREDENTIAL_BACKEND_ENV = "CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND";
+let credentialDraftId = 0;
+
+function nextCredentialDraftId(): string {
+  credentialDraftId += 1;
+  return `credential-backend-${credentialDraftId}`;
+}
 
 function linesToArray(value: string): string[] {
   return value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
@@ -53,31 +75,125 @@ function arrayToLines(values: string[]): string {
   return values.join("\n");
 }
 
-function credentialConfigForEdit(credentials: CredentialsSettingsInfo): unknown {
+function credentialDraftFromBackend(name: string, backend: CredentialBackendSettingsInfo): CredentialBackendDraft {
+  if (backend.type === "file") {
+    return {
+      id: nextCredentialDraftId(),
+      name,
+      type: "file",
+      path: backend.path,
+      url: "http://127.0.0.1:8087",
+      expose: arrayToLines(backend.expose),
+      hide: arrayToLines(backend.hide),
+      basicAuthEnabled: false,
+      basicAuthUsername: "",
+      basicAuthPassword: "",
+      basicAuthPasswordSet: false,
+    };
+  }
+
+  return {
+    id: nextCredentialDraftId(),
+    name,
+    type: "bitwarden",
+    path: "",
+    url: backend.url,
+    expose: arrayToLines(backend.expose),
+    hide: arrayToLines(backend.hide),
+    basicAuthEnabled: backend.basic_auth !== null && backend.basic_auth !== undefined,
+    basicAuthUsername: backend.basic_auth?.username ?? "",
+    basicAuthPassword: "",
+    basicAuthPasswordSet: backend.basic_auth?.password_set ?? false,
+  };
+}
+
+function credentialDraftsFromSettings(credentials: CredentialsSettingsInfo): CredentialBackendDraft[] {
+  return Object.entries(credentials.backends)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, backend]) => credentialDraftFromBackend(name, backend));
+}
+
+function uniqueCredentialBackendName(type: CredentialBackendDraftType, backends: CredentialBackendDraft[]): string {
+  const base = type === "file" ? "file" : "bitwarden";
+  const names = new Set(backends.map((backend) => backend.name.trim()).filter(Boolean));
+  if (!names.has(base)) return base;
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base}-${index}`;
+    if (!names.has(candidate)) return candidate;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+function newCredentialBackendDraft(
+  type: CredentialBackendDraftType,
+  backends: CredentialBackendDraft[],
+): CredentialBackendDraft {
+  return {
+    id: nextCredentialDraftId(),
+    name: uniqueCredentialBackendName(type, backends),
+    type,
+    path: "",
+    url: "http://127.0.0.1:8087",
+    expose: "",
+    hide: "",
+    basicAuthEnabled: false,
+    basicAuthUsername: "",
+    basicAuthPassword: "",
+    basicAuthPasswordSet: false,
+  };
+}
+
+function credentialsFromDraft(
+  backendsDraft: CredentialBackendDraft[],
+  fileBackendAllowed: boolean,
+  t: Translate,
+): { backends: Record<string, unknown> } {
+  const names = new Set<string>();
   const backends: Record<string, unknown> = {};
-  for (const [name, backend] of Object.entries(credentials.backends)) {
+
+  for (const backend of backendsDraft) {
+    const name = backend.name.trim();
+    if (!name) throw new Error(t("errors.credentialNameRequired"));
+    if (name.includes("/")) throw new Error(t("errors.credentialNameNoSlash", { name }));
+    if (names.has(name)) throw new Error(t("errors.credentialNameDuplicate", { name }));
+    names.add(name);
+
+    const expose = linesToArray(backend.expose);
+    const hide = linesToArray(backend.hide);
     if (backend.type === "file") {
+      if (!fileBackendAllowed) throw new Error(t("errors.fileBackendDisabled"));
       backends[name] = {
         type: "file",
-        path: backend.path,
-        expose: backend.expose,
-        hide: backend.hide,
+        path: backend.path.trim(),
+        expose,
+        hide,
       };
       continue;
     }
+
+    let basicAuth: Record<string, string> | undefined;
+    if (backend.basicAuthEnabled) {
+      const username = backend.basicAuthUsername.trim();
+      if (!username) throw new Error(t("errors.basicAuthUsernameRequired", { name }));
+      if (!backend.basicAuthPassword && !backend.basicAuthPasswordSet) {
+        throw new Error(t("errors.basicAuthPasswordRequired", { name }));
+      }
+      basicAuth = {
+        username,
+        ...(backend.basicAuthPassword ? { password: backend.basicAuthPassword } : {}),
+      };
+    }
+
     backends[name] = {
       type: "bitwarden",
-      url: backend.url,
-      ...(backend.basic_auth ? { basic_auth: { username: backend.basic_auth.username } } : {}),
-      expose: backend.expose,
-      hide: backend.hide,
+      url: backend.url.trim() || "http://127.0.0.1:8087",
+      ...(basicAuth ? { basic_auth: basicAuth } : {}),
+      expose,
+      hide,
     };
   }
-  return { backends };
-}
 
-function stringifyCredentials(credentials: CredentialsSettingsInfo): string {
-  return JSON.stringify(credentialConfigForEdit(credentials), null, 2);
+  return { backends };
 }
 
 function budgetValue(value: number | string | null | undefined): string {
@@ -97,10 +213,7 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
     },
     matrix: response.settings.matrix,
     matrixPassword: "",
-    matrixToken: "",
-    clearMatrixPassword: false,
-    clearMatrixToken: false,
-    credentialsJson: stringifyCredentials(response.settings.credentials),
+    credentials: credentialDraftsFromSettings(response.settings.credentials),
     git: response.settings.git,
     gitToken: "",
     clearGitToken: false,
@@ -125,6 +238,7 @@ function budgetFromDraft(draft: UserSettingsDraft): SessionBudgetSettings {
 }
 
 export function UserSettingsView({ server, token }: { server: string; token: string }) {
+  const t = useTranslations("accountSettings");
   const [settings, setSettings] = useState<UserSettingsResponseInfo | null>(null);
   const [draft, setDraft] = useState<UserSettingsDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,11 +254,11 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       setSettings(response);
       setDraft(draftFromSettings(response));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load user settings");
+      setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
       setLoading(false);
     }
-  }, [server, token]);
+  }, [server, t, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -180,15 +294,46 @@ export function UserSettingsView({ server, token }: { server: string; token: str
     setDraft((current) => current ? { ...current, matrix: { ...current.matrix, ...patch } } : current);
   }
 
+  function updateCredentialBackend(id: string, patch: Partial<CredentialBackendDraft>): void {
+    setDraft((current) => current ? {
+      ...current,
+      credentials: current.credentials.map((backend) => backend.id === id ? { ...backend, ...patch } : backend),
+    } : current);
+  }
+
+  function addCredentialBackend(type: CredentialBackendDraftType): void {
+    setDraft((current) => current ? {
+      ...current,
+      credentials: [...current.credentials, newCredentialBackendDraft(type, current.credentials)],
+    } : current);
+  }
+
+  function removeCredentialBackend(id: string): void {
+    setDraft((current) => current ? {
+      ...current,
+      credentials: current.credentials.filter((backend) => backend.id !== id),
+    } : current);
+  }
+
   async function handleSave(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!draft) return;
 
     let credentialsPayload: unknown;
     try {
-      credentialsPayload = JSON.parse(draft.credentialsJson || "{\"backends\":{}}");
-    } catch {
-      setError("Credential backend JSON is invalid");
+      credentialsPayload = credentialsFromDraft(
+        draft.credentials,
+        settings?.capabilities.file_credential_backend ?? false,
+        t,
+      );
+    } catch (credentialsError) {
+      setError(credentialsError instanceof Error ? credentialsError.message : t("errors.credentialsInvalid"));
+      setNotice(null);
+      return;
+    }
+
+    if (draft.matrix.enabled && !draft.matrix.password_set && !draft.matrixPassword.trim()) {
+      setError(t("errors.matrixPasswordRequired"));
       setNotice(null);
       return;
     }
@@ -208,9 +353,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
         allowed_rooms: draft.matrix.allowed_rooms,
         allowed_users: draft.matrix.allowed_users,
         ...(draft.matrixPassword ? { password: draft.matrixPassword } : {}),
-        ...(draft.matrixToken ? { token: draft.matrixToken } : {}),
-        ...(draft.clearMatrixPassword ? { clear_password: true } : {}),
-        ...(draft.clearMatrixToken ? { clear_token: true } : {}),
+        clear_token: true,
       },
       credentials: credentialsPayload,
       git: {
@@ -228,9 +371,9 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       const response = await updateUserSettings(server, token, body);
       setSettings(response);
       setDraft(draftFromSettings(response));
-      setNotice("Saved.");
+      setNotice(t("notices.saved"));
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to update user settings");
+      setError(saveError instanceof Error ? saveError.message : t("errors.save"));
       setNotice(null);
     } finally {
       setSaving(false);
@@ -241,7 +384,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading settings
+        {t("status.loading")}
       </div>
     );
   }
@@ -249,14 +392,10 @@ export function UserSettingsView({ server, token }: { server: string; token: str
   if (!draft || !settings) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-sm text-destructive">
-        {error ?? "Settings are unavailable"}
+        {error ?? t("status.unavailable")}
       </div>
     );
   }
-
-  const fileBackendText = settings.capabilities.file_credential_backend
-    ? `file backend enabled by ${FILE_CREDENTIAL_BACKEND_ENV}`
-    : `file backend disabled by ${FILE_CREDENTIAL_BACKEND_ENV}`;
 
   return (
     <form onSubmit={(event) => void handleSave(event)} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
@@ -267,80 +406,111 @@ export function UserSettingsView({ server, token }: { server: string; token: str
           </div>
         ) : null}
 
-        <Section title="Default models">
+        <Section title={t("sections.defaultModels")}>
           <div className="grid gap-4 lg:grid-cols-3">
-            <Field label="Agent">
+            <Field label={t("fields.agent")}>
               <ModelPicker
                 value={draft.defaultModels.agent}
                 entries={agentOptions}
                 onChange={(agent) => updateDraft({ defaultModels: { ...draft.defaultModels, agent } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.agent || "Server default"}
+                defaultLabel={settings.server_defaults.models.agent || t("defaults.serverDefault")}
               />
             </Field>
-            <Field label="Sentinel">
+            <Field label={t("fields.sentinel")}>
               <ModelPicker
                 value={draft.defaultModels.sentinel}
                 entries={sentinelOptions}
                 onChange={(sentinel) => updateDraft({ defaultModels: { ...draft.defaultModels, sentinel } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.sentinel || "Server default"}
+                defaultLabel={settings.server_defaults.models.sentinel || t("defaults.serverDefault")}
               />
             </Field>
-            <Field label="Title">
+            <Field label={t("fields.title")}>
               <ModelPicker
                 value={draft.defaultModels.title}
                 entries={titleOptions}
                 onChange={(title) => updateDraft({ defaultModels: { ...draft.defaultModels, title } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.title || "Server default"}
+                defaultLabel={settings.server_defaults.models.title || t("defaults.serverDefault")}
               />
             </Field>
           </div>
         </Section>
 
-        <Section title="Default budget">
+        <Section title={t("sections.defaultBudgets")}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <BudgetInput label="Input tokens" value={draft.budget.input_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
-            <BudgetInput label="Output tokens" value={draft.budget.output_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
-            <BudgetInput label="Cost USD" value={draft.budget.cost_usd} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
-            <BudgetInput label="Tool calls" value={draft.budget.tool_calls} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
+            <BudgetInput label={t("fields.inputTokens")} placeholder={t("placeholders.unlimited")} value={draft.budget.input_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
+            <BudgetInput label={t("fields.outputTokens")} placeholder={t("placeholders.unlimited")} value={draft.budget.output_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
+            <BudgetInput label={t("fields.costUsd")} placeholder={t("placeholders.unlimited")} value={draft.budget.cost_usd} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
+            <BudgetInput label={t("fields.toolCalls")} placeholder={t("placeholders.unlimited")} value={draft.budget.tool_calls} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
           </div>
         </Section>
 
-        <Section title="Matrix">
+        <Section title={t("sections.matrix")}>
           <div className="space-y-4">
-            <SwitchRow checked={draft.matrix.enabled} label="Enabled" onCheckedChange={(enabled) => updateMatrix({ enabled })} />
+            <SwitchRow checked={draft.matrix.enabled} label={t("fields.enabled")} onCheckedChange={(enabled) => updateMatrix({ enabled })} />
             <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label="Homeserver" value={draft.matrix.homeserver} onChange={(homeserver) => updateMatrix({ homeserver })} />
-              <TextInput label="User ID" value={draft.matrix.user_id} onChange={(user_id) => updateMatrix({ user_id })} />
-              <TextInput label="Device name" value={draft.matrix.device_name} onChange={(device_name) => updateMatrix({ device_name })} />
-              <SecretInput label="Password" configured={draft.matrix.password_set} value={draft.matrixPassword} clear={draft.clearMatrixPassword} onValueChange={(matrixPassword) => updateDraft({ matrixPassword })} onClearChange={(clearMatrixPassword) => updateDraft({ clearMatrixPassword })} />
-              <SecretInput label="Access token" configured={draft.matrix.token_set} value={draft.matrixToken} clear={draft.clearMatrixToken} onValueChange={(matrixToken) => updateDraft({ matrixToken })} onClearChange={(clearMatrixToken) => updateDraft({ clearMatrixToken })} />
-              <TextAreaInput label="Allowed rooms" value={arrayToLines(draft.matrix.allowed_rooms)} onChange={(value) => updateMatrix({ allowed_rooms: linesToArray(value) })} />
-              <TextAreaInput label="Allowed users" value={arrayToLines(draft.matrix.allowed_users)} onChange={(value) => updateMatrix({ allowed_users: linesToArray(value) })} />
+              <TextInput label={t("fields.homeserver")} value={draft.matrix.homeserver} onChange={(homeserver) => updateMatrix({ homeserver })} />
+              <TextInput label={t("fields.userId")} value={draft.matrix.user_id} onChange={(user_id) => updateMatrix({ user_id })} />
+              <TextInput label={t("fields.deviceName")} value={draft.matrix.device_name} onChange={(device_name) => updateMatrix({ device_name })} />
+              <WriteOnlyPasswordInput
+                label={t("fields.password")}
+                configured={draft.matrix.password_set}
+                configuredLabel={t("status.configured")}
+                notSetLabel={t("status.notSet")}
+                value={draft.matrixPassword}
+                name="matrix-credential-secret"
+                disablePasswordManager
+                onValueChange={(matrixPassword) => updateDraft({ matrixPassword })}
+              />
+              <FreeInputMultiSelect label={t("fields.allowedRooms")} values={draft.matrix.allowed_rooms} placeholder={t("placeholders.addRoom")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_rooms) => updateMatrix({ allowed_rooms })} />
+              <FreeInputMultiSelect label={t("fields.allowedUsers")} values={draft.matrix.allowed_users} placeholder={t("placeholders.addUser")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_users) => updateMatrix({ allowed_users })} />
             </div>
           </div>
         </Section>
 
-        <Section title="Credentials">
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">{fileBackendText}</div>
-            <textarea
-              value={draft.credentialsJson}
-              onChange={(event) => updateDraft({ credentialsJson: event.target.value })}
-              className={cn(inputClassName, "min-h-64 font-mono text-xs leading-relaxed")}
-              spellCheck={false}
-            />
+        <Section title={t("sections.credentials")}>
+          <div className="space-y-4">
+            <div className="flex flex-wrap justify-end gap-2">
+              <SecondaryButton onClick={() => addCredentialBackend("bitwarden")} disabled={saving}>
+                <Plus className="h-4 w-4" />
+                {t("actions.addBitwarden")}
+              </SecondaryButton>
+              {settings.capabilities.file_credential_backend ? (
+                <SecondaryButton onClick={() => addCredentialBackend("file")} disabled={saving}>
+                  <Plus className="h-4 w-4" />
+                  {t("actions.addFile")}
+                </SecondaryButton>
+              ) : null}
+            </div>
+            {draft.credentials.length ? (
+              <div className="space-y-3">
+                {draft.credentials.map((backend) => (
+                  <CredentialBackendEditor
+                    key={backend.id}
+                    backend={backend}
+                    onChange={(patch) => updateCredentialBackend(backend.id, patch)}
+                    onRemove={() => removeCredentialBackend(backend.id)}
+                    t={t}
+                    disabled={saving}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                {t("empty.credentials")}
+              </div>
+            )}
           </div>
         </Section>
 
-        <Section title="Git remote">
+        <Section title={t("sections.gitRemote")}>
           <div className="grid gap-4 md:grid-cols-2">
-            <TextInput label="Remote" value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
-            <TextInput label="Branch" value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
-            <TextInput label="Author" value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
-            <SecretInput label="Token" configured={draft.git.token_set} value={draft.gitToken} clear={draft.clearGitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} onClearChange={(clearGitToken) => updateDraft({ clearGitToken })} />
+            <TextInput label={t("fields.remote")} value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
+            <TextInput label={t("fields.branch")} value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
+            <TextInput label={t("fields.author")} value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
+            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} clearLabel={t("actions.clearValue")} value={draft.gitToken} clear={draft.clearGitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} onClearChange={(clearGitToken) => updateDraft({ clearGitToken })} />
           </div>
         </Section>
 
@@ -351,7 +521,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Saving" : "Save"}
+            {saving ? t("actions.saving") : t("actions.save")}
           </button>
         </div>
       </div>
@@ -368,35 +538,130 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1.5">
       <span className="block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
+      {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
 }
 
-function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TextInput({ label, hint, value, onChange }: { label: string; hint?: string; value: string; onChange: (value: string) => void }) {
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint}>
       <input value={value} onChange={(event) => onChange(event.target.value)} className={inputClassName} />
     </Field>
   );
 }
 
-function TextAreaInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function FreeInputMultiSelect({
+  label,
+  values,
+  placeholder,
+  help,
+  removeTitle,
+  removeAriaLabel,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  placeholder: string;
+  help?: string;
+  removeTitle: string;
+  removeAriaLabel: (value: string) => string;
+  onChange: (values: string[]) => void;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  function addFromText(text: string): void {
+    const additions = linesToArray(text);
+    if (!additions.length) return;
+    const nextValues = [...values];
+    for (const addition of additions) {
+      if (!nextValues.includes(addition)) nextValues.push(addition);
+    }
+    onChange(nextValues);
+  }
+
+  function removeValue(value: string): void {
+    onChange(values.filter((item) => item !== value));
+  }
+
+  function commitInput(): void {
+    addFromText(inputValue);
+    setInputValue("");
+  }
+
   return (
-    <Field label={label}>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} className={cn(inputClassName, "min-h-28")} />
-    </Field>
+    <div className="space-y-1.5">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {label}
+        {help ? (
+          <span
+            title={help}
+            aria-label={help}
+            className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </span>
+      <div className={cn(inputClassName, "flex min-h-11 flex-wrap items-center gap-1.5 py-1.5")}>
+        {values.map((value) => (
+          <span
+            key={value}
+            className="inline-flex min-h-7 max-w-full items-center gap-1 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+          >
+            <span className="truncate">{value}</span>
+            <button
+              type="button"
+              onClick={() => removeValue(value)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              aria-label={removeAriaLabel(value)}
+              title={removeTitle}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ))}
+        <input
+          value={inputValue}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (/[,\n\r]/.test(value)) {
+              addFromText(value);
+              setInputValue("");
+              return;
+            }
+            setInputValue(value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === "Tab" || event.key === ",") {
+              if (inputValue.trim()) {
+                event.preventDefault();
+                commitInput();
+              }
+            }
+            if (event.key === "Backspace" && !inputValue && values.length) {
+              event.preventDefault();
+              onChange(values.slice(0, -1));
+            }
+          }}
+          onBlur={commitInput}
+          placeholder={values.length ? "" : placeholder}
+          className="min-h-8 min-w-32 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground/50"
+        />
+      </div>
+    </div>
   );
 }
 
-function BudgetInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function BudgetInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (value: string) => void }) {
   return (
     <Field label={label}>
-      <input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} placeholder="No limit" className={inputClassName} />
+      <input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={inputClassName} />
     </Field>
   );
 }
@@ -404,6 +669,9 @@ function BudgetInput({ label, value, onChange }: { label: string; value: string;
 function SecretInput({
   label,
   configured,
+  configuredLabel,
+  notSetLabel,
+  clearLabel,
   value,
   clear,
   onValueChange,
@@ -411,6 +679,9 @@ function SecretInput({
 }: {
   label: string;
   configured: boolean;
+  configuredLabel: string;
+  notSetLabel: string;
+  clearLabel: string;
   value: string;
   clear: boolean;
   onValueChange: (value: string) => void;
@@ -420,13 +691,179 @@ function SecretInput({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3">
         <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground">{configured ? "configured" : "not set"}</span>
+        <span className="text-xs text-muted-foreground">{configured ? configuredLabel : notSetLabel}</span>
       </div>
       <input type="password" value={value} onChange={(event) => onValueChange(event.target.value)} className={inputClassName} />
       <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
         <input type="checkbox" checked={clear} onChange={(event) => onClearChange(event.target.checked)} className="h-4 w-4 rounded border-border accent-foreground" />
-        Clear value
+        {clearLabel}
       </label>
+    </div>
+  );
+}
+
+function SecondaryButton({
+  children,
+  onClick,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function CredentialBackendEditor({
+  backend,
+  onChange,
+  onRemove,
+  t,
+  disabled,
+}: {
+  backend: CredentialBackendDraft;
+  onChange: (patch: Partial<CredentialBackendDraft>) => void;
+  onRemove: () => void;
+  t: Translate;
+  disabled: boolean;
+}) {
+  const typeLabel = backend.type === "file" ? t("credentials.types.file.label") : t("credentials.types.bitwarden.label");
+  const typeDescription = backend.type === "file" ? t("credentials.types.file.description") : t("credentials.types.bitwarden.description");
+  const TypeIcon = backend.type === "file" ? FileText : KeyRound;
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+            <TypeIcon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground">{typeLabel}</div>
+            <div className="text-xs text-muted-foreground">{typeDescription}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={t("actions.removeBackendAria", { name: backend.name || t("credentials.backendFallback") })}
+          title={t("actions.removeBackend")}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      {backend.type === "file" ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextInput label={t("fields.name")} value={backend.name} onChange={(name) => onChange({ name })} />
+          <TextInput
+            label={t("fields.path")}
+            hint={t("hints.filePath")}
+            value={backend.path}
+            onChange={(path) => onChange({ path })}
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextInput label={t("fields.name")} value={backend.name} onChange={(name) => onChange({ name })} />
+            <TextInput label={t("fields.url")} value={backend.url} onChange={(url) => onChange({ url })} />
+          </div>
+          <SwitchRow
+            checked={backend.basicAuthEnabled}
+            label={t("fields.basicAuth")}
+            onCheckedChange={(basicAuthEnabled) => onChange({ basicAuthEnabled })}
+          />
+          {backend.basicAuthEnabled ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextInput
+                label={t("fields.basicAuthUsername")}
+                value={backend.basicAuthUsername}
+                onChange={(basicAuthUsername) => onChange({ basicAuthUsername })}
+              />
+              <WriteOnlyPasswordInput
+                label={t("fields.basicAuthPassword")}
+                configured={backend.basicAuthPasswordSet}
+                configuredLabel={t("status.configured")}
+                notSetLabel={t("status.notSet")}
+                value={backend.basicAuthPassword}
+                onValueChange={(basicAuthPassword) => onChange({ basicAuthPassword })}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <FreeInputMultiSelect
+          label={t("fields.expose")}
+          values={linesToArray(backend.expose)}
+          placeholder={t("placeholders.addIdentifier")}
+          help={t("tooltips.expose")}
+          removeTitle={t("actions.remove")}
+          removeAriaLabel={(value) => t("actions.removeValue", { value })}
+          onChange={(expose) => onChange({ expose: arrayToLines(expose) })}
+        />
+        <FreeInputMultiSelect
+          label={t("fields.hide")}
+          values={linesToArray(backend.hide)}
+          placeholder={t("placeholders.addIdentifier")}
+          help={t("tooltips.hide")}
+          removeTitle={t("actions.remove")}
+          removeAriaLabel={(value) => t("actions.removeValue", { value })}
+          onChange={(hide) => onChange({ hide: arrayToLines(hide) })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function WriteOnlyPasswordInput({
+  label,
+  configured,
+  configuredLabel,
+  notSetLabel,
+  value,
+  name,
+  disablePasswordManager = false,
+  onValueChange,
+}: {
+  label: string;
+  configured: boolean;
+  configuredLabel: string;
+  notSetLabel: string;
+  value: string;
+  name?: string;
+  disablePasswordManager?: boolean;
+  onValueChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{configured ? configuredLabel : notSetLabel}</span>
+      </div>
+      <input
+        type="password"
+        name={name}
+        autoComplete={disablePasswordManager ? "new-password" : undefined}
+        data-1p-ignore={disablePasswordManager ? "true" : undefined}
+        data-bwignore={disablePasswordManager ? "true" : undefined}
+        data-lpignore={disablePasswordManager ? "true" : undefined}
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        className={inputClassName}
+      />
     </div>
   );
 }
