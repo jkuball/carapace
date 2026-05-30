@@ -659,10 +659,25 @@ export function UserSettingsView({ server, token }: { server: string; token: str
 
         <Section title={t("sections.gitRemote")}>
           <div className="grid gap-4 md:grid-cols-2">
-            <TextInput label={t("fields.remote")} value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
+            <TextInput
+              label={t("fields.remote")}
+              value={draft.git.remote}
+              name="git-remote-url"
+              disablePasswordManager
+              onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })}
+            />
             <TextInput label={t("fields.branch")} value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
             <TextInput label={t("fields.author")} value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
-            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} value={draft.gitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} />
+            <WriteOnlyPasswordInput
+              label={t("fields.token")}
+              configured={draft.git.token_set}
+              configuredLabel={t("status.configured")}
+              notSetLabel={t("status.notSet")}
+              value={draft.gitToken}
+              name="git-remote-token"
+              disablePasswordManager
+              onValueChange={(gitToken) => updateDraft({ gitToken })}
+            />
           </div>
         </Section>
 
@@ -760,10 +775,35 @@ function Field({ label, hint, help, children }: { label: string; hint?: string; 
   );
 }
 
-function TextInput({ label, hint, help, value, onChange }: { label: string; hint?: string; help?: string; value: string; onChange: (value: string) => void }) {
+function TextInput({
+  label,
+  hint,
+  help,
+  value,
+  name,
+  disablePasswordManager = false,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  help?: string;
+  value: string;
+  name?: string;
+  disablePasswordManager?: boolean;
+  onChange: (value: string) => void;
+}) {
   return (
     <Field label={label} hint={hint} help={help}>
-      <input value={value} onChange={(event) => onChange(event.target.value)} className={inputClassName} />
+      <input
+        name={name}
+        autoComplete={disablePasswordManager ? "off" : undefined}
+        data-1p-ignore={disablePasswordManager ? "true" : undefined}
+        data-bwignore={disablePasswordManager ? "true" : undefined}
+        data-lpignore={disablePasswordManager ? "true" : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputClassName}
+      />
     </Field>
   );
 }
@@ -875,32 +915,6 @@ function BudgetInput({ label, placeholder, value, onBlur, onChange }: { label: s
     <Field label={label}>
       <input inputMode="decimal" value={value} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={inputClassName} />
     </Field>
-  );
-}
-
-function SecretInput({
-  label,
-  configured,
-  configuredLabel,
-  notSetLabel,
-  value,
-  onValueChange,
-}: {
-  label: string;
-  configured: boolean;
-  configuredLabel: string;
-  notSetLabel: string;
-  value: string;
-  onValueChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground">{configured ? configuredLabel : notSetLabel}</span>
-      </div>
-      <input type="password" value={value} onChange={(event) => onValueChange(event.target.value)} className={inputClassName} />
-    </div>
   );
 }
 
