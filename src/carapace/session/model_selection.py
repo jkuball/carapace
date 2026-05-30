@@ -80,8 +80,12 @@ class SessionModelMixin(SessionModelHost):
         self._agent_model = agent_model
         for active in self._active.values():
             active.agent_model = None
-            if active.sentinel_model_name is None and active.sentinel is not None:
-                active.sentinel.set_model(config.agent.sentinel_model)
+            if active.sentinel is not None:
+                active.sentinel.set_model_runtime(
+                    model=active.sentinel_model_name or config.agent.sentinel_model,
+                    model_factory=model_factory,
+                    model_settings_resolver=self._resolve_model_settings,
+                )
 
     def _restore_persisted_model_overrides(self, active: ActiveSession) -> None:
         """Validate restored overrides, falling back to defaults when they are no longer usable."""

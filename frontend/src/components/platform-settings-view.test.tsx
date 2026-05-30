@@ -75,3 +75,29 @@ test("buildPlatformSettingsPatch reuses configured raw OpenAI secrets", () => {
 
   assert.deepEqual(patch.available_models[0]?.api_key, { source: "raw" });
 });
+
+test("buildPlatformSettingsPatch includes OpenRouter API key fields without base URL", () => {
+  const patch = buildPlatformSettingsPatch(
+    draftWithModel({
+      rowId: "model-1",
+      provider: "openrouter",
+      name: "anthropic/claude-sonnet-4.5",
+      id: "openrouter:sonnet",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "128",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeySource: "env",
+      apiKeyValue: "OPENROUTER_API_KEY",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    }),
+    translate,
+  );
+
+  const model = patch.available_models[0]!;
+  assert.equal(model.provider, "openrouter");
+  assert.deepEqual(model.api_key, { source: "env", value: "OPENROUTER_API_KEY" });
+  assert.equal(Object.hasOwn(model, "base_url"), false);
+  assert.equal(Object.hasOwn(model, "thinking_budget_tokens"), false);
+});

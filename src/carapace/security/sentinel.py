@@ -188,6 +188,19 @@ class Sentinel:
         self._model = model
         self._agent = self._create_agent()
 
+    def set_model_runtime(
+        self,
+        *,
+        model: str | None = None,
+        model_factory: Callable[[str], Model] | None,
+        model_settings_resolver: Callable[[str], ModelSettings | None] | None,
+    ) -> None:
+        if model is not None:
+            self._model = model
+        self._model_factory = model_factory
+        self._model_settings_resolver = model_settings_resolver
+        self._agent = self._create_agent()
+
     def set_policy(self, *, ask_mode: bool | None = None, unattended: bool | None = None) -> None:
         """Update live mutable policy flags without discarding sentinel conversation state."""
         changed = False

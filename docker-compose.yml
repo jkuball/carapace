@@ -25,8 +25,9 @@ services:
       # Only keep this enabled when users who can change backend config are trustworthy;
       # the server process reads the configured path.
       - CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND=true
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
     networks:
       - default
       - carapace-sandbox

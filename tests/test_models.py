@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from carapace.llm import make_model_factory, model_settings_for_config
 from carapace.models.config import (
@@ -279,6 +281,26 @@ def test_available_model_entry_rejects_api_key_for_non_openai_provider():
         )
 
 
+def test_available_model_entry_allows_api_key_for_openrouter_provider():
+    e = AvailableModelEntry.model_validate(
+        {"provider": "openrouter", "name": "anthropic/claude-sonnet-4.5", "api_key": {"raw": "secret"}}
+    )
+
+    assert e.model_id == "openrouter:anthropic/claude-sonnet-4.5"
+    assert e.api_key is not None
+
+
+def test_available_model_entry_rejects_base_url_for_openrouter_provider():
+    with pytest.raises(ValidationError):
+        AvailableModelEntry.model_validate(
+            {
+                "provider": "openrouter",
+                "name": "anthropic/claude-sonnet-4.5",
+                "base_url": "https://openrouter.ai/api/v1",
+            }
+        )
+
+
 def test_available_model_entry_rejects_thinking_budget_tokens_for_non_openai_provider():
     with pytest.raises(ValidationError):
         AvailableModelEntry.model_validate(
@@ -354,6 +376,29 @@ def test_make_model_factory_openai_compatible_row():
     factory = make_model_factory(cfg)
     m = factory("on-prem:custom")
     assert isinstance(m, OpenAIChatModel)
+
+
+def test_make_model_factory_openrouter_row():
+    cfg = Config.model_validate(
+        {
+            "agent": {
+                "model": "openrouter:anthropic/claude-sonnet-4.5",
+                "sentinel_model": "openrouter:anthropic/claude-sonnet-4.5",
+                "title_model": "openrouter:anthropic/claude-sonnet-4.5",
+                "available_models": [
+                    {
+                        "provider": "openrouter",
+                        "name": "anthropic/claude-sonnet-4.5",
+                        "api_key": {"raw": "x"},
+                    },
+                ],
+            }
+        }
+    )
+    factory = make_model_factory(cfg)
+    m = factory("openrouter:anthropic/claude-sonnet-4.5")
+    assert isinstance(m, OpenRouterModel)
+    assert isinstance(m.provider, OpenRouterProvider)
 
 
 def test_make_model_factory_rejects_unregistered_model():
