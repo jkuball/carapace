@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.128.1 (2026-05-30)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`dde1cd5`](https://github.com/thiesgerken/carapace/commit/dde1cd5bf70f4e11f681212ba9073d51ed79b8be))
+
+- ⬆️ chore: upgrade redis to 8.0.0
+  ([`929a732`](https://github.com/thiesgerken/carapace/commit/929a732a7834d09bad05c8bec8a60ce57785d253))
+
 ## v0.128.0 (2026-05-27)
 
 
