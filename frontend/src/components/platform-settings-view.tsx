@@ -32,6 +32,7 @@ interface ModelDraft {
   apiKeySource: SecretSource;
   apiKeyValue: string;
   apiKeyConfigured: boolean;
+  apiKeyConfiguredSource: SecretSource;
 }
 
 interface PlatformDraft {
@@ -172,6 +173,24 @@ function modelId(model: Pick<ModelDraft, "provider" | "name" | "id">): string {
   return model.id.trim() || `${model.provider.trim()}:${model.name.trim()}`;
 }
 
+function isOpenAICompatibleProvider(provider: string): boolean {
+  const normalized = provider.trim().toLowerCase();
+  return normalized === "openai" || normalized === "openai-chat";
+}
+
+function hasReusableRawSecret(model: Pick<ModelDraft, "apiKeyConfigured" | "apiKeyConfiguredSource">): boolean {
+  return model.apiKeyConfigured && model.apiKeyConfiguredSource === "raw";
+}
+
+function apiKeySourceChangePatch(model: ModelDraft, apiKeySource: SecretSource): Partial<ModelDraft> {
+  return {
+    apiKeySource,
+    apiKeyValue: "",
+    apiKeyConfigured: model.apiKeyConfigured,
+    apiKeyConfiguredSource: model.apiKeyConfiguredSource,
+  };
+}
+
 function budgetDraftFromSettings(budget: SessionBudgetSettings): PlatformDraft["budget"] {
   return {
     input_tokens: budget.input_tokens?.toString() ?? "",
@@ -195,6 +214,7 @@ function modelDraftFromSettings(model: PlatformModelEntryInfo): ModelDraft {
     apiKeySource,
     apiKeyValue: apiKeySource === "raw" ? "" : model.api_key.value ?? "",
     apiKeyConfigured: model.api_key.configured,
+    apiKeyConfiguredSource: model.api_key.configured ? apiKeySource : "none",
   };
 }
 
@@ -266,30 +286,36 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
     const effectiveId = id ?? `${provider}:${name}`;
     if (ids.has(effectiveId)) throw new Error(t("errors.duplicateModel", { id: effectiveId }));
     ids.add(effectiveId);
-    if (model.apiKeySource === "raw" && !model.apiKeyValue.trim() && !model.apiKeyConfigured) {
+    const openAICompatible = isOpenAICompatibleProvider(provider);
+    if (openAICompatible && model.apiKeySource === "raw" && !model.apiKeyValue.trim() && !hasReusableRawSecret(model)) {
       throw new Error(t("errors.rawSecretRequired", { id: effectiveId }));
     }
-    if ((model.apiKeySource === "env" || model.apiKeySource === "file") && !model.apiKeyValue.trim()) {
+    if (openAICompatible && (model.apiKeySource === "env" || model.apiKeySource === "file") && !model.apiKeyValue.trim()) {
       throw new Error(t("errors.secretValueRequired", { id: effectiveId }));
     }
 
-    return {
+    const entry: PlatformModelEntryPatchInput = {
       provider,
       name,
       id,
       max_input_tokens: numericLimit(model.maxInputTokens, t("fields.maxInputTokens"), t),
       thinking: thinkingFromDraft(model.thinking),
-      thinking_budget_tokens: nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t),
-      base_url: model.baseUrl.trim() || null,
-      api_key: model.apiKeySource === "none" ? { source: null } : {
-        source: model.apiKeySource,
-        ...(model.apiKeyValue.trim() ? { value: model.apiKeyValue.trim() } : {}),
-      },
     };
+    if (!openAICompatible) return entry;
+
+    entry.thinking_budget_tokens = nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t);
+    entry.base_url = model.baseUrl.trim() || null;
+    entry.api_key = model.apiKeySource === "none"
+      ? { source: null }
+      : {
+          source: model.apiKeySource,
+          ...(model.apiKeyValue.trim() ? { value: model.apiKeyValue.trim() } : {}),
+        };
+    return entry;
   });
 }
 
-function buildPatch(draft: PlatformDraft, t: Translate): PlatformSettingsPatchInput {
+export function buildPlatformSettingsPatch(draft: PlatformDraft, t: Translate): PlatformSettingsPatchInput {
   const availableModels = modelsFromDraft(draft.models, t);
   const ids = new Set(availableModels.map((model) => model.id ?? `${model.provider}:${model.name}`));
   for (const [key, value] of Object.entries(draft.defaultModels)) {
@@ -324,6 +350,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
       apiKeySource: model.apiKeySource,
       apiKeyValue: model.apiKeyValue,
       apiKeyConfigured: model.apiKeyConfigured,
+      apiKeyConfiguredSource: model.apiKeyConfiguredSource,
     })),
   };
 }
@@ -352,6 +379,7 @@ function newModelDraft(): ModelDraft {
     apiKeySource: "none",
     apiKeyValue: "",
     apiKeyConfigured: false,
+    apiKeyConfiguredSource: "none",
   };
 }
 
@@ -417,7 +445,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
     if (!draft || !changed || !configWritable) return;
     let body: PlatformSettingsPatchInput;
     try {
-      body = buildPatch(draft, t);
+      body = buildPlatformSettingsPatch(draft, t);
     } catch (buildError) {
       setError(buildError instanceof Error ? buildError.message : t("errors.save"));
       setNotice(null);
@@ -561,13 +589,15 @@ function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, 
   const effectiveId = modelId(model);
   const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
   const provider = model.provider.trim();
-  const providerLabel = providerBadgeLabel(provider, model.baseUrl);
+  const openAICompatible = isOpenAICompatibleProvider(provider);
+  const openAIFieldsDisabled = disabled || !openAICompatible;
+  const providerLabel = providerBadgeLabel(provider, openAICompatible ? model.baseUrl : "");
   const summaryBadges: SummaryBadge[] = [];
-  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, model.baseUrl, providerColors), icon: Cloud });
+  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, openAICompatible ? model.baseUrl : "", providerColors), icon: Cloud });
   if (model.id.trim() && model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name, modelNameColors), icon: BrainCircuit });
   if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
-  if (model.thinking || model.thinkingBudgetTokens.trim()) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, model.thinkingBudgetTokens, t), className: neutralBadgeClassName, icon: Brain });
-  const rawSecretConfigured = model.apiKeySource === "raw" && model.apiKeyConfigured;
+  if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
+  const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
     <details className="group rounded-lg border border-border bg-background/70" open={!model.name.trim() || undefined}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-details-marker]:hidden">
@@ -606,17 +636,17 @@ function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, 
             {thinkingOptions.map((value) => <option key={value || "default"} value={value}>{value ? t(`thinking.${value}`) : t("thinking.default")}</option>)}
           </select>
         </Field>
-        <TextInput label={t("fields.thinkingBudgetTokens")} value={model.thinkingBudgetTokens} disabled={disabled} onChange={(thinkingBudgetTokens) => onChange({ thinkingBudgetTokens })} />
-        <TextInput label={t("fields.baseUrl")} value={model.baseUrl} disabled={disabled} onChange={(baseUrl) => onChange({ baseUrl })} />
+        <TextInput label={t("fields.thinkingBudgetTokens")} value={model.thinkingBudgetTokens} disabled={openAIFieldsDisabled} onChange={(thinkingBudgetTokens) => onChange({ thinkingBudgetTokens })} />
+        <TextInput label={t("fields.baseUrl")} value={model.baseUrl} disabled={openAIFieldsDisabled} onChange={(baseUrl) => onChange({ baseUrl })} />
         <Field label={t("fields.apiKeySource")}>
-          <select value={model.apiKeySource} disabled={disabled} onChange={(event) => onChange({ apiKeySource: event.target.value as SecretSource, apiKeyValue: "", apiKeyConfigured: false })} className={inputClassName}>
+          <select value={model.apiKeySource} disabled={openAIFieldsDisabled} onChange={(event) => onChange(apiKeySourceChangePatch(model, event.target.value as SecretSource))} className={inputClassName}>
             <option value="none">{t("secretSources.none")}</option>
             <option value="raw">{t("secretSources.raw")}</option>
             <option value="env">{t("secretSources.env")}</option>
             <option value="file">{t("secretSources.file")}</option>
           </select>
         </Field>
-        {model.apiKeySource !== "none" ? (
+        {openAICompatible && model.apiKeySource !== "none" ? (
           <Field label={model.apiKeySource === "raw" ? t("fields.apiKey") : t("fields.secretReference")}>
             <div className="relative">
               <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
