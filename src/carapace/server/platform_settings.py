@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -172,7 +173,7 @@ def _response() -> PlatformSettingsResponse:
     path = _config_path()
     return PlatformSettingsResponse(
         config_path=str(path),
-        config_writable=path.exists() and path.is_file() and path.parent.exists(),
+        config_writable=_config_writable(path),
         settings=PlatformSettingsPayload(
             default_models=PlatformDefaultModels(
                 agent=server._config.agent.model,
@@ -185,6 +186,12 @@ def _response() -> PlatformSettingsResponse:
             ],
         ),
     )
+
+
+def _config_writable(path: Path) -> bool:
+    if path.exists():
+        return path.is_file() and os.access(path, os.W_OK) and os.access(path.parent, os.W_OK)
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
 def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | None) -> Secret | None:

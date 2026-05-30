@@ -220,7 +220,7 @@ function nonNegativeLimit(value: string, field: string, t: Translate): number | 
   const normalized = value.trim();
   if (!normalized) return null;
   if (!/^\d+$/.test(normalized)) {
-    throw new Error(t("errors.wholeNumber", { field }));
+    throw new Error(t("errors.nonNegativeWholeNumber", { field }));
   }
   return Number(normalized);
 }
@@ -393,6 +393,8 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   const providerColors = useMemo(() => providerColorClassMap(draft?.models ?? []), [draft?.models]);
   const modelNameColors = useMemo(() => modelNameColorClassMap(draft?.models ?? []), [draft?.models]);
   const changed = useMemo(() => comparableDraft(draft) !== null && JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableDraft(settings ? draftFromSettings(settings) : null)), [draft, settings]);
+  const configWritable = settings?.config_writable ?? false;
+  const fieldsDisabled = saving || !configWritable;
   const agentOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.agent), [draft?.defaultModels.agent, modelOptions]);
   const sentinelOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.sentinel), [draft?.defaultModels.sentinel, modelOptions]);
   const titleOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.title), [draft?.defaultModels.title, modelOptions]);
@@ -412,7 +414,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!draft || !changed) return;
+    if (!draft || !changed || !configWritable) return;
     let body: PlatformSettingsPatchInput;
     try {
       body = buildPatch(draft, t);
@@ -450,12 +452,12 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
             <div className={cn("min-h-5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
-              {error ? error : notice ? <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" />{notice}</span> : null}
+              {error ? error : notice ? <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" />{notice}</span> : configWritable ? null : t("status.readOnly")}
             </div>
           </div>
           <button
             type="submit"
-            disabled={saving || !changed}
+            disabled={saving || !changed || !configWritable}
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -466,30 +468,30 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
         <Section title={t("sections.defaultModels")}>
           <div className="grid gap-4 lg:grid-cols-3">
             <Field label={t("fields.agent")}>
-              <ModelPicker value={draft.defaultModels.agent} entries={agentOptions} onChange={(agent) => updateDraft({ defaultModels: { ...draft.defaultModels, agent: agent ?? "" } })} disabled={saving} defaultLabel={t("placeholders.selectModel")} />
+              <ModelPicker value={draft.defaultModels.agent} entries={agentOptions} onChange={(agent) => updateDraft({ defaultModels: { ...draft.defaultModels, agent: agent ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("placeholders.selectModel")} />
             </Field>
             <Field label={t("fields.sentinel")}>
-              <ModelPicker value={draft.defaultModels.sentinel} entries={sentinelOptions} onChange={(sentinel) => updateDraft({ defaultModels: { ...draft.defaultModels, sentinel: sentinel ?? "" } })} disabled={saving} defaultLabel={t("placeholders.selectModel")} />
+              <ModelPicker value={draft.defaultModels.sentinel} entries={sentinelOptions} onChange={(sentinel) => updateDraft({ defaultModels: { ...draft.defaultModels, sentinel: sentinel ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("placeholders.selectModel")} />
             </Field>
             <Field label={t("fields.title")}>
-              <ModelPicker value={draft.defaultModels.title} entries={titleOptions} onChange={(title) => updateDraft({ defaultModels: { ...draft.defaultModels, title: title ?? "" } })} disabled={saving} defaultLabel={t("placeholders.selectModel")} />
+              <ModelPicker value={draft.defaultModels.title} entries={titleOptions} onChange={(title) => updateDraft({ defaultModels: { ...draft.defaultModels, title: title ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("placeholders.selectModel")} />
             </Field>
           </div>
         </Section>
 
         <Section title={t("sections.defaultBudgets")}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <TextInput label={t("fields.inputTokens")} value={draft.budget.input_tokens} disabled={saving} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
-            <TextInput label={t("fields.outputTokens")} value={draft.budget.output_tokens} disabled={saving} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
-            <TextInput label={t("fields.costUsd")} value={draft.budget.cost_usd} disabled={saving} placeholder={t("placeholders.unlimited")} onBlur={() => updateDraft({ budget: { ...draft.budget, cost_usd: budgetCostValue(draft.budget.cost_usd) } })} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
-            <TextInput label={t("fields.toolCalls")} value={draft.budget.tool_calls} disabled={saving} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
+            <TextInput label={t("fields.inputTokens")} value={draft.budget.input_tokens} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
+            <TextInput label={t("fields.outputTokens")} value={draft.budget.output_tokens} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
+            <TextInput label={t("fields.costUsd")} value={draft.budget.cost_usd} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onBlur={() => updateDraft({ budget: { ...draft.budget, cost_usd: budgetCostValue(draft.budget.cost_usd) } })} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
+            <TextInput label={t("fields.toolCalls")} value={draft.budget.tool_calls} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
           </div>
         </Section>
 
         <Section
           title={t("sections.catalog")}
           action={(
-            <SecondaryButton disabled={saving} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
+            <SecondaryButton disabled={fieldsDisabled} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
               <Plus className="h-4 w-4" />
               {t("actions.addModel")}
             </SecondaryButton>
@@ -503,7 +505,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
               <ModelRow
                 key={model.rowId}
                 model={model}
-                disabled={saving}
+                disabled={fieldsDisabled}
                 providerColors={providerColors}
                 modelNameColors={modelNameColors}
                 onChange={(patch) => updateModel(model.rowId, patch)}

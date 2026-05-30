@@ -124,7 +124,8 @@
     "platformSettings": {
         "status": {
             "loading": "Plattformeinstellungen werden geladen",
-            "unavailable": "Plattformeinstellungen sind nicht verfügbar"
+            "unavailable": "Plattformeinstellungen sind nicht verfügbar",
+            "readOnly": "Die Konfigurationsdatei ist schreibgeschützt."
         },
         "notices": {
             "saved": "Gespeichert."
@@ -133,6 +134,7 @@
             "load": "Plattformeinstellungen konnten nicht geladen werden",
             "save": "Plattformeinstellungen konnten nicht aktualisiert werden",
             "wholeNumber": "{field} muss eine positive ganze Zahl sein.",
+            "nonNegativeWholeNumber": "{field} muss eine nicht negative ganze Zahl sein.",
             "number": "{field} muss eine nicht negative Zahl sein.",
             "providerRequired": "Provider ist für Modell {index} erforderlich.",
             "nameRequired": "Name ist für Modell {index} erforderlich.",

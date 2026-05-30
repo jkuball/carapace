@@ -267,6 +267,19 @@ def test_admin_platform_settings_requires_admin_role(client, auth_headers, admin
     assert admin_resp.json()["settings"]["default_models"]["agent"] == srv._config.agent.model
 
 
+def test_admin_platform_settings_reports_unwritable_config(
+    client,
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(platform_settings.os, "access", lambda _path, _mode: False)
+
+    resp = client.get("/api/admin/platform/settings", headers=admin_auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["config_writable"] is False
+
+
 def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_headers):
     resp = client.patch(
         "/api/admin/platform/settings",

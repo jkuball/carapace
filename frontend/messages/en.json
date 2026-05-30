@@ -124,7 +124,8 @@
     "platformSettings": {
         "status": {
             "loading": "Loading platform settings",
-            "unavailable": "Platform settings are unavailable"
+            "unavailable": "Platform settings are unavailable",
+            "readOnly": "Config file is read-only."
         },
         "notices": {
             "saved": "Saved."
@@ -133,6 +134,7 @@
             "load": "Failed to load platform settings",
             "save": "Failed to update platform settings",
             "wholeNumber": "{field} must be a positive whole number.",
+            "nonNegativeWholeNumber": "{field} must be a non-negative whole number.",
             "number": "{field} must be a non-negative number.",
             "providerRequired": "Provider is required for model {index}.",
             "nameRequired": "Name is required for model {index}.",
