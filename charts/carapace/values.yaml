@@ -63,22 +63,11 @@ ingress:
 
 # -- Persistence
 persistence:
-  # Data PVC (sessions, knowledge — server-only, no sandbox access needed)
+  # Data PVC (config, sessions, knowledge — server-only, no sandbox access needed)
   data:
     # -- Leave empty to use the cluster default StorageClass
     storageClassName: ""
     size: 10Gi
-    # -- Finalizers to protect the PVC from accidental deletion (e.g. by ArgoCD pruning)
-    finalizers: []
-    # - kubernetes.io/pvc-protection
-  # Config PVC mounted read-write at /var/lib/carapace-config.
-  # The app creates config.yaml there on first startup when it is missing.
-  config:
-    # -- Leave empty to use persistence.data.storageClassName, then the cluster default StorageClass
-    storageClassName: ""
-    size: 16Mi
-    accessModes:
-      - ReadWriteMany
     # -- Finalizers to protect the PVC from accidental deletion (e.g. by ArgoCD pruning)
     finalizers: []
     # - kubernetes.io/pvc-protection
@@ -167,7 +156,7 @@ extraEnv: []
 #     - secretRef:
 #         name: carapace-secrets
 #     - configMapRef:
-#         name: carapace-config
+#         name: carapace-env
 envFrom: []
 
 redis:

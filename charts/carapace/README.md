@@ -71,7 +71,7 @@ helm upgrade carapace oci://ghcr.io/thiesgerken/charts/carapace -n carapace
 helm uninstall carapace -n carapace
 ```
 
-> PVCs are **not** deleted on uninstall to protect your data. Remove them manually with `kubectl delete pvc carapace-data carapace-config -n carapace` if desired.
+> PVCs are **not** deleted on uninstall to protect your data. Remove them manually with `kubectl delete pvc carapace-data -n carapace` if desired.
 
 ## Configuration
 
@@ -105,12 +105,12 @@ extraEnv:
 
 ### Application configuration
 
-The chart stores application configuration on a dedicated read-write PVC mounted at `/var/lib/carapace-config`. The server reads `/var/lib/carapace-config/config.yaml` through `CARAPACE_CONFIG`. On first startup, carapace creates a valid empty config file when it does not exist yet.
+The chart stores application configuration on the data PVC mounted at `/var/lib/carapace`. The server reads `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`. On first startup, carapace creates a valid empty config file when it does not exist yet.
 
 Create or update the file on the PVC when you want to seed settings outside the web UI:
 
 ```yaml
-# /var/lib/carapace-config/config.yaml
+# /var/lib/carapace/config.yaml
 agent:
   model: anthropic:claude-sonnet-4-6
   sentinel_model: anthropic:claude-haiku-4-5
@@ -119,27 +119,14 @@ agent:
 The chart deploys Redis by default and wires the server to `<release>-redis`. If you disable the bundled Redis, point the application config at an external Redis instance:
 
 ```yaml
-# /var/lib/carapace-config/config.yaml
+# /var/lib/carapace/config.yaml
 cache:
   redis_url: redis://carapace-redis:6379/0
 ```
 
 Replace `carapace-redis` with `<release>-redis` when your Helm release name is not `carapace`.
 
-The config PVC defaults to RWX. Configure it separately from the data PVC:
-
-```yaml
-# values.yaml
-persistence:
-  data:
-    storageClassName: ceph-cephfs
-  config:
-    size: 16Mi
-    accessModes:
-      - ReadWriteMany
-```
-
-Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap. New chart versions do not render or mount that ConfigMap; migrate existing content to the config PVC manually before relying on web-editable platform settings.
+Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. New chart versions do not render or mount that ConfigMap; migrate existing content to `/var/lib/carapace/config.yaml` on the data PVC manually before relying on web-editable platform settings.
 
 ```yaml
 # old values.yaml shape, no longer used by the chart
@@ -240,10 +227,6 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `persistence.data.storageClassName`      | `""` (cluster default)           | StorageClass for the data PVC                                       |
 | `persistence.data.size`                  | `10Gi`                           | Data PVC size                                                       |
 | `persistence.data.finalizers`            | `[]`                             | Data PVC finalizers (e.g. `kubernetes.io/pvc-protection`)           |
-| `persistence.config.storageClassName`    | `""` (inherits data/default)     | StorageClass for the config PVC                                     |
-| `persistence.config.size`                | `16Mi`                           | Config PVC size                                                     |
-| `persistence.config.accessModes`         | `[ReadWriteMany]`                | Access modes for the config PVC                                     |
-| `persistence.config.finalizers`          | `[]`                             | Config PVC finalizers (e.g. `kubernetes.io/pvc-protection`)         |
 | `priorityClassName`                      | `""`                             | PriorityClass for all pods (server, frontend, sandbox)              |
 | `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                      |
 | `extraEnv`                               | `[]`                             | Extra env vars for the server container                             |
