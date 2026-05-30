@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.131.1 (2026-05-30)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: do not auto fill git token + use WriteOnlyPasswordInput component there
+  ([`21b070f`](https://github.com/thiesgerken/carapace/commit/21b070f16bd42639584a57314b086341799e295f))
+
 ## v0.131.0 (2026-05-30)
 
 
