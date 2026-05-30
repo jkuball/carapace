@@ -402,6 +402,46 @@ async def test_on_reaction_ignores_unrelated_event(tmp_path: Path):
 
 
 @pytest.mark.anyio
+async def test_on_reaction_rejects_unknown_user(tmp_path: Path):
+    ch = _make_channel(tmp_path, allowed_users=["@alice:example.com"])
+    room_id = "!room:example.com"
+    ch._get_or_create_session(room_id)
+
+    sub = MatrixSubscriber(ch, room_id)
+    sub._approval_events["$approval_event"] = "call-1"
+    ch._room_subscribers[room_id] = sub
+    ch._pending_approvals["$approval_event"] = _PendingApproval("$approval_event", "call-1")
+
+    reaction_event = _make_reaction_event(
+        reacts_to="$approval_event",
+        key="✅",
+        sender="@mallory:example.com",
+    )
+    room = _make_room(room_id=room_id)
+    await ch._on_reaction(room, reaction_event)
+
+    ch._engine.submit_approval.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_on_reaction_rejects_unlisted_room(tmp_path: Path):
+    ch = _make_channel(tmp_path, allowed_rooms=["!allowed:example.com"])
+    room_id = "!other:example.com"
+    ch._get_or_create_session(room_id)
+
+    sub = MatrixSubscriber(ch, room_id)
+    sub._approval_events["$approval_event"] = "call-1"
+    ch._room_subscribers[room_id] = sub
+    ch._pending_approvals["$approval_event"] = _PendingApproval("$approval_event", "call-1")
+
+    reaction_event = _make_reaction_event(reacts_to="$approval_event", key="✅")
+    room = _make_room(room_id=room_id)
+    await ch._on_reaction(room, reaction_event)
+
+    ch._engine.submit_approval.assert_not_called()
+
+
+@pytest.mark.anyio
 async def test_approve_command_resolves_via_engine(tmp_path: Path):
     ch = _make_channel(tmp_path)
     room_id = "!room:example.com"

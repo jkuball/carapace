@@ -447,7 +447,7 @@ class MatrixChannel:
 
     async def _on_reaction(self, room: nio.MatrixRoom, event: nio.ReactionEvent) -> None:
         """Resolve pending approvals when the user reacts to an approval message."""
-        if event.sender == self._config.user_id:
+        if not self._is_allowed(room, event.sender):
             return
 
         key = event.key.strip()
