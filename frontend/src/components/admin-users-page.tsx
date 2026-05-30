@@ -427,6 +427,11 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                   <Field label={t("fields.password")}>
                     <input
                       type="password"
+                      name="admin-create-user-secret"
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-lpignore="true"
                       value={createDraft.password}
                       onChange={(event) => setCreateDraft((draft) => ({ ...draft, password: event.target.value }))}
                       className={inputClassName}
@@ -517,6 +522,11 @@ export function AdminUsersPage({ embedded = false, server: serverProp, currentUs
                   <Field label={t("fields.newPassword")}>
                     <input
                       type="password"
+                      name="admin-edit-user-secret"
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-lpignore="true"
                       value={editDraft.password}
                       onChange={(event) => setEditDraft((draft) => draft ? { ...draft, password: event.target.value } : draft)}
                       placeholder={t("fields.keepPassword")}
