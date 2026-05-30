@@ -457,6 +457,59 @@ def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client,
     assert returned_model["api_key"] == {"source": "raw", "value": None, "configured": True}
 
 
+def test_admin_platform_settings_drops_openai_secret_when_provider_changes(client, admin_auth_headers):
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "local:test",
+                    "sentinel_model": "local:test",
+                    "title_model": "local:test",
+                    "available_models": [
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"raw": "existing-secret"},
+                            "thinking_budget_tokens": 128,
+                        }
+                    ],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "anthropic",
+                    "name": "claude-haiku-4-5",
+                    "id": "local:test",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw_model = yaml.safe_load((srv._config_path).read_text())["agent"]["available_models"][0]
+    assert raw_model["provider"] == "anthropic"
+    assert "api_key" not in raw_model
+    assert "base_url" not in raw_model
+    assert "thinking_budget_tokens" not in raw_model
+
+
 def test_admin_platform_settings_validates_runtime_before_writing_config(
     admin_auth_headers,
     monkeypatch: pytest.MonkeyPatch,

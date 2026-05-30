@@ -215,11 +215,16 @@ def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | Non
     return Secret(file=patch.value)
 
 
+def _openai_compatible_provider(provider: str) -> bool:
+    return provider in {"openai", "openai-chat"}
+
+
 def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentConfig) -> AgentConfig:
     existing_by_id = {entry.model_id: entry for entry in agent_available_model_entries(existing_agent)}
     entries = []
     for patch in body.available_models:
         existing = existing_by_id.get(patch.model_id)
+        openai_compatible = _openai_compatible_provider(patch.provider)
         entries.append(
             AvailableModelEntry(
                 provider=patch.provider,
@@ -227,9 +232,13 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
                 id=patch.id,
                 max_input_tokens=patch.max_input_tokens,
                 thinking=patch.thinking,
-                thinking_budget_tokens=patch.thinking_budget_tokens,
-                base_url=patch.base_url,
-                api_key=_secret_from_patch(patch.api_key, existing.api_key if existing is not None else None),
+                thinking_budget_tokens=patch.thinking_budget_tokens if openai_compatible else None,
+                base_url=patch.base_url if openai_compatible else None,
+                api_key=(
+                    _secret_from_patch(patch.api_key, existing.api_key if existing is not None else None)
+                    if openai_compatible
+                    else None
+                ),
             )
         )
     return AgentConfig(
