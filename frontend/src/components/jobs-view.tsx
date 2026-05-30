@@ -679,7 +679,7 @@ export function JobsView({
                 onClick={() => onTabChange("account")}
                 className={tabButtonClassName(isAccountTab)}
               >
-                Account
+                {tRoot("navigation.account")}
               </button>
               <button
                 id="settings-tab-jobs"
