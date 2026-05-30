@@ -6,7 +6,7 @@ Helm chart for deploying [carapace](https://github.com/thiesgerken/carapace) on 
 
 - Kubernetes 1.27+ with [Gateway API](https://gateway-api.sigs.k8s.io/) CRDs installed
 - Helm 3
-- A **ReadWriteMany** (RWX) StorageClass (e.g. CephFS, NFS)
+- A **ReadWriteOnce** (RWO) StorageClass. The server gets its own data PVC and each sandbox session gets its own PVC.
 - Container images pushed to a registry (GHCR by default)
 - A CNI plugin that enforces **NetworkPolicy** (e.g. Calico, Cilium, k3s built-in)
 
@@ -105,36 +105,24 @@ extraEnv:
 
 ### Application configuration
 
-The chart stores application configuration on the data PVC mounted at `/var/lib/carapace`. The server reads `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`. On first startup, carapace creates a valid empty config file when it does not exist yet.
+The chart no longer accepts application `config.yaml` through Helm values and does not render a ConfigMap for it. Platform and user settings are managed from the web UI after install:
 
-Create or update the file on the PVC when you want to seed settings outside the web UI:
+- **Settings** -> **Admin** -> **Platform** for model catalog, default models, OpenAI-compatible base URLs and API keys, reasoning options, and default budgets.
+- **Settings** -> **Admin** -> **Users** for local users, roles, passwords, and assignment of existing data.
+- **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
+- **Settings** -> **Jobs** for saved jobs and schedules.
 
-```yaml
-# /var/lib/carapace/config.yaml
-agent:
-  model: anthropic:claude-sonnet-4-6
-  sentinel_model: anthropic:claude-haiku-4-5
-```
+The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. Treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
 
-The chart deploys Redis by default and wires the server to `<release>-redis`. If you disable the bundled Redis, point the application config at an external Redis instance:
+The chart deploys Redis by default and wires the server to `<release>-redis` via `CARAPACE_CACHE_REDIS_URL`. If you disable the bundled Redis, provide an external URL with `extraEnv` or `envFrom`:
 
 ```yaml
-# /var/lib/carapace/config.yaml
-cache:
-  redis_url: redis://carapace-redis:6379/0
+extraEnv:
+  - name: CARAPACE_CACHE_REDIS_URL
+    value: redis://redis.example.internal:6379/0
 ```
 
-Replace `carapace-redis` with `<release>-redis` when your Helm release name is not `carapace`.
-
-Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. New chart versions do not render or mount that ConfigMap; migrate existing content to `/var/lib/carapace/config.yaml` on the data PVC manually before relying on web-editable platform settings.
-
-```yaml
-# old values.yaml shape, no longer used by the chart
-config:
-  agent:
-    model: anthropic:claude-sonnet-4-6
-    sentinel_model: anthropic:claude-haiku-4-5
-```
+Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. Current chart versions do not render or mount that ConfigMap; migrate existing content through the web UI or, when automation needs it, to `/var/lib/carapace/config.yaml` on the data PVC. Do not keep a `config:` block in Helm values; it is ignored.
 
 ### Bitwarden / Vaultwarden credential backend
 
@@ -192,7 +180,7 @@ bitwarden:
           memory: 256Mi
 ```
 
-4. **Configure the matching credential backend** in user settings or a user config file:
+4. **Configure the matching credential backend** in **Settings** -> **Account** -> **Credentials**. The equivalent backing user config is:
 
 ```yaml
 credentials:
@@ -233,7 +221,7 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                      |
 | `extraEnv`                               | `[]`                             | Extra env vars for the server container                             |
 | `redis.enabled`                          | `true`                           | Deploy the bundled Redis required for session-list cache            |
-| `redis.image.tag`                        | `7-alpine`                       | Redis image tag                                                     |
+| `redis.image.tag`                        | `8-alpine`                       | Redis image tag                                                     |
 | `redis.resources`                        | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
 | `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |
 | `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |

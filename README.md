@@ -33,6 +33,7 @@ carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for op
 - 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, and archived sessions live in files you can inspect, diff, sync, and push upstream.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context. Neither the agent nor the backend have a giant `.env` with all of your secrets.
+- 👥 Multi-user. Bootstrap an admin user, then manage users, roles, passwords, per-user models, Matrix, Git, and credential backends from Settings. Invite your family!
 - ⏰ Built-in jobs and scheduling. Saved jobs can run on demand or by cron, either in fresh unattended sessions or in reused attended sessions.
 - 🌐 Bring your own LLM — tested with Gemini, LMStudio and llama.cpp. The agent loop is handled by [Pydantic AI](https://github.com/pydantic/pydantic-ai), which supports lots of LLM backends.
 
@@ -139,11 +140,11 @@ Optional CLI connection:
 uv run carapace --user alice --password change-me
 ```
 
-The web UI uses the same username/password login and stores the session in an HttpOnly cookie.
+The web UI uses the same username/password login and stores the session in an HttpOnly cookie. Admin users can manage local users and platform model defaults from **Settings**; normal users manage their own account defaults, Matrix channel, Git remote, and credential backends there too.
 
 You can use whichever LLM backend fits your setup: hosted APIs, self-hosted `vllm`, `llama.cpp`, LM Studio, or anything else that exposes a compatible endpoint.
 
-For the full Docker Compose setup, auth model, model configuration, credential backends, Matrix integration, and knowledge-repo configuration, see [docs/quickstart.md](docs/quickstart.md) and [docs/auth.md](docs/auth.md). For Kubernetes deployment, see [docs/kubernetes.md](docs/kubernetes.md) and [charts/carapace/README.md](charts/carapace/README.md).
+For the full Docker Compose setup, multi-user auth model, UI-managed configuration, credential backends, Matrix integration, and knowledge-repo configuration, see [docs/quickstart.md](docs/quickstart.md) and [docs/auth.md](docs/auth.md). For Kubernetes deployment, see [docs/kubernetes.md](docs/kubernetes.md) and [charts/carapace/README.md](charts/carapace/README.md).
 
 ## Architecture
 
@@ -155,7 +156,7 @@ See [docs/architecture.md](docs/architecture.md) for the diagrams and fuller arc
 
 | Topic                                                          | What it covers                                                             |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [docs/quickstart.md](docs/quickstart.md)                       | Docker Compose setup, credentials, Matrix, and initial configuration       |
+| [docs/quickstart.md](docs/quickstart.md)                       | Docker Compose setup, users, UI settings, credentials, and Matrix          |
 | [docs/security.md](docs/security.md)                           | Sentinel policy model, audit trail, approvals, and veto semantics          |
 | [docs/skills.md](docs/skills.md)                               | AgentSkills support, context-scoped access, providers, and command aliases |
 | [docs/credentials.md](docs/credentials.md)                     | Vault-backed credentials, approval flow, and per-exec injection            |

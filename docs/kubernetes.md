@@ -28,9 +28,9 @@ helm install carapace oci://ghcr.io/thiesgerken/charts/carapace \
 helm upgrade carapace oci://ghcr.io/thiesgerken/charts/carapace -n carapace
 ```
 
-Inject additional config via `extraEnv` (inline values) or `envFrom` (external Secrets / ConfigMaps). The PVC uses the cluster's default StorageClass unless overridden with `persistence.storageClassName`.
+Inject additional environment variables via `extraEnv` (inline values) or `envFrom` (external Secrets / ConfigMaps). Platform and user settings are managed from the web UI after install; the server data PVC uses the cluster's default StorageClass unless overridden with `persistence.data.storageClassName`.
 
-Session-list caching requires Redis. The Helm chart deploys an in-cluster Redis by default; if you disable it, point carapace at an external Redis instance instead.
+Session-list caching requires Redis. The Helm chart deploys an in-cluster Redis by default and wires `CARAPACE_CACHE_REDIS_URL` automatically; if you disable it, point carapace at an external Redis instance with `extraEnv` or `envFrom`.
 
 Kubernetes credential backends can be deployed through the Helm chart too. For Bitwarden/Vaultwarden, the chart runs separately addressable vault proxies protected by HTTP Basic Auth and NetworkPolicy.
 
@@ -85,7 +85,7 @@ When a session is permanently deleted (or the user runs `/reload`), the entire S
 
 ## Configuration
 
-Sandbox settings are configured via environment variables (prefix `CARAPACE_SANDBOX_`), not through `data/config.yaml`. This keeps deployment-specific settings separate from runtime data on the shared volume.
+Sandbox settings are configured via environment variables (prefix `CARAPACE_SANDBOX_`), not through Helm-rendered `config.yaml`. This keeps deployment-specific settings separate from UI-managed runtime data on the server PVC.
 
 Set the following env vars on the server pod:
 
@@ -105,15 +105,15 @@ env:
 
 When `CARAPACE_SANDBOX_RUNTIME` is unset or `docker` (the default), nothing changes — the server uses the Docker socket as before.
 
-The session-list cache is configured through `config.yaml` instead:
+The Helm chart sets the session-list cache URL automatically when bundled Redis is enabled. For an external Redis, configure `CARAPACE_CACHE_REDIS_URL` through `extraEnv` or `envFrom`:
 
 ```yaml
-config:
-  cache:
-    redis_url: redis://carapace-redis:6379/0
+extraEnv:
+  - name: CARAPACE_CACHE_REDIS_URL
+    value: redis://redis.example.internal:6379/0
 ```
 
-The Helm chart deploys an in-cluster Redis by default. Its Service name is `<release>-redis`, so a typical URL is `redis://<release>-redis:6379/0`. If you set `redis.enabled=false`, you must provide an external Redis URL via `config.cache.redis_url` or `CARAPACE_CACHE_REDIS_URL`.
+The bundled Redis Service name is `<release>-redis`, so the in-cluster URL is `redis://<release>-redis:6379/0`. If you set `redis.enabled=false`, provide an external Redis URL with `CARAPACE_CACHE_REDIS_URL`.
 
 > **Important:** Always pin the sandbox image to a specific version tag (e.g. `:0.25.1`). Using `:latest` in production can lead to version mismatches between the server and sandbox image.
 
@@ -157,7 +157,7 @@ bitwarden:
         existingSecret: carapace-bitwarden-alice-basic-auth
 ```
 
-Configure the matching Bitwarden backend on the user record, for example in `auth/users.yaml` or through the admin API:
+Configure the matching Bitwarden backend in **Settings** -> **Account** -> **Credentials** for the owning user. The equivalent backing user config is:
 
 ```yaml
 users:
@@ -288,9 +288,9 @@ Labels and `argocd.argoproj.io/tracking-id` keep sandboxes associated with the a
 
 ## Customization
 
-- **StorageClass**: set `persistence.storageClassName` in your values (defaults to the cluster default)
+- **StorageClass**: set `persistence.data.storageClassName`, `sandbox.sessionPvc.storageClass`, or `bitwarden.persistence.storageClassName` in your values (each defaults to the cluster default)
 - **Ingress**: the chart uses Gateway API `HTTPRoute`. Set `ingress.parentRefs` to match your Gateway.
 - **Image tags**: pinned to `appVersion` by default; override with `image.tag`, `frontend.image.tag`, `sandbox.image.tag`
 - **Resources**: sensible defaults are included; override `resources` / `frontend.resources` as needed
 - **Priority class**: set `priorityClassName` to apply to all pods (server, frontend, sandbox)
-- **PVC protection**: set `persistence.finalizers` to `["kubernetes.io/pvc-protection"]` to guard against accidental deletion
+- **PVC protection**: set `persistence.data.finalizers` and `bitwarden.persistence.finalizers` to `["kubernetes.io/pvc-protection"]` to guard against accidental deletion

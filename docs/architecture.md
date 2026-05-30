@@ -396,7 +396,7 @@ The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to t
 
 ## Configuration
 
-Configuration lives in `$CARAPACE_DATA_DIR/config.yaml`. The default configuration (seeded on first run) sets only the LLM models:
+Platform configuration is stored in `$CARAPACE_DATA_DIR/config.yaml` and is editable from **Settings** -> **Admin** -> **Platform**. The default configuration sets only the LLM models:
 
 ```yaml
 agent:
@@ -410,9 +410,7 @@ agent:
   max_parallel_llm: 2
 ```
 
-Users can override the default agent, sentinel, and title models plus their default session budget from the web UI under
-Settings -> Account. Those defaults apply to newly created web, Matrix, and non-persistent job sessions; existing
-sessions keep their current model overrides and budget.
+Admins can update the model catalog, platform defaults, provider keys, and default session budget from the web UI. Users can override the default agent, sentinel, and title models plus their own default session budget from **Settings** -> **Account**. Those defaults apply to newly created web, Matrix, and non-persistent job sessions; existing sessions keep their current model overrides and budget.
 
 Additional configuration sections:
 

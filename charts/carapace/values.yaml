@@ -100,8 +100,9 @@ resetAssets: false
 
 # -- Standalone Bitwarden CLI proxy instance(s) for Bitwarden-compatible credential backends.
 # Each entry spawns a companion Pod running `bw serve` behind an nginx Basic Auth proxy.
-# The matching credential backend in config.yaml should use type: bitwarden
-# with url set to http://<release>-bitwarden-<name>:<port> or fullnameOverride:<port>.
+# Configure the matching user credential backend in Settings -> Account -> Credentials.
+# Use type: bitwarden with url set to http://<release>-bitwarden-<name>:<port>
+# or fullnameOverride:<port>.
 #
 # Example:
 #   bitwarden:

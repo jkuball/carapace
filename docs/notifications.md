@@ -96,7 +96,7 @@ Pending notification ids are cleared when the session becomes active again, incl
 
 ## Delivery behavior
 
-The Web Push sender uses `pywebpush` with VAPID configuration from `config.yaml`.
+The Web Push sender uses `pywebpush` with VAPID configuration from the platform config. Browser subscriptions and per-user notification ownership are managed through the web UI and notification APIs.
 
 Behavior:
 
@@ -122,7 +122,7 @@ Current payload actions use a single `open` action with title `Open session`.
 
 ## Configuration
 
-Notification config lives under `notifications:` in `data/config.yaml`.
+Notification config lives under `notifications:` in the platform backing config. The defaults work for local deployments; carapace can generate and persist a VAPID keypair automatically.
 
 ```yaml
 notifications:

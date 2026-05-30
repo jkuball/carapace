@@ -39,7 +39,7 @@ This starts:
 - **Redis** for mandatory session-list caching
 - **Sandbox image** is built automatically
 
-Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** → **Admin** → **Users** to create your normal user. You can also use the admin API after logging in and storing the session cookie:
+Log in to the web UI as `admin` with the `CARAPACE_TOKEN` value, then open **Settings** -> **Admin** -> **Users** to create your normal user. carapace is multi-user by default: sessions, jobs, notification subscriptions, Matrix channels, Git remotes, model defaults, and credential backends are owned by the authenticated user. You can also use the admin API after logging in and storing the session cookie:
 
 ```bash
 curl -c carapace.cookies -X POST http://localhost:3001/api/auth/login \
@@ -64,11 +64,18 @@ uv run carapace --user alice --password change-me
 
 You can also set `CARAPACE_USER` and `CARAPACE_PASSWORD` for the CLI.
 
-## 4. Configure `data/config.yaml`
+## 4. Configure from Settings
 
-The server reads its configuration from `data/config.yaml`. On first start, carapace seeds runtime files under `data/` and a separate Git-backed knowledge repo under `data/knowledge/` by default. You can customise the config at any time — restart the server to pick up changes.
+Most first-run configuration now lives in the web UI:
 
-A minimal config:
+- **Settings** -> **Admin** -> **Platform** manages the model catalog, platform default agent/sentinel/title models, OpenAI-compatible base URLs and API keys, reasoning options, and default session budget.
+- **Settings** -> **Admin** -> **Users** manages local users, roles, passwords, profile fields, enabled/disabled state, and assignment of existing single-user data.
+- **Settings** -> **Account** manages each user's default models and budget, Matrix channel, Git remote, and credential backends.
+- **Settings** -> **Jobs** manages saved jobs and schedules.
+
+The old mental model was “edit `data/config.yaml`, then restart”. That file still exists as the backing store for platform settings and as an escape hatch for automation, but day-to-day setup should happen through Settings. The UI writes the relevant backing files and keeps write-only secrets out of API responses.
+
+On first start, carapace seeds runtime files under `data/` and a separate Git-backed knowledge repo under `data/knowledge/` by default. The equivalent backing-file shape for platform defaults is:
 
 ```yaml
 agent:
@@ -98,7 +105,7 @@ cache:
 
 Session histories always live primarily under `data/sessions/<session_id>/`. The `sessions.commit.*` settings control a secondary commit flow into the Git-backed knowledge repo so the agent can refer back to past conversations later.
 
-The knowledge repo location is configurable via `knowledge_dir` in `config.yaml`. If you do not override it, the default path is `data/knowledge/` because `knowledge_dir` defaults to `./knowledge` relative to the config file.
+The knowledge repo location defaults to `data/knowledge/` because `knowledge_dir` defaults to `./knowledge` relative to the config file.
 
 In the web UI, public sessions expose a "Commit to knowledge" action. Private sessions do not. Autosave uses the same privacy rule: only public, inactive sessions are eligible.
 
@@ -139,7 +146,7 @@ Notes:
 
 ## 5. Connect Matrix (optional)
 
-Create a Matrix account for carapace on your homeserver, then add Matrix settings to the owning user's config (`config.channels.matrix` in the user record):
+Create a Matrix account for carapace on your homeserver, then open **Settings** -> **Account** -> **Matrix** for the owning carapace user. Enable Matrix and fill in homeserver, user id, password, allowed rooms, and allowed users. The backing user config looks like this:
 
 ```yaml
 channels:
@@ -154,7 +161,7 @@ channels:
       - "@you:example.com"
 ```
 
-Restart carapace after changing the user config. carapace starts one Matrix channel per enabled user config, joins the allowed rooms, and responds to messages from allowed users. Sessions are created per-room and owned by that user.
+carapace starts one Matrix channel per enabled user config, joins the allowed rooms, and responds to messages from allowed users. Sessions are created per-room and owned by that user.
 
 `allowed_rooms` and `allowed_users` are mandatory — without them the bot ignores all messages. This prevents accidental exposure if someone invites the bot to a public room.
 
@@ -175,7 +182,7 @@ echo "github-token=ghp_xxxxxxxxxxxx" > data/secrets.env
 echo "smtp-password=myapppassword" >> data/secrets.env
 ```
 
-Add the backend to your user config in `data/auth/users.yaml`:
+Add the backend in **Settings** -> **Account** -> **Credentials**. The equivalent backing user config is:
 
 ```yaml
 users:
@@ -222,7 +229,7 @@ docker compose up -d --scale bw=1
 
 Startup messages from the entrypoint go to the **`bw` container** — use `docker compose logs -f bw` (not only `carapace`). Without a TTY, stdout is often block-buffered and lines can appear late or only after exit; this stack allocates a TTY for `bw` and logs progress to stderr so `docker compose logs` shows them as they run. The `bitwarden-cli-data` volume keeps Bitwarden CLI login/device state and the cached server URL across container recreation; removing that volume applies `BW_SERVER_URL` from scratch on the next start.
 
-3. Add the backend to your user config in `data/auth/users.yaml`:
+3. Add the backend in **Settings** -> **Account** -> **Credentials**. The equivalent backing user config is:
 
 ```yaml
 users:
@@ -242,7 +249,7 @@ Credentials are accessible by their Bitwarden UUID: `personal/9742101e-68b8-4a07
 
 ### Exposure control
 
-By default, all credentials in a backend are accessible (subject to sentinel + user approval). To restrict which credentials carapace can see:
+By default, all credentials in a backend are accessible (subject to sentinel + user approval). To restrict which credentials carapace can see, set expose/hide rules in **Settings** -> **Account** -> **Credentials**. The equivalent backing user config is:
 
 ```yaml
 users:

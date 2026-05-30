@@ -78,7 +78,7 @@ The safe-list is defined in `src/carapace/security/__init__.py`.
 
 ## The sentinel agent
 
-The sentinel is a Pydantic AI agent with its own LLM model (configured as `agent.sentinel_model` in `config.yaml`). It has two key properties:
+The sentinel is a Pydantic AI agent with its own LLM model, configured from **Settings** -> **Admin** -> **Platform** (`agent.sentinel_model` in the backing config). It has two key properties:
 
 ### Shadow conversation
 
