@@ -1,6 +1,65 @@
 # CHANGELOG
 
 
+## v0.129.0 (2026-05-30)
+
+
+### Other
+
+
+- feat: enhance user settings management with credential handling and validation
+  ([`d342760`](https://github.com/thiesgerken/carapace/commit/d342760a0b02854ccf001b535d07d43a7b91a8e5))
+
+- feat: implement matrix token management during user settings update
+  ([`4a35c7e`](https://github.com/thiesgerken/carapace/commit/4a35c7ed017cb1219757782006b353ff01199f6e))
+
+- feat: add current model description to defaults in settings and enhance user settings view
+  ([`8d592ab`](https://github.com/thiesgerken/carapace/commit/8d592ab797a2ab8d8399be2e8ca34e00f91ce290))
+
+- feat: update translations for account and cost labels in German and English
+  ([`1e2b4fb`](https://github.com/thiesgerken/carapace/commit/1e2b4fbf7052a19b2f1c44b0ed0cf7a49dbd6d24))
+
+- crc
+  ([`b0e2ecd`](https://github.com/thiesgerken/carapace/commit/b0e2ecd074c730951958f52e93e66355ca72b257))
+
+- refactor: remove unused clearGitToken field and related logic from user settings
+  ([`ed8bd64`](https://github.com/thiesgerken/carapace/commit/ed8bd64612fa0d609af371a7403f0c199745c489))
+
+- feat: enhance password input fields with autocomplete and ignore attributes
+  ([`5307ed1`](https://github.com/thiesgerken/carapace/commit/5307ed1bcda89b1b0c2ebf2eb411f8fb09f17b21))
+
+- Refactor user settings field to include help tooltip and update file path hint to tooltip
+  ([`b8a30bb`](https://github.com/thiesgerken/carapace/commit/b8a30bbcdf740906f79b69eef8209c65be5d45b0))
+
+- Add account settings localization and enhance user settings view
+  ([`0fe5fda`](https://github.com/thiesgerken/carapace/commit/0fe5fda4dd33e7af19e0963bc5ac7abb29aa35ab))
+
+  - Introduced German translations for account settings, including status messages, notices, errors, sections, fields, defaults, placeholders, hints, tooltips, actions, and credential types.
+  - Updated the user settings view to utilize the new translations, improving accessibility for German-speaking users.
+  - Refactored credential backend handling to support dynamic addition and removal of credential types (file and Bitwarden).
+  - Enhanced input components for better user experience, including multi-select for allowed rooms and users, and improved password handling.
+
+- crc, flatten cred settings caps
+  ([`6bf64a4`](https://github.com/thiesgerken/carapace/commit/6bf64a4392eb368f8749990e9372946ff4893172))
+
+- reload if needed
+  ([`02dc74b`](https://github.com/thiesgerken/carapace/commit/02dc74b80f6e0c471ed88330afee5647bc89e5d0))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: serialize settings runtime updates
+  ([`a435036`](https://github.com/thiesgerken/carapace/commit/a435036771b1d71479fba7d8b2eedfc9bc3f2a67))
+
+- 🐛 fix: harden editable settings reloads
+  ([`5edee8e`](https://github.com/thiesgerken/carapace/commit/5edee8e21d14b1a84b1182c5f5a2548984af539e))
+
+### ✨ Features
+
+
+- ✨ feat: make user settings editable
+  ([`d848aa8`](https://github.com/thiesgerken/carapace/commit/d848aa88c399c4281247b62f3e576973d4ba6f5e))
+
 ## v0.128.1 (2026-05-30)
 
 
