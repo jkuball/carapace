@@ -352,7 +352,7 @@ wheels = [
 
 [[package]]
 name = "carapace"
-version = "0.129.0"
+version = "0.129.1"
 source = { editable = "." }
 dependencies = [
     { name = "croniter" },
