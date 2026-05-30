@@ -95,20 +95,39 @@ class KnowledgeGitRuntime:
 
     async def apply_config(self, config: KnowledgeGitConfig) -> None:
         async with self._lock:
+            previous_config = self._config
+            previous_branch = self._git_store.remote_branch
+            previous_author = self._git_store.author_template
+            try:
+                self._git_store.remote_branch = config.branch
+                self._git_store.author_template = config.author
+
+                if config.remote:
+                    logger.info(f"Using knowledge Git remote from user {config.owner}")
+                    await self._git_store.add_remote(config.remote, config.token)
+                    summary = await self._git_store.pull_from_remote()
+                    logger.info(f"Pulled from remote: {summary}")
+                else:
+                    await self._git_store.remove_remote()
+
+                self._sandbox_mgr.set_git_author(config.author)
+                await self._sandbox_mgr.refresh_git_identities()
+            except Exception:
+                self._config = previous_config
+                self._git_store.remote_branch = previous_branch
+                self._git_store.author_template = previous_author
+                self._sandbox_mgr.set_git_author(previous_author)
+                try:
+                    if previous_config.remote:
+                        await self._git_store.add_remote(previous_config.remote, previous_config.token)
+                    else:
+                        await self._git_store.remove_remote()
+                    await self._sandbox_mgr.refresh_git_identities()
+                except Exception as rollback_exc:
+                    logger.warning(f"Knowledge Git runtime rollback failed: {rollback_exc}")
+                raise
+
             self._config = config
-            self._git_store.remote_branch = config.branch
-            self._git_store.author_template = config.author
-            self._sandbox_mgr.set_git_author(config.author)
-
-            if config.remote:
-                logger.info(f"Using knowledge Git remote from user {config.owner}")
-                await self._git_store.add_remote(config.remote, config.token)
-                summary = await self._git_store.pull_from_remote()
-                logger.info(f"Pulled from remote: {summary}")
-            else:
-                await self._git_store.remove_remote()
-
-            await self._sandbox_mgr.refresh_git_identities()
 
     async def push_if_configured(self) -> None:
         if self._git_store.remote_configured:

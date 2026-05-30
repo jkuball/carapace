@@ -9,6 +9,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
@@ -407,6 +408,48 @@ def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, aut
     )
 
     assert resp.status_code == 200
+
+
+def test_user_settings_default_changes_reload_enabled_matrix(client, auth_headers, monkeypatch):
+    srv._auth_store.update_user(
+        "thies",
+        {"config": UserConfig.model_validate({"channels": {"matrix": {"enabled": True}}})},
+    )
+    manager = MagicMock()
+    manager.reload_user = AsyncMock()
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"default_budget": {"tool_calls": 5}},
+    )
+
+    assert resp.status_code == 200
+    manager.reload_user.assert_awaited_once()
+
+
+def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth_headers, monkeypatch):
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=HTTPException(status_code=500, detail="matrix failed"))
+    runtime = MagicMock()
+    runtime.apply_config = AsyncMock()
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "matrix": {"enabled": True},
+            "git": {"remote": "https://git.example.test/thies/knowledge.git"},
+        },
+    )
+
+    assert resp.status_code == 500
+    assert "matrix failed" in resp.json()["detail"]
+    manager.reload_user.assert_awaited_once()
+    runtime.apply_config.assert_awaited_once()
 
 
 def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):

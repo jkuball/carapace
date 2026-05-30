@@ -39,7 +39,9 @@
             "fileBackendDisabled": "Dateibasierte Zugangsdaten-Backends sind auf diesem Server deaktiviert",
             "basicAuthUsernameRequired": "Basic-Auth-Benutzername ist für {name} erforderlich",
             "basicAuthPasswordRequired": "Basic-Auth-Passwort ist für {name} erforderlich",
-            "matrixPasswordRequired": "Matrix-Passwort ist erforderlich, wenn Matrix aktiviert ist"
+            "matrixPasswordRequired": "Matrix-Passwort ist erforderlich, wenn Matrix aktiviert ist",
+            "budgetWholeNumber": "{field} muss eine nicht negative ganze Zahl sein.",
+            "budgetNumber": "{field} muss eine nicht negative Zahl sein."
         },
         "sections": {
             "defaultModels": "Standardmodelle",
@@ -80,7 +82,6 @@
             "serverDefault": "Serverstandard"
         },
         "placeholders": {
-            "unlimited": "Unbegrenzt",
             "addRoom": "Raum hinzufügen, Enter oder Komma",
             "addUser": "Benutzer hinzufügen, Enter oder Komma",
             "addIdentifier": "Kennung hinzufügen, Enter oder Komma"

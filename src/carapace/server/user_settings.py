@@ -428,7 +428,12 @@ async def update_user_settings(
         _assert_git_remote_owner(user.username, next_config)
 
     credentials_changed = original_config.credentials != next_config.credentials
-    matrix_changed = original_config.channels.matrix != next_config.channels.matrix
+    matrix_defaults_changed = (
+        original_config.default_models != next_config.default_models or original_config.budgets != next_config.budgets
+    )
+    matrix_changed = original_config.channels.matrix != next_config.channels.matrix or (
+        next_config.channels.matrix.enabled and matrix_defaults_changed
+    )
     git_changed = original_config.git != next_config.git
 
     try:
@@ -439,9 +444,20 @@ async def update_user_settings(
     if credentials_changed:
         await _invalidate_user_credential_registry(user.username)
 
+    runtime_errors: list[HTTPException] = []
     if matrix_changed:
-        await _reload_matrix_settings(user.username, next_config)
+        try:
+            await _reload_matrix_settings(user.username, next_config)
+        except HTTPException as exc:
+            runtime_errors.append(exc)
     if git_changed:
-        await _reload_git_settings()
+        try:
+            await _reload_git_settings()
+        except HTTPException as exc:
+            runtime_errors.append(exc)
+
+    if runtime_errors:
+        detail = "; ".join(error.detail for error in runtime_errors)
+        raise HTTPException(status_code=runtime_errors[0].status_code, detail=detail)
 
     return _settings_response(user.username)

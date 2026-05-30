@@ -218,20 +218,33 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
   };
 }
 
-function parseOptionalNumber(value: string): number | null {
+function parseOptionalBudgetInteger(value: string, label: string, t: Translate): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const parsed = Number(trimmed.replaceAll(",", "").replaceAll("_", ""));
-  if (!Number.isFinite(parsed)) return null;
+  const normalized = trimmed.replaceAll(",", "").replaceAll("_", "");
+  const parsed = Number(normalized);
+  if (!/^\d+$/.test(normalized) || !Number.isSafeInteger(parsed)) {
+    throw new Error(t("errors.budgetWholeNumber", { field: label }));
+  }
   return parsed;
 }
 
-function budgetFromDraft(draft: UserSettingsDraft): SessionBudgetSettings {
+function parseOptionalBudgetDecimal(value: string, label: string, t: Translate): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replaceAll(",", "").replaceAll("_", "");
+  if (!/^\d+(\.\d+)?$/.test(normalized) || !Number.isFinite(Number(normalized))) {
+    throw new Error(t("errors.budgetNumber", { field: label }));
+  }
+  return normalized;
+}
+
+function budgetFromDraft(draft: UserSettingsDraft, t: Translate): SessionBudgetSettings {
   return {
-    input_tokens: parseOptionalNumber(draft.budget.input_tokens),
-    output_tokens: parseOptionalNumber(draft.budget.output_tokens),
-    cost_usd: draft.budget.cost_usd.trim() || null,
-    tool_calls: parseOptionalNumber(draft.budget.tool_calls),
+    input_tokens: parseOptionalBudgetInteger(draft.budget.input_tokens, t("fields.inputTokens"), t),
+    output_tokens: parseOptionalBudgetInteger(draft.budget.output_tokens, t("fields.outputTokens"), t),
+    cost_usd: parseOptionalBudgetDecimal(draft.budget.cost_usd, t("fields.costUsd"), t),
+    tool_calls: parseOptionalBudgetInteger(draft.budget.tool_calls, t("fields.toolCalls"), t),
   };
 }
 
@@ -336,13 +349,22 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       return;
     }
 
+    let defaultBudget: SessionBudgetSettings;
+    try {
+      defaultBudget = budgetFromDraft(draft, t);
+    } catch (budgetError) {
+      setError(budgetError instanceof Error ? budgetError.message : t("errors.save"));
+      setNotice(null);
+      return;
+    }
+
     const body: UserSettingsPatchInput = {
       default_models: {
         agent: draft.defaultModels.agent?.trim() || null,
         sentinel: draft.defaultModels.sentinel?.trim() || null,
         title: draft.defaultModels.title?.trim() || null,
       },
-      default_budget: budgetFromDraft(draft),
+      default_budget: defaultBudget,
       matrix: {
         enabled: draft.matrix.enabled,
         homeserver: draft.matrix.homeserver,
@@ -436,10 +458,10 @@ export function UserSettingsView({ server, token }: { server: string; token: str
 
         <Section title={t("sections.defaultBudgets")}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <BudgetInput label={t("fields.inputTokens")} placeholder={t("placeholders.unlimited")} value={draft.budget.input_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
-            <BudgetInput label={t("fields.outputTokens")} placeholder={t("placeholders.unlimited")} value={draft.budget.output_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
-            <BudgetInput label={t("fields.costUsd")} placeholder={t("placeholders.unlimited")} value={draft.budget.cost_usd} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
-            <BudgetInput label={t("fields.toolCalls")} placeholder={t("placeholders.unlimited")} value={draft.budget.tool_calls} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
+            <BudgetInput label={t("fields.inputTokens")} placeholder={t("defaults.serverDefault")} value={draft.budget.input_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
+            <BudgetInput label={t("fields.outputTokens")} placeholder={t("defaults.serverDefault")} value={draft.budget.output_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
+            <BudgetInput label={t("fields.costUsd")} placeholder={t("defaults.serverDefault")} value={draft.budget.cost_usd} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
+            <BudgetInput label={t("fields.toolCalls")} placeholder={t("defaults.serverDefault")} value={draft.budget.tool_calls} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
           </div>
         </Section>
 

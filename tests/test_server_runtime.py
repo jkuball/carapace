@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
@@ -94,6 +94,48 @@ async def test_knowledge_git_runtime_applies_remote_and_updates_sandbox_identity
     git_store.add_remote.assert_awaited_once_with("https://git.example.test/knowledge.git", "secret-token")
     git_store.pull_from_remote.assert_awaited_once()
     sandbox_mgr.set_git_author.assert_called_once_with("Thies <thies@example.test>")
+    sandbox_mgr.refresh_git_identities.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_knowledge_git_runtime_rolls_back_when_remote_pull_fails() -> None:
+    previous = KnowledgeGitConfig(
+        owner="ada",
+        remote="https://git.example.test/old.git",
+        branch="main",
+        author="Ada <ada@example.test>",
+        token="old-token",
+    )
+    git_store = MagicMock(spec=GitStore)
+    git_store.remote_branch = previous.branch
+    git_store.author_template = previous.author
+    git_store.add_remote = AsyncMock()
+    git_store.remove_remote = AsyncMock()
+    git_store.pull_from_remote = AsyncMock(side_effect=RuntimeError("pull failed"))
+    sandbox_mgr = MagicMock(spec=SandboxManager)
+    sandbox_mgr.set_git_author = MagicMock()
+    sandbox_mgr.refresh_git_identities = AsyncMock()
+    runtime = KnowledgeGitRuntime(git_store=git_store, sandbox_mgr=sandbox_mgr, current_config=previous)
+
+    with pytest.raises(RuntimeError, match="pull failed"):
+        await runtime.apply_config(
+            KnowledgeGitConfig(
+                owner="thies",
+                remote="https://git.example.test/new.git",
+                branch="prod",
+                author="Thies <thies@example.test>",
+                token="new-token",
+            )
+        )
+
+    assert runtime.config == previous
+    assert git_store.remote_branch == previous.branch
+    assert git_store.author_template == previous.author
+    assert git_store.add_remote.await_args_list == [
+        call("https://git.example.test/new.git", "new-token"),
+        call(previous.remote, previous.token),
+    ]
+    sandbox_mgr.set_git_author.assert_called_once_with(previous.author)
     sandbox_mgr.refresh_git_identities.assert_awaited_once()
 
 
