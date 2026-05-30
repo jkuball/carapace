@@ -87,18 +87,6 @@ resources:
 # with the versions bundled in the container image on every startup.
 resetAssets: false
 
-# -- Application configuration (written to config.yaml and mounted into /data).
-# When non-empty a ConfigMap is created and mounted at /data/config.yaml.
-# Example:
-#   config:
-#     agent:
-#       model: anthropic:claude-sonnet-4-6
-#       sentinel_model: anthropic:claude-haiku-4-5
-#     channels:
-#       matrix:
-#         enabled: true
-config: {}
-
 # -- Standalone Bitwarden CLI proxy instance(s) for Bitwarden-compatible credential backends.
 # Each entry spawns a companion Pod running `bw serve` behind an nginx Basic Auth proxy.
 # The matching credential backend in config.yaml should use type: bitwarden
@@ -168,7 +156,7 @@ extraEnv: []
 #     - secretRef:
 #         name: carapace-secrets
 #     - configMapRef:
-#         name: carapace-config
+#         name: carapace-env
 envFrom: []
 
 redis:

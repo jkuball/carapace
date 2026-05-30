@@ -5,6 +5,7 @@ import {
   createAdminUser,
   deleteAdminUser,
   deleteNotificationSubscription,
+  getPlatformSettings,
   getUserSettings,
   getWebSocketTicket,
   getCurrentUser,
@@ -13,6 +14,7 @@ import {
   listAdminUsers,
   sendTestNotification,
   updateAdminUser,
+  updatePlatformSettings,
   updateUserSettings,
   wsUrl,
 } from "./api";
@@ -442,4 +444,89 @@ test("user settings helpers decode write-only status and patch payloads", async 
   assert.deepEqual(JSON.parse(await calls[1]!.text()).git, {
     clear_token: true,
   });
+});
+
+test("platform settings helpers parse model secrets and send patches", async () => {
+  const calls: Request[] = [];
+  setFetch(async (input, init) => {
+    const request = new Request(input, init);
+    calls.push(request);
+    return new Response(
+      JSON.stringify({
+        config_path: "/var/lib/carapace-config/config.yaml",
+        config_writable: true,
+        settings: {
+          default_models: {
+            agent: "local:test",
+            sentinel: "local:test-low",
+            title: "anthropic:claude-haiku-4-5",
+          },
+          default_budget: { cost_usd: "2.50" },
+          available_models: [
+            {
+              id: "local:test",
+              provider: "openai",
+              name: "gpt-4o-mini",
+              base_url: "http://127.0.0.1:1234/v1",
+              thinking_budget_tokens: 128,
+              api_key: {
+                source: "env",
+                value: "LOCAL_API_KEY",
+                configured: true,
+              },
+            },
+            {
+              id: "anthropic:claude-haiku-4-5",
+              provider: "anthropic",
+              name: "claude-haiku-4-5",
+              api_key: { source: "raw", configured: true },
+            },
+          ],
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  });
+
+  const settings = await getPlatformSettings(
+    "https://carapace.example.test",
+    "",
+  );
+  const patched = await updatePlatformSettings(
+    "https://carapace.example.test",
+    "",
+    {
+      default_models: settings.settings.default_models,
+      default_budget: { cost_usd: "2.50" },
+      available_models: [
+        {
+          provider: "openai",
+          name: "gpt-4o-mini",
+          id: "local:test",
+          base_url: "http://127.0.0.1:1234/v1",
+          api_key: { source: "env", value: "LOCAL_API_KEY" },
+        },
+      ],
+    },
+  );
+
+  assert.equal(settings.config_writable, true);
+  assert.equal(
+    settings.settings.available_models[0]?.api_key.value,
+    "LOCAL_API_KEY",
+  );
+  assert.equal(settings.settings.available_models[1]?.api_key.source, "raw");
+  assert.equal(patched.settings.default_models.agent, "local:test");
+  assert.equal(
+    calls[0]?.url,
+    "https://carapace.example.test/api/admin/platform/settings",
+  );
+  assert.equal(calls[1]?.method, "PATCH");
+  assert.deepEqual(
+    JSON.parse(await calls[1]!.text()).available_models[0].api_key,
+    {
+      source: "env",
+      value: "LOCAL_API_KEY",
+    },
+  );
 });

@@ -18,12 +18,14 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 import carapace.sandbox.state as sandbox_state
 import carapace.server as srv
 import carapace.server.jobs as server_jobs
+import carapace.server.platform_settings as platform_settings
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
+from carapace.models.config import AgentConfig
 from carapace.models.credentials import (
     BasicAuthConfig,
     BitwardenCredentialBackendConfig,
@@ -80,6 +82,7 @@ def _setup_server(tmp_path, monkeypatch):
     # time, but these tests never call the LLM.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-fake-for-tests")
     monkeypatch.setenv("CARAPACE_TOKEN", _TEST_TOKEN)
+    monkeypatch.setenv("CARAPACE_CONFIG", str(tmp_path / "config.yaml"))
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
     srv._session_list_cache = _FakeSessionListCache()
@@ -99,6 +102,7 @@ def _setup_server(tmp_path, monkeypatch):
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
     srv._data_dir = tmp_path
+    srv._config_path = tmp_path / "config.yaml"
     srv._config = config
     srv._user_credential_registries = {}
     srv._engine = SessionEngine(
@@ -249,6 +253,311 @@ def test_admin_user_management_requires_admin_role(client, auth_headers, admin_a
     login_resp = client.post("/api/auth/login", json={"username": "ada", "password": "correct-horse-battery"})
 
     assert login_resp.status_code == 200
+
+
+def test_admin_platform_settings_requires_admin_role(client, auth_headers, admin_auth_headers):
+    unauthenticated_resp = client.get("/api/admin/platform/settings")
+    assert unauthenticated_resp.status_code == 401
+
+    non_admin_resp = client.get("/api/admin/platform/settings", headers=auth_headers)
+    assert non_admin_resp.status_code == 403
+
+    admin_resp = client.get("/api/admin/platform/settings", headers=admin_auth_headers)
+    assert admin_resp.status_code == 200
+    assert admin_resp.json()["settings"]["default_models"]["agent"] == srv._config.agent.model
+
+
+def test_admin_platform_settings_reports_unwritable_config(
+    client,
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(platform_settings.os, "access", lambda _path, _mode: False)
+
+    resp = client.get("/api/admin/platform/settings", headers=admin_auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["config_writable"] is False
+
+
+def test_admin_platform_settings_rejects_patch_when_config_unwritable(
+    client,
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(platform_settings.os, "access", lambda _path, _mode: False)
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-haiku-4-5",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "available_models": [{"provider": "anthropic", "name": "claude-haiku-4-5"}],
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Config file is not writable"
+
+
+def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_headers):
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {"cost_usd": "2.50", "tool_calls": 8},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                    "max_input_tokens": 1234,
+                    "thinking_budget_tokens": 0,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()["settings"]
+    assert body["default_models"] == {"agent": "local:test", "sentinel": "local:test", "title": "local:test"}
+    assert srv._config.agent.model == "local:test"
+    assert srv._engine.config.agent.model == "local:test"
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["model"] == "local:test"
+    assert raw["agent"]["available_models"][1]["api_key"] == {"env": "ANTHROPIC_API_KEY"}
+
+
+def test_admin_platform_settings_preserves_on_disk_agent_fields(client, admin_auth_headers):
+    srv._config.agent = AgentConfig()
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "anthropic:claude-haiku-4-5",
+                    "sentinel_model": "anthropic:claude-haiku-4-5",
+                    "title_model": "anthropic:claude-haiku-4-5",
+                    "available_models": [
+                        {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"env": "ANTHROPIC_API_KEY"},
+                        },
+                    ],
+                    "max_parallel_llm": 7,
+                    "max_sentinel_calls_per_tool_call": 3,
+                    "sentinel_domain_batch_window_ms": 250,
+                    "sentinel_timeout_seconds": 42,
+                    "tool_output_max_chars": 12345,
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["max_parallel_llm"] == 7
+    assert raw["agent"]["max_sentinel_calls_per_tool_call"] == 3
+    assert raw["agent"]["sentinel_domain_batch_window_ms"] == 250
+    assert raw["agent"]["sentinel_timeout_seconds"] == 42
+    assert raw["agent"]["tool_output_max_chars"] == 12345
+
+
+def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client, admin_auth_headers):
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "local:test",
+                    "sentinel_model": "local:test",
+                    "title_model": "local:test",
+                    "available_models": [
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"raw": "existing-secret"},
+                        }
+                    ],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "raw"},
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["available_models"][0]["api_key"] == {"raw": "existing-secret"}
+    returned_model = resp.json()["settings"]["available_models"][0]
+    assert returned_model["api_key"] == {"source": "raw", "value": None, "configured": True}
+
+
+def test_admin_platform_settings_drops_openai_secret_when_provider_changes(client, admin_auth_headers):
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "local:test",
+                    "sentinel_model": "local:test",
+                    "title_model": "local:test",
+                    "available_models": [
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"raw": "existing-secret"},
+                            "thinking_budget_tokens": 128,
+                        }
+                    ],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "anthropic",
+                    "name": "claude-haiku-4-5",
+                    "id": "local:test",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw_model = yaml.safe_load((srv._config_path).read_text())["agent"]["available_models"][0]
+    assert raw_model["provider"] == "anthropic"
+    assert "api_key" not in raw_model
+    assert "base_url" not in raw_model
+    assert "thinking_budget_tokens" not in raw_model
+
+
+def test_admin_platform_settings_validates_runtime_before_writing_config(
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    original_document = {
+        "agent": {
+            "model": "anthropic:claude-haiku-4-5",
+            "sentinel_model": "anthropic:claude-haiku-4-5",
+            "title_model": "anthropic:claude-haiku-4-5",
+            "available_models": [{"provider": "anthropic", "name": "claude-haiku-4-5"}],
+        }
+    }
+    srv._config_path.write_text(yaml.safe_dump(original_document, sort_keys=False), encoding="utf-8")
+
+    def _failing_model_factory(_config):
+        def _factory(_name: str):
+            raise ValueError("runtime model validation failed")
+
+        return _factory
+
+    monkeypatch.setattr(platform_settings, "make_model_factory", _failing_model_factory)
+
+    local_client = TestClient(app, raise_server_exceptions=False)
+    resp = local_client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 500
+    assert yaml.safe_load(srv._config_path.read_text(encoding="utf-8")) == original_document
+    assert srv._config.agent.model == "anthropic:claude-sonnet-4-6"
 
 
 def test_admin_user_update_can_clear_email(client, admin_auth_headers):

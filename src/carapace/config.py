@@ -43,11 +43,13 @@ def _resolve_knowledge_dir(config_path: Path, config: Config) -> Path:
 
 def load_config(data_dir: Path | None = None) -> Config:
     config_path = get_config_path() if data_dir is None else data_dir / "config.yaml"
-    if config_path.exists():
-        with open(config_path) as f:
-            raw = yaml.safe_load(f) or {}
-        return Config.model_validate(raw)
-    return Config()
+    if not config_path.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("{}\n")
+
+    with open(config_path) as f:
+        raw = yaml.safe_load(f) or {}
+    return Config.model_validate(raw)
 
 
 def load_workspace_file(base_dir: Path, name: str) -> str:

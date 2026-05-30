@@ -10,6 +10,7 @@
         "account": "Account",
         "preferences": "Preferences",
         "platform": "Admin",
+        "models": "Models",
         "users": "Users",
         "disconnect": "Disconnect",
         "github": "thiesgerken/carapace"
@@ -119,6 +120,86 @@
                 }
             }
         }
+    },
+    "platformSettings": {
+        "status": {
+            "loading": "Loading platform settings",
+            "unavailable": "Platform settings are unavailable",
+            "readOnly": "Config file is read-only."
+        },
+        "notices": {
+            "saved": "Saved."
+        },
+        "errors": {
+            "load": "Failed to load platform settings",
+            "save": "Failed to update platform settings",
+            "wholeNumber": "{field} must be a positive whole number.",
+            "nonNegativeWholeNumber": "{field} must be a non-negative whole number.",
+            "number": "{field} must be a non-negative number.",
+            "providerRequired": "Provider is required for model {index}.",
+            "nameRequired": "Name is required for model {index}.",
+            "duplicateModel": "Model id {id} is used more than once.",
+            "rawSecretRequired": "Paste an API key for {id}, or choose another secret source.",
+            "secretValueRequired": "Secret reference is required for {id}.",
+            "defaultRequired": "{field} default model is required.",
+            "defaultUnknown": "{field} default model {id} is not in the catalog."
+        },
+        "sections": {
+            "defaultModels": "Default models",
+            "defaultBudgets": "Default budgets",
+            "catalog": "Model catalog"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Title",
+            "inputTokens": "Input tokens",
+            "outputTokens": "Output tokens",
+            "costUsd": "Cost USD",
+            "toolCalls": "Tool calls",
+            "provider": "Provider",
+            "name": "Name",
+            "id": "ID",
+            "maxInputTokens": "Max input tokens",
+            "thinking": "Thinking",
+            "thinkingBudgetTokens": "Thinking budget tokens",
+            "baseUrl": "Base URL",
+            "apiKeySource": "API key source",
+            "apiKey": "API key",
+            "secretReference": "Secret reference"
+        },
+        "placeholders": {
+            "selectModel": "Select model",
+            "unlimited": "Unlimited",
+            "generatedId": "provider:name",
+            "keepSecret": "Keep configured secret"
+        },
+        "actions": {
+            "save": "Save",
+            "saving": "Saving",
+            "addModel": "Add model",
+            "removeModel": "Remove model"
+        },
+        "secretSources": {
+            "none": "None",
+            "raw": "Raw value",
+            "env": "Environment variable",
+            "file": "File"
+        },
+        "thinking": {
+            "default": "Default",
+            "true": "Enabled",
+            "false": "Disabled",
+            "minimal": "Minimal",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "xhigh": "Extra high"
+        },
+        "units": {
+            "tokens": "tokens"
+        },
+        "modelRow": "Model {index}"
     },
     "home": {
         "empty": {

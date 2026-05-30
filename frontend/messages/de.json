@@ -10,6 +10,7 @@
         "account": "Konto",
         "preferences": "Allgemein",
         "platform": "Admin",
+        "models": "Modelle",
         "users": "Benutzer",
         "disconnect": "Trennen",
         "github": "thiesgerken/carapace"
@@ -119,6 +120,86 @@
                 }
             }
         }
+    },
+    "platformSettings": {
+        "status": {
+            "loading": "Plattformeinstellungen werden geladen",
+            "unavailable": "Plattformeinstellungen sind nicht verfügbar",
+            "readOnly": "Die Konfigurationsdatei ist schreibgeschützt."
+        },
+        "notices": {
+            "saved": "Gespeichert."
+        },
+        "errors": {
+            "load": "Plattformeinstellungen konnten nicht geladen werden",
+            "save": "Plattformeinstellungen konnten nicht aktualisiert werden",
+            "wholeNumber": "{field} muss eine positive ganze Zahl sein.",
+            "nonNegativeWholeNumber": "{field} muss eine nicht negative ganze Zahl sein.",
+            "number": "{field} muss eine nicht negative Zahl sein.",
+            "providerRequired": "Provider ist für Modell {index} erforderlich.",
+            "nameRequired": "Name ist für Modell {index} erforderlich.",
+            "duplicateModel": "Modell-ID {id} wird mehrfach verwendet.",
+            "rawSecretRequired": "Füge einen API-Key für {id} ein oder wähle eine andere Secret-Quelle.",
+            "secretValueRequired": "Secret-Referenz ist für {id} erforderlich.",
+            "defaultRequired": "{field}-Standardmodell ist erforderlich.",
+            "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog."
+        },
+        "sections": {
+            "defaultModels": "Standardmodelle",
+            "defaultBudgets": "Standardbudgets",
+            "catalog": "Modellkatalog"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Titel",
+            "inputTokens": "Input-Tokens",
+            "outputTokens": "Output-Tokens",
+            "costUsd": "Kosten (in $)",
+            "toolCalls": "Tool-Aufrufe",
+            "provider": "Provider",
+            "name": "Name",
+            "id": "ID",
+            "maxInputTokens": "Max. Input-Tokens",
+            "thinking": "Thinking",
+            "thinkingBudgetTokens": "Thinking-Budget-Tokens",
+            "baseUrl": "Base URL",
+            "apiKeySource": "API-Key-Quelle",
+            "apiKey": "API-Key",
+            "secretReference": "Secret-Referenz"
+        },
+        "placeholders": {
+            "selectModel": "Modell auswählen",
+            "unlimited": "Unbegrenzt",
+            "generatedId": "provider:name",
+            "keepSecret": "Konfiguriertes Secret behalten"
+        },
+        "actions": {
+            "save": "Speichern",
+            "saving": "Speichert",
+            "addModel": "Modell hinzufügen",
+            "removeModel": "Modell entfernen"
+        },
+        "secretSources": {
+            "none": "Keine",
+            "raw": "Direkter Wert",
+            "env": "Umgebungsvariable",
+            "file": "Datei"
+        },
+        "thinking": {
+            "default": "Standard",
+            "true": "Aktiviert",
+            "false": "Deaktiviert",
+            "minimal": "Minimal",
+            "low": "Niedrig",
+            "medium": "Mittel",
+            "high": "Hoch",
+            "xhigh": "Extra hoch"
+        },
+        "units": {
+            "tokens": "Token"
+        },
+        "modelRow": "Modell {index}"
     },
     "home": {
         "empty": {

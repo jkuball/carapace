@@ -116,12 +116,6 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/carapace
-          {{- if .Values.config }}
-            - name: config
-              mountPath: /var/lib/carapace/config.yaml
-              subPath: config.yaml
-              readOnly: true
-          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -146,8 +140,3 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-data
-      {{- if .Values.config }}
-        - name: config
-          configMap:
-            name: {{ .Release.Name }}-config
-      {{- end }}

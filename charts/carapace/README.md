@@ -71,7 +71,7 @@ helm upgrade carapace oci://ghcr.io/thiesgerken/charts/carapace -n carapace
 helm uninstall carapace -n carapace
 ```
 
-> The PVC is **not** deleted on uninstall to protect your data. Remove it manually with `kubectl delete pvc carapace-data -n carapace` if desired.
+> PVCs are **not** deleted on uninstall to protect your data. Remove them manually with `kubectl delete pvc carapace-data -n carapace` if desired.
 
 ## Configuration
 
@@ -96,7 +96,7 @@ envFrom:
   - secretRef:
       name: carapace-secrets # your externally managed Secret
   - configMapRef:
-      name: carapace-config # optional ConfigMap for non-sensitive settings
+      name: carapace-env # optional ConfigMap for non-sensitive environment variables
 
 extraEnv:
   - name: CARAPACE_LOG_LEVEL
@@ -105,35 +105,36 @@ extraEnv:
 
 ### Application configuration
 
-Inline your `config.yaml` under the `config` key — the chart creates a ConfigMap and mounts it at `/data/config.yaml`:
+The chart stores application configuration on the data PVC mounted at `/var/lib/carapace`. The server reads `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`. On first startup, carapace creates a valid empty config file when it does not exist yet.
+
+Create or update the file on the PVC when you want to seed settings outside the web UI:
 
 ```yaml
-# values.yaml
-config:
-  agent:
-    model: anthropic:claude-sonnet-4-6
-    sentinel_model: anthropic:claude-haiku-4-5
-  channels:
-    matrix:
-      enabled: true
-      homeserver: https://matrix.example.com
-      user_id: "@carapace:example.com"
+# /var/lib/carapace/config.yaml
+agent:
+  model: anthropic:claude-sonnet-4-6
+  sentinel_model: anthropic:claude-haiku-4-5
 ```
-
-Leave `config` empty (`{}`) to skip the ConfigMap entirely and manage the file on the PVC instead.
 
 The chart deploys Redis by default and wires the server to `<release>-redis`. If you disable the bundled Redis, point the application config at an external Redis instance:
 
 ```yaml
-redis:
-  enabled: false
-
-config:
-  cache:
-    redis_url: redis://carapace-redis:6379/0
+# /var/lib/carapace/config.yaml
+cache:
+  redis_url: redis://carapace-redis:6379/0
 ```
 
 Replace `carapace-redis` with `<release>-redis` when your Helm release name is not `carapace`.
+
+Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. New chart versions do not render or mount that ConfigMap; migrate existing content to `/var/lib/carapace/config.yaml` on the data PVC manually before relying on web-editable platform settings.
+
+```yaml
+# old values.yaml shape, no longer used by the chart
+config:
+  agent:
+    model: anthropic:claude-sonnet-4-6
+    sentinel_model: anthropic:claude-haiku-4-5
+```
 
 ### Bitwarden / Vaultwarden credential backend
 
@@ -191,18 +192,17 @@ bitwarden:
           memory: 256Mi
 ```
 
-4. **Configure the matching credential backend** in your application config or user config:
+4. **Configure the matching credential backend** in user settings or a user config file:
 
 ```yaml
-config:
-  credentials:
-    backends:
-      personal:
-        type: bitwarden
-        url: http://carapace-bitwarden
-        basic_auth:
-          username: carapace
-          password: change-me
+credentials:
+  backends:
+    personal:
+      type: bitwarden
+      url: http://carapace-bitwarden
+      basic_auth:
+        username: carapace
+        password: change-me
 ```
 
 Multiple instances are supported — just add more entries with different names and ports. Each instance gets its own companion Pod, Kubernetes Secret, Service, Basic Auth proxy, and (when persistence is enabled) PVC mounted at `/var/lib/bitwarden-cli` so Bitwarden CLI device/session data survives Pod reschedules — reducing repeated logins and “new device” emails from the vault provider. Set `bitwarden.persistence.enabled` to `false` if you prefer ephemeral Bitwarden CLI data.
@@ -224,10 +224,9 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `ingress.hostname`                       | `carapace.example.com`           | Ingress hostname                                                    |
 | `ingress.parentRefs`                     | `[{name: default-gateway}]`      | Gateway parent references                                           |
 | `ingress.annotations`                    | `{}`                             | Extra annotations on the HTTPRoute                                  |
-| `persistence.storageClassName`           | `""` (cluster default)           | StorageClass for the RWX PVC                                        |
-| `persistence.size`                       | `10Gi`                           | PVC size                                                            |
-| `persistence.finalizers`                 | `[]`                             | PVC finalizers (e.g. `kubernetes.io/pvc-protection`)                |
-| `config`                                 | `{}`                             | Application config (mounted as `/data/config.yaml` via ConfigMap)   |
+| `persistence.data.storageClassName`      | `""` (cluster default)           | StorageClass for the data PVC                                       |
+| `persistence.data.size`                  | `10Gi`                           | Data PVC size                                                       |
+| `persistence.data.finalizers`            | `[]`                             | Data PVC finalizers (e.g. `kubernetes.io/pvc-protection`)           |
 | `priorityClassName`                      | `""`                             | PriorityClass for all pods (server, frontend, sandbox)              |
 | `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                      |
 | `extraEnv`                               | `[]`                             | Extra env vars for the server container                             |

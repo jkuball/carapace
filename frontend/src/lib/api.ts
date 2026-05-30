@@ -715,6 +715,19 @@ export interface AvailableModelInfo {
   max_input_tokens?: number | null;
 }
 
+export interface PlatformModelSecretInfo {
+  source: "raw" | "env" | "file" | null;
+  value: string | null;
+  configured: boolean;
+}
+
+export interface PlatformModelEntryInfo extends AvailableModelInfo {
+  thinking?: boolean | "minimal" | "low" | "medium" | "high" | "xhigh" | null;
+  thinking_budget_tokens?: number | null;
+  base_url?: string | null;
+  api_key: PlatformModelSecretInfo;
+}
+
 export interface SessionBudgetSettings {
   input_tokens?: number | null;
   output_tokens?: number | null;
@@ -817,6 +830,48 @@ export interface UserSettingsPatchInput {
     token: string | null;
     clear_token: boolean;
   }> | null;
+}
+
+export interface PlatformSettingsInfo {
+  default_models: {
+    agent: string;
+    sentinel: string;
+    title: string;
+  };
+  default_budget: SessionBudgetSettings;
+  available_models: PlatformModelEntryInfo[];
+}
+
+export interface PlatformSettingsResponseInfo {
+  config_path: string;
+  config_writable: boolean;
+  settings: PlatformSettingsInfo;
+}
+
+export interface PlatformSecretPatchInput {
+  source: "raw" | "env" | "file" | null;
+  value?: string | null;
+}
+
+export interface PlatformModelEntryPatchInput {
+  provider: string;
+  name: string;
+  id?: string | null;
+  max_input_tokens?: number | null;
+  thinking?: boolean | "minimal" | "low" | "medium" | "high" | "xhigh" | null;
+  thinking_budget_tokens?: number | null;
+  base_url?: string | null;
+  api_key?: PlatformSecretPatchInput | null;
+}
+
+export interface PlatformSettingsPatchInput {
+  default_models: {
+    agent: string;
+    sentinel: string;
+    title: string;
+  };
+  default_budget: SessionBudgetSettings;
+  available_models: PlatformModelEntryPatchInput[];
 }
 
 function readBoolean(
@@ -942,6 +997,70 @@ function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
   };
 }
 
+function decodePlatformModelSecret(raw: unknown): PlatformModelSecretInfo {
+  const record = isRecord(raw) ? raw : {};
+  const rawSource = readString(record, "source");
+  const source =
+    rawSource === "raw" || rawSource === "env" || rawSource === "file"
+      ? rawSource
+      : null;
+  return {
+    source,
+    value: readString(record, "value") ?? null,
+    configured: readBoolean(record, "configured"),
+  };
+}
+
+function decodePlatformModelEntry(raw: unknown): PlatformModelEntryInfo | null {
+  const model = decodeAvailableModel(raw);
+  if (model === null || !isRecord(raw)) return null;
+  const rawThinking = raw.thinking;
+  const thinking =
+    typeof rawThinking === "boolean" ||
+    rawThinking === "minimal" ||
+    rawThinking === "low" ||
+    rawThinking === "medium" ||
+    rawThinking === "high" ||
+    rawThinking === "xhigh"
+      ? rawThinking
+      : null;
+  return {
+    ...model,
+    thinking,
+    thinking_budget_tokens: readNumber(raw, "thinking_budget_tokens") ?? null,
+    base_url: readString(raw, "base_url") ?? null,
+    api_key: decodePlatformModelSecret(raw.api_key),
+  };
+}
+
+function decodePlatformSettingsResponse(
+  raw: unknown,
+): PlatformSettingsResponseInfo {
+  if (!isRecord(raw)) throw new Error("Invalid platform settings response");
+  const settings = isRecord(raw.settings) ? raw.settings : {};
+  const defaults = isRecord(settings.default_models)
+    ? settings.default_models
+    : {};
+  const models = Array.isArray(settings.available_models)
+    ? settings.available_models
+        .map((item) => decodePlatformModelEntry(item))
+        .filter((item): item is PlatformModelEntryInfo => item !== null)
+    : [];
+  return {
+    config_path: readString(raw, "config_path") ?? "",
+    config_writable: readBoolean(raw, "config_writable"),
+    settings: {
+      default_models: {
+        agent: readString(defaults, "agent") ?? "",
+        sentinel: readString(defaults, "sentinel") ?? "",
+        title: readString(defaults, "title") ?? "",
+      },
+      default_budget: decodeBudget(settings.default_budget),
+      available_models: models,
+    },
+  };
+}
+
 export function decodeAvailableModel(raw: unknown): AvailableModelInfo | null {
   if (typeof raw === "string") {
     if (!raw) return null;
@@ -1019,6 +1138,37 @@ export async function updateUserSettings(
       await readErrorMessage(res, "Failed to update user settings"),
     );
   return decodeUserSettingsResponse(await res.json());
+}
+
+export async function getPlatformSettings(
+  server: string,
+  token: string,
+): Promise<PlatformSettingsResponseInfo> {
+  const res = await fetch(`${server}/api/admin/platform/settings`, {
+    headers: headers(token),
+  });
+  if (!res.ok)
+    throw new Error(
+      await readErrorMessage(res, "Failed to load platform settings"),
+    );
+  return decodePlatformSettingsResponse(await res.json());
+}
+
+export async function updatePlatformSettings(
+  server: string,
+  token: string,
+  body: PlatformSettingsPatchInput,
+): Promise<PlatformSettingsResponseInfo> {
+  const res = await fetch(`${server}/api/admin/platform/settings`, {
+    method: "PATCH",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok)
+    throw new Error(
+      await readErrorMessage(res, "Failed to update platform settings"),
+    );
+  return decodePlatformSettingsResponse(await res.json());
 }
 
 export async function listJobs(
