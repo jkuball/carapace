@@ -112,6 +112,74 @@ function credentialDraftsFromSettings(credentials: CredentialsSettingsInfo): Cre
     .map(([name, backend]) => credentialDraftFromBackend(name, backend));
 }
 
+function comparableCredentialsFromDraft(backendsDraft: CredentialBackendDraft[]): unknown[] {
+  return backendsDraft
+    .map((backend) => {
+      const expose = linesToArray(backend.expose);
+      const hide = linesToArray(backend.hide);
+      if (backend.type === "file") {
+        return {
+          name: backend.name.trim(),
+          type: "file",
+          path: backend.path.trim(),
+          expose,
+          hide,
+        };
+      }
+
+      return {
+        name: backend.name.trim(),
+        type: "bitwarden",
+        url: backend.url.trim() || "http://127.0.0.1:8087",
+        basic_auth: backend.basicAuthEnabled
+          ? {
+              username: backend.basicAuthUsername.trim(),
+              password_set: backend.basicAuthPasswordSet,
+              password_changed: backend.basicAuthPassword.length > 0,
+            }
+          : null,
+        expose,
+        hide,
+      };
+    })
+    .sort((left, right) => {
+      if (typeof left !== "object" || left === null || !("name" in left)) return 0;
+      if (typeof right !== "object" || right === null || !("name" in right)) return 0;
+      return String(left.name).localeCompare(String(right.name));
+    });
+}
+
+function comparableCredentialsFromSettings(credentials: CredentialsSettingsInfo): unknown[] {
+  return Object.entries(credentials.backends)
+    .map(([name, backend]) => {
+      if (backend.type === "file") {
+        return {
+          name,
+          type: "file",
+          path: backend.path,
+          expose: backend.expose,
+          hide: backend.hide,
+        };
+      }
+
+      return {
+        name,
+        type: "bitwarden",
+        url: backend.url,
+        basic_auth: backend.basic_auth
+          ? {
+              username: backend.basic_auth.username,
+              password_set: backend.basic_auth.password_set,
+              password_changed: false,
+            }
+          : null,
+        expose: backend.expose,
+        hide: backend.hide,
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function uniqueCredentialBackendName(type: CredentialBackendDraftType, backends: CredentialBackendDraft[]): string {
   const base = type === "file" ? "file" : "bitwarden";
   const names = new Set(backends.map((backend) => backend.name.trim()).filter(Boolean));
@@ -200,6 +268,15 @@ function budgetValue(value: number | string | null | undefined): string {
   return String(value);
 }
 
+function budgetCostValue(value: number | string | null | undefined): string {
+  const rawValue = budgetValue(value).trim();
+  if (!rawValue) return "";
+  const normalized = rawValue.replaceAll(",", "").replaceAll("_", "");
+  const parsed = Number(normalized);
+  if (parsed === 0) return "";
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : rawValue;
+}
+
 function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraft {
   const budget = response.settings.default_budget;
   return {
@@ -207,7 +284,7 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
     budget: {
       input_tokens: budgetValue(budget.input_tokens),
       output_tokens: budgetValue(budget.output_tokens),
-      cost_usd: budgetValue(budget.cost_usd),
+      cost_usd: budgetCostValue(budget.cost_usd),
       tool_calls: budgetValue(budget.tool_calls),
     },
     matrix: response.settings.matrix,
@@ -239,11 +316,88 @@ function parseOptionalBudgetDecimal(value: string, label: string, t: Translate):
   return normalized;
 }
 
+function parseOptionalBudgetCost(value: string, label: string, t: Translate): string | null {
+  const parsed = parseOptionalBudgetDecimal(value, label, t);
+  if (parsed === null) return null;
+  const cost = Number(parsed);
+  return cost === 0 ? null : cost.toFixed(2);
+}
+
+function comparableBudgetInteger(value: string | number | null | undefined): number | string | null {
+  const normalized = budgetValue(value).trim().replaceAll(",", "").replaceAll("_", "");
+  if (!normalized) return null;
+  if (!/^\d+$/.test(normalized)) return `invalid:${normalized}`;
+  const parsed = Number(normalized);
+  return parsed === 0 ? null : parsed;
+}
+
+function comparableBudgetCost(value: string | number | null | undefined): string | null {
+  const normalized = budgetCostValue(value);
+  return normalized || null;
+}
+
+function comparableBudget(budget: Record<keyof Required<SessionBudgetSettings>, string> | SessionBudgetSettings): unknown {
+  return {
+    input_tokens: comparableBudgetInteger(budget.input_tokens),
+    output_tokens: comparableBudgetInteger(budget.output_tokens),
+    cost_usd: comparableBudgetCost(budget.cost_usd),
+    tool_calls: comparableBudgetInteger(budget.tool_calls),
+  };
+}
+
+function comparableDefaultModels(models: UserDefaultModelsSettings): unknown {
+  return {
+    agent: models.agent?.trim() || null,
+    sentinel: models.sentinel?.trim() || null,
+    title: models.title?.trim() || null,
+  };
+}
+
+function comparableDraft(draft: UserSettingsDraft): unknown {
+  return {
+    default_models: comparableDefaultModels(draft.defaultModels),
+    default_budget: comparableBudget(draft.budget),
+    matrix: {
+      ...draft.matrix,
+      password_changed: draft.matrixPassword.length > 0,
+    },
+    credentials: comparableCredentialsFromDraft(draft.credentials),
+    git: {
+      remote: draft.git.remote,
+      branch: draft.git.branch,
+      author: draft.git.author,
+      token_set: draft.git.token_set,
+      token_changed: draft.gitToken.length > 0,
+    },
+  };
+}
+
+function comparableSettings(settings: UserSettingsResponseInfo): unknown {
+  return {
+    default_models: comparableDefaultModels(settings.settings.default_models),
+    default_budget: comparableBudget(settings.settings.default_budget),
+    matrix: {
+      ...settings.settings.matrix,
+      password_changed: false,
+    },
+    credentials: comparableCredentialsFromSettings(settings.settings.credentials),
+    git: {
+      ...settings.settings.git,
+      token_changed: false,
+    },
+  };
+}
+
+function userSettingsChanged(draft: UserSettingsDraft | null, settings: UserSettingsResponseInfo | null): boolean {
+  if (!draft || !settings) return false;
+  return JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableSettings(settings));
+}
+
 function budgetFromDraft(draft: UserSettingsDraft, t: Translate): SessionBudgetSettings {
   return {
     input_tokens: parseOptionalBudgetInteger(draft.budget.input_tokens, t("fields.inputTokens"), t),
     output_tokens: parseOptionalBudgetInteger(draft.budget.output_tokens, t("fields.outputTokens"), t),
-    cost_usd: parseOptionalBudgetDecimal(draft.budget.cost_usd, t("fields.costUsd"), t),
+    cost_usd: parseOptionalBudgetCost(draft.budget.cost_usd, t("fields.costUsd"), t),
     tool_calls: parseOptionalBudgetInteger(draft.budget.tool_calls, t("fields.toolCalls"), t),
   };
 }
@@ -280,6 +434,16 @@ export function UserSettingsView({ server, token }: { server: string; token: str
     };
   }, [loadSettings]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => {
+      setNotice(null);
+    }, 30_000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [notice]);
+
   const availableModels: AvailableModelInfo[] = useMemo(
     () => settings?.available_models ?? [],
     [settings?.available_models],
@@ -296,16 +460,23 @@ export function UserSettingsView({ server, token }: { server: string; token: str
     () => withSelectedModelOption(availableModels, draft?.defaultModels.title),
     [availableModels, draft?.defaultModels.title],
   );
+  const settingsChanged = useMemo(
+    () => userSettingsChanged(draft, settings),
+    [draft, settings],
+  );
 
   function updateDraft(patch: Partial<UserSettingsDraft>): void {
+    setNotice(null);
     setDraft((current) => current ? { ...current, ...patch } : current);
   }
 
   function updateMatrix(patch: Partial<MatrixSettingsInfo>): void {
+    setNotice(null);
     setDraft((current) => current ? { ...current, matrix: { ...current.matrix, ...patch } } : current);
   }
 
   function updateCredentialBackend(id: string, patch: Partial<CredentialBackendDraft>): void {
+    setNotice(null);
     setDraft((current) => current ? {
       ...current,
       credentials: current.credentials.map((backend) => backend.id === id ? { ...backend, ...patch } : backend),
@@ -313,6 +484,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
   }
 
   function addCredentialBackend(type: CredentialBackendDraftType): void {
+    setNotice(null);
     setDraft((current) => current ? {
       ...current,
       credentials: [...current.credentials, newCredentialBackendDraft(type, current.credentials)],
@@ -320,6 +492,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
   }
 
   function removeCredentialBackend(id: string): void {
+    setNotice(null);
     setDraft((current) => current ? {
       ...current,
       credentials: current.credentials.filter((backend) => backend.id !== id),
@@ -328,7 +501,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!draft) return;
+    if (!draft || !settingsChanged) return;
 
     let credentialsPayload: unknown;
     try {
@@ -418,11 +591,19 @@ export function UserSettingsView({ server, token }: { server: string; token: str
   return (
     <form onSubmit={(event) => void handleSave(event)} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-        {(error || notice) ? (
-          <div className={cn("rounded-xl border border-border bg-background px-4 py-3 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
-            {error ?? <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" />{notice}</span>}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={cn("min-h-5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
+            {error ? error : notice ? <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" />{notice}</span> : null}
           </div>
-        ) : null}
+          <button
+            type="submit"
+            disabled={saving || !settingsChanged}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? t("actions.saving") : t("actions.save")}
+          </button>
+        </div>
 
         <Section title={t("sections.defaultModels")}>
           <div className="grid gap-4 lg:grid-cols-3">
@@ -432,7 +613,8 @@ export function UserSettingsView({ server, token }: { server: string; token: str
                 entries={agentOptions}
                 onChange={(agent) => updateDraft({ defaultModels: { ...draft.defaultModels, agent } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.agent || t("defaults.serverDefault")}
+                defaultLabel={t("defaults.serverDefault")}
+                defaultDescription={t("defaults.currentModel", { model: settings.server_defaults.models.agent || t("defaults.serverDefault") })}
               />
             </Field>
             <Field label={t("fields.sentinel")}>
@@ -441,7 +623,8 @@ export function UserSettingsView({ server, token }: { server: string; token: str
                 entries={sentinelOptions}
                 onChange={(sentinel) => updateDraft({ defaultModels: { ...draft.defaultModels, sentinel } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.sentinel || t("defaults.serverDefault")}
+                defaultLabel={t("defaults.serverDefault")}
+                defaultDescription={t("defaults.currentModel", { model: settings.server_defaults.models.sentinel || t("defaults.serverDefault") })}
               />
             </Field>
             <Field label={t("fields.title")}>
@@ -450,7 +633,8 @@ export function UserSettingsView({ server, token }: { server: string; token: str
                 entries={titleOptions}
                 onChange={(title) => updateDraft({ defaultModels: { ...draft.defaultModels, title } })}
                 disabled={saving}
-                defaultLabel={settings.server_defaults.models.title || t("defaults.serverDefault")}
+                defaultLabel={t("defaults.serverDefault")}
+                defaultDescription={t("defaults.currentModel", { model: settings.server_defaults.models.title || t("defaults.serverDefault") })}
               />
             </Field>
           </div>
@@ -460,31 +644,17 @@ export function UserSettingsView({ server, token }: { server: string; token: str
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <BudgetInput label={t("fields.inputTokens")} placeholder={t("defaults.serverDefault")} value={draft.budget.input_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, input_tokens: value } })} />
             <BudgetInput label={t("fields.outputTokens")} placeholder={t("defaults.serverDefault")} value={draft.budget.output_tokens} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
-            <BudgetInput label={t("fields.costUsd")} placeholder={t("defaults.serverDefault")} value={draft.budget.cost_usd} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
+            <BudgetInput label={t("fields.costUsd")} placeholder={t("defaults.serverDefault")} value={draft.budget.cost_usd} onBlur={() => updateDraft({ budget: { ...draft.budget, cost_usd: budgetCostValue(draft.budget.cost_usd) } })} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
             <BudgetInput label={t("fields.toolCalls")} placeholder={t("defaults.serverDefault")} value={draft.budget.tool_calls} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
           </div>
         </Section>
 
-        <Section title={t("sections.matrix")}>
-          <div className="space-y-4">
-            <SwitchRow checked={draft.matrix.enabled} label={t("fields.enabled")} onCheckedChange={(enabled) => updateMatrix({ enabled })} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <TextInput label={t("fields.homeserver")} value={draft.matrix.homeserver} onChange={(homeserver) => updateMatrix({ homeserver })} />
-              <TextInput label={t("fields.userId")} value={draft.matrix.user_id} onChange={(user_id) => updateMatrix({ user_id })} />
-              <TextInput label={t("fields.deviceName")} value={draft.matrix.device_name} onChange={(device_name) => updateMatrix({ device_name })} />
-              <WriteOnlyPasswordInput
-                label={t("fields.password")}
-                configured={draft.matrix.password_set}
-                configuredLabel={t("status.configured")}
-                notSetLabel={t("status.notSet")}
-                value={draft.matrixPassword}
-                name="matrix-credential-secret"
-                disablePasswordManager
-                onValueChange={(matrixPassword) => updateDraft({ matrixPassword })}
-              />
-              <FreeInputMultiSelect label={t("fields.allowedRooms")} values={draft.matrix.allowed_rooms} placeholder={t("placeholders.addRoom")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_rooms) => updateMatrix({ allowed_rooms })} />
-              <FreeInputMultiSelect label={t("fields.allowedUsers")} values={draft.matrix.allowed_users} placeholder={t("placeholders.addUser")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_users) => updateMatrix({ allowed_users })} />
-            </div>
+        <Section title={t("sections.gitRemote")}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextInput label={t("fields.remote")} value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
+            <TextInput label={t("fields.branch")} value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
+            <TextInput label={t("fields.author")} value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
+            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} value={draft.gitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} />
           </div>
         </Section>
 
@@ -523,25 +693,30 @@ export function UserSettingsView({ server, token }: { server: string; token: str
           </div>
         </Section>
 
-        <Section title={t("sections.gitRemote")}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextInput label={t("fields.remote")} value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
-            <TextInput label={t("fields.branch")} value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
-            <TextInput label={t("fields.author")} value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
-            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} value={draft.gitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} />
+        <Section title={t("sections.matrix")}>
+          <div className="space-y-4">
+            <SwitchRow checked={draft.matrix.enabled} label={t("fields.enabled")} onCheckedChange={(enabled) => updateMatrix({ enabled })} />
+            {draft.matrix.enabled ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput label={t("fields.homeserver")} value={draft.matrix.homeserver} onChange={(homeserver) => updateMatrix({ homeserver })} />
+                <TextInput label={t("fields.userId")} value={draft.matrix.user_id} onChange={(user_id) => updateMatrix({ user_id })} />
+                <TextInput label={t("fields.deviceName")} value={draft.matrix.device_name} onChange={(device_name) => updateMatrix({ device_name })} />
+                <WriteOnlyPasswordInput
+                  label={t("fields.password")}
+                  configured={draft.matrix.password_set}
+                  configuredLabel={t("status.configured")}
+                  notSetLabel={t("status.notSet")}
+                  value={draft.matrixPassword}
+                  name="matrix-credential-secret"
+                  disablePasswordManager
+                  onValueChange={(matrixPassword) => updateDraft({ matrixPassword })}
+                />
+                <FreeInputMultiSelect label={t("fields.allowedRooms")} values={draft.matrix.allowed_rooms} placeholder={t("placeholders.addRoom")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_rooms) => updateMatrix({ allowed_rooms })} />
+                <FreeInputMultiSelect label={t("fields.allowedUsers")} values={draft.matrix.allowed_users} placeholder={t("placeholders.addUser")} removeTitle={t("actions.remove")} removeAriaLabel={(value) => t("actions.removeValue", { value })} onChange={(allowed_users) => updateMatrix({ allowed_users })} />
+              </div>
+            ) : null}
           </div>
         </Section>
-
-        <div className="sticky bottom-0 flex justify-end border-t border-border bg-background/90 py-4 backdrop-blur">
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? t("actions.saving") : t("actions.save")}
-          </button>
-        </div>
       </div>
     </form>
   );
@@ -687,10 +862,10 @@ function FreeInputMultiSelect({
   );
 }
 
-function BudgetInput({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string; onChange: (value: string) => void }) {
+function BudgetInput({ label, placeholder, value, onBlur, onChange }: { label: string; placeholder: string; value: string; onBlur?: () => void; onChange: (value: string) => void }) {
   return (
     <Field label={label}>
-      <input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={inputClassName} />
+      <input inputMode="decimal" value={value} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={inputClassName} />
     </Field>
   );
 }

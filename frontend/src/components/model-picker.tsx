@@ -43,9 +43,10 @@ interface ModelPickerProps {
   onChange: (value: string | null) => void;
   disabled: boolean;
   defaultLabel: string;
+  defaultDescription?: string;
 }
 
-export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }: ModelPickerProps) {
+export function ModelPicker({ value, entries, onChange, disabled, defaultLabel, defaultDescription }: ModelPickerProps) {
   const tModels = useTranslations("commandResult.models");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -138,7 +139,11 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={cn("min-w-0 break-all font-mono text-xs leading-tight", !selected && "text-muted-foreground")}>{triggerLabel}</span>
+        {selected ? (
+          <span className="min-w-0 break-all font-mono text-xs leading-tight">{triggerLabel}</span>
+        ) : (
+          <span className="min-w-0 break-all text-sm font-medium leading-tight text-muted-foreground">{defaultLabel}</span>
+        )}
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
 
@@ -171,11 +176,16 @@ export function ModelPicker({ value, entries, onChange, disabled, defaultLabel }
                 closePicker();
               }}
               className={cn(
-                "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                "flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
                 !selected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
               )}
             >
-              <span className="text-sm font-medium">{defaultLabel}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block break-all text-xs font-medium leading-tight">{defaultLabel}</span>
+                {defaultDescription ? (
+                  <span className="mt-0.5 block break-all font-mono text-xs text-muted-foreground">{defaultDescription}</span>
+                ) : null}
+              </span>
               {!selected && <Check className="h-4 w-4 shrink-0" />}
             </button>
 

@@ -80,7 +80,8 @@
             "hide": "Ausblenden"
         },
         "defaults": {
-            "serverDefault": "Serverstandard"
+            "serverDefault": "Serverstandard",
+            "currentModel": "{model}"
         },
         "placeholders": {
             "addRoom": "Raum hinzufügen, Enter oder Komma",
