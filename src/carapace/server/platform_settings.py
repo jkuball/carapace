@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -7,6 +8,7 @@ from typing import Annotated, Any, Literal
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_ai.models import Model
 
 from ..config import get_config_path
 from ..llm import make_model_factory
@@ -291,11 +293,20 @@ def _validated_config_with_agent(agent: AgentConfig, document: dict[str, Any]) -
     return Config.model_validate(candidate)
 
 
-def _apply_runtime_config(config: Config) -> None:
+def _runtime_models_for_config(config: Config) -> tuple[Callable[[str], Model], Model]:
     model_factory = make_model_factory(config)
     agent_model = model_factory(config.agent.model)
     model_factory(config.agent.sentinel_model)
     model_factory(config.agent.title_model)
+    return model_factory, agent_model
+
+
+def _apply_runtime_config(
+    config: Config,
+    *,
+    model_factory: Callable[[str], Model],
+    agent_model: Model,
+) -> None:
     server.__dict__["_config"] = config
     server._engine.apply_platform_model_config(config, model_factory=model_factory, agent_model=agent_model)
 
@@ -316,10 +327,11 @@ async def update_platform_settings(
     document = _read_config_document(path)
     agent = _agent_config_from_patch(body)
     config = _validated_config_with_agent(agent, document)
+    model_factory, agent_model = _runtime_models_for_config(config)
     document["agent"] = _agent_config_to_yaml(config.agent)
     try:
         _write_config_document(path, document)
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to write config: {exc}") from exc
-    _apply_runtime_config(config)
+    _apply_runtime_config(config, model_factory=model_factory, agent_model=agent_model)
     return _response()

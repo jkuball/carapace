@@ -18,6 +18,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 import carapace.sandbox.state as sandbox_state
 import carapace.server as srv
 import carapace.server.jobs as server_jobs
+import carapace.server.platform_settings as platform_settings
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
@@ -345,6 +346,56 @@ def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client,
     assert raw["agent"]["available_models"][0]["api_key"] == {"raw": "existing-secret"}
     returned_model = resp.json()["settings"]["available_models"][0]
     assert returned_model["api_key"] == {"source": "raw", "value": None, "configured": True}
+
+
+def test_admin_platform_settings_validates_runtime_before_writing_config(
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    original_document = {
+        "agent": {
+            "model": "anthropic:claude-haiku-4-5",
+            "sentinel_model": "anthropic:claude-haiku-4-5",
+            "title_model": "anthropic:claude-haiku-4-5",
+            "available_models": [{"provider": "anthropic", "name": "claude-haiku-4-5"}],
+        }
+    }
+    srv._config_path.write_text(yaml.safe_dump(original_document, sort_keys=False), encoding="utf-8")
+
+    def _failing_model_factory(_config):
+        def _factory(_name: str):
+            raise ValueError("runtime model validation failed")
+
+        return _factory
+
+    monkeypatch.setattr(platform_settings, "make_model_factory", _failing_model_factory)
+
+    local_client = TestClient(app, raise_server_exceptions=False)
+    resp = local_client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 500
+    assert yaml.safe_load(srv._config_path.read_text(encoding="utf-8")) == original_document
+    assert srv._config.agent.model == "anthropic:claude-sonnet-4-6"
 
 
 def test_admin_user_update_can_clear_email(client, admin_auth_headers):

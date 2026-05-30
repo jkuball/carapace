@@ -398,6 +398,25 @@ def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
     _sentinel_set_model_mock(active).assert_called_once_with("openai:gpt-4o")
 
 
+def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session(user="thies")
+        active = engine.get_or_activate(state.session_id)
+        cached_model = TestModel()
+        active.agent_model_name = "openai:gpt-4o"
+        active.agent_model = cached_model
+
+        engine.apply_platform_model_config(
+            engine.config,
+            model_factory=lambda _name: TestModel(),
+            agent_model=TestModel(),
+        )
+
+    assert active.agent_model_name == "openai:gpt-4o"
+    assert active.agent_model is None
+
+
 def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path)

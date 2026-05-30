@@ -79,8 +79,7 @@ class SessionModelMixin(SessionModelHost):
         self._model_factory = model_factory
         self._agent_model = agent_model
         for active in self._active.values():
-            if active.agent_model_name is None:
-                active.agent_model = None
+            active.agent_model = None
             if active.sentinel_model_name is None and active.sentinel is not None:
                 active.sentinel.set_model(config.agent.sentinel_model)
 
