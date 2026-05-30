@@ -9,6 +9,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -25,6 +26,7 @@ from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.models.credentials import BasicAuthConfig, BitwardenCredentialBackendConfig, CredentialMetadata
 from carapace.models.jobs import JobDefinition
+from carapace.models.matrix import MatrixTokenFile, MatrixTokensFile
 from carapace.models.session import SessionBudget
 from carapace.models.user import UserConfig
 from carapace.notifications.presence import NotificationPresenceRegistry
@@ -486,6 +488,110 @@ def test_user_settings_does_not_persist_matrix_when_reload_fails(client, auth_he
     user = srv._auth_store.get_user("thies")
     assert user is not None
     assert user.config.channels.matrix.enabled is False
+
+
+def test_user_settings_matrix_password_clears_persisted_token_before_reload(client, auth_headers, monkeypatch):
+    token_file = srv._engine.session_mgr.sessions_dir.parent / "matrix_token.yaml"
+    token_file.write_text(
+        yaml.safe_dump(
+            MatrixTokensFile(
+                tokens=[
+                    MatrixTokenFile(
+                        access_token="old-token",
+                        device_id="OLD",
+                        user_id="@carapace:example.test",
+                        user="thies",
+                    )
+                ]
+            ).model_dump(mode="json")
+        ),
+        encoding="utf-8",
+    )
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "old-password",
+                        }
+                    }
+                }
+            )
+        },
+    )
+
+    async def reload_user(_username: str, _config: UserConfig) -> None:
+        assert not token_file.exists()
+
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=reload_user)
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"password": "new-password", "clear_token": True}},
+    )
+
+    assert resp.status_code == 200
+    assert not token_file.exists()
+    manager.reload_user.assert_awaited_once()
+
+
+def test_user_settings_matrix_password_restores_persisted_token_on_reload_failure(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    token_file = srv._engine.session_mgr.sessions_dir.parent / "matrix_token.yaml"
+    token_content = yaml.safe_dump(
+        MatrixTokensFile(
+            tokens=[
+                MatrixTokenFile(
+                    access_token="old-token",
+                    device_id="OLD",
+                    user_id="@carapace:example.test",
+                    user="thies",
+                )
+            ]
+        ).model_dump(mode="json")
+    )
+    token_file.write_text(token_content, encoding="utf-8")
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "old-password",
+                        }
+                    }
+                }
+            )
+        },
+    )
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"password": "new-password", "clear_token": True}},
+    )
+
+    assert resp.status_code == 500
+    assert token_file.read_text(encoding="utf-8") == token_content
+    manager.reload_user.assert_awaited()
 
 
 def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):

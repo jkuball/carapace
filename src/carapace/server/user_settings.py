@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -13,7 +16,7 @@ from ..models.credentials import (
     CredentialsConfig,
     FileCredentialBackendConfig,
 )
-from ..models.matrix import MatrixChannelConfig
+from ..models.matrix import MatrixChannelConfig, MatrixTokensFile
 from ..models.session import SessionBudget
 from ..models.user import UserConfig, UserDefaultModelsConfig, UserGitConfig
 from .auth import verify_token
@@ -22,6 +25,18 @@ from .state import server_module
 
 server = server_module()
 router = APIRouter()
+
+
+@dataclass(frozen=True)
+class MatrixTokenFileBackup:
+    path: Path
+    content: str | None
+
+    def restore(self) -> None:
+        if self.content is None:
+            self.path.unlink(missing_ok=True)
+            return
+        self.path.write_text(self.content, encoding="utf-8")
 
 
 class SettingsModel(BaseModel):
@@ -223,6 +238,59 @@ def _public_git(config: UserGitConfig) -> PublicGitSettings:
         author=config.author,
         token_set=config.token is not None,
     )
+
+
+def _matrix_token_path() -> Path | None:
+    engine = getattr(server, "_engine", None)
+    session_mgr = getattr(engine, "session_mgr", None)
+    sessions_dir = getattr(session_mgr, "sessions_dir", None)
+    if not isinstance(sessions_dir, Path):
+        return None
+    return sessions_dir.parent / "matrix_token.yaml"
+
+
+def _matrix_password_replaces_token(patch: MatrixSettingsPatch | None) -> bool:
+    if patch is None:
+        return False
+    return "password" in patch.model_fields_set and patch.password is not None
+
+
+def _clear_persisted_matrix_token(username: str, config: UserConfig) -> MatrixTokenFileBackup | None:
+    token_path = _matrix_token_path()
+    if token_path is None or not token_path.exists():
+        return None
+
+    raw_content = token_path.read_text(encoding="utf-8")
+    try:
+        tokens_file = MatrixTokensFile.model_validate(yaml.safe_load(raw_content) or {})
+    except Exception as exc:
+        logger.warning(f"Matrix: could not update persisted token file before password login: {exc}")
+        return None
+
+    normalized_username = normalize_username(username)
+    matrix_user_id = config.channels.matrix.user_id or None
+    remaining = []
+    removed = False
+    for stored in tokens_file.tokens:
+        owner_matches = normalize_username(stored.user) == normalized_username
+        user_id_matches = stored.user_id is None or stored.user_id == matrix_user_id
+        if owner_matches and user_id_matches:
+            removed = True
+            continue
+        remaining.append(stored)
+
+    if not removed:
+        return None
+
+    backup = MatrixTokenFileBackup(path=token_path, content=raw_content)
+    if remaining:
+        token_path.write_text(
+            yaml.safe_dump(MatrixTokensFile(tokens=remaining).model_dump(mode="json", exclude_none=True)),
+            encoding="utf-8",
+        )
+    else:
+        token_path.unlink(missing_ok=True)
+    return backup
 
 
 def _available_model_ids() -> set[str]:
@@ -484,6 +552,11 @@ async def update_user_settings(
     git_changed = original_config.git != next_config.git
 
     runtime_errors: list[HTTPException] = []
+    matrix_token_backup = (
+        _clear_persisted_matrix_token(user.username, next_config)
+        if _matrix_password_replaces_token(body.matrix)
+        else None
+    )
     if matrix_changed:
         try:
             await _reload_matrix_settings(user.username, next_config)
@@ -496,6 +569,8 @@ async def update_user_settings(
             runtime_errors.append(exc)
 
     if runtime_errors:
+        if matrix_token_backup is not None:
+            matrix_token_backup.restore()
         await _rollback_settings_runtime(
             user.username,
             original_config,
@@ -508,6 +583,8 @@ async def update_user_settings(
     try:
         _auth_store().update_user(user.username, {"config": next_config})
     except ValueError as exc:
+        if matrix_token_backup is not None:
+            matrix_token_backup.restore()
         await _rollback_settings_runtime(
             user.username,
             original_config,
