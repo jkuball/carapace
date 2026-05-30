@@ -13,7 +13,7 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from ..usage import LlmRequestLogCapability, UsageTracker
+from ..usage import LlmRequestLogCapability, UsageTracker, provider_cost_usd_from_messages
 from .context import (
     ActionLogEntry,
     AgentResponseEntry,
@@ -403,7 +403,12 @@ class Sentinel:
         session.sentinel_eval_count += 1
 
         if usage_tracker:
-            usage_tracker.record(self._model, "sentinel", result.usage)
+            usage_tracker.record(
+                self._model,
+                "sentinel",
+                result.usage,
+                cost_usd=provider_cost_usd_from_messages(result.new_messages()),
+            )
 
         usage = result.usage
         output = self._normalize_verdict(result.output)

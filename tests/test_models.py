@@ -408,6 +408,28 @@ def test_make_model_factory_rejects_unregistered_model():
         factory("openai:gpt-4o")
 
 
+def test_model_settings_for_config_enables_openrouter_usage_accounting():
+    cfg = Config.model_validate(
+        {
+            "agent": {
+                "model": "openrouter:openai/gpt-5.2",
+                "sentinel_model": "openrouter:openai/gpt-5.2",
+                "title_model": "openrouter:openai/gpt-5.2",
+                "available_models": [
+                    {
+                        "provider": "openrouter",
+                        "name": "openai/gpt-5.2",
+                    },
+                ],
+            }
+        }
+    )
+
+    settings = model_settings_for_config(cfg, "openrouter:openai/gpt-5.2")
+
+    assert settings == {"openrouter_usage": {"include": True}}
+
+
 def test_make_model_factory_resolves_registered_alias(monkeypatch: pytest.MonkeyPatch):
     cfg = Config.model_validate(
         {

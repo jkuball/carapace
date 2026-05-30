@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Literal, Protocol, TypedDict, assert_never
 
 import tiktoken
@@ -47,9 +47,12 @@ class ModelUsage(BaseModel):
     output_audio_tokens: int = 0
     cache_audio_read_tokens: int = 0
     requests: int = 0
+    cost_usd: Decimal = Decimal(0)
 
 
 def _price_for_usage(model_key: str, u: ModelUsage) -> Decimal | None:
+    if u.cost_usd:
+        return u.cost_usd
     provider_id, _, model_ref = model_key.partition(":")
     if not model_ref:
         model_ref, provider_id = provider_id, None
@@ -83,21 +86,55 @@ def _merge_run_usage_into_bucket(bucket: ModelUsage, usage: RunUsage) -> None:
     bucket.requests += usage.requests
 
 
+def _merge_cost_into_bucket(bucket: ModelUsage, cost_usd: Decimal | None) -> None:
+    if cost_usd is not None:
+        bucket.cost_usd += cost_usd
+
+
+def _coerce_cost_usd(value: Any) -> Decimal | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int | float | str):
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+    return None
+
+
+def provider_cost_usd_from_messages(messages: list[ModelMessage]) -> Decimal | None:
+    total = Decimal(0)
+    found = False
+    for message in messages:
+        if not isinstance(message, ModelResponse) or message.provider_details is None:
+            continue
+        cost = _coerce_cost_usd(message.provider_details.get("cost"))
+        if cost is None:
+            continue
+        total += cost
+        found = True
+    return total if found else None
+
+
 class UsageTracker(BaseModel):
     models: dict[str, ModelUsage] = {}
     categories: dict[str, ModelUsage] = {}
     category_by_model: dict[str, dict[str, ModelUsage]] = {}
     tool_calls: int = 0
 
-    def record(self, model: str, category: str, usage: RunUsage) -> None:
+    def record(self, model: str, category: str, usage: RunUsage, *, cost_usd: Decimal | None = None) -> None:
         for bucket in (
             self.models.setdefault(model, ModelUsage()),
             self.categories.setdefault(category, ModelUsage()),
         ):
             _merge_run_usage_into_bucket(bucket, usage)
+            _merge_cost_into_bucket(bucket, cost_usd)
         cm = self.category_by_model.setdefault(category, {})
         m_bucket = cm.setdefault(model, ModelUsage())
         _merge_run_usage_into_bucket(m_bucket, usage)
+        _merge_cost_into_bucket(m_bucket, cost_usd)
 
     def record_tool_call(self) -> None:
         self.tool_calls += 1

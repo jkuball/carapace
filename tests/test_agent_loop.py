@@ -31,6 +31,9 @@ class _FakeResult:
     def all_messages(self) -> list[Any]:
         return []
 
+    def new_messages(self) -> list[Any]:
+        return []
+
 
 def _make_deps(tmp_path: Path, *, unattended: bool) -> Deps:
     session_id = "session-1"

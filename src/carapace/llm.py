@@ -67,6 +67,8 @@ def model_settings_for_entry(
     default_thinking: ThinkingSetting | None = None,
 ) -> ModelSettings | None:
     settings: dict[str, object] = {}
+    if entry.provider == "openrouter":
+        settings["openrouter_usage"] = {"include": True}
     thinking = entry.thinking if entry.thinking is not None else default_thinking
     if thinking is not None:
         settings["thinking"] = thinking

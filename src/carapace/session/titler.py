@@ -11,7 +11,7 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from ..usage import LlmRequestLogCapability, UsageTracker
+from ..usage import LlmRequestLogCapability, UsageTracker, provider_cost_usd_from_messages
 
 _SYSTEM_PROMPT = """\
 Generate a very short title (3-8 words) for a chat conversation.
@@ -74,7 +74,12 @@ async def generate_title(
             before_llm_call()
         result = await agent.run(prompt, usage_limits=usage_limits)
         if usage_tracker:
-            usage_tracker.record(model, "title", result.usage)
+            usage_tracker.record(
+                model,
+                "title",
+                result.usage,
+                cost_usd=provider_cost_usd_from_messages(result.new_messages()),
+            )
         return result.output.strip()
     except Exception:
         logger.opt(exception=True).warning("Title generation failed")

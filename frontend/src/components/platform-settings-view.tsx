@@ -117,35 +117,24 @@ function modelNameKey(name: string): string {
   return name.trim().toLowerCase();
 }
 
-function badgeColorClassMap(keys: string[], classNames: readonly string[]): ReadonlyMap<string, string> {
-  const uniqueKeys = Array.from(new Set(keys.filter(Boolean))).sort();
-  return new Map(uniqueKeys.map((key, index) => [key, classNames[index % classNames.length]]));
+function badgeClassNameFromHash(key: string, classNames: readonly string[]): string {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return classNames[hash % classNames.length];
 }
 
-function providerColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
-  return badgeColorClassMap(models.map((model) => providerKey(model.provider, model.baseUrl)), providerBadgeClassNames);
-}
-
-function modelNameColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
-  return badgeColorClassMap(models.map((model) => modelNameKey(model.name)), modelBadgeClassNames);
-}
-
-function providerBadgeClassName(provider: string, baseUrl: string, providerColors: ReadonlyMap<string, string>): string {
+function providerBadgeClassName(provider: string, baseUrl: string): string {
   const normalized = providerKey(provider, baseUrl);
   if (!normalized) return neutralBadgeClassName;
-  const className = providerColors.get(normalized);
-  if (className) return className;
-  let hash = 0;
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
-  }
-  return providerBadgeClassNames[hash % providerBadgeClassNames.length];
+  return badgeClassNameFromHash(normalized, providerBadgeClassNames);
 }
 
-function modelNameBadgeClassName(name: string, modelNameColors: ReadonlyMap<string, string>): string {
+function modelNameBadgeClassName(name: string): string {
   const normalized = modelNameKey(name);
   if (!normalized) return neutralBadgeClassName;
-  return modelNameColors.get(normalized) ?? modelBadgeClassNames[0];
+  return badgeClassNameFromHash(normalized, modelBadgeClassNames);
 }
 
 function compactTokenCount(value: string): string {
@@ -426,8 +415,6 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   }, [notice]);
 
   const modelOptions = useMemo(() => draftModelOptions(draft?.models ?? []), [draft?.models]);
-  const providerColors = useMemo(() => providerColorClassMap(draft?.models ?? []), [draft?.models]);
-  const modelNameColors = useMemo(() => modelNameColorClassMap(draft?.models ?? []), [draft?.models]);
   const changed = useMemo(() => comparableDraft(draft) !== null && JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableDraft(settings ? draftFromSettings(settings) : null)), [draft, settings]);
   const configWritable = settings?.config_writable ?? false;
   const fieldsDisabled = saving || !configWritable;
@@ -539,8 +526,6 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
                 key={model.rowId}
                 model={model}
                 disabled={fieldsDisabled}
-                providerColors={providerColors}
-                modelNameColors={modelNameColors}
                 onChange={(patch) => updateModel(model.rowId, patch)}
                 onRemove={() => updateDraft({ models: draft.models.filter((item) => item.rowId !== model.rowId) })}
                 t={t}
@@ -667,7 +652,8 @@ function ProviderInput({ value, disabled, onChange }: { value: string; disabled:
   );
 }
 
-function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; providerColors: ReadonlyMap<string, string>; modelNameColors: ReadonlyMap<string, string>; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+  const [expanded, setExpanded] = useState(!model.name.trim());
   const effectiveId = modelId(model);
   const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
   const provider = model.provider.trim();
@@ -677,13 +663,13 @@ function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, 
   const apiKeyFieldsDisabled = disabled || !modelApiKeySupported;
   const providerLabel = providerBadgeLabel(provider, openAICompatible ? model.baseUrl : "");
   const summaryBadges: SummaryBadge[] = [];
-  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, openAICompatible ? model.baseUrl : "", providerColors), icon: Cloud });
-  if (model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name, modelNameColors), icon: BrainCircuit });
+  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, openAICompatible ? model.baseUrl : ""), icon: Cloud });
+  if (model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name), icon: BrainCircuit });
   if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
   if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
   const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
-    <details className="group rounded-lg border border-border bg-background/70" open={!model.name.trim() || undefined}>
+    <details className="group rounded-lg border border-border bg-background/70" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 space-y-2">
           <div className="break-all font-mono text-sm font-medium">{summaryId}</div>
