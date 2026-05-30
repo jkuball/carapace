@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.131.0 (2026-05-30)
+
+
+### ✨ Features
+
+
+- ✨ feat: increase default probe delays in helm chart and make them configurable
+  ([`34d2a61`](https://github.com/thiesgerken/carapace/commit/34d2a615d38458377010f906394c2de0edb97972))
+
 ## v0.130.1 (2026-05-30)
 
 
