@@ -790,7 +790,7 @@
         "thinkingMeta": {
             "durationStreaming": "for {duration}",
             "durationComplete": "for {duration}",
-            "reasoning": "{count} reasoning"
+            "reasoning": "{count} tokens"
         },
         "actions": {
             "fork": "Fork session from here",
