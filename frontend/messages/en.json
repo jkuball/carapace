@@ -143,7 +143,7 @@
             "defaultUnknown": "{field} default model {id} is not in the catalog."
         },
         "sections": {
-            "defaultModels": "Global default models",
+            "defaultModels": "Default models",
             "defaultBudgets": "Default budgets",
             "catalog": "Model catalog"
         },
@@ -194,8 +194,10 @@
             "high": "High",
             "xhigh": "Extra high"
         },
-        "modelRow": "Model {index}",
-        "configPath": "Config file: {path}"
+        "units": {
+            "tokens": "tokens"
+        },
+        "modelRow": "Model {index}"
     },
     "home": {
         "empty": {

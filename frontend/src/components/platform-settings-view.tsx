@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, KeyRound, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { Brain, BrainCircuit, Check, ChevronDown, Cloud, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   getPlatformSettings,
@@ -45,6 +45,13 @@ interface PlatformDraft {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
+type BadgeIcon = ComponentType<{ className?: string }>;
+
+interface SummaryBadge {
+  label: string;
+  className: string;
+  icon?: BadgeIcon;
+}
 
 const providerPresets = ["anthropic", "google-gla", "google-vertex", "openai", "openai-chat"];
 const thinkingOptions: ThinkingDraft[] = ["", "true", "false", "minimal", "low", "medium", "high", "xhigh"];
@@ -54,12 +61,111 @@ const inputClassName = cn(
   "outline-none transition-colors placeholder:text-muted-foreground/50",
   "focus:border-ring focus:ring-2 focus:ring-ring/30",
 );
+const neutralBadgeClassName = "rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground";
+const providerBadgeClassNames = [
+  "rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200",
+  "rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+  "rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+  "rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200",
+  "rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200",
+  "rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-xs text-cyan-800 dark:border-cyan-900/60 dark:bg-cyan-950/40 dark:text-cyan-200",
+];
+const modelBadgeClassNames = [
+  "rounded-md border border-lime-200 bg-lime-50 px-2 py-0.5 text-xs text-lime-800 dark:border-lime-900/60 dark:bg-lime-950/40 dark:text-lime-200",
+  "rounded-md border border-fuchsia-200 bg-fuchsia-50 px-2 py-0.5 text-xs text-fuchsia-800 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/40 dark:text-fuchsia-200",
+  "rounded-md border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs text-teal-800 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200",
+  "rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200",
+  "rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs text-indigo-800 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200",
+  "rounded-md border border-pink-200 bg-pink-50 px-2 py-0.5 text-xs text-pink-800 dark:border-pink-900/60 dark:bg-pink-950/40 dark:text-pink-200",
+];
 
 let modelDraftId = 0;
 
 function nextModelDraftId(): string {
   modelDraftId += 1;
   return `platform-model-${modelDraftId}`;
+}
+
+function baseUrlHost(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return "";
+  try {
+    return new URL(trimmed).hostname;
+  } catch {
+    try {
+      return new URL(`http://${trimmed}`).hostname;
+    } catch {
+      return "";
+    }
+  }
+}
+
+function providerKey(provider: string, baseUrl: string): string {
+  const providerName = provider.trim().toLowerCase();
+  const host = baseUrlHost(baseUrl).toLowerCase();
+  return host ? `${providerName}@${host}` : providerName;
+}
+
+function providerBadgeLabel(provider: string, baseUrl: string): string {
+  const providerName = provider.trim();
+  const host = baseUrlHost(baseUrl);
+  return host ? `${providerName} @ ${host}` : providerName;
+}
+
+function modelNameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function badgeColorClassMap(keys: string[], classNames: readonly string[]): ReadonlyMap<string, string> {
+  const uniqueKeys = Array.from(new Set(keys.filter(Boolean))).sort();
+  return new Map(uniqueKeys.map((key, index) => [key, classNames[index % classNames.length]]));
+}
+
+function providerColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
+  return badgeColorClassMap(models.map((model) => providerKey(model.provider, model.baseUrl)), providerBadgeClassNames);
+}
+
+function modelNameColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
+  return badgeColorClassMap(models.map((model) => modelNameKey(model.name)), modelBadgeClassNames);
+}
+
+function providerBadgeClassName(provider: string, baseUrl: string, providerColors: ReadonlyMap<string, string>): string {
+  const normalized = providerKey(provider, baseUrl);
+  if (!normalized) return neutralBadgeClassName;
+  const className = providerColors.get(normalized);
+  if (className) return className;
+  let hash = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
+  }
+  return providerBadgeClassNames[hash % providerBadgeClassNames.length];
+}
+
+function modelNameBadgeClassName(name: string, modelNameColors: ReadonlyMap<string, string>): string {
+  const normalized = modelNameKey(name);
+  if (!normalized) return neutralBadgeClassName;
+  return modelNameColors.get(normalized) ?? modelBadgeClassNames[0];
+}
+
+function compactTokenCount(value: string): string {
+  const normalized = value.trim().replaceAll(",", "").replaceAll("_", "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return value.trim();
+  if (parsed < 1_000) return String(parsed);
+  const compact = parsed / 1_000;
+  return `${Number.isInteger(compact) ? compact.toFixed(0) : compact.toFixed(1)}k`;
+}
+
+function tokenLabel(value: string, t: Translate): string {
+  return `${value} ${t("units.tokens")}`;
+}
+
+function thinkingBadgeLabel(thinking: ThinkingDraft, thinkingBudgetTokens: string, t: Translate): string {
+  if (thinkingBudgetTokens.trim() === "0") return t("thinking.false");
+  const budget = thinkingBudgetTokens.trim();
+  if (!thinking) return tokenLabel(budget, t);
+  const label = t(`thinking.${thinking}`);
+  return budget ? `${label}: ${tokenLabel(budget, t)}` : label;
 }
 
 function modelId(model: Pick<ModelDraft, "provider" | "name" | "id">): string {
@@ -70,7 +176,7 @@ function budgetDraftFromSettings(budget: SessionBudgetSettings): PlatformDraft["
   return {
     input_tokens: budget.input_tokens?.toString() ?? "",
     output_tokens: budget.output_tokens?.toString() ?? "",
-    cost_usd: budget.cost_usd?.toString() ?? "",
+    cost_usd: budgetCostValue(budget.cost_usd),
     tool_calls: budget.tool_calls?.toString() ?? "",
   };
 }
@@ -110,13 +216,23 @@ function numericLimit(value: string, field: string, t: Translate): number | null
   return parsed > 0 ? parsed : null;
 }
 
-function budgetCostValue(value: string): string {
-  const trimmed = value.trim();
+function nonNegativeLimit(value: string, field: string, t: Translate): number | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(t("errors.wholeNumber", { field }));
+  }
+  return Number(normalized);
+}
+
+function budgetCostValue(value: number | string | null | undefined): string {
+  const trimmed = value === null || value === undefined ? "" : String(value).trim();
   if (!trimmed) return "";
   const normalized = trimmed.replace(",", ".");
   const parsed = Number(normalized);
+  if (parsed === 0) return "";
   if (!Number.isFinite(parsed)) return trimmed;
-  return parsed.toFixed(2).replace(/\.00$/, "");
+  return parsed.toFixed(2);
 }
 
 function budgetFromDraft(draft: PlatformDraft, t: Translate): SessionBudgetSettings {
@@ -127,7 +243,7 @@ function budgetFromDraft(draft: PlatformDraft, t: Translate): SessionBudgetSetti
   return {
     input_tokens: numericLimit(draft.budget.input_tokens, t("fields.inputTokens"), t),
     output_tokens: numericLimit(draft.budget.output_tokens, t("fields.outputTokens"), t),
-    cost_usd: cost ? budgetCostValue(cost) : null,
+    cost_usd: cost ? budgetCostValue(cost) || null : null,
     tool_calls: numericLimit(draft.budget.tool_calls, t("fields.toolCalls"), t),
   };
 }
@@ -163,7 +279,7 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
       id,
       max_input_tokens: numericLimit(model.maxInputTokens, t("fields.maxInputTokens"), t),
       thinking: thinkingFromDraft(model.thinking),
-      thinking_budget_tokens: numericLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t),
+      thinking_budget_tokens: nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t),
       base_url: model.baseUrl.trim() || null,
       api_key: model.apiKeySource === "none" ? { source: null } : {
         source: model.apiKeySource,
@@ -274,6 +390,8 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   }, [notice]);
 
   const modelOptions = useMemo(() => draftModelOptions(draft?.models ?? []), [draft?.models]);
+  const providerColors = useMemo(() => providerColorClassMap(draft?.models ?? []), [draft?.models]);
+  const modelNameColors = useMemo(() => modelNameColorClassMap(draft?.models ?? []), [draft?.models]);
   const changed = useMemo(() => comparableDraft(draft) !== null && JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableDraft(settings ? draftFromSettings(settings) : null)), [draft, settings]);
   const agentOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.agent), [draft?.defaultModels.agent, modelOptions]);
   const sentinelOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.sentinel), [draft?.defaultModels.sentinel, modelOptions]);
@@ -334,7 +452,6 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
             <div className={cn("min-h-5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
               {error ? error : notice ? <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" />{notice}</span> : null}
             </div>
-            <p className="break-all text-xs text-muted-foreground">{t("configPath", { path: settings.config_path })}</p>
           </div>
           <button
             type="submit"
@@ -369,23 +486,26 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
           </div>
         </Section>
 
-        <Section title={t("sections.catalog")}>
+        <Section
+          title={t("sections.catalog")}
+          action={(
+            <SecondaryButton disabled={saving} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
+              <Plus className="h-4 w-4" />
+              {t("actions.addModel")}
+            </SecondaryButton>
+          )}
+        >
           <div className="space-y-3">
-            <div className="flex justify-end">
-              <SecondaryButton disabled={saving} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
-                <Plus className="h-4 w-4" />
-                {t("actions.addModel")}
-              </SecondaryButton>
-            </div>
             <datalist id="platform-model-provider-presets">
               {providerPresets.map((provider) => <option key={provider} value={provider} />)}
             </datalist>
-            {draft.models.map((model, index) => (
+            {draft.models.map((model) => (
               <ModelRow
                 key={model.rowId}
                 model={model}
-                index={index}
                 disabled={saving}
+                providerColors={providerColors}
+                modelNameColors={modelNameColors}
                 onChange={(patch) => updateModel(model.rowId, patch)}
                 onRemove={() => updateDraft({ models: draft.models.filter((item) => item.rowId !== model.rowId) })}
                 t={t}
@@ -398,10 +518,13 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-border bg-background/88 p-4 shadow-sm sm:p-5">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h2>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h2>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {children}
     </section>
   );
@@ -432,21 +555,44 @@ function SecondaryButton({ children, disabled, onClick }: { children: React.Reac
   );
 }
 
-function ModelRow({ model, index, disabled, onChange, onRemove, t }: { model: ModelDraft; index: number; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; providerColors: ReadonlyMap<string, string>; modelNameColors: ReadonlyMap<string, string>; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
   const effectiveId = modelId(model);
+  const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
+  const provider = model.provider.trim();
+  const providerLabel = providerBadgeLabel(provider, model.baseUrl);
+  const summaryBadges: SummaryBadge[] = [];
+  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, model.baseUrl, providerColors), icon: Cloud });
+  if (model.id.trim() && model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name, modelNameColors), icon: BrainCircuit });
+  if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
+  if (model.thinking || model.thinkingBudgetTokens.trim()) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, model.thinkingBudgetTokens, t), className: neutralBadgeClassName, icon: Brain });
   const rawSecretConfigured = model.apiKeySource === "raw" && model.apiKeyConfigured;
   return (
-    <div className="rounded-lg border border-border bg-background/70 p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">{t("modelRow", { index: index + 1 })}</div>
-          <div className="break-all font-mono text-xs text-muted-foreground">{effectiveId}</div>
+    <details className="group rounded-lg border border-border bg-background/70" open={!model.name.trim() || undefined}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0 space-y-2">
+          <div className="break-all font-mono text-sm font-medium">{summaryId}</div>
+          {summaryBadges.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {summaryBadges.map((badge) => {
+                const Icon = badge.icon;
+                return (
+                  <span key={badge.label} className={cn(badge.className, Icon ? "inline-flex items-center gap-1" : null)}>
+                    {Icon ? <Icon className="h-3 w-3" /> : null}
+                    {badge.label}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
-        <button type="button" disabled={disabled} onClick={onRemove} title={t("actions.removeModel")} aria-label={t("actions.removeModel")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" disabled={disabled} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onRemove(); }} title={t("actions.removeModel")} aria-label={t("actions.removeModel")} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50">
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </div>
+      </summary>
+      <div className="grid gap-4 border-t border-border p-4 md:grid-cols-2 lg:grid-cols-3">
         <Field label={t("fields.provider")}>
           <input list="platform-model-provider-presets" value={model.provider} disabled={disabled} onChange={(event) => onChange({ provider: event.target.value })} className={inputClassName} />
         </Field>
@@ -485,6 +631,6 @@ function ModelRow({ model, index, disabled, onChange, onRemove, t }: { model: Mo
           </Field>
         ) : null}
       </div>
-    </div>
+    </details>
   );
 }
