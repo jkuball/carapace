@@ -68,6 +68,22 @@ class SessionModelMixin(SessionModelHost):
         """Build per-model request settings from the configured catalog."""
         return model_settings_for_config(self._config, name, default_thinking=True)
 
+    def apply_platform_model_config(
+        self,
+        config: Config,
+        *,
+        model_factory: Callable[[str], Model] | None,
+        agent_model: Model | None,
+    ) -> None:
+        self._config = config
+        self._model_factory = model_factory
+        self._agent_model = agent_model
+        for active in self._active.values():
+            if active.agent_model_name is None:
+                active.agent_model = None
+            if active.sentinel_model_name is None and active.sentinel is not None:
+                active.sentinel.set_model(config.agent.sentinel_model)
+
     def _restore_persisted_model_overrides(self, active: ActiveSession) -> None:
         """Validate restored overrides, falling back to defaults when they are no longer usable."""
         state_changed = False

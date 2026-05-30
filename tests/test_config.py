@@ -20,6 +20,15 @@ def test_load_config_defaults(tmp_path: Path):
     assert cfg.sandbox.k8s_session_pvc_storage_class == ""
 
 
+def test_load_config_creates_missing_file(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+
+    cfg = load_config(tmp_path)
+
+    assert cfg.carapace.log_level == "info"
+    assert config_path.read_text() == "{}\n"
+
+
 def test_load_config_from_yaml(tmp_path: Path):
     (tmp_path / "config.yaml").write_text(
         "cache:\n  ttl_seconds: 120\n  redis_url: redis://redis:6379/0\n"

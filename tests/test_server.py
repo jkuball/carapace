@@ -24,6 +24,7 @@ from carapace.config import load_config
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
+from carapace.models.config import AgentConfig, AvailableModelEntry, Secret
 from carapace.models.credentials import (
     BasicAuthConfig,
     BitwardenCredentialBackendConfig,
@@ -80,6 +81,7 @@ def _setup_server(tmp_path, monkeypatch):
     # time, but these tests never call the LLM.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-fake-for-tests")
     monkeypatch.setenv("CARAPACE_TOKEN", _TEST_TOKEN)
+    monkeypatch.setenv("CARAPACE_CONFIG", str(tmp_path / "config.yaml"))
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
     srv._session_list_cache = _FakeSessionListCache()
@@ -99,6 +101,7 @@ def _setup_server(tmp_path, monkeypatch):
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
     srv._data_dir = tmp_path
+    srv._config_path = tmp_path / "config.yaml"
     srv._config = config
     srv._user_credential_registries = {}
     srv._engine = SessionEngine(
@@ -249,6 +252,99 @@ def test_admin_user_management_requires_admin_role(client, auth_headers, admin_a
     login_resp = client.post("/api/auth/login", json={"username": "ada", "password": "correct-horse-battery"})
 
     assert login_resp.status_code == 200
+
+
+def test_admin_platform_settings_requires_admin_role(client, auth_headers, admin_auth_headers):
+    unauthenticated_resp = client.get("/api/admin/platform/settings")
+    assert unauthenticated_resp.status_code == 401
+
+    non_admin_resp = client.get("/api/admin/platform/settings", headers=auth_headers)
+    assert non_admin_resp.status_code == 403
+
+    admin_resp = client.get("/api/admin/platform/settings", headers=admin_auth_headers)
+    assert admin_resp.status_code == 200
+    assert admin_resp.json()["settings"]["default_models"]["agent"] == srv._config.agent.model
+
+
+def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_headers):
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {"cost_usd": "2.50", "tool_calls": 8},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                    "max_input_tokens": 1234,
+                    "thinking_budget_tokens": 0,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()["settings"]
+    assert body["default_models"] == {"agent": "local:test", "sentinel": "local:test", "title": "local:test"}
+    assert srv._config.agent.model == "local:test"
+    assert srv._engine.config.agent.model == "local:test"
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["model"] == "local:test"
+    assert raw["agent"]["available_models"][1]["api_key"] == {"env": "ANTHROPIC_API_KEY"}
+
+
+def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client, admin_auth_headers):
+    srv._config.agent = AgentConfig(
+        model="local:test",
+        sentinel_model="local:test",
+        title_model="local:test",
+        available_models=[
+            AvailableModelEntry(
+                provider="openai",
+                name="gpt-4o-mini",
+                id="local:test",
+                base_url="http://127.0.0.1:1234/v1",
+                api_key=Secret(raw="existing-secret"),
+            )
+        ],
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "raw"},
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["available_models"][0]["api_key"] == {"raw": "existing-secret"}
+    returned_model = resp.json()["settings"]["available_models"][0]
+    assert returned_model["api_key"] == {"source": "raw", "value": None, "configured": True}
 
 
 def test_admin_user_update_can_clear_email(client, admin_auth_headers):

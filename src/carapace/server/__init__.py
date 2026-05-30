@@ -58,6 +58,7 @@ from .jobs import _jobs_scheduler_loop
 from .jobs import router as jobs_router
 from .notifications import _set_notification_presence as _set_notification_presence
 from .notifications import router as notifications_router
+from .platform_settings import router as platform_settings_router
 from .runtime import KnowledgeGitConfig, KnowledgeGitRuntime, MatrixChannelHandle, MatrixChannelManager
 from .session_sandbox import router as session_sandbox_router
 from .sessions import router as sessions_router
@@ -74,6 +75,7 @@ load_dotenv()
 # --- Shared state populated in lifespan ---
 
 _data_dir: Path
+_config_path: Path
 _config: Config
 _engine: SessionEngine
 _git_handler: GitHttpHandler
@@ -239,6 +241,7 @@ async def _autosave_inactive_sessions() -> None:
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     global \
         _data_dir, \
+        _config_path, \
         _config, \
         _engine, \
         _git_handler, \
@@ -256,6 +259,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # 1. Load config
     config_path = get_config_path()
+    _config_path = config_path
     _config = load_config()
     _data_dir = _resolve_data_dir(config_path, _config)
     knowledge_dir = _resolve_knowledge_dir(config_path, _config)
@@ -671,6 +675,7 @@ router.include_router(history_router)
 router.include_router(jobs_router)
 router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
+router.include_router(platform_settings_router)
 router.include_router(user_settings_router)
 router.include_router(websocket_router)
 router.include_router(auth_router)

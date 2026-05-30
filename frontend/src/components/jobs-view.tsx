@@ -17,6 +17,7 @@ import {
 import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { AdminUsersPage } from "@/components/admin-users-page";
+import { PlatformSettingsView } from "@/components/platform-settings-view";
 import { PreferencesView } from "@/components/preferences-view";
 import { UserSettingsView } from "@/components/user-settings-view";
 import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
@@ -38,7 +39,7 @@ interface JobsViewProps {
   onTabChange: (tab: SettingsTab) => void;
 }
 
-export type SettingsTab = "jobs" | "platform-users" | "preferences" | "account";
+export type SettingsTab = "jobs" | "platform-models" | "platform-users" | "preferences" | "account";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -631,8 +632,9 @@ export function JobsView({
   const usePersistentSession = draft.persistent_session_id !== null;
   const hasPersistentSessionId = Boolean(draft.persistent_session_id?.trim());
   const defaultModelLabel = tRoot("commandResult.models.default");
-  const effectiveActiveTab = activeTab === "platform-users" && !isAdmin ? "preferences" : activeTab;
+  const effectiveActiveTab = activeTab.startsWith("platform-") && !isAdmin ? "preferences" : activeTab;
   const isJobsTab = effectiveActiveTab === "jobs";
+  const isPlatformModelsTab = effectiveActiveTab === "platform-models";
   const isPlatformUsersTab = effectiveActiveTab === "platform-users";
   const isPreferencesTab = effectiveActiveTab === "preferences";
   const isAccountTab = effectiveActiveTab === "account";
@@ -700,6 +702,18 @@ export function JobsView({
                 <span className="pb-2 pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                   {tRoot("navigation.platform")}
                 </span>
+                <button
+                  id="settings-tab-platform-models"
+                  type="button"
+                  role="tab"
+                  aria-selected={isPlatformModelsTab}
+                  aria-controls="settings-panel-platform-models"
+                  tabIndex={isPlatformModelsTab ? 0 : -1}
+                  onClick={() => onTabChange("platform-models")}
+                  className={tabButtonClassName(isPlatformModelsTab)}
+                >
+                  {tRoot("navigation.models")}
+                </button>
                 <button
                   id="settings-tab-platform-users"
                   type="button"
@@ -1275,6 +1289,15 @@ export function JobsView({
           className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
         >
           <UserSettingsView server={server} token={token} />
+        </div>
+      ) : isPlatformModelsTab ? (
+        <div
+          id="settings-panel-platform-models"
+          role="tabpanel"
+          aria-labelledby="settings-tab-platform-models"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
+        >
+          <PlatformSettingsView server={server} token={token} />
         </div>
       ) : isPlatformUsersTab ? (
         <div

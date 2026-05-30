@@ -41,7 +41,7 @@ spec:
               containerPort: {{ .Values.server.proxyPort }}
           env:
             - name: CARAPACE_CONFIG
-              value: /var/lib/carapace/config.yaml
+              value: /var/lib/carapace-config/config.yaml
             - name: CARAPACE_SERVER_PORT
               value: {{ .Values.server.apiPort | quote }}
             - name: CARAPACE_SERVER_SANDBOX_PORT
@@ -116,12 +116,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/carapace
-          {{- if .Values.config }}
             - name: config
-              mountPath: /var/lib/carapace/config.yaml
-              subPath: config.yaml
-              readOnly: true
-          {{- end }}
+              mountPath: /var/lib/carapace-config
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -146,8 +142,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-data
-      {{- if .Values.config }}
         - name: config
-          configMap:
-            name: {{ .Release.Name }}-config
-      {{- end }}
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-config

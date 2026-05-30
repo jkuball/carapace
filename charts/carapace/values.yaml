@@ -63,11 +63,22 @@ ingress:
 
 # -- Persistence
 persistence:
-  # Data PVC (config, sessions, knowledge — server-only, no sandbox access needed)
+  # Data PVC (sessions, knowledge — server-only, no sandbox access needed)
   data:
     # -- Leave empty to use the cluster default StorageClass
     storageClassName: ""
     size: 10Gi
+    # -- Finalizers to protect the PVC from accidental deletion (e.g. by ArgoCD pruning)
+    finalizers: []
+    # - kubernetes.io/pvc-protection
+  # Config PVC mounted read-write at /var/lib/carapace-config.
+  # The app creates config.yaml there on first startup when it is missing.
+  config:
+    # -- Leave empty to use persistence.data.storageClassName, then the cluster default StorageClass
+    storageClassName: ""
+    size: 16Mi
+    accessModes:
+      - ReadWriteMany
     # -- Finalizers to protect the PVC from accidental deletion (e.g. by ArgoCD pruning)
     finalizers: []
     # - kubernetes.io/pvc-protection
@@ -86,18 +97,6 @@ resources:
 # -- Overwrite existing asset files (SOUL.md, SECURITY.md, bundled skills, …)
 # with the versions bundled in the container image on every startup.
 resetAssets: false
-
-# -- Application configuration (written to config.yaml and mounted into /data).
-# When non-empty a ConfigMap is created and mounted at /data/config.yaml.
-# Example:
-#   config:
-#     agent:
-#       model: anthropic:claude-sonnet-4-6
-#       sentinel_model: anthropic:claude-haiku-4-5
-#     channels:
-#       matrix:
-#         enabled: true
-config: {}
 
 # -- Standalone Bitwarden CLI proxy instance(s) for Bitwarden-compatible credential backends.
 # Each entry spawns a companion Pod running `bw serve` behind an nginx Basic Auth proxy.

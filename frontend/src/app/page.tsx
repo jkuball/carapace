@@ -128,7 +128,7 @@ function HomeContent() {
   })();
   const initialSettingsTab: SettingsTab = (() => {
     const tab = searchParams.get("tab");
-    if (tab === "jobs" || tab === "platform-users" || tab === "account") {
+    if (tab === "jobs" || tab === "platform-models" || tab === "platform-users" || tab === "account") {
       return tab;
     }
     return "preferences";
@@ -568,6 +568,8 @@ function HomeContent() {
     if (activeView === "settings") {
       const viewTitle = settingsTab === "jobs"
         ? t("navigation.jobs")
+        : settingsTab === "platform-models"
+          ? t("navigation.models")
         : settingsTab === "platform-users"
           ? t("navigation.users")
           : t("navigation.settings");
