@@ -35,6 +35,7 @@ class MatrixChannelManager:
     def __init__(self, channel_factory: MatrixChannelFactory) -> None:
         self._channel_factory = channel_factory
         self._channels: dict[str, MatrixChannelHandle] = {}
+        self._configs: dict[str, UserConfig] = {}
         self._lock = asyncio.Lock()
 
     @property
@@ -52,20 +53,34 @@ class MatrixChannelManager:
                 if current is not None:
                     await current.stop()
                     del self._channels[normalized_username]
+                    self._configs.pop(normalized_username, None)
                 return
 
+            previous_config = self._configs.get(normalized_username)
             if current is not None:
                 await current.stop()
                 del self._channels[normalized_username]
 
             replacement = self._channel_factory(normalized_username, user_config)
-            await replacement.start()
+            try:
+                await replacement.start()
+            except Exception:
+                if previous_config is not None and previous_config.channels.matrix.enabled:
+                    rollback = self._channel_factory(normalized_username, previous_config)
+                    try:
+                        await rollback.start()
+                        self._channels[normalized_username] = rollback
+                    except Exception as rollback_exc:
+                        logger.warning(f"Matrix channel rollback for {normalized_username!r} failed: {rollback_exc}")
+                raise
             self._channels[normalized_username] = replacement
+            self._configs[normalized_username] = user_config.model_copy(deep=True)
 
     async def stop_all(self) -> None:
         async with self._lock:
             channels = list(self._channels.items())
             self._channels.clear()
+            self._configs.clear()
         for username, channel in channels:
             try:
                 await channel.stop()

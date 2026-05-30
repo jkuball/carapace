@@ -431,7 +431,7 @@ def test_user_settings_default_changes_reload_enabled_matrix(client, auth_header
 
 def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth_headers, monkeypatch):
     manager = MagicMock()
-    manager.reload_user = AsyncMock(side_effect=HTTPException(status_code=500, detail="matrix failed"))
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
     runtime = MagicMock()
     runtime.apply_config = AsyncMock()
     monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
@@ -448,8 +448,44 @@ def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth
 
     assert resp.status_code == 500
     assert "matrix failed" in resp.json()["detail"]
-    manager.reload_user.assert_awaited_once()
-    runtime.apply_config.assert_awaited_once()
+    assert manager.reload_user.await_count == 2
+    assert runtime.apply_config.await_count == 2
+
+
+def test_user_settings_does_not_persist_git_when_reload_fails(client, auth_headers, monkeypatch):
+    runtime = MagicMock()
+    runtime.apply_config = AsyncMock(side_effect=HTTPException(status_code=500, detail="git failed"))
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"git": {"remote": "https://git.example.test/thies/knowledge.git"}},
+    )
+
+    assert resp.status_code == 500
+    assert "git failed" in resp.json()["detail"]
+    user = srv._auth_store.get_user("thies")
+    assert user is not None
+    assert user.config.git.remote == ""
+
+
+def test_user_settings_does_not_persist_matrix_when_reload_fails(client, auth_headers, monkeypatch):
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"enabled": True}},
+    )
+
+    assert resp.status_code == 500
+    assert "matrix failed" in resp.json()["detail"]
+    user = srv._auth_store.get_user("thies")
+    assert user is not None
+    assert user.config.channels.matrix.enabled is False
 
 
 def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):

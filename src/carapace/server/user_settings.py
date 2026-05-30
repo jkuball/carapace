@@ -17,6 +17,7 @@ from ..models.matrix import MatrixChannelConfig
 from ..models.session import SessionBudget
 from ..models.user import UserConfig, UserDefaultModelsConfig, UserGitConfig
 from .auth import verify_token
+from .runtime import KnowledgeGitConfig
 from .state import server_module
 
 server = server_module()
@@ -305,20 +306,66 @@ async def _reload_matrix_settings(username: str, config: UserConfig) -> None:
         raise
     except Exception as exc:
         logger.exception(f"Matrix settings reload failed for user {username!r}")
-        raise HTTPException(status_code=500, detail=f"Matrix settings saved, but reload failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Matrix settings reload failed: {exc}") from exc
 
 
-async def _reload_git_settings() -> None:
+def _knowledge_git_config_with_candidate(username: str, config: UserConfig) -> KnowledgeGitConfig:
+    configured: list[tuple[str, UserGitConfig]] = []
+    normalized_username = normalize_username(username)
+    for stored_username, stored_user in sorted(_auth_store().load_users().users.items()):
+        user_config = config if normalize_username(stored_username) == normalized_username else stored_user.config
+        if stored_user.enabled and user_config.git.remote:
+            configured.append((stored_username, user_config.git))
+
+    if not configured:
+        return KnowledgeGitConfig()
+    if len(configured) > 1:
+        owners = ", ".join(stored_username for stored_username, _ in configured)
+        raise HTTPException(
+            status_code=400,
+            detail=f"knowledge Git remote is configured for multiple enabled users: {owners}",
+        )
+
+    owner, git = configured[0]
+    return KnowledgeGitConfig(
+        owner=owner,
+        remote=git.remote,
+        branch=git.branch,
+        author=git.author,
+        token=git.token,
+    )
+
+
+async def _reload_git_settings(config: KnowledgeGitConfig) -> None:
     runtime = getattr(server, "_knowledge_git_runtime", None)
     if runtime is None:
         raise HTTPException(status_code=503, detail="Git runtime is not initialized")
     try:
-        await runtime.apply_config(server._select_knowledge_git_config(_auth_store()))
+        await runtime.apply_config(config)
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Knowledge Git settings reload failed")
-        raise HTTPException(status_code=500, detail=f"Git settings saved, but reload failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Git settings reload failed: {exc}") from exc
+
+
+async def _rollback_settings_runtime(
+    username: str,
+    config: UserConfig,
+    *,
+    matrix_changed: bool,
+    git_changed: bool,
+) -> None:
+    if matrix_changed:
+        try:
+            await _reload_matrix_settings(username, config)
+        except HTTPException as exc:
+            logger.warning(f"Matrix settings runtime rollback failed for user {username!r}: {exc.detail}")
+    if git_changed:
+        try:
+            await _reload_git_settings(_knowledge_git_config_with_candidate(username, config))
+        except HTTPException as exc:
+            logger.warning(f"Git settings runtime rollback failed: {exc.detail}")
 
 
 def _settings_response(username: str) -> UserSettingsResponse:
@@ -436,14 +483,6 @@ async def update_user_settings(
     )
     git_changed = original_config.git != next_config.git
 
-    try:
-        _auth_store().update_user(user.username, {"config": next_config})
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    if credentials_changed:
-        await _invalidate_user_credential_registry(user.username)
-
     runtime_errors: list[HTTPException] = []
     if matrix_changed:
         try:
@@ -452,12 +491,32 @@ async def update_user_settings(
             runtime_errors.append(exc)
     if git_changed:
         try:
-            await _reload_git_settings()
+            await _reload_git_settings(_knowledge_git_config_with_candidate(user.username, next_config))
         except HTTPException as exc:
             runtime_errors.append(exc)
 
     if runtime_errors:
+        await _rollback_settings_runtime(
+            user.username,
+            original_config,
+            matrix_changed=matrix_changed,
+            git_changed=git_changed,
+        )
         detail = "; ".join(error.detail for error in runtime_errors)
         raise HTTPException(status_code=runtime_errors[0].status_code, detail=detail)
+
+    try:
+        _auth_store().update_user(user.username, {"config": next_config})
+    except ValueError as exc:
+        await _rollback_settings_runtime(
+            user.username,
+            original_config,
+            matrix_changed=matrix_changed,
+            git_changed=git_changed,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if credentials_changed:
+        await _invalidate_user_credential_registry(user.username)
 
     return _settings_response(user.username)
