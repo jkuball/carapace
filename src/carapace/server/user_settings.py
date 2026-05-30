@@ -307,11 +307,15 @@ def _validate_default_models(default_models: UserDefaultModelsConfig) -> None:
             raise HTTPException(status_code=400, detail=f"Unknown {field_name} model: {model_id}")
 
 
-def _assert_credentials_supported(credentials: CredentialsConfig) -> None:
+def _assert_credentials_supported(existing: CredentialsConfig, credentials: CredentialsConfig) -> None:
     if _file_backend_allowed():
         return
     for name, backend in credentials.backends.items():
-        if isinstance(backend, FileCredentialBackendConfig):
+        existing_backend = existing.backends.get(name)
+        unchanged_file_backend = (
+            isinstance(existing_backend, FileCredentialBackendConfig) and existing_backend == backend
+        )
+        if isinstance(backend, FileCredentialBackendConfig) and not unchanged_file_backend:
             raise HTTPException(
                 status_code=400,
                 detail=f"File credential backend {name!r} is disabled on this server",
@@ -535,7 +539,7 @@ async def update_user_settings(
 
     if "credentials" in body.model_fields_set:
         credentials = body.credentials or CredentialsConfig()
-        _assert_credentials_supported(credentials)
+        _assert_credentials_supported(original_config.credentials, credentials)
         next_config.credentials = _credentials_with_preserved_backend_passwords(user.username, credentials)
 
     if body.git is not None:

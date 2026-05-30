@@ -24,7 +24,12 @@ from carapace.config import load_config
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
-from carapace.models.credentials import BasicAuthConfig, BitwardenCredentialBackendConfig, CredentialMetadata
+from carapace.models.credentials import (
+    BasicAuthConfig,
+    BitwardenCredentialBackendConfig,
+    CredentialMetadata,
+    FileCredentialBackendConfig,
+)
 from carapace.models.jobs import JobDefinition
 from carapace.models.matrix import MatrixTokenFile, MatrixTokensFile
 from carapace.models.session import SessionBudget
@@ -605,6 +610,43 @@ def test_user_settings_rejects_file_credentials_when_disabled(client, auth_heade
 
     assert resp.status_code == 400
     assert "disabled" in resp.json()["detail"]
+
+
+def test_user_settings_preserves_unchanged_file_credentials_when_disabled(client, auth_headers, monkeypatch):
+    monkeypatch.delenv("CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND", raising=False)
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig(
+                credentials={
+                    "backends": {
+                        "dev": FileCredentialBackendConfig(path="secrets.env", expose=["API_TOKEN"]),
+                    }
+                }
+            )
+        },
+    )
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_budget": {"tool_calls": 4},
+            "credentials": {
+                "backends": {
+                    "dev": {"type": "file", "path": "secrets.env", "expose": ["API_TOKEN"], "hide": []},
+                }
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["settings"]["credentials"]["backends"]["dev"] == {
+        "type": "file",
+        "path": "secrets.env",
+        "expose": ["API_TOKEN"],
+        "hide": [],
+    }
 
 
 def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):

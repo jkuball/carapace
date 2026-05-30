@@ -393,6 +393,10 @@ function userSettingsChanged(draft: UserSettingsDraft | null, settings: UserSett
   return JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableSettings(settings));
 }
 
+function credentialsChanged(draft: UserSettingsDraft, settings: UserSettingsResponseInfo): boolean {
+  return JSON.stringify(comparableCredentialsFromDraft(draft.credentials)) !== JSON.stringify(comparableCredentialsFromSettings(settings.settings.credentials));
+}
+
 function budgetFromDraft(draft: UserSettingsDraft, t: Translate): SessionBudgetSettings {
   return {
     input_tokens: parseOptionalBudgetInteger(draft.budget.input_tokens, t("fields.inputTokens"), t),
@@ -400,6 +404,54 @@ function budgetFromDraft(draft: UserSettingsDraft, t: Translate): SessionBudgetS
     cost_usd: parseOptionalBudgetCost(draft.budget.cost_usd, t("fields.costUsd"), t),
     tool_calls: parseOptionalBudgetInteger(draft.budget.tool_calls, t("fields.toolCalls"), t),
   };
+}
+
+export function buildUserSettingsPatch(
+  draft: UserSettingsDraft,
+  settings: UserSettingsResponseInfo,
+  t: Translate,
+): UserSettingsPatchInput {
+  const includeCredentials = credentialsChanged(draft, settings);
+  let credentialsPayload: unknown;
+  if (includeCredentials) {
+    credentialsPayload = credentialsFromDraft(
+      draft.credentials,
+      settings.capabilities.file_credential_backend,
+      t,
+    );
+  }
+
+  if (draft.matrix.enabled && !draft.matrix.password_set && !draft.matrix.token_set && !draft.matrixPassword.trim()) {
+    throw new Error(t("errors.matrixPasswordRequired"));
+  }
+
+  const body: UserSettingsPatchInput = {
+    default_models: {
+      agent: draft.defaultModels.agent?.trim() || null,
+      sentinel: draft.defaultModels.sentinel?.trim() || null,
+      title: draft.defaultModels.title?.trim() || null,
+    },
+    default_budget: budgetFromDraft(draft, t),
+    matrix: {
+      enabled: draft.matrix.enabled,
+      homeserver: draft.matrix.homeserver,
+      user_id: draft.matrix.user_id,
+      device_name: draft.matrix.device_name,
+      allowed_rooms: draft.matrix.allowed_rooms,
+      allowed_users: draft.matrix.allowed_users,
+      ...(draft.matrixPassword ? { password: draft.matrixPassword, clear_token: true } : {}),
+    },
+    git: {
+      remote: draft.git.remote,
+      branch: draft.git.branch,
+      author: draft.git.author,
+      ...(draft.gitToken ? { token: draft.gitToken } : {}),
+    },
+  };
+  if (includeCredentials) {
+    body.credentials = credentialsPayload;
+  }
+  return body;
 }
 
 export function UserSettingsView({ server, token }: { server: string; token: string }) {
@@ -501,60 +553,16 @@ export function UserSettingsView({ server, token }: { server: string; token: str
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!draft || !settingsChanged) return;
+    if (!draft || !settings || !settingsChanged) return;
 
-    let credentialsPayload: unknown;
+    let body: UserSettingsPatchInput;
     try {
-      credentialsPayload = credentialsFromDraft(
-        draft.credentials,
-        settings?.capabilities.file_credential_backend ?? false,
-        t,
-      );
-    } catch (credentialsError) {
-      setError(credentialsError instanceof Error ? credentialsError.message : t("errors.credentialsInvalid"));
+      body = buildUserSettingsPatch(draft, settings, t);
+    } catch (settingsError) {
+      setError(settingsError instanceof Error ? settingsError.message : t("errors.save"));
       setNotice(null);
       return;
     }
-
-    if (draft.matrix.enabled && !draft.matrix.password_set && !draft.matrix.token_set && !draft.matrixPassword.trim()) {
-      setError(t("errors.matrixPasswordRequired"));
-      setNotice(null);
-      return;
-    }
-
-    let defaultBudget: SessionBudgetSettings;
-    try {
-      defaultBudget = budgetFromDraft(draft, t);
-    } catch (budgetError) {
-      setError(budgetError instanceof Error ? budgetError.message : t("errors.save"));
-      setNotice(null);
-      return;
-    }
-
-    const body: UserSettingsPatchInput = {
-      default_models: {
-        agent: draft.defaultModels.agent?.trim() || null,
-        sentinel: draft.defaultModels.sentinel?.trim() || null,
-        title: draft.defaultModels.title?.trim() || null,
-      },
-      default_budget: defaultBudget,
-      matrix: {
-        enabled: draft.matrix.enabled,
-        homeserver: draft.matrix.homeserver,
-        user_id: draft.matrix.user_id,
-        device_name: draft.matrix.device_name,
-        allowed_rooms: draft.matrix.allowed_rooms,
-        allowed_users: draft.matrix.allowed_users,
-        ...(draft.matrixPassword ? { password: draft.matrixPassword, clear_token: true } : {}),
-      },
-      credentials: credentialsPayload,
-      git: {
-        remote: draft.git.remote,
-        branch: draft.git.branch,
-        author: draft.git.author,
-        ...(draft.gitToken ? { token: draft.gitToken } : {}),
-      },
-    };
 
     setSaving(true);
     setError(null);
