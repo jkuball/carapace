@@ -191,7 +191,10 @@ def _response() -> PlatformSettingsResponse:
 def _config_writable(path: Path) -> bool:
     if path.exists():
         return path.is_file() and os.access(path, os.W_OK) and os.access(path.parent, os.W_OK)
-    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+    parent = path.parent
+    while not parent.exists() and parent != parent.parent:
+        parent = parent.parent
+    return parent.is_dir() and os.access(parent, os.W_OK)
 
 
 def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | None) -> Secret | None:
@@ -212,8 +215,8 @@ def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | Non
     return Secret(file=patch.value)
 
 
-def _agent_config_from_patch(body: PlatformSettingsPatch) -> AgentConfig:
-    existing_by_id = {entry.model_id: entry for entry in agent_available_model_entries(server._config.agent)}
+def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentConfig) -> AgentConfig:
+    existing_by_id = {entry.model_id: entry for entry in agent_available_model_entries(existing_agent)}
     entries = []
     for patch in body.available_models:
         existing = existing_by_id.get(patch.model_id)
@@ -235,11 +238,11 @@ def _agent_config_from_patch(body: PlatformSettingsPatch) -> AgentConfig:
         title_model=body.default_models.title,
         default_session_budget=body.default_budget,
         available_models=entries,
-        max_parallel_llm=server._config.agent.max_parallel_llm,
-        max_sentinel_calls_per_tool_call=server._config.agent.max_sentinel_calls_per_tool_call,
-        sentinel_domain_batch_window_ms=server._config.agent.sentinel_domain_batch_window_ms,
-        sentinel_timeout_seconds=server._config.agent.sentinel_timeout_seconds,
-        tool_output_max_chars=server._config.agent.tool_output_max_chars,
+        max_parallel_llm=existing_agent.max_parallel_llm,
+        max_sentinel_calls_per_tool_call=existing_agent.max_sentinel_calls_per_tool_call,
+        sentinel_domain_batch_window_ms=existing_agent.sentinel_domain_batch_window_ms,
+        sentinel_timeout_seconds=existing_agent.sentinel_timeout_seconds,
+        tool_output_max_chars=existing_agent.tool_output_max_chars,
     )
 
 
@@ -331,8 +334,11 @@ async def update_platform_settings(
     _admin: Annotated[object, Depends(verify_admin_user)],
 ) -> PlatformSettingsResponse:
     path = _config_path()
+    if not _config_writable(path):
+        raise HTTPException(status_code=409, detail="Config file is not writable")
     document = _read_config_document(path)
-    agent = _agent_config_from_patch(body)
+    existing_config = Config.model_validate(document)
+    agent = _agent_config_from_patch(body, existing_config.agent)
     config = _validated_config_with_agent(agent, document)
     model_factory, agent_model = _runtime_models_for_config(config)
     document["agent"] = _agent_config_to_yaml(config.agent)

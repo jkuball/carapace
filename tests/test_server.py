@@ -25,7 +25,7 @@ from carapace.config import load_config
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
-from carapace.models.config import AgentConfig, AvailableModelEntry, Secret
+from carapace.models.config import AgentConfig
 from carapace.models.credentials import (
     BasicAuthConfig,
     BitwardenCredentialBackendConfig,
@@ -280,6 +280,31 @@ def test_admin_platform_settings_reports_unwritable_config(
     assert resp.json()["config_writable"] is False
 
 
+def test_admin_platform_settings_rejects_patch_when_config_unwritable(
+    client,
+    admin_auth_headers,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(platform_settings.os, "access", lambda _path, _mode: False)
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-haiku-4-5",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "available_models": [{"provider": "anthropic", "name": "claude-haiku-4-5"}],
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Config file is not writable"
+
+
 def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_headers):
     resp = client.patch(
         "/api/admin/platform/settings",
@@ -316,20 +341,91 @@ def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_h
     assert raw["agent"]["available_models"][1]["api_key"] == {"env": "ANTHROPIC_API_KEY"}
 
 
+def test_admin_platform_settings_preserves_on_disk_agent_fields(client, admin_auth_headers):
+    srv._config.agent = AgentConfig()
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "anthropic:claude-haiku-4-5",
+                    "sentinel_model": "anthropic:claude-haiku-4-5",
+                    "title_model": "anthropic:claude-haiku-4-5",
+                    "available_models": [
+                        {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"env": "ANTHROPIC_API_KEY"},
+                        },
+                    ],
+                    "max_parallel_llm": 7,
+                    "max_sentinel_calls_per_tool_call": 3,
+                    "sentinel_domain_batch_window_ms": 250,
+                    "sentinel_timeout_seconds": 42,
+                    "tool_output_max_chars": 12345,
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "local:test",
+                "sentinel": "local:test",
+                "title": "local:test",
+            },
+            "default_budget": {},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+                {
+                    "provider": "openai",
+                    "name": "gpt-4o-mini",
+                    "id": "local:test",
+                    "base_url": "http://127.0.0.1:1234/v1",
+                    "api_key": {"source": "env", "value": "ANTHROPIC_API_KEY"},
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    raw = yaml.safe_load((srv._config_path).read_text())
+    assert raw["agent"]["max_parallel_llm"] == 7
+    assert raw["agent"]["max_sentinel_calls_per_tool_call"] == 3
+    assert raw["agent"]["sentinel_domain_batch_window_ms"] == 250
+    assert raw["agent"]["sentinel_timeout_seconds"] == 42
+    assert raw["agent"]["tool_output_max_chars"] == 12345
+
+
 def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client, admin_auth_headers):
-    srv._config.agent = AgentConfig(
-        model="local:test",
-        sentinel_model="local:test",
-        title_model="local:test",
-        available_models=[
-            AvailableModelEntry(
-                provider="openai",
-                name="gpt-4o-mini",
-                id="local:test",
-                base_url="http://127.0.0.1:1234/v1",
-                api_key=Secret(raw="existing-secret"),
-            )
-        ],
+    srv._config_path.write_text(
+        yaml.safe_dump(
+            {
+                "agent": {
+                    "model": "local:test",
+                    "sentinel_model": "local:test",
+                    "title_model": "local:test",
+                    "available_models": [
+                        {
+                            "provider": "openai",
+                            "name": "gpt-4o-mini",
+                            "id": "local:test",
+                            "base_url": "http://127.0.0.1:1234/v1",
+                            "api_key": {"raw": "existing-secret"},
+                        }
+                    ],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
     )
 
     resp = client.patch(
