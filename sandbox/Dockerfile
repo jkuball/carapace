@@ -12,7 +12,7 @@ RUN apt-get update \
    && apt-get install -y --no-install-recommends nodejs \
    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv@sha256:440fd6477af86a2f1b38080c539f1672cd22acb1b1a47e321dba5158ab08864d /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv@sha256:03bdc89bb9798628846e60c3a9ad19006c8c3c724ccd2985a33145c039a0577b /uv /usr/local/bin/uv
 
 ENV PATH="/workspace/.carapace/bin:/root/.local/bin:${PATH}" \
    NODE_USE_ENV_PROXY=1
