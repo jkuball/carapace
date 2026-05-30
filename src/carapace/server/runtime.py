@@ -54,16 +54,13 @@ class MatrixChannelManager:
                     del self._channels[normalized_username]
                 return
 
+            if current is not None:
+                await current.stop()
+                del self._channels[normalized_username]
+
             replacement = self._channel_factory(normalized_username, user_config)
             await replacement.start()
             self._channels[normalized_username] = replacement
-
-            if current is None:
-                return
-            try:
-                await current.stop()
-            except Exception as exc:
-                logger.warning(f"Matrix channel reload for {normalized_username!r}: old channel stop failed: {exc}")
 
     async def stop_all(self) -> None:
         async with self._lock:
@@ -130,5 +127,6 @@ class KnowledgeGitRuntime:
             self._config = config
 
     async def push_if_configured(self) -> None:
-        if self._git_store.remote_configured:
-            await self._git_store.push_to_remote()
+        async with self._lock:
+            if self._git_store.remote_configured:
+                await self._git_store.push_to_remote()

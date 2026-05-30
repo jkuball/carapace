@@ -47,8 +47,10 @@ async def test_matrix_channel_manager_replaces_running_channel() -> None:
 
 
 @pytest.mark.anyio
-async def test_matrix_channel_manager_keeps_old_channel_when_replacement_fails() -> None:
-    created = [_FakeMatrixChannel(), _FakeMatrixChannel(start_error=RuntimeError("login failed"))]
+async def test_matrix_channel_manager_stops_old_channel_before_replacement() -> None:
+    first = _FakeMatrixChannel()
+    second = _FakeMatrixChannel(start_error=RuntimeError("login failed"))
+    created = [first, second]
 
     def channel_factory(_username: str, _config: UserConfig) -> _FakeMatrixChannel:
         return created.pop(0)
@@ -60,7 +62,8 @@ async def test_matrix_channel_manager_keeps_old_channel_when_replacement_fails()
     with pytest.raises(RuntimeError, match="login failed"):
         await manager.reload_user("thies", config)
 
-    assert manager.channel_count == 1
+    assert manager.channel_count == 0
+    assert first.stopped is True
     assert created == []
 
 

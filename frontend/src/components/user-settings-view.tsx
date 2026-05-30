@@ -343,7 +343,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       return;
     }
 
-    if (draft.matrix.enabled && !draft.matrix.password_set && !draft.matrixPassword.trim()) {
+    if (draft.matrix.enabled && !draft.matrix.password_set && !draft.matrix.token_set && !draft.matrixPassword.trim()) {
       setError(t("errors.matrixPasswordRequired"));
       setNotice(null);
       return;
