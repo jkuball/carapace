@@ -95,7 +95,7 @@ def test_create_user_normalizes_persists_and_verifies_password(tmp_path) -> None
     assert persisted["thies"].display_name == "Thies Gerken"
     assert persisted["thies"].email == "thies@example.com"
     assert persisted["thies"].roles == ["admin"]
-    assert persisted["thies"].config.default_models == {"agent": "anthropic:test"}
+    assert persisted["thies"].config.default_models.agent == "anthropic:test"
     assert store.verify_password("THIES", "secret") is not None
     assert store.verify_password("thies", "wrong") is None
 

@@ -7,6 +7,7 @@
         "home": "Home",
         "settings": "Settings",
         "jobs": "Jobs",
+        "account": "Account",
         "preferences": "Preferences",
         "platform": "Admin",
         "users": "Users",
@@ -18,6 +19,106 @@
         "openMenu": "Open account menu",
         "unknown": "Unknown user",
         "logout": "Log out"
+    },
+    "accountSettings": {
+        "status": {
+            "loading": "Loading settings",
+            "unavailable": "Settings are unavailable",
+            "configured": "configured",
+            "notSet": "not set"
+        },
+        "notices": {
+            "saved": "Saved."
+        },
+        "errors": {
+            "load": "Failed to load user settings",
+            "save": "Failed to update user settings",
+            "credentialsInvalid": "Credential backend settings are invalid",
+            "credentialNameRequired": "Credential backend name is required",
+            "credentialNameNoSlash": "Credential backend name {name} must not contain /",
+            "credentialNameDuplicate": "Credential backend name {name} is already used",
+            "fileBackendDisabled": "File credential backends are disabled on this server",
+            "basicAuthUsernameRequired": "Basic Auth username is required for {name}",
+            "basicAuthPasswordRequired": "Basic Auth password is required for {name}",
+            "matrixPasswordRequired": "Matrix password is required when Matrix is enabled",
+            "budgetWholeNumber": "{field} must be a non-negative whole number.",
+            "budgetNumber": "{field} must be a non-negative number."
+        },
+        "sections": {
+            "defaultModels": "Default models",
+            "defaultBudgets": "Default budgets",
+            "matrix": "Matrix",
+            "credentials": "Credentials",
+            "gitRemote": "Git remote"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Title",
+            "inputTokens": "Input tokens",
+            "outputTokens": "Output tokens",
+            "costUsd": "Cost USD",
+            "toolCalls": "Tool calls",
+            "enabled": "Enabled",
+            "homeserver": "Homeserver",
+            "userId": "User ID",
+            "deviceName": "Device name",
+            "password": "Password",
+            "allowedRooms": "Allowed rooms",
+            "allowedUsers": "Allowed users",
+            "remote": "Remote",
+            "branch": "Branch",
+            "author": "Author",
+            "token": "Token",
+            "name": "Name",
+            "path": "Path",
+            "url": "URL",
+            "basicAuth": "Basic Auth",
+            "basicAuthUsername": "Basic Auth username",
+            "basicAuthPassword": "Basic Auth password",
+            "expose": "Expose",
+            "hide": "Hide"
+        },
+        "defaults": {
+            "serverDefault": "Server default",
+            "currentModel": "{model}"
+        },
+        "placeholders": {
+            "addRoom": "Add room, Enter or comma",
+            "addUser": "Add user, Enter or comma",
+            "addIdentifier": "Add identifier, Enter or comma"
+        },
+        "tooltips": {
+            "filePath": "Relative paths are resolved from the server working directory.",
+            "expose": "Allow only these credential identifiers from this backend. Leave empty to allow everything except hidden entries.",
+            "hide": "Deny these credential identifiers from this backend. Ignored when Expose is set."
+        },
+        "actions": {
+            "save": "Save",
+            "saving": "Saving",
+            "addBitwarden": "Bitwarden",
+            "addFile": "File",
+            "remove": "Remove",
+            "removeValue": "Remove {value}",
+            "removeBackend": "Remove backend",
+            "removeBackendAria": "Remove {name}"
+        },
+        "empty": {
+            "credentials": "No credential backends configured"
+        },
+        "credentials": {
+            "backendFallback": "credential backend",
+            "types": {
+                "file": {
+                    "label": "File",
+                    "description": "Local credentials file"
+                },
+                "bitwarden": {
+                    "label": "Bitwarden",
+                    "description": "Password manager proxy"
+                }
+            }
+        }
     },
     "home": {
         "empty": {

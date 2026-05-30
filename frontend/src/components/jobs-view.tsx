@@ -18,6 +18,7 @@ import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { AdminUsersPage } from "@/components/admin-users-page";
 import { PreferencesView } from "@/components/preferences-view";
+import { UserSettingsView } from "@/components/user-settings-view";
 import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import { SwitchRow } from "@/components/switch-row";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
@@ -37,7 +38,7 @@ interface JobsViewProps {
   onTabChange: (tab: SettingsTab) => void;
 }
 
-export type SettingsTab = "jobs" | "platform-users" | "preferences";
+export type SettingsTab = "jobs" | "platform-users" | "preferences" | "account";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -634,6 +635,7 @@ export function JobsView({
   const isJobsTab = effectiveActiveTab === "jobs";
   const isPlatformUsersTab = effectiveActiveTab === "platform-users";
   const isPreferencesTab = effectiveActiveTab === "preferences";
+  const isAccountTab = effectiveActiveTab === "account";
   const tabButtonClassName = (selected: boolean): string => cn(
     "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     selected
@@ -666,6 +668,18 @@ export function JobsView({
                 className={tabButtonClassName(isPreferencesTab)}
               >
                 {tRoot("navigation.preferences")}
+              </button>
+              <button
+                id="settings-tab-account"
+                type="button"
+                role="tab"
+                aria-selected={isAccountTab}
+                aria-controls="settings-panel-account"
+                tabIndex={isAccountTab ? 0 : -1}
+                onClick={() => onTabChange("account")}
+                className={tabButtonClassName(isAccountTab)}
+              >
+                {tRoot("navigation.account")}
               </button>
               <button
                 id="settings-tab-jobs"
@@ -1252,6 +1266,15 @@ export function JobsView({
 
           </div>
         </section>
+        </div>
+      ) : isAccountTab ? (
+        <div
+          id="settings-panel-account"
+          role="tabpanel"
+          aria-labelledby="settings-tab-account"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
+        >
+          <UserSettingsView server={server} token={token} />
         </div>
       ) : isPlatformUsersTab ? (
         <div

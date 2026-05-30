@@ -14,6 +14,7 @@ from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, Too
 
 from .. import security as security
 from ..config import load_workspace_file
+from ..credentials import CredentialBackendError
 from ..llm import model_settings_for_config
 from ..models.credentials import CredentialMetadata
 from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
@@ -290,6 +291,11 @@ async def _cache_skill_credentials(
             meta = await cred_registry.fetch_metadata(decl.vault_path)
         except KeyError:
             meta = CredentialMetadata(vault_path=decl.vault_path, name=decl.vault_path, description=decl.description)
+        except CredentialBackendError as exc:
+            logger.warning(f"Credential metadata fetch failed for {decl.vault_path!r} (skill {skill_name!r}): {exc}")
+            meta_errors.append(f"{decl.vault_path}: {exc}")
+            failed_vault_paths.add(decl.vault_path)
+            continue
         except (httpx.RequestError, httpx.HTTPStatusError) as exc:
             logger.warning(f"Credential metadata fetch failed for {decl.vault_path!r} (skill {skill_name!r}): {exc}")
             meta_errors.append(f"{decl.vault_path}: vault unreachable or error ({type(exc).__name__})")
@@ -339,6 +345,12 @@ async def _cache_skill_credentials(
             value = await cred_registry.fetch(decl.vault_path)
         except KeyError:
             fetch_errors.append(f"Credential {decl.vault_path} not found in vault")
+            continue
+        except CredentialBackendError as exc:
+            logger.warning(
+                f"Credential fetch failed for {decl.vault_path!r} (session {session_id}, skill {skill_name!r}): {exc}"
+            )
+            fetch_errors.append(f"Credential {decl.vault_path}: {exc}")
             continue
         except (httpx.RequestError, httpx.HTTPStatusError) as exc:
             logger.warning(

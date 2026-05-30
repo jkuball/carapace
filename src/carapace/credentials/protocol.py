@@ -9,6 +9,10 @@ from ..models.credentials import (
 )
 
 
+class CredentialBackendError(RuntimeError):
+    """Credential backend failure with a message safe to show to users."""
+
+
 class VaultBackend(Protocol):
     """Abstract interface for credential storage backends.
 

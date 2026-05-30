@@ -70,6 +70,13 @@ class AdminUserResponse(BaseModel):
 
 def _redact_user_config(config: UserConfig) -> dict[str, Any]:
     payload = config.model_dump(mode="json", exclude_none=True)
+    matrix = payload.get("channels", {}).get("matrix", {})
+    if isinstance(matrix, dict):
+        matrix.pop("password", None)
+        matrix.pop("token", None)
+    git = payload.get("git", {})
+    if isinstance(git, dict):
+        git.pop("token", None)
     backends = payload.get("credentials", {}).get("backends", {})
     if isinstance(backends, dict):
         for backend in backends.values():

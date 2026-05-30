@@ -7,7 +7,6 @@ import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -33,13 +32,13 @@ from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
 from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
-from ..credentials import CredentialRegistry, build_credential_registry
+from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..git.http import GitHttpHandler
 from ..git.store import GitStore
 from ..jobs import JobsScheduler, JobsStore
 from ..llm import make_model_factory
 from ..models.config import Config
-from ..models.user import DEFAULT_GIT_AUTHOR, DEFAULT_GIT_BRANCH, UserGitConfig
+from ..models.user import UserConfig, UserGitConfig
 from ..notifications.presence import NotificationPresenceRegistry
 from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
@@ -59,8 +58,10 @@ from .jobs import _jobs_scheduler_loop
 from .jobs import router as jobs_router
 from .notifications import _set_notification_presence as _set_notification_presence
 from .notifications import router as notifications_router
+from .runtime import KnowledgeGitConfig, KnowledgeGitRuntime, MatrixChannelHandle, MatrixChannelManager
 from .session_sandbox import router as session_sandbox_router
 from .sessions import router as sessions_router
+from .user_settings import router as user_settings_router
 from .websocket import ServerMeta as ServerMeta
 from .websocket import VapidPublicKeyResponse as VapidPublicKeyResponse
 from .websocket import WebSocketSubscriber as WebSocketSubscriber
@@ -76,6 +77,8 @@ _data_dir: Path
 _config: Config
 _engine: SessionEngine
 _git_handler: GitHttpHandler
+_knowledge_git_runtime: KnowledgeGitRuntime
+_matrix_channel_manager: MatrixChannelManager
 _user_credential_registries: dict[str, tuple[str, CredentialRegistry]]
 _session_archive: SessionArchiveService
 _session_list_cache: SessionListCache
@@ -85,15 +88,6 @@ _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 _auth_store: AuthStore
-
-
-@dataclass(frozen=True)
-class KnowledgeGitConfig:
-    owner: str | None = None
-    remote: str = ""
-    branch: str = DEFAULT_GIT_BRANCH
-    author: str = DEFAULT_GIT_AUTHOR
-    token: str | None = None
 
 
 def _select_knowledge_git_config(auth_store: AuthStore) -> KnowledgeGitConfig:
@@ -248,6 +242,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _config, \
         _engine, \
         _git_handler, \
+        _knowledge_git_runtime, \
+        _matrix_channel_manager, \
         _user_credential_registries, \
         _session_archive, \
         _session_list_cache, \
@@ -361,6 +357,12 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 
+    _knowledge_git_runtime = KnowledgeGitRuntime(
+        git_store=git_store,
+        sandbox_mgr=_sandbox_mgr,
+        current_config=knowledge_git,
+    )
+
     if _config.sandbox.cleanup_orphans_on_startup:
         known = set(session_mgr.list_sessions())
         removed = await _sandbox_mgr.cleanup_orphaned_sandboxes(known)
@@ -419,7 +421,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         default_branch="main",
         api_port=_config.server.internal_port,
         verify_session_token=_sandbox_mgr.verify_session_token,
-        on_push_success=git_store.push_to_remote if git_store.remote_configured else None,
+        on_push_success=_knowledge_git_runtime.push_if_configured,
     )
 
     proxy = ProxyServer(
@@ -467,42 +469,42 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     archive_task = asyncio.create_task(_session_archive_loop())
     jobs_task = asyncio.create_task(_jobs_scheduler_loop())
 
-    matrix_channels = []
-    matrix_user_configs = [
-        (username, user.config.channels.matrix)
-        for username, user in sorted(_auth_store.load_users().users.items())
-        if user.enabled and user.config.channels.matrix.enabled
-    ]
-    if matrix_user_configs:
+    def matrix_channel_factory(username: str, user_config: UserConfig) -> MatrixChannelHandle:
         from ..channels.matrix import MatrixChannel
 
-        for username, matrix_config in matrix_user_configs:
-            matrix_channel = MatrixChannel(
-                config=matrix_config,
-                full_config=_config,
-                session_mgr=session_mgr,
-                skill_catalog=skill_catalog,
-                agent_model=agent_model,
-                sandbox_mgr=_sandbox_mgr,
-                engine=_engine,
-                owner_user=username,
-                presence_registry=_notification_presence,
-            )
-            await matrix_channel.start()
-            matrix_channels.append(matrix_channel)
+        return MatrixChannel(
+            config=user_config.channels.matrix,
+            full_config=_config,
+            session_mgr=session_mgr,
+            skill_catalog=skill_catalog,
+            agent_model=agent_model,
+            sandbox_mgr=_sandbox_mgr,
+            engine=_engine,
+            owner_user=username,
+            owner_config=user_config,
+            presence_registry=_notification_presence,
+        )
+
+    _matrix_channel_manager = MatrixChannelManager(matrix_channel_factory)
+    for username, stored_user in sorted(_auth_store.load_users().users.items()):
+        if stored_user.enabled and stored_user.config.channels.matrix.enabled:
+            await _matrix_channel_manager.reload_user(username, stored_user.config)
 
     logger.info(
         f"carapace server ready — model={_config.agent.model}, "
         f"skills={len(skill_catalog)}, proxy_port={proxy_port}"
-        + (f", matrix=on ({len(matrix_channels)} user channel(s))" if matrix_channels else "")
+        + (
+            f", matrix=on ({_matrix_channel_manager.channel_count} user channel(s))"
+            if _matrix_channel_manager.channel_count
+            else ""
+        )
     )
     yield
     logger.info("Server shutting down…")
     cleanup_task.cancel()
     archive_task.cancel()
     jobs_task.cancel()
-    for matrix_channel in matrix_channels:
-        await matrix_channel.stop()
+    await _matrix_channel_manager.stop_all()
     sandbox_server.should_exit = True
     internal_server.should_exit = True
     sandbox_task.cancel()
@@ -669,6 +671,7 @@ router.include_router(history_router)
 router.include_router(jobs_router)
 router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
+router.include_router(user_settings_router)
 router.include_router(websocket_router)
 router.include_router(auth_router)
 app.include_router(router)
@@ -723,6 +726,10 @@ def _authenticate_sandbox(auth: str | None) -> str | None:
     return None
 
 
+def _credential_backend_unavailable(exc: CredentialBackendError) -> Response:
+    return Response(status_code=503, content=str(exc), media_type="text/plain")
+
+
 @sandbox_app.get("/credentials")
 async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]]:
     """List/search available credentials (metadata only, no values)."""
@@ -739,7 +746,10 @@ async def list_credentials(request: Request, q: str = "") -> list[dict[str, str]
     except KeyError:
         raise HTTPException(status_code=403, detail="Session owner is not configured") from None
 
-    items = await credential_registry.list(q)
+    try:
+        items = await credential_registry.list(q)
+    except CredentialBackendError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     paths = [i.vault_path for i in items]
     names = [i.name for i in items]
     explanation = f"Sandbox listed credential metadata (query={q!r}, {len(paths)} item(s))"
@@ -779,6 +789,8 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         meta = await credential_registry.fetch_metadata(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
+    except CredentialBackendError as exc:
+        return _credential_backend_unavailable(exc)
 
     active = _engine.get_or_activate(session_id)
 
@@ -840,6 +852,8 @@ async def fetch_credential(request: Request, vault_path: str) -> Response:
         value = await credential_registry.fetch(vault_path)
     except KeyError:
         return Response(status_code=404, content="Credential not found")
+    except CredentialBackendError as exc:
+        return _credential_backend_unavailable(exc)
 
     return Response(content=value, media_type="text/plain")
 

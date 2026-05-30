@@ -36,7 +36,10 @@ async function fetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
-  const response = await globalThis.fetch(input, { ...init, credentials: "include" });
+  const response = await globalThis.fetch(input, {
+    ...init,
+    credentials: "include",
+  });
   if (response.status === 401) {
     emitAuthRequired(input);
   }
@@ -193,7 +196,9 @@ export async function getCurrentUser(server: string): Promise<AuthUserInfo> {
     headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, "Failed to fetch current user"));
+    throw new Error(
+      await readErrorMessage(res, "Failed to fetch current user"),
+    );
   }
   const user = decodeAuthUser(await res.json());
   if (user === null) {
@@ -202,13 +207,19 @@ export async function getCurrentUser(server: string): Promise<AuthUserInfo> {
   return user;
 }
 
-export async function getWebSocketTicket(server: string, token: string): Promise<string> {
+export async function getWebSocketTicket(
+  server: string,
+  token: string,
+): Promise<string> {
   const res = await fetch(`${server}/api/auth/ws-ticket`, {
     method: "POST",
     headers: headers(token),
   });
-  if (!res.ok) throw new Error(await readErrorMessage(res, "Failed to create websocket ticket"));
-  const body = await res.json() as WebSocketTicketResponse;
+  if (!res.ok)
+    throw new Error(
+      await readErrorMessage(res, "Failed to create websocket ticket"),
+    );
+  const body = (await res.json()) as WebSocketTicketResponse;
   return body.ticket;
 }
 
@@ -704,6 +715,233 @@ export interface AvailableModelInfo {
   max_input_tokens?: number | null;
 }
 
+export interface SessionBudgetSettings {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost_usd?: string | null;
+  tool_calls?: number | null;
+}
+
+export interface UserDefaultModelsSettings {
+  agent?: string | null;
+  sentinel?: string | null;
+  title?: string | null;
+}
+
+export interface MatrixSettingsInfo {
+  enabled: boolean;
+  homeserver: string;
+  user_id: string;
+  device_name: string;
+  password_set: boolean;
+  token_set: boolean;
+  allowed_rooms: string[];
+  allowed_users: string[];
+}
+
+export interface BasicAuthSettingsInfo {
+  username: string;
+  password_set: boolean;
+}
+
+export type CredentialBackendSettingsInfo =
+  | {
+      type: "file";
+      path: string;
+      expose: string[];
+      hide: string[];
+    }
+  | {
+      type: "bitwarden";
+      url: string;
+      basic_auth?: BasicAuthSettingsInfo | null;
+      expose: string[];
+      hide: string[];
+    };
+
+export interface CredentialsSettingsInfo {
+  backends: Record<string, CredentialBackendSettingsInfo>;
+}
+
+export interface GitSettingsInfo {
+  remote: string;
+  branch: string;
+  author: string;
+  token_set: boolean;
+}
+
+export interface UserSettingsInfo {
+  default_models: UserDefaultModelsSettings;
+  default_budget: SessionBudgetSettings;
+  matrix: MatrixSettingsInfo;
+  credentials: CredentialsSettingsInfo;
+  git: GitSettingsInfo;
+}
+
+export interface UserSettingsResponseInfo {
+  capabilities: {
+    file_credential_backend: boolean;
+  };
+  server_defaults: {
+    models: {
+      agent: string;
+      sentinel: string;
+      title: string;
+    };
+    budget: SessionBudgetSettings;
+  };
+  available_models: AvailableModelInfo[];
+  settings: UserSettingsInfo;
+}
+
+export interface UserSettingsPatchInput {
+  default_models?: UserDefaultModelsSettings | null;
+  default_budget?: SessionBudgetSettings | null;
+  matrix?: Partial<{
+    enabled: boolean;
+    homeserver: string | null;
+    user_id: string | null;
+    device_name: string | null;
+    password: string | null;
+    clear_password: boolean;
+    token: string | null;
+    clear_token: boolean;
+    allowed_rooms: string[];
+    allowed_users: string[];
+  }> | null;
+  credentials?: unknown;
+  git?: Partial<{
+    remote: string | null;
+    branch: string | null;
+    author: string | null;
+    token: string | null;
+    clear_token: boolean;
+  }> | null;
+}
+
+function readBoolean(
+  record: Record<string, unknown>,
+  key: string,
+  fallback = false,
+): boolean {
+  const value = record[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function decodeBudget(raw: unknown): SessionBudgetSettings {
+  if (!isRecord(raw)) return {};
+  const cost =
+    readString(raw, "cost_usd") ??
+    (typeof raw.cost_usd === "number" ? String(raw.cost_usd) : undefined);
+  return {
+    input_tokens: readNumber(raw, "input_tokens") ?? null,
+    output_tokens: readNumber(raw, "output_tokens") ?? null,
+    cost_usd: cost ?? null,
+    tool_calls: readNumber(raw, "tool_calls") ?? null,
+  };
+}
+
+function decodeDefaultModels(raw: unknown): UserDefaultModelsSettings {
+  if (!isRecord(raw)) return {};
+  return {
+    agent: readString(raw, "agent") ?? null,
+    sentinel: readString(raw, "sentinel") ?? null,
+    title: readString(raw, "title") ?? null,
+  };
+}
+
+function decodeMatrixSettings(raw: unknown): MatrixSettingsInfo {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    enabled: readBoolean(record, "enabled"),
+    homeserver: readString(record, "homeserver") ?? "",
+    user_id: readString(record, "user_id") ?? "",
+    device_name: readString(record, "device_name") ?? "carapace",
+    password_set: readBoolean(record, "password_set"),
+    token_set: readBoolean(record, "token_set"),
+    allowed_rooms: readStringArray(record, "allowed_rooms") ?? [],
+    allowed_users: readStringArray(record, "allowed_users") ?? [],
+  };
+}
+
+function decodeCredentialsSettings(raw: unknown): CredentialsSettingsInfo {
+  if (!isRecord(raw) || !isRecord(raw.backends)) return { backends: {} };
+  const backends: Record<string, CredentialBackendSettingsInfo> = {};
+  for (const [name, backend] of Object.entries(raw.backends)) {
+    if (!isRecord(backend)) continue;
+    const type = readString(backend, "type");
+    if (type === "file") {
+      backends[name] = {
+        type: "file",
+        path: readString(backend, "path") ?? "",
+        expose: readStringArray(backend, "expose") ?? [],
+        hide: readStringArray(backend, "hide") ?? [],
+      };
+    } else if (type === "bitwarden") {
+      const basicAuth = isRecord(backend.basic_auth)
+        ? {
+            username: readString(backend.basic_auth, "username") ?? "",
+            password_set: readBoolean(backend.basic_auth, "password_set"),
+          }
+        : null;
+      backends[name] = {
+        type: "bitwarden",
+        url: readString(backend, "url") ?? "http://127.0.0.1:8087",
+        basic_auth: basicAuth,
+        expose: readStringArray(backend, "expose") ?? [],
+        hide: readStringArray(backend, "hide") ?? [],
+      };
+    }
+  }
+  return { backends };
+}
+
+function decodeGitSettings(raw: unknown): GitSettingsInfo {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    remote: readString(record, "remote") ?? "",
+    branch: readString(record, "branch") ?? "main",
+    author: readString(record, "author") ?? "carapace <carapace@%h>",
+    token_set: readBoolean(record, "token_set"),
+  };
+}
+
+function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
+  if (!isRecord(raw)) throw new Error("Invalid settings response");
+  const capabilities = isRecord(raw.capabilities) ? raw.capabilities : {};
+  const serverDefaults = isRecord(raw.server_defaults)
+    ? raw.server_defaults
+    : {};
+  const serverModels = isRecord(serverDefaults.models)
+    ? serverDefaults.models
+    : {};
+  const settings = isRecord(raw.settings) ? raw.settings : {};
+  return {
+    capabilities: {
+      file_credential_backend: readBoolean(
+        capabilities,
+        "file_credential_backend",
+      ),
+    },
+    server_defaults: {
+      models: {
+        agent: readString(serverModels, "agent") ?? "",
+        sentinel: readString(serverModels, "sentinel") ?? "",
+        title: readString(serverModels, "title") ?? "",
+      },
+      budget: decodeBudget(serverDefaults.budget),
+    },
+    available_models: decodeAvailableModels(raw.available_models),
+    settings: {
+      default_models: decodeDefaultModels(settings.default_models),
+      default_budget: decodeBudget(settings.default_budget),
+      matrix: decodeMatrixSettings(settings.matrix),
+      credentials: decodeCredentialsSettings(settings.credentials),
+      git: decodeGitSettings(settings.git),
+    },
+  };
+}
+
 export function decodeAvailableModel(raw: unknown): AvailableModelInfo | null {
   if (typeof raw === "string") {
     if (!raw) return null;
@@ -750,6 +988,37 @@ export async function fetchModels(
   if (!res.ok) return [];
   const raw: unknown = await res.json();
   return decodeAvailableModels(raw);
+}
+
+export async function getUserSettings(
+  server: string,
+  token: string,
+): Promise<UserSettingsResponseInfo> {
+  const res = await fetch(`${server}/api/user/settings`, {
+    headers: headers(token),
+  });
+  if (!res.ok)
+    throw new Error(
+      await readErrorMessage(res, "Failed to load user settings"),
+    );
+  return decodeUserSettingsResponse(await res.json());
+}
+
+export async function updateUserSettings(
+  server: string,
+  token: string,
+  body: UserSettingsPatchInput,
+): Promise<UserSettingsResponseInfo> {
+  const res = await fetch(`${server}/api/user/settings`, {
+    method: "PATCH",
+    headers: headers(token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok)
+    throw new Error(
+      await readErrorMessage(res, "Failed to update user settings"),
+    );
+  return decodeUserSettingsResponse(await res.json());
 }
 
 export async function listJobs(

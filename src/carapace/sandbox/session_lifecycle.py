@@ -76,6 +76,9 @@ class SandboxSessionLifecycle:
         self._sandbox_port = sandbox_port
         self._git_author = git_author
 
+    def set_git_author(self, git_author: str) -> None:
+        self._git_author = git_author
+
     def _token_path(self, session_id: str) -> Path:
         return self._data_dir / "sessions" / session_id / "token"
 

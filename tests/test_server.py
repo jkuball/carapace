@@ -9,6 +9,8 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import yaml
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
@@ -19,11 +21,17 @@ import carapace.server.jobs as server_jobs
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
-from carapace.credentials import CredentialRegistry
+from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
-from carapace.models.credentials import BasicAuthConfig, BitwardenCredentialBackendConfig, CredentialMetadata
+from carapace.models.credentials import (
+    BasicAuthConfig,
+    BitwardenCredentialBackendConfig,
+    CredentialMetadata,
+    FileCredentialBackendConfig,
+)
 from carapace.models.jobs import JobDefinition
+from carapace.models.matrix import MatrixTokenFile, MatrixTokensFile
 from carapace.models.session import SessionBudget
 from carapace.models.user import UserConfig
 from carapace.notifications.presence import NotificationPresenceRegistry
@@ -312,6 +320,333 @@ def test_admin_user_config_redacts_and_preserves_backend_password(client, admin_
     stored_backend = user.config.credentials.backends["vault"]
     assert isinstance(stored_backend, BitwardenCredentialBackendConfig)
     assert stored_backend.basic_auth == BasicAuthConfig(username="ada", password="proxy-password")
+
+
+def test_user_settings_redacts_write_only_fields(client, auth_headers):
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "credentials": {
+                        "backends": {
+                            "vault": {
+                                "type": "bitwarden",
+                                "url": "http://carapace-bitwarden:8087",
+                                "basic_auth": {"username": "thies", "password": "proxy-password"},
+                            }
+                        }
+                    },
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "matrix-password",
+                            "token": "matrix-token",
+                        }
+                    },
+                    "git": {
+                        "remote": "https://gitea.example.test/thies/knowledge.git",
+                        "token": "git-token",
+                    },
+                }
+            )
+        },
+    )
+
+    resp = client.get("/api/user/settings", headers=auth_headers)
+
+    assert resp.status_code == 200
+    settings = resp.json()["settings"]
+    assert settings["matrix"]["password_set"] is True
+    assert settings["matrix"]["token_set"] is True
+    assert "password" not in settings["matrix"]
+    assert "token" not in settings["matrix"]
+    assert settings["git"]["token_set"] is True
+    assert "token" not in settings["git"]
+    basic_auth = settings["credentials"]["backends"]["vault"]["basic_auth"]
+    assert basic_auth == {"username": "thies", "password_set": True}
+
+
+def test_user_settings_apply_defaults_to_new_sessions(client, auth_headers):
+    patch_resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_models": {"agent": srv._config.agent.model},
+            "default_budget": {"tool_calls": 3, "cost_usd": "1.50"},
+        },
+    )
+    assert patch_resp.status_code == 200
+
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+
+    assert create_resp.status_code == 200
+    state = srv._engine.session_mgr.load_state(create_resp.json()["session_id"])
+    assert state is not None
+    assert state.agent_model_name == srv._config.agent.model
+    assert state.budget.tool_calls == 3
+    assert state.budget.cost_usd == Decimal("1.50")
+
+
+def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, auth_headers):
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_models": {},
+            "default_budget": {},
+            "matrix": {
+                "enabled": False,
+                "homeserver": "",
+                "user_id": "",
+                "device_name": "carapace",
+                "allowed_rooms": [],
+                "allowed_users": [],
+            },
+            "credentials": {"backends": {}},
+            "git": {
+                "remote": "",
+                "branch": "main",
+                "author": "carapace <carapace@%h>",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+
+
+def test_user_settings_default_changes_reload_enabled_matrix(client, auth_headers, monkeypatch):
+    srv._auth_store.update_user(
+        "thies",
+        {"config": UserConfig.model_validate({"channels": {"matrix": {"enabled": True}}})},
+    )
+    manager = MagicMock()
+    manager.reload_user = AsyncMock()
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"default_budget": {"tool_calls": 5}},
+    )
+
+    assert resp.status_code == 200
+    manager.reload_user.assert_awaited_once()
+
+
+def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth_headers, monkeypatch):
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
+    runtime = MagicMock()
+    runtime.apply_config = AsyncMock()
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "matrix": {"enabled": True},
+            "git": {"remote": "https://git.example.test/thies/knowledge.git"},
+        },
+    )
+
+    assert resp.status_code == 500
+    assert "matrix failed" in resp.json()["detail"]
+    assert manager.reload_user.await_count == 2
+    assert runtime.apply_config.await_count == 2
+
+
+def test_user_settings_does_not_persist_git_when_reload_fails(client, auth_headers, monkeypatch):
+    runtime = MagicMock()
+    runtime.apply_config = AsyncMock(side_effect=HTTPException(status_code=500, detail="git failed"))
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"git": {"remote": "https://git.example.test/thies/knowledge.git"}},
+    )
+
+    assert resp.status_code == 500
+    assert "git failed" in resp.json()["detail"]
+    user = srv._auth_store.get_user("thies")
+    assert user is not None
+    assert user.config.git.remote == ""
+
+
+def test_user_settings_does_not_persist_matrix_when_reload_fails(client, auth_headers, monkeypatch):
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"enabled": True}},
+    )
+
+    assert resp.status_code == 500
+    assert "matrix failed" in resp.json()["detail"]
+    user = srv._auth_store.get_user("thies")
+    assert user is not None
+    assert user.config.channels.matrix.enabled is False
+
+
+def test_user_settings_matrix_password_clears_persisted_token_before_reload(client, auth_headers, monkeypatch):
+    token_file = srv._engine.session_mgr.sessions_dir.parent / "matrix_token.yaml"
+    token_file.write_text(
+        yaml.safe_dump(
+            MatrixTokensFile(
+                tokens=[
+                    MatrixTokenFile(
+                        access_token="old-token",
+                        device_id="OLD",
+                        user_id="@carapace:example.test",
+                        user="thies",
+                    )
+                ]
+            ).model_dump(mode="json")
+        ),
+        encoding="utf-8",
+    )
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "old-password",
+                        }
+                    }
+                }
+            )
+        },
+    )
+
+    async def reload_user(_username: str, _config: UserConfig) -> None:
+        assert not token_file.exists()
+
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=reload_user)
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"password": "new-password", "clear_token": True}},
+    )
+
+    assert resp.status_code == 200
+    assert not token_file.exists()
+    manager.reload_user.assert_awaited_once()
+
+
+def test_user_settings_matrix_password_restores_persisted_token_on_reload_failure(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    token_file = srv._engine.session_mgr.sessions_dir.parent / "matrix_token.yaml"
+    token_content = yaml.safe_dump(
+        MatrixTokensFile(
+            tokens=[
+                MatrixTokenFile(
+                    access_token="old-token",
+                    device_id="OLD",
+                    user_id="@carapace:example.test",
+                    user="thies",
+                )
+            ]
+        ).model_dump(mode="json")
+    )
+    token_file.write_text(token_content, encoding="utf-8")
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "channels": {
+                        "matrix": {
+                            "enabled": True,
+                            "homeserver": "https://matrix.example.test",
+                            "user_id": "@carapace:example.test",
+                            "password": "old-password",
+                        }
+                    }
+                }
+            )
+        },
+    )
+    manager = MagicMock()
+    manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
+    monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"matrix": {"password": "new-password", "clear_token": True}},
+    )
+
+    assert resp.status_code == 500
+    assert token_file.read_text(encoding="utf-8") == token_content
+    manager.reload_user.assert_awaited()
+
+
+def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):
+    monkeypatch.delenv("CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND", raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"credentials": {"backends": {"dev": {"type": "file", "path": "secrets.env"}}}},
+    )
+
+    assert resp.status_code == 400
+    assert "disabled" in resp.json()["detail"]
+
+
+def test_user_settings_preserves_unchanged_file_credentials_when_disabled(client, auth_headers, monkeypatch):
+    monkeypatch.delenv("CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND", raising=False)
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig(
+                credentials={
+                    "backends": {
+                        "dev": FileCredentialBackendConfig(path="secrets.env", expose=["API_TOKEN"]),
+                    }
+                }
+            )
+        },
+    )
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_budget": {"tool_calls": 4},
+            "credentials": {
+                "backends": {
+                    "dev": {"type": "file", "path": "secrets.env", "expose": ["API_TOKEN"], "hide": []},
+                }
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["settings"]["credentials"]["backends"]["dev"] == {
+        "type": "file",
+        "path": "secrets.env",
+        "expose": ["API_TOKEN"],
+        "hide": [],
+    }
 
 
 def test_admin_user_update_cannot_remove_last_enabled_admin(client, admin_auth_headers):
@@ -1865,6 +2200,40 @@ def test_sandbox_list_credentials_audit(client, auth_headers, monkeypatch):
     text = audit_path.read_text()
     assert "credential_access" in text
     assert "auto_allowed" in text
+
+
+def test_sandbox_list_credentials_backend_error_returns_503(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    mock_reg = MagicMock()
+    mock_reg.list = AsyncMock(side_effect=CredentialBackendError("Bitwarden backend unavailable"))
+    monkeypatch.setattr(srv, "_credential_registry_for_session", AsyncMock(return_value=mock_reg), raising=False)
+    srv._engine.sandbox_mgr.verify_session_token.side_effect = lambda s, t: s == sid and t == "secret"
+
+    basic = base64.b64encode(f"{sid}:secret".encode()).decode()
+    sb_client = TestClient(sandbox_app)
+    resp = sb_client.get("/credentials", headers={"Authorization": f"Basic {basic}"})
+
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "Bitwarden backend unavailable"}
+
+
+def test_sandbox_fetch_credential_backend_error_returns_503(client, auth_headers, monkeypatch):
+    create_resp = client.post("/api/sessions", headers=auth_headers)
+    sid = create_resp.json()["session_id"]
+
+    mock_reg = MagicMock()
+    mock_reg.fetch_metadata = AsyncMock(side_effect=CredentialBackendError("Bitwarden backend unavailable"))
+    monkeypatch.setattr(srv, "_credential_registry_for_session", AsyncMock(return_value=mock_reg), raising=False)
+    srv._engine.sandbox_mgr.verify_session_token.side_effect = lambda s, t: s == sid and t == "secret"
+
+    basic = base64.b64encode(f"{sid}:secret".encode()).decode()
+    sb_client = TestClient(sandbox_app)
+    resp = sb_client.get("/credentials/bw/id-1", headers={"Authorization": f"Basic {basic}"})
+
+    assert resp.status_code == 503
+    assert resp.text == "Bitwarden backend unavailable"
 
 
 # --- WebSocket: basic slash commands ---
