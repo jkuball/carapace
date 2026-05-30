@@ -1,6 +1,42 @@
 # CHANGELOG
 
 
+## v0.130.0 (2026-05-30)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: clear provider-specific model fields
+  ([`57601d2`](https://github.com/thiesgerken/carapace/commit/57601d2845f64b38c53b747881719ddfd31df334))
+
+- 🐛 fix: constrain platform model secret fields
+  ([`0705c83`](https://github.com/thiesgerken/carapace/commit/0705c83d12705d8a19bc7333c3d32ce7ca38e33e))
+
+- 🐛 fix: preserve disk platform config fields
+  ([`fd5891c`](https://github.com/thiesgerken/carapace/commit/fd5891c6cd707952d2023986da0f1e670e5ced43))
+
+- 🐛 fix: honor read-only platform config
+  ([`cf33dac`](https://github.com/thiesgerken/carapace/commit/cf33dacda2e2d3d00143bed425a7eb209441dbfc))
+
+- 🐛 fix: address platform settings review comments
+  ([`f6b6532`](https://github.com/thiesgerken/carapace/commit/f6b6532088ef284188ecf7ba030d14dad2cc91bc))
+
+### Other
+
+
+- update platform settings UI with enhanced model display and badge functionality
+  ([`9cb617b`](https://github.com/thiesgerken/carapace/commit/9cb617b22aa5537b3efc3c4890c768df2143fa0b))
+
+- update configuration paths and remove deprecated PVC for config
+  ([`fc98b30`](https://github.com/thiesgerken/carapace/commit/fc98b30d3177645564fcbc6bdbafbdcda80f4580))
+
+### ✨ Features
+
+
+- ✨ feat: make config adjustable from ui
+  ([`bbf899c`](https://github.com/thiesgerken/carapace/commit/bbf899c1f0d754e545cddd63383a316452047fff))
+
 ## v0.129.1 (2026-05-30)
 
 
