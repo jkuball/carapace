@@ -382,6 +382,33 @@ def test_user_settings_apply_defaults_to_new_sessions(client, auth_headers):
     assert state.budget.cost_usd == Decimal("1.50")
 
 
+def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, auth_headers):
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={
+            "default_models": {},
+            "default_budget": {},
+            "matrix": {
+                "enabled": False,
+                "homeserver": "",
+                "user_id": "",
+                "device_name": "carapace",
+                "allowed_rooms": [],
+                "allowed_users": [],
+            },
+            "credentials": {"backends": {}},
+            "git": {
+                "remote": "",
+                "branch": "main",
+                "author": "carapace <carapace@%h>",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+
+
 def test_user_settings_rejects_file_credentials_when_disabled(client, auth_headers, monkeypatch):
     monkeypatch.delenv("CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND", raising=False)
 

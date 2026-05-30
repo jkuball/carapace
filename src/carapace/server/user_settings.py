@@ -405,10 +405,8 @@ async def update_user_settings(
     if stored_user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    next_config = stored_user.config.model_copy(deep=True)
-    credentials_changed = False
-    matrix_changed = body.matrix is not None
-    git_changed = body.git is not None
+    original_config = stored_user.config
+    next_config = original_config.model_copy(deep=True)
 
     if "default_models" in body.model_fields_set:
         next_config.default_models = body.default_models or UserDefaultModelsConfig()
@@ -424,11 +422,14 @@ async def update_user_settings(
         credentials = body.credentials or CredentialsConfig()
         _assert_credentials_supported(credentials)
         next_config.credentials = _credentials_with_preserved_backend_passwords(user.username, credentials)
-        credentials_changed = True
 
     if body.git is not None:
         _apply_git_patch(next_config, body.git)
         _assert_git_remote_owner(user.username, next_config)
+
+    credentials_changed = original_config.credentials != next_config.credentials
+    matrix_changed = original_config.channels.matrix != next_config.channels.matrix
+    git_changed = original_config.git != next_config.git
 
     try:
         _auth_store().update_user(user.username, {"config": next_config})

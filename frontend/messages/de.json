@@ -95,7 +95,6 @@
             "saving": "Speichert",
             "addBitwarden": "Bitwarden",
             "addFile": "Datei",
-            "clearValue": "Wert löschen",
             "remove": "Entfernen",
             "removeValue": "{value} entfernen",
             "removeBackend": "Backend entfernen",

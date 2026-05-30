@@ -33,7 +33,6 @@ interface UserSettingsDraft {
     token_set: boolean;
   };
   gitToken: string;
-  clearGitToken: boolean;
 }
 
 type CredentialBackendDraftType = "file" | "bitwarden";
@@ -216,7 +215,6 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
     credentials: credentialDraftsFromSettings(response.settings.credentials),
     git: response.settings.git,
     gitToken: "",
-    clearGitToken: false,
   };
 }
 
@@ -352,8 +350,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
         device_name: draft.matrix.device_name,
         allowed_rooms: draft.matrix.allowed_rooms,
         allowed_users: draft.matrix.allowed_users,
-        ...(draft.matrixPassword ? { password: draft.matrixPassword } : {}),
-        clear_token: true,
+        ...(draft.matrixPassword ? { password: draft.matrixPassword, clear_token: true } : {}),
       },
       credentials: credentialsPayload,
       git: {
@@ -361,7 +358,6 @@ export function UserSettingsView({ server, token }: { server: string; token: str
         branch: draft.git.branch,
         author: draft.git.author,
         ...(draft.gitToken ? { token: draft.gitToken } : {}),
-        ...(draft.clearGitToken ? { clear_token: true } : {}),
       },
     };
 
@@ -510,7 +506,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
             <TextInput label={t("fields.remote")} value={draft.git.remote} onChange={(remote) => updateDraft({ git: { ...draft.git, remote } })} />
             <TextInput label={t("fields.branch")} value={draft.git.branch} onChange={(branch) => updateDraft({ git: { ...draft.git, branch } })} />
             <TextInput label={t("fields.author")} value={draft.git.author} onChange={(author) => updateDraft({ git: { ...draft.git, author } })} />
-            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} clearLabel={t("actions.clearValue")} value={draft.gitToken} clear={draft.clearGitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} onClearChange={(clearGitToken) => updateDraft({ clearGitToken })} />
+            <SecretInput label={t("fields.token")} configured={draft.git.token_set} configuredLabel={t("status.configured")} notSetLabel={t("status.notSet")} value={draft.gitToken} onValueChange={(gitToken) => updateDraft({ gitToken })} />
           </div>
         </Section>
 
@@ -682,21 +678,15 @@ function SecretInput({
   configured,
   configuredLabel,
   notSetLabel,
-  clearLabel,
   value,
-  clear,
   onValueChange,
-  onClearChange,
 }: {
   label: string;
   configured: boolean;
   configuredLabel: string;
   notSetLabel: string;
-  clearLabel: string;
   value: string;
-  clear: boolean;
   onValueChange: (value: string) => void;
-  onClearChange: (value: boolean) => void;
 }) {
   return (
     <div className="space-y-1.5">
@@ -705,10 +695,6 @@ function SecretInput({
         <span className="text-xs text-muted-foreground">{configured ? configuredLabel : notSetLabel}</span>
       </div>
       <input type="password" value={value} onChange={(event) => onValueChange(event.target.value)} className={inputClassName} />
-      <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-        <input type="checkbox" checked={clear} onChange={(event) => onClearChange(event.target.checked)} className="h-4 w-4 rounded border-border accent-foreground" />
-        {clearLabel}
-      </label>
     </div>
   );
 }

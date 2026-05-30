@@ -95,7 +95,6 @@
             "saving": "Saving",
             "addBitwarden": "Bitwarden",
             "addFile": "File",
-            "clearValue": "Clear value",
             "remove": "Remove",
             "removeValue": "Remove {value}",
             "removeBackend": "Remove backend",
