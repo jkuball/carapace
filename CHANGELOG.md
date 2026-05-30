@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.130.1 (2026-05-30)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: sender check for _on_reaction handling in matrix channel
+  ([`2c0a9f1`](https://github.com/thiesgerken/carapace/commit/2c0a9f185e150327ad8f81ad6ad6e8cf483133ad))
+
 ## v0.130.0 (2026-05-30)
 
 
