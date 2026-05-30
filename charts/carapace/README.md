@@ -218,6 +218,8 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `image.tag`                              | `""` (appVersion)                | Server image tag                                                    |
 | `frontend.enabled`                       | `true`                           | Deploy the Next.js frontend                                         |
 | `frontend.image.tag`                     | `""` (appVersion)                | Frontend image tag                                                  |
+| `server.probes.startup.initialDelaySeconds` | `15`                            | Delay before the server startup probe runs                          |
+| `server.probes`                          | see `values.yaml`                 | Server startup, liveness, and readiness probe timing                |
 | `sandbox.image.tag`                      | `""` (appVersion)                | Sandbox base image tag                                              |
 | `sandbox.sandboxesName`                  | `null` (`<release>-sandboxes`)   | `Sandboxes` CR name; set `""` to use the Deployment as owner        |
 | `ingress.enabled`                        | `true`                           | Create a Gateway API HTTPRoute                                      |

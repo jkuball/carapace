@@ -123,19 +123,15 @@ spec:
           startupProbe:
             tcpSocket:
               port: api
-            initialDelaySeconds: 2
-            periodSeconds: 5
-            failureThreshold: 20
+            {{- toYaml .Values.server.probes.startup | nindent 12 }}
           livenessProbe:
             tcpSocket:
               port: api
-            initialDelaySeconds: 10
-            periodSeconds: 30
+            {{- toYaml .Values.server.probes.liveness | nindent 12 }}
           readinessProbe:
             tcpSocket:
               port: api
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            {{- toYaml .Values.server.probes.readiness | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:

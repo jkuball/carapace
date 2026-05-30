@@ -28,6 +28,17 @@ server:
   sandboxPort: 8322
   # -- Proxy port (sandbox HTTP proxy)
   proxyPort: 3128
+  probes:
+    startup:
+      initialDelaySeconds: 15
+      periodSeconds: 5
+      failureThreshold: 20
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
 
 sandbox:
   image:
