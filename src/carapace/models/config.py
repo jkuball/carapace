@@ -11,6 +11,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ..notifications.models import NotificationsConfig
 from .session import SessionBudget
 
+OPENAI_COMPATIBLE_PROVIDERS = {"openai", "openai-chat"}
+PROVIDERS_WITH_MODEL_API_KEYS = OPENAI_COMPATIBLE_PROVIDERS | {"openrouter"}
+
 
 class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -72,7 +75,7 @@ class AvailableModelEntry(ConfigModel):
     """One row in ``agent.available_models``: shorthand ``provider:name`` string or a mapping."""
 
     provider: str = Field(
-        description="API kind used to access the model, such as anthropic, openai, or openai-chat.",
+        description="API kind used to access the model, such as anthropic, openai, openai-chat, or openrouter.",
     )
     name: str = Field(
         description="Provider-specific model name sent to that API.",
@@ -110,12 +113,12 @@ class AvailableModelEntry(ConfigModel):
 
     @model_validator(mode="after")
     def _validate_openai_compatible_fields(self) -> AvailableModelEntry:
-        if self.base_url is None and self.api_key is None and self.thinking_budget_tokens is None:
-            return self
-        if self.provider not in ("openai", "openai-chat"):
-            raise ValueError(
-                "base_url/api_key/thinking_budget_tokens are only supported for provider 'openai' or 'openai-chat'"
-            )
+        if self.base_url is not None and self.provider not in OPENAI_COMPATIBLE_PROVIDERS:
+            raise ValueError("base_url is only supported for provider 'openai' or 'openai-chat'")
+        if self.thinking_budget_tokens is not None and self.provider not in OPENAI_COMPATIBLE_PROVIDERS:
+            raise ValueError("thinking_budget_tokens is only supported for provider 'openai' or 'openai-chat'")
+        if self.api_key is not None and self.provider not in PROVIDERS_WITH_MODEL_API_KEYS:
+            raise ValueError("api_key is only supported for provider 'openai', 'openai-chat', or 'openrouter'")
         return self
 
     @property

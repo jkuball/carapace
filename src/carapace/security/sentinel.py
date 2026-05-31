@@ -13,7 +13,7 @@ from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
-from ..usage import LlmRequestLogCapability, UsageTracker
+from ..usage import LlmRequestLogCapability, UsageTracker, provider_cost_usd_from_messages
 from .context import (
     ActionLogEntry,
     AgentResponseEntry,
@@ -186,6 +186,19 @@ class Sentinel:
     def set_model(self, model: str) -> None:
         """Switch the sentinel model, recreating the internal agent."""
         self._model = model
+        self._agent = self._create_agent()
+
+    def set_model_runtime(
+        self,
+        *,
+        model: str | None = None,
+        model_factory: Callable[[str], Model] | None,
+        model_settings_resolver: Callable[[str], ModelSettings | None] | None,
+    ) -> None:
+        if model is not None:
+            self._model = model
+        self._model_factory = model_factory
+        self._model_settings_resolver = model_settings_resolver
         self._agent = self._create_agent()
 
     def set_policy(self, *, ask_mode: bool | None = None, unattended: bool | None = None) -> None:
@@ -390,7 +403,12 @@ class Sentinel:
         session.sentinel_eval_count += 1
 
         if usage_tracker:
-            usage_tracker.record(self._model, "sentinel", result.usage)
+            usage_tracker.record(
+                self._model,
+                "sentinel",
+                result.usage,
+                cost_usd=provider_cost_usd_from_messages(result.new_messages()),
+            )
 
         usage = result.usage
         output = self._normalize_verdict(result.output)

@@ -9,9 +9,11 @@ from typing import Literal, cast
 from httpx import AsyncClient, HTTPStatusError, Timeout
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
 from pydantic_ai.settings import ModelSettings
 from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -65,6 +67,8 @@ def model_settings_for_entry(
     default_thinking: ThinkingSetting | None = None,
 ) -> ModelSettings | None:
     settings: dict[str, object] = {}
+    if entry.provider == "openrouter":
+        settings["openrouter_usage"] = {"include": True}
     thinking = entry.thinking if entry.thinking is not None else default_thinking
     if thinking is not None:
         settings["thinking"] = thinking
@@ -89,6 +93,12 @@ def make_model_factory(config: Config) -> Callable[[str], Model]:
     def factory(model_name: str) -> Model:
         entry = resolve_available_model_entry(config, model_name)
         resolved_model_name = f"{entry.provider}:{entry.name}"
+        if entry.provider == "openrouter":
+            api_key: str | None = None
+            if entry.api_key is not None:
+                api_key = entry.api_key.resolve().get_secret_value()
+            provider = OpenRouterProvider(api_key=api_key, http_client=retry_http_client())
+            return OpenRouterModel(entry.name, provider=provider)
         if entry.provider in ("openai", "openai-chat"):
             api_key: str | None = None
             if entry.api_key is not None:

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPlatformSettingsPatch } from "./platform-settings-view";
+import { flushReact, installDom, renderReact, runInAct } from "../../test/react-test-utils";
+
+import { buildPlatformSettingsPatch, ModelRow, sortModelDrafts } from "./platform-settings-view";
 
 type PlatformDraft = Parameters<typeof buildPlatformSettingsPatch>[0];
 
@@ -74,4 +76,143 @@ test("buildPlatformSettingsPatch reuses configured raw OpenAI secrets", () => {
   );
 
   assert.deepEqual(patch.available_models[0]?.api_key, { source: "raw" });
+});
+
+test("buildPlatformSettingsPatch includes OpenRouter API key fields without base URL", () => {
+  const patch = buildPlatformSettingsPatch(
+    draftWithModel({
+      rowId: "model-1",
+      provider: "openrouter",
+      name: "anthropic/claude-sonnet-4.5",
+      id: "openrouter:sonnet",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "128",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeySource: "env",
+      apiKeyValue: "OPENROUTER_API_KEY",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    }),
+    translate,
+  );
+
+  const model = patch.available_models[0]!;
+  assert.equal(model.provider, "openrouter");
+  assert.deepEqual(model.api_key, { source: "env", value: "OPENROUTER_API_KEY" });
+  assert.equal(Object.hasOwn(model, "base_url"), false);
+  assert.equal(Object.hasOwn(model, "thinking_budget_tokens"), false);
+});
+
+test("sortModelDrafts orders complete rows by provider then model name while keeping incomplete rows first", () => {
+  const sorted = sortModelDrafts([
+    {
+      rowId: "model-1",
+      provider: "openai",
+      name: "gpt-4o-mini",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-2",
+      provider: "anthropic",
+      name: "claude-sonnet-4-6",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-3",
+      provider: "openai",
+      name: "",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-4",
+      provider: "anthropic",
+      name: "claude-haiku-4-5",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+  ]);
+
+  assert.deepEqual(
+    sorted.map((model) => model.rowId),
+    ["model-3", "model-4", "model-2", "model-1"],
+  );
+});
+
+test("ModelRow reopens incomplete rows after a manual collapse", async () => {
+  const cleanup = installDom();
+
+  try {
+    const view = await renderReact(
+      <ModelRow
+        model={{
+          rowId: "model-1",
+          provider: "openai",
+          name: "",
+          id: "",
+          maxInputTokens: "",
+          thinking: "",
+          thinkingBudgetTokens: "",
+          baseUrl: "",
+          apiKeySource: "none",
+          apiKeyValue: "",
+          apiKeyConfigured: false,
+          apiKeyConfiguredSource: "none",
+        }}
+        disabled={false}
+        onChange={() => undefined}
+        onRemove={() => undefined}
+        t={translate}
+      />,
+    );
+
+    try {
+      const details = view.container.querySelector("details");
+      assert.ok(details instanceof HTMLElement);
+      assert.equal((details as HTMLDetailsElement).open, true);
+
+      await runInAct(() => {
+        (details as HTMLDetailsElement).open = false;
+        details.dispatchEvent(new window.Event("toggle", { bubbles: true }));
+      });
+      await flushReact();
+
+      assert.equal((details as HTMLDetailsElement).open, true);
+    } finally {
+      await view.unmount();
+    }
+  } finally {
+    cleanup();
+  }
 });

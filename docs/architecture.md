@@ -412,6 +412,17 @@ agent:
 
 Admins can update the model catalog, platform defaults, provider keys, and default session budget from the web UI. Users can override the default agent, sentinel, and title models plus their own default session budget from **Settings** -> **Account**. Those defaults apply to newly created web, Matrix, and non-persistent job sessions; existing sessions keep their current model overrides and budget.
 
+OpenRouter is exposed as its own model provider. It uses Pydantic AI's `OpenRouterProvider`, including `OPENROUTER_API_KEY`, `OPENROUTER_APP_URL`, and `OPENROUTER_APP_TITLE` environment variable fallback. Example row:
+
+```yaml
+agent:
+  available_models:
+    - provider: openrouter
+      name: anthropic/claude-sonnet-4.5
+      api_key:
+        env: OPENROUTER_API_KEY
+```
+
 Additional configuration sections:
 
 ```yaml
@@ -465,7 +476,7 @@ Session commit settings control how conversation histories are copied into the k
 - `sessions.commit.autosave_inactivity_hours`: inactivity threshold before a public session is auto-committed
 - `sessions.commit.delete_from_knowledge_on_session_delete`: whether deleting a session also removes its current committed snapshot directory from the knowledge repo
 
-LLM API keys are provided as standard environment variables (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.) — not through the config file.
+LLM API keys are provided as standard environment variables (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, etc.) or configured on model rows that support per-row keys.
 
 Credential backends are configured per user under `config.credentials`. Sandbox credential requests resolve the session
 owner before listing or fetching credentials:
@@ -490,7 +501,7 @@ File credential backends are ignored unless `CARAPACE_ALLOW_FILE_CREDENTIAL_BACK
 
 ### Secrets
 
-Global config `Secret` fields, such as OpenAI-compatible model API keys, support three sources:
+Global config `Secret` fields, such as OpenAI-compatible and OpenRouter model API keys, support three sources:
 
 ```yaml
 # Inline value (also accepts a plain string as shorthand)

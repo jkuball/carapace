@@ -34,6 +34,7 @@ from ..security.context import (
     SentinelVerdict,
     UserMessageEntry,
 )
+from ..usage import provider_cost_usd_from_messages
 from ..ws_models import ApprovalRequest, FinalStatus
 from .deps import Deps, TaskDone, TaskFailed
 from .tools import create_agent
@@ -97,7 +98,12 @@ async def run_agent_turn(
         usage_limits=usage_limits,
     )
     last_thinking = "".join(current_thinking_parts)
-    deps.usage_tracker.record(usage_model_key, "agent", result.usage)
+    deps.usage_tracker.record(
+        usage_model_key,
+        "agent",
+        result.usage,
+        cost_usd=provider_cost_usd_from_messages(result.new_messages()),
+    )
     messages = result.all_messages()
     if on_messages_snapshot is not None:
         on_messages_snapshot(list(messages))
@@ -161,7 +167,12 @@ async def run_agent_turn(
             usage_limits=usage_limits,
         )
         last_thinking = "".join(current_thinking_parts)
-        deps.usage_tracker.record(usage_model_key, "agent", result.usage)
+        deps.usage_tracker.record(
+            usage_model_key,
+            "agent",
+            result.usage,
+            cost_usd=provider_cost_usd_from_messages(result.new_messages()),
+        )
         messages = result.all_messages()
         if on_messages_snapshot is not None:
             on_messages_snapshot(list(messages))

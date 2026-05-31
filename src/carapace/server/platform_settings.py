@@ -13,7 +13,15 @@ from pydantic_ai.models import Model
 
 from ..config import get_config_path
 from ..llm import make_model_factory
-from ..models.config import AgentConfig, AvailableModelEntry, Config, Secret, agent_available_model_entries
+from ..models.config import (
+    OPENAI_COMPATIBLE_PROVIDERS,
+    PROVIDERS_WITH_MODEL_API_KEYS,
+    AgentConfig,
+    AvailableModelEntry,
+    Config,
+    Secret,
+    agent_available_model_entries,
+)
 from ..models.session import SessionBudget
 from .auth import verify_admin_user
 from .state import server_module
@@ -216,7 +224,11 @@ def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | Non
 
 
 def _openai_compatible_provider(provider: str) -> bool:
-    return provider in {"openai", "openai-chat"}
+    return provider in OPENAI_COMPATIBLE_PROVIDERS
+
+
+def _provider_supports_api_key(provider: str) -> bool:
+    return provider in PROVIDERS_WITH_MODEL_API_KEYS
 
 
 def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentConfig) -> AgentConfig:
@@ -225,6 +237,7 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
     for patch in body.available_models:
         existing = existing_by_id.get(patch.model_id)
         openai_compatible = _openai_compatible_provider(patch.provider)
+        supports_api_key = _provider_supports_api_key(patch.provider)
         entries.append(
             AvailableModelEntry(
                 provider=patch.provider,
@@ -236,7 +249,7 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
                 base_url=patch.base_url if openai_compatible else None,
                 api_key=(
                     _secret_from_patch(patch.api_key, existing.api_key if existing is not None else None)
-                    if openai_compatible
+                    if supports_api_key
                     else None
                 ),
             )

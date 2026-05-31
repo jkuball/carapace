@@ -82,7 +82,7 @@ All images default to the chart's `appVersion` tag, which is kept in sync with t
 | What                   | How                                                                                                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists. |
-| **Anthropic API key**  | Set `ANTHROPIC_API_KEY` in the same Secret.                                                                                                                            |
+| **LLM API key**        | Set `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or another configured provider key in the same Secret.                                                                  |
 | **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                                                                          |
 | **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                                                                          |
 
@@ -107,7 +107,7 @@ extraEnv:
 
 The chart no longer accepts application `config.yaml` through Helm values and does not render a ConfigMap for it. Platform and user settings are managed from the web UI after install:
 
-- **Settings** -> **Admin** -> **Platform** for model catalog, default models, OpenAI-compatible base URLs and API keys, reasoning options, and default budgets.
+- **Settings** -> **Admin** -> **Platform** for model catalog, default models, OpenAI-compatible base URLs, OpenRouter API keys, reasoning options, and default budgets.
 - **Settings** -> **Admin** -> **Users** for local users, roles, passwords, and assignment of existing data.
 - **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
 - **Settings** -> **Jobs** for saved jobs and schedules.
@@ -199,39 +199,39 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 
 ### Key values
 
-| Value                                    | Default                          | Description                                                         |
-| ---------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
-| `image.registry`                         | `ghcr.io`                        | Server image registry                                               |
-| `image.repository`                       | `thiesgerken/carapace`           | Server image repository                                             |
-| `image.tag`                              | `""` (appVersion)                | Server image tag                                                    |
-| `frontend.enabled`                       | `true`                           | Deploy the Next.js frontend                                         |
-| `frontend.image.tag`                     | `""` (appVersion)                | Frontend image tag                                                  |
-| `server.probes.startup.initialDelaySeconds` | `15`                            | Delay before the server startup probe runs                          |
-| `server.probes`                          | see `values.yaml`                 | Server startup, liveness, and readiness probe timing                |
-| `sandbox.image.tag`                      | `""` (appVersion)                | Sandbox base image tag                                              |
-| `sandbox.sandboxesName`                  | `null` (`<release>-sandboxes`)   | `Sandboxes` CR name; set `""` to use the Deployment as owner        |
-| `ingress.enabled`                        | `true`                           | Create a Gateway API HTTPRoute                                      |
-| `ingress.hostname`                       | `carapace.example.com`           | Ingress hostname                                                    |
-| `ingress.parentRefs`                     | `[{name: default-gateway}]`      | Gateway parent references                                           |
-| `ingress.annotations`                    | `{}`                             | Extra annotations on the HTTPRoute                                  |
-| `persistence.data.storageClassName`      | `""` (cluster default)           | StorageClass for the data PVC                                       |
-| `persistence.data.size`                  | `10Gi`                           | Data PVC size                                                       |
-| `persistence.data.finalizers`            | `[]`                             | Data PVC finalizers (e.g. `kubernetes.io/pvc-protection`)           |
-| `priorityClassName`                      | `""`                             | PriorityClass for all pods (server, frontend, sandbox)              |
-| `envFrom`                                | `[]`                             | Secret/ConfigMap refs injected into the server                      |
-| `extraEnv`                               | `[]`                             | Extra env vars for the server container                             |
-| `redis.enabled`                          | `true`                           | Deploy the bundled Redis required for session-list cache            |
-| `redis.image.tag`                        | `8-alpine`                       | Redis image tag                                                     |
-| `redis.resources`                        | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
-| `resources`                              | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |
-| `frontend.resources`                     | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |
-| `bitwarden.image.tag`                    | `""` (appVersion)                | bitwarden-cli image tag                                             |
-| `bitwarden.nginx.image.tag`              | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy              |
-| `bitwarden.persistence.enabled`          | `true`                           | Create a PVC per instance for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
-| `bitwarden.persistence.size`             | `256Mi`                          | Size of each Bitwarden instance PVC                                 |
-| `bitwarden.persistence.storageClassName` | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                     |
-| `bitwarden.persistence.finalizers`       | `[]`                             | Finalizers for Bitwarden PVCs                                       |
-| `bitwarden.instances`                    | `[]`                             | List of standalone `bw serve` proxy instances (see above)           |
+| Value                                       | Default                          | Description                                                         |
+| ------------------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `image.registry`                            | `ghcr.io`                        | Server image registry                                               |
+| `image.repository`                          | `thiesgerken/carapace`           | Server image repository                                             |
+| `image.tag`                                 | `""` (appVersion)                | Server image tag                                                    |
+| `frontend.enabled`                          | `true`                           | Deploy the Next.js frontend                                         |
+| `frontend.image.tag`                        | `""` (appVersion)                | Frontend image tag                                                  |
+| `server.probes.startup.initialDelaySeconds` | `15`                             | Delay before the server startup probe runs                          |
+| `server.probes`                             | see `values.yaml`                | Server startup, liveness, and readiness probe timing                |
+| `sandbox.image.tag`                         | `""` (appVersion)                | Sandbox base image tag                                              |
+| `sandbox.sandboxesName`                     | `null` (`<release>-sandboxes`)   | `Sandboxes` CR name; set `""` to use the Deployment as owner        |
+| `ingress.enabled`                           | `true`                           | Create a Gateway API HTTPRoute                                      |
+| `ingress.hostname`                          | `carapace.example.com`           | Ingress hostname                                                    |
+| `ingress.parentRefs`                        | `[{name: default-gateway}]`      | Gateway parent references                                           |
+| `ingress.annotations`                       | `{}`                             | Extra annotations on the HTTPRoute                                  |
+| `persistence.data.storageClassName`         | `""` (cluster default)           | StorageClass for the data PVC                                       |
+| `persistence.data.size`                     | `10Gi`                           | Data PVC size                                                       |
+| `persistence.data.finalizers`               | `[]`                             | Data PVC finalizers (e.g. `kubernetes.io/pvc-protection`)           |
+| `priorityClassName`                         | `""`                             | PriorityClass for all pods (server, frontend, sandbox)              |
+| `envFrom`                                   | `[]`                             | Secret/ConfigMap refs injected into the server                      |
+| `extraEnv`                                  | `[]`                             | Extra env vars for the server container                             |
+| `redis.enabled`                             | `true`                           | Deploy the bundled Redis required for session-list cache            |
+| `redis.image.tag`                           | `8-alpine`                       | Redis image tag                                                     |
+| `redis.resources`                           | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
+| `resources`                                 | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |
+| `frontend.resources`                        | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |
+| `bitwarden.image.tag`                       | `""` (appVersion)                | bitwarden-cli image tag                                             |
+| `bitwarden.nginx.image.tag`                 | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy              |
+| `bitwarden.persistence.enabled`             | `true`                           | Create a PVC per instance for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
+| `bitwarden.persistence.size`                | `256Mi`                          | Size of each Bitwarden instance PVC                                 |
+| `bitwarden.persistence.storageClassName`    | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                     |
+| `bitwarden.persistence.finalizers`          | `[]`                             | Finalizers for Bitwarden PVCs                                       |
+| `bitwarden.instances`                       | `[]`                             | List of standalone `bw serve` proxy instances (see above)           |
 
 See [values.yaml](values.yaml) for the complete reference.
 

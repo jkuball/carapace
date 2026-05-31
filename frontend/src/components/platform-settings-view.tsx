@@ -2,7 +2,7 @@
 
 import { Brain, BrainCircuit, Check, ChevronDown, Cloud, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type ComponentType, useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentType, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   getPlatformSettings,
@@ -54,7 +54,7 @@ interface SummaryBadge {
   icon?: BadgeIcon;
 }
 
-const providerPresets = ["anthropic", "google-gla", "google-vertex", "openai", "openai-chat"];
+const providerPresets = ["anthropic", "google-gla", "google-vertex", "openai", "openai-chat", "openrouter"];
 const thinkingOptions: ThinkingDraft[] = ["", "true", "false", "minimal", "low", "medium", "high", "xhigh"];
 
 const inputClassName = cn(
@@ -117,35 +117,24 @@ function modelNameKey(name: string): string {
   return name.trim().toLowerCase();
 }
 
-function badgeColorClassMap(keys: string[], classNames: readonly string[]): ReadonlyMap<string, string> {
-  const uniqueKeys = Array.from(new Set(keys.filter(Boolean))).sort();
-  return new Map(uniqueKeys.map((key, index) => [key, classNames[index % classNames.length]]));
+function badgeClassNameFromHash(key: string, classNames: readonly string[]): string {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return classNames[hash % classNames.length];
 }
 
-function providerColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
-  return badgeColorClassMap(models.map((model) => providerKey(model.provider, model.baseUrl)), providerBadgeClassNames);
-}
-
-function modelNameColorClassMap(models: ModelDraft[]): ReadonlyMap<string, string> {
-  return badgeColorClassMap(models.map((model) => modelNameKey(model.name)), modelBadgeClassNames);
-}
-
-function providerBadgeClassName(provider: string, baseUrl: string, providerColors: ReadonlyMap<string, string>): string {
+function providerBadgeClassName(provider: string, baseUrl: string): string {
   const normalized = providerKey(provider, baseUrl);
   if (!normalized) return neutralBadgeClassName;
-  const className = providerColors.get(normalized);
-  if (className) return className;
-  let hash = 0;
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
-  }
-  return providerBadgeClassNames[hash % providerBadgeClassNames.length];
+  return badgeClassNameFromHash(normalized, providerBadgeClassNames);
 }
 
-function modelNameBadgeClassName(name: string, modelNameColors: ReadonlyMap<string, string>): string {
+function modelNameBadgeClassName(name: string): string {
   const normalized = modelNameKey(name);
   if (!normalized) return neutralBadgeClassName;
-  return modelNameColors.get(normalized) ?? modelBadgeClassNames[0];
+  return badgeClassNameFromHash(normalized, modelBadgeClassNames);
 }
 
 function compactTokenCount(value: string): string {
@@ -173,9 +162,43 @@ function modelId(model: Pick<ModelDraft, "provider" | "name" | "id">): string {
   return model.id.trim() || `${model.provider.trim()}:${model.name.trim()}`;
 }
 
+function compareModelText(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { sensitivity: "base" });
+}
+
+function isIncompleteModelDraft(model: Pick<ModelDraft, "provider" | "name">): boolean {
+  return !model.provider.trim() || !model.name.trim();
+}
+
+export function sortModelDrafts(models: ModelDraft[]): ModelDraft[] {
+  return [...models].sort((left, right) => {
+    const leftIncomplete = isIncompleteModelDraft(left);
+    const rightIncomplete = isIncompleteModelDraft(right);
+    if (leftIncomplete !== rightIncomplete) {
+      return leftIncomplete ? -1 : 1;
+    }
+    if (leftIncomplete && rightIncomplete) {
+      return 0;
+    }
+
+    const providerOrder = compareModelText(left.provider.trim(), right.provider.trim());
+    if (providerOrder !== 0) return providerOrder;
+
+    const nameOrder = compareModelText(left.name.trim(), right.name.trim());
+    if (nameOrder !== 0) return nameOrder;
+
+    return compareModelText(modelId(left), modelId(right));
+  });
+}
+
 function isOpenAICompatibleProvider(provider: string): boolean {
   const normalized = provider.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-chat";
+}
+
+function supportsModelApiKey(provider: string): boolean {
+  const normalized = provider.trim().toLowerCase();
+  return isOpenAICompatibleProvider(normalized) || normalized === "openrouter";
 }
 
 function hasReusableRawSecret(model: Pick<ModelDraft, "apiKeyConfigured" | "apiKeyConfiguredSource">): boolean {
@@ -222,7 +245,7 @@ function draftFromSettings(response: PlatformSettingsResponseInfo): PlatformDraf
   return {
     defaultModels: { ...response.settings.default_models },
     budget: budgetDraftFromSettings(response.settings.default_budget),
-    models: response.settings.available_models.map(modelDraftFromSettings),
+    models: sortModelDrafts(response.settings.available_models.map(modelDraftFromSettings)),
   };
 }
 
@@ -287,10 +310,11 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
     if (ids.has(effectiveId)) throw new Error(t("errors.duplicateModel", { id: effectiveId }));
     ids.add(effectiveId);
     const openAICompatible = isOpenAICompatibleProvider(provider);
-    if (openAICompatible && model.apiKeySource === "raw" && !model.apiKeyValue.trim() && !hasReusableRawSecret(model)) {
+    const modelApiKeySupported = supportsModelApiKey(provider);
+    if (modelApiKeySupported && model.apiKeySource === "raw" && !model.apiKeyValue.trim() && !hasReusableRawSecret(model)) {
       throw new Error(t("errors.rawSecretRequired", { id: effectiveId }));
     }
-    if (openAICompatible && (model.apiKeySource === "env" || model.apiKeySource === "file") && !model.apiKeyValue.trim()) {
+    if (modelApiKeySupported && (model.apiKeySource === "env" || model.apiKeySource === "file") && !model.apiKeyValue.trim()) {
       throw new Error(t("errors.secretValueRequired", { id: effectiveId }));
     }
 
@@ -301,16 +325,18 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
       max_input_tokens: numericLimit(model.maxInputTokens, t("fields.maxInputTokens"), t),
       thinking: thinkingFromDraft(model.thinking),
     };
-    if (!openAICompatible) return entry;
-
-    entry.thinking_budget_tokens = nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t);
-    entry.base_url = model.baseUrl.trim() || null;
-    entry.api_key = model.apiKeySource === "none"
-      ? { source: null }
-      : {
-          source: model.apiKeySource,
-          ...(model.apiKeyValue.trim() ? { value: model.apiKeyValue.trim() } : {}),
-        };
+    if (openAICompatible) {
+      entry.thinking_budget_tokens = nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t);
+      entry.base_url = model.baseUrl.trim() || null;
+    }
+    if (modelApiKeySupported) {
+      entry.api_key = model.apiKeySource === "none"
+        ? { source: null }
+        : {
+            source: model.apiKeySource,
+            ...(model.apiKeyValue.trim() ? { value: model.apiKeyValue.trim() } : {}),
+          };
+    }
     return entry;
   });
 }
@@ -356,7 +382,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
 }
 
 function draftModelOptions(models: ModelDraft[]): AvailableModelInfo[] {
-  return models
+  return sortModelDrafts(models)
     .filter((model) => model.provider.trim() && model.name.trim())
     .map((model) => ({
       id: modelId(model),
@@ -418,8 +444,6 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   }, [notice]);
 
   const modelOptions = useMemo(() => draftModelOptions(draft?.models ?? []), [draft?.models]);
-  const providerColors = useMemo(() => providerColorClassMap(draft?.models ?? []), [draft?.models]);
-  const modelNameColors = useMemo(() => modelNameColorClassMap(draft?.models ?? []), [draft?.models]);
   const changed = useMemo(() => comparableDraft(draft) !== null && JSON.stringify(comparableDraft(draft)) !== JSON.stringify(comparableDraft(settings ? draftFromSettings(settings) : null)), [draft, settings]);
   const configWritable = settings?.config_writable ?? false;
   const fieldsDisabled = saving || !configWritable;
@@ -519,23 +543,18 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
         <Section
           title={t("sections.catalog")}
           action={(
-            <SecondaryButton disabled={fieldsDisabled} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
+            <SecondaryButton disabled={fieldsDisabled} onClick={() => updateDraft({ models: [newModelDraft(), ...draft.models] })}>
               <Plus className="h-4 w-4" />
               {t("actions.addModel")}
             </SecondaryButton>
           )}
         >
           <div className="space-y-3">
-            <datalist id="platform-model-provider-presets">
-              {providerPresets.map((provider) => <option key={provider} value={provider} />)}
-            </datalist>
             {draft.models.map((model) => (
               <ModelRow
                 key={model.rowId}
                 model={model}
                 disabled={fieldsDisabled}
-                providerColors={providerColors}
-                modelNameColors={modelNameColors}
                 onChange={(patch) => updateModel(model.rowId, patch)}
                 onRemove={() => updateDraft({ models: draft.models.filter((item) => item.rowId !== model.rowId) })}
                 t={t}
@@ -585,21 +604,115 @@ function SecondaryButton({ children, disabled, onClick }: { children: React.Reac
   );
 }
 
-function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; providerColors: ReadonlyMap<string, string>; modelNameColors: ReadonlyMap<string, string>; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+function ProviderInput({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  function closeWhenFocusLeaves(event: React.FocusEvent<HTMLDivElement>): void {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && wrapperRef.current?.contains(nextTarget)) return;
+    setOpen(false);
+  }
+
+  function toggleDropdown(): void {
+    if (disabled) return;
+    setOpen((current) => !current);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative" onBlur={closeWhenFocusLeaves}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        disabled={disabled}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-haspopup="listbox"
+        aria-autocomplete="list"
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") setOpen(true);
+          if (event.key === "Escape") setOpen(false);
+        }}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(inputClassName, "pr-10")}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="Provider presets"
+        aria-expanded={open}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={toggleDropdown}
+        className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open ? "rotate-180" : null)} />
+      </button>
+      {open ? (
+        <div id={listId} role="listbox" className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-background p-1 shadow-xl">
+          {providerPresets.map((provider) => (
+            <button
+              key={provider}
+              type="button"
+              role="option"
+              aria-selected={provider === value}
+              className={cn(
+                "block w-full rounded-lg px-2.5 py-2 text-left font-mono text-sm transition-colors focus:outline-none",
+                provider === value ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 focus:bg-accent/50",
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(provider);
+                setOpen(false);
+                inputRef.current?.focus();
+              }}
+            >
+              {provider}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+  const incomplete = isIncompleteModelDraft(model);
+  const [expanded, setExpanded] = useState(incomplete);
+  const open = expanded || incomplete;
   const effectiveId = modelId(model);
   const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
   const provider = model.provider.trim();
   const openAICompatible = isOpenAICompatibleProvider(provider);
+  const modelApiKeySupported = supportsModelApiKey(provider);
   const openAIFieldsDisabled = disabled || !openAICompatible;
+  const apiKeyFieldsDisabled = disabled || !modelApiKeySupported;
   const providerLabel = providerBadgeLabel(provider, openAICompatible ? model.baseUrl : "");
   const summaryBadges: SummaryBadge[] = [];
-  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, openAICompatible ? model.baseUrl : "", providerColors), icon: Cloud });
-  if (model.id.trim() && model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name, modelNameColors), icon: BrainCircuit });
+  if (provider) summaryBadges.push({ label: providerLabel, className: providerBadgeClassName(provider, openAICompatible ? model.baseUrl : ""), icon: Cloud });
+  if (model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name), icon: BrainCircuit });
   if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
   if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
   const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
-    <details className="group rounded-lg border border-border bg-background/70" open={!model.name.trim() || undefined}>
+    <details
+      className="group rounded-lg border border-border bg-background/70"
+      open={open}
+      onToggle={(event) => {
+        const nextOpen = event.currentTarget.open;
+        if (!nextOpen && incomplete) {
+          event.currentTarget.open = true;
+          setExpanded(true);
+          return;
+        }
+        setExpanded(nextOpen);
+      }}
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 space-y-2">
           <div className="break-all font-mono text-sm font-medium">{summaryId}</div>
@@ -626,7 +739,7 @@ function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, 
       </summary>
       <div className="grid gap-4 border-t border-border p-4 md:grid-cols-2 lg:grid-cols-3">
         <Field label={t("fields.provider")}>
-          <input list="platform-model-provider-presets" value={model.provider} disabled={disabled} onChange={(event) => onChange({ provider: event.target.value })} className={inputClassName} />
+          <ProviderInput value={model.provider} disabled={disabled} onChange={(provider) => onChange({ provider })} />
         </Field>
         <TextInput label={t("fields.name")} value={model.name} disabled={disabled} onChange={(name) => onChange({ name })} />
         <TextInput label={t("fields.id")} value={model.id} disabled={disabled} placeholder={t("placeholders.generatedId")} onChange={(id) => onChange({ id })} />
@@ -639,14 +752,14 @@ function ModelRow({ model, disabled, providerColors, modelNameColors, onChange, 
         <TextInput label={t("fields.thinkingBudgetTokens")} value={model.thinkingBudgetTokens} disabled={openAIFieldsDisabled} onChange={(thinkingBudgetTokens) => onChange({ thinkingBudgetTokens })} />
         <TextInput label={t("fields.baseUrl")} value={model.baseUrl} disabled={openAIFieldsDisabled} onChange={(baseUrl) => onChange({ baseUrl })} />
         <Field label={t("fields.apiKeySource")}>
-          <select value={model.apiKeySource} disabled={openAIFieldsDisabled} onChange={(event) => onChange(apiKeySourceChangePatch(model, event.target.value as SecretSource))} className={inputClassName}>
+          <select value={model.apiKeySource} disabled={apiKeyFieldsDisabled} onChange={(event) => onChange(apiKeySourceChangePatch(model, event.target.value as SecretSource))} className={inputClassName}>
             <option value="none">{t("secretSources.none")}</option>
             <option value="raw">{t("secretSources.raw")}</option>
             <option value="env">{t("secretSources.env")}</option>
             <option value="file">{t("secretSources.file")}</option>
           </select>
         </Field>
-        {openAICompatible && model.apiKeySource !== "none" ? (
+        {modelApiKeySupported && model.apiKeySource !== "none" ? (
           <Field label={model.apiKeySource === "raw" ? t("fields.apiKey") : t("fields.secretReference")}>
             <div className="relative">
               <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

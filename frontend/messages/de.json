@@ -197,7 +197,7 @@
             "xhigh": "Extra hoch"
         },
         "units": {
-            "tokens": "Token"
+            "tokens": "Tokens"
         },
         "modelRow": "Modell {index}"
     },
@@ -790,7 +790,7 @@
         "thinkingMeta": {
             "durationStreaming": "seit {duration}",
             "durationComplete": "{duration} lang",
-            "reasoning": "{count} Reasoning"
+            "reasoning": "{count} Tokens"
         },
         "actions": {
             "fork": "Sitzung von hier forken",

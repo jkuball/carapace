@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
+import pytest
+from pydantic_ai.messages import ModelRequest, ModelResponse
 from pydantic_ai.usage import RunUsage
 
 from carapace.usage import (
     UsageTracker,
+    provider_cost_usd_from_messages,
     usage_budget_exceeded_error,
     usage_budget_gauges,
     usage_limits_for_remaining_budget,
@@ -50,6 +54,74 @@ def test_category_by_model_splits_per_category() -> None:
     assert t.models["anthropic:claude-haiku-4-5"].input_tokens == 110
     assert t.category_by_model["agent"]["anthropic:claude-haiku-4-5"].input_tokens == 100
     assert t.category_by_model["title"]["anthropic:claude-haiku-4-5"].input_tokens == 10
+
+
+def test_provider_cost_usd_from_messages_sums_response_costs() -> None:
+    messages = [
+        ModelRequest(parts=[]),
+        ModelResponse(parts=[], provider_details={"cost": 0.0012}),
+        ModelResponse(parts=[], provider_details={"cost": "0.0034"}),
+        ModelResponse(parts=[], provider_details={"cost": True}),
+        ModelResponse(parts=[]),
+    ]
+
+    assert provider_cost_usd_from_messages(messages) == Decimal("0.0046")
+
+
+def test_estimated_cost_uses_provider_cost_when_available() -> None:
+    t = UsageTracker()
+    t.record(
+        "openrouter:openai/gpt-5.2",
+        "agent",
+        RunUsage(input_tokens=100, output_tokens=50, requests=1),
+        cost_usd=Decimal("0.0123"),
+    )
+
+    assert t.estimated_cost()["openrouter:openai/gpt-5.2"] == Decimal("0.0123")
+    assert t.estimated_cost()["total"] == Decimal("0.0123")
+    assert t.estimated_category_cost()["agent"] == Decimal("0.0123")
+
+
+def test_estimated_cost_uses_token_price_when_provider_cost_is_partial(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Price:
+        total_price = Decimal("0.05")
+
+    def fake_calc_price(*_args: Any, **_kwargs: Any) -> Price:
+        return Price()
+
+    monkeypatch.setattr("carapace.usage.calc_price", fake_calc_price)
+    t = UsageTracker()
+    t.record(
+        "openrouter:openai/gpt-5.2",
+        "agent",
+        RunUsage(input_tokens=100, output_tokens=50, requests=1),
+        cost_usd=Decimal("0.0123"),
+    )
+    t.record(
+        "openrouter:openai/gpt-5.2",
+        "agent",
+        RunUsage(input_tokens=1000, output_tokens=500, requests=1),
+    )
+
+    assert t.estimated_cost()["openrouter:openai/gpt-5.2"] == Decimal("0.05")
+    assert t.estimated_category_cost()["agent"] == Decimal("0.05")
+
+
+def test_estimated_cost_falls_back_to_provider_cost_when_pricing_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_calc_price(*_args: Any, **_kwargs: Any) -> None:
+        raise LookupError
+
+    monkeypatch.setattr("carapace.usage.calc_price", fake_calc_price)
+    t = UsageTracker()
+    t.record(
+        "openrouter:unknown-model",
+        "agent",
+        RunUsage(input_tokens=100, output_tokens=50, requests=1),
+        cost_usd=Decimal("0.0123"),
+    )
+
+    assert t.estimated_cost()["openrouter:unknown-model"] == Decimal("0.0123")
+    assert t.estimated_category_cost()["agent"] == Decimal("0.0123")
 
 
 def test_estimated_category_cost_sums_to_model_costs_when_disjoint() -> None:

@@ -18,6 +18,7 @@ from pydantic_ai.usage import RunUsage
 
 import carapace.security as security_mod
 import carapace.usage as usage_mod
+from carapace.models.config import AgentConfig
 from carapace.models.session import SessionBudget
 from carapace.security.context import SentinelVerdict, SessionSecurity, ToolCallEntry
 from carapace.security.sentinel import Sentinel
@@ -415,6 +416,83 @@ def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp
 
     assert active.agent_model_name == "openai:gpt-4o"
     assert active.agent_model is None
+
+
+def test_apply_platform_model_config_refreshes_active_sentinel_factory(tmp_path: Path) -> None:
+    engine = _make_engine(tmp_path)
+
+    def old_factory(name: str) -> TestModel:
+        if name == "local:new-model":
+            raise ValueError("old catalog")
+        return TestModel()
+
+    engine._model_factory = old_factory
+    state = engine.session_mgr.create_session(user="thies")
+    active = engine.get_or_activate(state.session_id)
+    assert active.sentinel is not None
+
+    def new_factory(_name: str) -> TestModel:
+        return TestModel()
+
+    config = engine.config.model_copy(deep=True)
+    config.agent = AgentConfig(
+        model=engine.config.agent.model,
+        sentinel_model=engine.config.agent.sentinel_model,
+        title_model=engine.config.agent.title_model,
+        available_models=[
+            *engine.config.agent.available_models,
+            {"provider": "openai", "name": "new-model", "id": "local:new-model"},
+        ],
+    )
+    engine.apply_platform_model_config(config, model_factory=new_factory, agent_model=TestModel())
+    updated = engine.update_session_model_overrides(
+        state.session_id,
+        agent_model_name="local:new-model",
+        sentinel_model_name="local:new-model",
+    )
+
+    assert updated.agent_model_name == "local:new-model"
+    assert updated.sentinel_model_name == "local:new-model"
+    assert active.agent_model_name == "local:new-model"
+    assert active.sentinel_model_name == "local:new-model"
+
+
+def test_apply_platform_model_config_clears_stale_active_sentinel_override(tmp_path: Path) -> None:
+    with _patch_sentinel() as sentinel_cls, patch("carapace.session.engine.logger.warning") as warning_mock:
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session(user="thies")
+        active = engine.get_or_activate(state.session_id)
+        assert active.sentinel is not None
+
+        active.sentinel_model_name = "openai:missing-sentinel"
+        active.state.sentinel_model_name = "openai:missing-sentinel"
+        engine.session_mgr.save_state(active.state)
+
+        sentinel = sentinel_cls.return_value
+
+        def _set_model_runtime(*, model: str | None = None, **_kwargs: Any) -> None:
+            if model == "openai:missing-sentinel":
+                raise ValueError("missing sentinel model")
+
+        sentinel.set_model_runtime.side_effect = _set_model_runtime
+
+        engine.apply_platform_model_config(
+            engine.config,
+            model_factory=lambda _name: TestModel(),
+            agent_model=TestModel(),
+        )
+
+    assert active.sentinel_model_name is None
+    assert active.state.sentinel_model_name is None
+
+    persisted = engine.session_mgr.load_state(state.session_id)
+    assert persisted is not None
+    assert persisted.sentinel_model_name is None
+
+    assert sentinel.set_model_runtime.call_count == 2
+    assert sentinel.set_model_runtime.call_args_list[0].kwargs["model"] == "openai:missing-sentinel"
+    assert sentinel.set_model_runtime.call_args_list[1].kwargs["model"] == engine.config.agent.sentinel_model
+    warning_mock.assert_called_once()
 
 
 def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:

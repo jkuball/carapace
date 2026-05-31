@@ -94,7 +94,6 @@ export function Sidebar({
   sessions,
   showArchivedSessions = true,
   activeSessionId,
-  activeView = "chat",
   frontendVersion = null,
   backendVersion = null,
   currentUser = null,
@@ -125,6 +124,11 @@ export function Sidebar({
     : [];
   const accountName = currentUser?.display_name?.trim() || currentUser?.username || t("account.unknown");
   const accountUsername = currentUser?.username ?? t("account.unknown");
+
+  function handleOpenSettings(): void {
+    setAccountMenuOpen(false);
+    onOpenSettings();
+  }
 
   useEffect(() => {
     const updateReferenceTime = (): void => {
@@ -595,6 +599,15 @@ export function Sidebar({
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />
         </div>
         <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={handleOpenSettings}
+            title={t("navigation.settings")}
+            aria-label={t("navigation.settings")}
+            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
           <div ref={accountMenuRef} className="relative">
             <button
               type="button"
@@ -608,7 +621,7 @@ export function Sidebar({
               <span
                 className={cn(
                   "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-semibold transition-colors",
-                  activeView === "settings" || accountMenuOpen
+                  accountMenuOpen
                     ? "bg-accent text-accent-foreground"
                     : "bg-background text-muted-foreground",
                 )}
@@ -654,10 +667,7 @@ export function Sidebar({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => {
-                      setAccountMenuOpen(false);
-                      onOpenSettings();
-                    }}
+                    onClick={handleOpenSettings}
                     className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
                   >
                     <Settings2 className="h-4 w-4 text-muted-foreground" />
