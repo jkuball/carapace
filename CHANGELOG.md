@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.133.0 (2026-05-31)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: update defaultMode for nginx-auth secret to 0444
+  ([`b98c11e`](https://github.com/thiesgerken/carapace/commit/b98c11e1b71154c6780b2eda57e5084e706e824f))
+
+### ✨ Features
+
+
+- ✨ feat: add configurable probes for Bitwarden and nginx in values.yaml
+  ([`56858db`](https://github.com/thiesgerken/carapace/commit/56858db0d80e28f6b13e15d6f05c32a551fa552a))
+
 ## v0.132.1 (2026-05-31)
 
 
