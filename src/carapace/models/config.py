@@ -303,4 +303,4 @@ class Config(ConfigModel):
     sessions: SessionsConfig = SessionsConfig()
     sandbox: SandboxConfig = SandboxConfig()
     data_dir: str = "."  # resolved relative to config file location
-    knowledge_dir: str = "./knowledge"  # resolved relative to config file location
+    knowledge_dir: str = "./knowledges"  # parent directory for per-user repos, resolved relative to config file

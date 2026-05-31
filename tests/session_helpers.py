@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,6 +13,7 @@ from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
+from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.credentials import CredentialRegistryProtocol
 from carapace.models.tooling import ToolResult
 from carapace.sandbox.manager import SandboxManager
@@ -179,30 +181,43 @@ def _sentinel_set_model_mock(active: ActiveSession) -> MagicMock:
     return cast(MagicMock, cast(Any, active.sentinel.set_model))
 
 
-def _make_engine(tmp_path: Path, credential_registry: CredentialRegistryProtocol | None = None) -> SessionEngine:
+def _make_engine(
+    tmp_path: Path,
+    credential_registry: CredentialRegistryProtocol | None = None,
+    knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
+) -> SessionEngine:
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
     session_mgr = SessionManager(tmp_path)
     registry = SkillRegistry(tmp_path / "skills")
-    skill_catalog = registry.scan()
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.refresh_sandbox_snapshot = AsyncMock()
     sandbox_mgr.reset_session = AsyncMock()
     sandbox_mgr.get_domain_info.return_value = []
     registry_for_session = credential_registry or CredentialRegistry()
+    git_store = MagicMock(spec=GitStore)
 
     async def credential_registry_for_session(_session_id: str) -> CredentialRegistryProtocol:
         return registry_for_session
 
+    if knowledge_repo_for_session is None:
+        handle = KnowledgeRepoHandle(
+            owner="thies",
+            knowledge_dir=tmp_path,
+            git_store=git_store,
+            skill_registry=registry,
+        )
+
+        def knowledge_repo_for_session(_session_id: str) -> KnowledgeRepoHandle:
+            return handle
+
     return SessionEngine(
         config=config,
         data_dir=tmp_path,
-        knowledge_dir=tmp_path,
-        git_store=MagicMock(spec=GitStore),
         session_mgr=session_mgr,
-        skill_catalog=skill_catalog,
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         credential_registry_for_session=credential_registry_for_session,
+        knowledge_repo_for_session=knowledge_repo_for_session,
         model_factory=lambda _name: TestModel(),
     )

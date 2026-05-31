@@ -38,7 +38,7 @@ flowchart TD
 
 ## SECURITY.md -- the policy file
 
-The security policy lives in the Git-backed knowledge repo as `SECURITY.md`. With the default config path, that file is `data/knowledge/SECURITY.md`; if you override `knowledge_dir`, the sentinel reads `<knowledge_dir>/SECURITY.md`. It is written in plain English and becomes part of the sentinel agent's system prompt. There are no rigid YAML rules to parse -- the sentinel interprets the policy with full LLM understanding.
+The security policy lives in each user's Git-backed knowledge repo as `SECURITY.md`. With the default layout, the file for user `alice` is `data/knowledges/alice/SECURITY.md`. The sentinel resolves the policy from the session owner, so two users can run with different policies at the same time. The file is written in plain English and becomes part of the sentinel agent's system prompt. There are no rigid YAML rules to parse -- the sentinel interprets the policy with full LLM understanding.
 
 The shipped default policy (see `src/carapace/assets/SECURITY.md`) covers:
 

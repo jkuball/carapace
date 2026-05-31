@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from carapace.config import load_config, load_workspace_file
+from carapace.config import (
+    _resolve_knowledge_dir,
+    load_config,
+    load_workspace_file,
+    resolve_knowledge_repos_dir,
+    resolve_user_knowledge_dir,
+)
+from carapace.models.config import Config
 
 
 def test_load_config_defaults(tmp_path: Path):
@@ -18,6 +25,7 @@ def test_load_config_defaults(tmp_path: Path):
     assert cfg.sessions.commit.autosave_inactivity_hours == 4
     assert cfg.sandbox.k8s_session_pvc_size == "1Gi"
     assert cfg.sandbox.k8s_session_pvc_storage_class == ""
+    assert cfg.knowledge_dir == "./knowledges"
 
 
 def test_load_config_creates_missing_file(tmp_path: Path):
@@ -98,3 +106,33 @@ def test_load_workspace_file(tmp_path: Path):
     (tmp_path / "SECURITY.md").write_text("# Test Policy\nBe safe.")
     result = load_workspace_file(tmp_path, "SECURITY.md")
     assert "Test Policy" in result
+
+
+def test_resolve_knowledge_repos_dir_uses_knowledges_under_data_dir(tmp_path: Path) -> None:
+    assert resolve_knowledge_repos_dir(tmp_path) == (tmp_path / "knowledges").resolve()
+
+
+def test_resolve_knowledge_repos_dir_uses_explicit_root(tmp_path: Path) -> None:
+    explicit = tmp_path / "legacy-knowledge"
+    assert resolve_knowledge_repos_dir(tmp_path, explicit) == explicit.resolve()
+
+
+def test_resolve_user_knowledge_dir_uses_normalized_username(tmp_path: Path) -> None:
+    assert resolve_user_knowledge_dir(tmp_path, "thies") == (tmp_path / "knowledges" / "thies").resolve()
+
+
+def test_resolve_user_knowledge_dir_uses_explicit_root(tmp_path: Path) -> None:
+    explicit = tmp_path / "legacy-knowledge"
+    assert resolve_user_knowledge_dir(tmp_path, "thies", knowledge_repos_dir=explicit) == (explicit / "thies").resolve()
+
+
+def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="username must be lowercase"):
+        resolve_user_knowledge_dir(tmp_path, "Thies")
+
+
+def test_resolve_knowledge_dir_uses_knowledges_when_config_value_is_empty(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config = Config(knowledge_dir="")
+
+    assert _resolve_knowledge_dir(config_path, config) == (tmp_path / "knowledges").resolve()

@@ -29,6 +29,7 @@ from ..agent.deps import Deps
 from ..agent.loop import run_agent_turn as _run_agent_turn
 from ..credentials import SessionCredentialRegistry
 from ..git.store import GitStore
+from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
 from ..models.config import Config
 from ..models.credentials import CredentialRegistryProtocol
 from ..models.session import SessionAttributes, SessionState
@@ -111,26 +112,22 @@ class SessionEngine(
         *,
         config: Config,
         data_dir: Path,
-        knowledge_dir: Path,
-        git_store: GitStore,
         session_mgr: SessionManager,
-        skill_catalog: list[SkillInfo],
         agent_model: Model | None,
         sandbox_mgr: SandboxManager,
         credential_registry_for_session: Callable[[str], Awaitable[CredentialRegistryProtocol]],
+        knowledge_repo_for_session: KnowledgeRepoResolver,
         model_factory: Callable[[str], Model] | None = None,
         notification_router: NotificationRouter | None = None,
     ) -> None:
         self._config = config
         self._data_dir = data_dir
-        self._knowledge_dir = knowledge_dir
-        self._git_store = git_store
         self._session_mgr = session_mgr
-        self._skill_catalog = skill_catalog
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._model_factory = model_factory
         self._credential_registry_for_session = credential_registry_for_session
+        self._knowledge_repo_for_session = knowledge_repo_for_session
         self._notification_router = notification_router
         self._active: dict[str, ActiveSession] = {}
         self._llm_semaphore = asyncio.Semaphore(config.agent.max_parallel_llm)
@@ -187,9 +184,20 @@ class SessionEngine(
     def data_dir(self) -> Path:
         return self._data_dir
 
-    @property
-    def skill_catalog(self) -> list[SkillInfo]:
-        return self._skill_catalog
+    def _repo_handle_for_session(self, session_id: str) -> KnowledgeRepoHandle:
+        return self._knowledge_repo_for_session(session_id)
+
+    def _knowledge_dir_for_session(self, session_id: str) -> Path:
+        return self._repo_handle_for_session(session_id).knowledge_dir
+
+    def _git_store_for_session(self, session_id: str) -> GitStore:
+        return self._repo_handle_for_session(session_id).git_store
+
+    def _skill_registry_for_session(self, session_id: str) -> SkillRegistry:
+        return self._repo_handle_for_session(session_id).skill_registry
+
+    def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]:
+        return self._repo_handle_for_session(session_id).skill_registry.scan()
 
     @property
     def sandbox_mgr(self) -> SandboxManager:
@@ -220,10 +228,11 @@ class SessionEngine(
             ask_mode=state.attributes.ask_mode,
             yolo_mode=state.attributes.yolo_mode,
         )
+        knowledge_dir = self._knowledge_dir_for_session(session_id)
         sentinel = Sentinel(
             model=self._config.agent.sentinel_model,
-            knowledge_dir=self._knowledge_dir,
-            skills_dir=self._knowledge_dir / "skills",
+            knowledge_dir=knowledge_dir,
+            skills_dir=knowledge_dir / "skills",
             unattended=state.attributes.unattended,
             ask_mode=state.attributes.ask_mode,
             timeout=timedelta(seconds=self._config.agent.sentinel_timeout_seconds),
@@ -287,7 +296,7 @@ class SessionEngine(
 
     async def _skill_activation_inputs(self, session_id: str, skill_name: str) -> SkillActivationInputs:
         """Return approved env/file inputs for automatic skill activation providers."""
-        registry = SkillRegistry(self._knowledge_dir / "skills")
+        registry = self._skill_registry_for_session(session_id)
         carapace_cfg = registry.get_carapace_config(skill_name)
         if not carapace_cfg or not carapace_cfg.credentials:
             return SkillActivationInputs()
@@ -317,9 +326,9 @@ class SessionEngine(
                 file_credentials.append(SkillFileCredential(path=decl.file, value=value))
         return SkillActivationInputs(environment=env, file_credentials=file_credentials)
 
-    def _skill_command_aliases(self, skill_name: str) -> list[tuple[str, str]]:
+    def _skill_command_aliases(self, session_id: str, skill_name: str) -> list[tuple[str, str]]:
         """Return validated command aliases declared by a skill."""
-        registry = SkillRegistry(self._knowledge_dir / "skills")
+        registry = self._skill_registry_for_session(session_id)
         carapace_cfg = registry.get_carapace_config(skill_name)
         if not carapace_cfg:
             return []
@@ -441,15 +450,17 @@ class SessionEngine(
         def _append_session_events(events: list[dict[str, Any]]) -> None:
             self._session_mgr.append_events(session_id, events)
 
+        knowledge_dir = self._knowledge_dir_for_session(session_id)
+
         return Deps(
             config=self._config,
             data_dir=self._data_dir,
-            knowledge_dir=self._knowledge_dir,
+            knowledge_dir=knowledge_dir,
             session_state=active.state,
             security=active.security,
             sentinel=active.sentinel,
-            git_store=self._git_store,
-            skill_catalog=self._skill_catalog,
+            git_store=self._git_store_for_session(session_id),
+            skill_catalog=self._skill_catalog_for_session(session_id),
             agent_model=agent_model,
             agent_model_id=agent_model_id,
             tool_call_callback=tool_call_callback,
@@ -543,6 +554,7 @@ class SessionEngine(
             msg = "Agent is busy — cancel first"
             raise RuntimeError(msg)
 
+        source_meta = self._session_mgr.load_meta(session_id)
         source_state = active.state.model_copy(deep=True)
         events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
         turns = self._completed_event_turns(events)
@@ -586,6 +598,7 @@ class SessionEngine(
         )
 
         self._session_mgr.save_state(forked_state)
+        self._session_mgr.save_meta(forked_session_id, source_meta.model_copy(deep=True))
         self._session_mgr.save_events(forked_session_id, forked_events)
         self._session_mgr.save_history(forked_session_id, forked_history)
         self._session_mgr.clear_llm_request_state(forked_session_id)

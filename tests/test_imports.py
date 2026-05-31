@@ -16,7 +16,17 @@ def test_import_agent_deps():
 
 
 def test_import_config():
-    from carapace.config import get_data_dir, load_config, load_workspace_file  # noqa: F401
+    from carapace.config import (  # noqa: F401
+        get_data_dir,
+        load_config,
+        load_workspace_file,
+        resolve_knowledge_repos_dir,
+        resolve_user_knowledge_dir,
+    )
+
+
+def test_import_knowledge():
+    from carapace.knowledge import KnowledgeRepoHandle, KnowledgeRepoRegistry  # noqa: F401
 
 
 def test_import_session():

@@ -85,7 +85,6 @@ def _make_channel(tmp_path: Path, *, owner_user: str = "thies", **config_kwargs:
         config=_make_config(**config_kwargs),
         full_config=full_config,
         session_mgr=session_mgr,
-        skill_catalog=[],
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         engine=_make_engine_mock(),
@@ -148,7 +147,7 @@ def test_matrix_session_created_with_token_owner(tmp_path: Path):
                         access_token="tok_good",
                         device_id="DEV1",
                         user_id="@carapace:example.com",
-                        user="Thies",
+                        user="thies",
                     )
                 ]
             ).model_dump(mode="json", exclude_none=True)

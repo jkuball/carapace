@@ -22,17 +22,22 @@ class GitHttpHandler:
     def __init__(
         self,
         *,
-        knowledge_dir: Path,
+        knowledge_root: Path,
+        owner_for_session: Callable[[str], str],
         default_branch: str,
         api_port: int = 8320,
         verify_session_token: Callable[[str, str], bool] | None = None,
-        on_push_success: Callable[[], Awaitable[None]] | None = None,
+        on_push_success: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
-        self._knowledge_dir = knowledge_dir
+        self._knowledge_root = knowledge_root
         self._default_branch = default_branch
         self._api_port = api_port
         self._verify_session_token = verify_session_token
         self._on_push_success = on_push_success
+        self._owner_for_session = owner_for_session
+
+    def _repo_name_for_session(self, session_id: str) -> str:
+        return self._owner_for_session(session_id)
 
     def authenticate(self, authorization: str | None) -> str | None:
         """Validate an ``Authorization: Basic ...`` header.
@@ -81,12 +86,12 @@ class GitHttpHandler:
         # Validate PATH_INFO using Path() to catch traversal segments and
         # normalise double slashes before checking the allowed repo prefix.
         path_obj = Path(path_info)
-        repo_name = self._knowledge_dir.name
+        repo_name = self._repo_name_for_session(session_id)
         allowed_prefixes = (f"/{repo_name}/", f"/{repo_name}.git/")
         if (
             ".." in path_obj.parts
             or "\\" in path_info
-            or not any(str(path_obj).startswith(p) for p in allowed_prefixes)
+            or not any(path_info.startswith(prefix) for prefix in allowed_prefixes)
         ):
             logger.warning(f"Rejected git request with unexpected PATH_INFO: {path_info}")
             return 403, {}, b""
@@ -95,7 +100,7 @@ class GitHttpHandler:
 
         # Build CGI environment
         cgi_env = {
-            "GIT_PROJECT_ROOT": str(self._knowledge_dir.parent),
+            "GIT_PROJECT_ROOT": str(self._knowledge_root),
             "GIT_HTTP_EXPORT_ALL": "1",
             "PATH_INFO": path_info,
             "REMOTE_USER": session_id,
@@ -144,7 +149,7 @@ class GitHttpHandler:
         # "ng refs/…" in the Git report-status inside the response body.
         if is_push and 200 <= status_code < 300 and b"ng refs/" not in response_body and self._on_push_success:
             try:
-                await self._on_push_success()
+                await self._on_push_success(repo_name)
             except Exception as exc:
                 logger.warning(f"Post-push callback failed: {exc}")
 

@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import carapace.usage as usage_mod
+from carapace.knowledge import KnowledgeRepoRegistry
 from carapace.models.session import SessionBudget
 from carapace.usage import LlmRequestRecord, LlmRequestState, ModelUsage
 from tests.session_helpers import (
@@ -222,6 +223,96 @@ def test_handle_slash_command_usage_includes_tool_call_total(tmp_path: Path):
             assert result is not None
             assert result["command"] == "usage"
             assert result["data"]["total_tool_calls"] == 2
+
+        asyncio.run(_run())
+
+
+def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        registry = KnowledgeRepoRegistry(tmp_path)
+        thies_skill = registry.ensure_user_repo("thies").knowledge_dir / "skills" / "alpha"
+        thies_skill.mkdir(parents=True)
+        (thies_skill / "SKILL.md").write_text(
+            "---\nname: alpha\ndescription: Owner skill\n---\n",
+            encoding="utf-8",
+        )
+        ada_skill = registry.ensure_user_repo("ada").knowledge_dir / "skills" / "beta"
+        ada_skill.mkdir(parents=True)
+        (ada_skill / "SKILL.md").write_text(
+            "---\nname: beta\ndescription: Other skill\n---\n",
+            encoding="utf-8",
+        )
+
+        engine = None
+
+        def knowledge_repo_for_session(session_id: str):
+            assert engine is not None
+            owner = engine.session_mgr.load_meta(session_id).user
+            return registry.get_for_user(owner)
+
+        engine = _make_engine(tmp_path, knowledge_repo_for_session=knowledge_repo_for_session)
+        thies_state = engine.session_mgr.create_session(user="thies")
+        ada_state = engine.session_mgr.create_session(user="ada")
+        thies_sid = thies_state.session_id
+        ada_sid = ada_state.session_id
+        engine.get_or_activate(thies_sid)
+        engine.get_or_activate(ada_sid)
+
+        async def _run() -> None:
+            thies_result = await engine.handle_slash_command(thies_sid, "/skills")
+            ada_result = await engine.handle_slash_command(ada_sid, "/skills")
+
+            assert thies_result is not None
+            assert ada_result is not None
+            assert thies_result["data"] == [{"name": "alpha", "description": "Owner skill"}]
+            assert ada_result["data"] == [{"name": "beta", "description": "Other skill"}]
+
+        asyncio.run(_run())
+        assert engine._knowledge_dir_for_session(thies_sid) != engine._knowledge_dir_for_session(ada_sid)
+
+
+def test_handle_slash_command_pull_invalidates_cached_skill_catalog(tmp_path: Path) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session(user="thies")
+        sid = state.session_id
+        engine.get_or_activate(sid)
+
+        alpha_skill = tmp_path / "skills" / "alpha"
+        alpha_skill.mkdir(parents=True)
+        (alpha_skill / "SKILL.md").write_text(
+            "---\nname: alpha\ndescription: Before pull\n---\n",
+            encoding="utf-8",
+        )
+        git_store = engine._git_store_for_session(sid)
+        git_store.remote_configured = True
+
+        async def pull_from_remote() -> str:
+            beta_skill = tmp_path / "skills" / "beta"
+            beta_skill.mkdir(parents=True)
+            (beta_skill / "SKILL.md").write_text(
+                "---\nname: beta\ndescription: Added by pull\n---\n",
+                encoding="utf-8",
+            )
+            return "Pulled"
+
+        git_store.pull_from_remote = AsyncMock(side_effect=pull_from_remote)
+
+        async def _run() -> None:
+            initial = await engine.handle_slash_command(sid, "/skills")
+            assert initial is not None
+            assert initial["data"] == [{"name": "alpha", "description": "Before pull"}]
+
+            pull_result = await engine.handle_slash_command(sid, "/pull")
+            assert pull_result is not None
+            assert pull_result["data"]["message"] == "Pulled"
+
+            refreshed = await engine.handle_slash_command(sid, "/skills")
+            assert refreshed is not None
+            assert refreshed["data"] == [
+                {"name": "alpha", "description": "Before pull"},
+                {"name": "beta", "description": "Added by pull"},
+            ]
 
         asyncio.run(_run())
 

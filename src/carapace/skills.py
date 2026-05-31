@@ -22,6 +22,9 @@ class SkillRegistry:
         self.skills_dir = skills_dir
         self._catalog: list[SkillInfo] | None = None
 
+    def invalidate(self) -> None:
+        self._catalog = None
+
     def scan(self) -> list[SkillInfo]:
         """Scan skills/ directory and load frontmatter only (progressive disclosure)."""
         if self._catalog is not None:

@@ -286,7 +286,8 @@ class TestGitHttpHandlerCgiConversion:
 
     def _handler(self) -> GitHttpHandler:
         return GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
         )
 
@@ -342,7 +343,8 @@ class TestGitHttpHandlerAuth:
 
     def test_authenticate_success(self):
         h = GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
             verify_session_token=lambda sid, tok: sid == "sess-1" and tok == "my-token",
         )
@@ -351,7 +353,8 @@ class TestGitHttpHandlerAuth:
 
     def test_authenticate_invalid_token(self):
         h = GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
             verify_session_token=lambda sid, tok: False,
         )
@@ -360,7 +363,8 @@ class TestGitHttpHandlerAuth:
 
     def test_authenticate_wrong_session(self):
         h = GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
             verify_session_token=lambda sid, tok: sid == "sess-1" and tok == "tok",
         )
@@ -369,7 +373,8 @@ class TestGitHttpHandlerAuth:
 
     def test_authenticate_no_header(self):
         h = GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
             verify_session_token=lambda sid, tok: True,
         )
@@ -385,7 +390,8 @@ class TestGitHttpHandlerHandle:
 
     def _handler(self) -> GitHttpHandler:
         return GitHttpHandler(
-            knowledge_dir=Path("/tmp/knowledge"),
+            knowledge_root=Path("/tmp"),
+            owner_for_session=lambda _session_id: "knowledge",
             default_branch="main",
         )
 
@@ -441,4 +447,22 @@ class TestGitHttpHandlerHandle:
             content_type=None,
             body=b"",
         )
+        assert status == 403
+
+    async def test_cross_user_repo_path_returns_403(self):
+        h = GitHttpHandler(
+            knowledge_root=Path("/tmp/knowledges"),
+            owner_for_session=lambda session_id: "thies" if session_id == "sess-1" else "ada",
+            default_branch="main",
+        )
+
+        status, _headers, _body = await h.handle(
+            session_id="sess-1",
+            method="GET",
+            path="/git/ada/info/refs",
+            query_string="service=git-upload-pack",
+            content_type=None,
+            body=b"",
+        )
+
         assert status == 403

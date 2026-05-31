@@ -12,7 +12,6 @@ from pydantic_ai.messages import ModelMessage
 from ..auth import UserIdentity
 from ..models.session import SessionAttributes, SessionJobRunContext, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
-from ..session.manager import SessionMeta
 from ..user_defaults import apply_user_model_defaults, effective_user_budget
 from .auth import verify_token
 from .history import _history_from_messages
@@ -434,7 +433,6 @@ async def fork_session(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    server._engine.session_mgr.save_meta(forked.session_id, SessionMeta(user=user.username))
     return SessionInfo.from_state(
         forked,
         message_count=_session_message_count(forked.session_id),

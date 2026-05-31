@@ -75,7 +75,7 @@ Most first-run configuration now lives in the web UI:
 
 The old mental model was “edit `data/config.yaml`, then restart”. That file still exists as the backing store for platform settings and as an escape hatch for automation, but day-to-day setup should happen through Settings. The UI writes the relevant backing files and keeps write-only secrets out of API responses.
 
-On first start, carapace seeds runtime files under `data/` and a separate Git-backed knowledge repo under `data/knowledge/` by default. The equivalent backing-file shape for platform defaults is:
+On first start, carapace seeds runtime files under `data/` and bootstraps one Git-backed knowledge repo per enabled user under `data/knowledges/<normalized-user>/`. The equivalent backing-file shape for platform defaults is:
 
 ```yaml
 agent:
@@ -91,7 +91,7 @@ agent:
 sessions:
   commit:
     enabled: true
-    # Histories are written to data/knowledge/sessions/YYYY/MM/<session_id>/conversation.json
+    # Histories are written to data/knowledges/<user>/sessions/YYYY/MM/<session_id>/conversation.json
     path_prefix: sessions
     autosave_enabled: true
     autosave_inactivity_hours: 4
@@ -103,9 +103,9 @@ cache:
   redis_url: redis://redis:6379/0
 ```
 
-Session histories always live primarily under `data/sessions/<session_id>/`. The `sessions.commit.*` settings control a secondary commit flow into the Git-backed knowledge repo so the agent can refer back to past conversations later.
+Session histories always live primarily under `data/sessions/<session_id>/`. The `sessions.commit.*` settings control a secondary commit flow into the owning user's knowledge repo so the agent can refer back to past conversations later.
 
-The knowledge repo location defaults to `data/knowledge/` because `knowledge_dir` defaults to `./knowledge` relative to the config file.
+By default the knowledge root is `data/knowledges/`. Each enabled user gets a repo at `data/knowledges/<normalized-user>/`, initialized independently on startup. If a user has a Git remote configured, carapace adds that remote and pulls its configured branch before seeding any missing bootstrap files into that user's repo.
 
 In the web UI, public sessions expose a "Commit to knowledge" action. Private sessions do not. Autosave uses the same privacy rule: only public, inactive sessions are eligible.
 
@@ -272,7 +272,7 @@ users:
 
 ## 7. Personalise
 
-Edit the workspace files in the knowledge repo to shape carapace's behaviour. With the default config, these live under `data/knowledge/`:
+Edit the workspace files in your own knowledge repo to shape carapace's behaviour. With the default config, user `alice` would edit files under `data/knowledges/alice/`:
 
 | File          | Purpose                                                   |
 | ------------- | --------------------------------------------------------- |
@@ -283,7 +283,7 @@ Edit the workspace files in the knowledge repo to shape carapace's behaviour. Wi
 
 ## Next steps
 
-- Install skills into `data/knowledge/skills/` by default, or into your configured `knowledge_dir` — see [docs/skills.md](skills.md)
+- Install skills into `data/knowledges/<your-user>/skills/` by default — see [docs/skills.md](skills.md)
 - Explore the [architecture](architecture.md) and [security model](security.md)
 - Explore [jobs.md](jobs.md) for scheduled and on-demand job runs
 - Deploy to Kubernetes with the [Helm chart](../charts/carapace/README.md)

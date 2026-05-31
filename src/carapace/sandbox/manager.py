@@ -11,6 +11,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
 from ..security.context import ApprovalSource, ApprovalVerdict
 from . import file_ops
 from .exec_flow import SandboxExecCoordinator, SandboxExecState
@@ -192,18 +193,16 @@ class SandboxManager:
         self,
         runtime: ContainerRuntime,
         data_dir: Path,
-        knowledge_dir: Path,
+        knowledge_repo_for_session: KnowledgeRepoResolver,
         base_image: str = "carapace-sandbox:latest",
         network_name: str = "carapace-sandbox",
         idle_timeout_minutes: int = 15,
         proxy_port: int = 3128,
         sandbox_port: int = 8322,
-        git_author: str = "carapace <carapace@%h>",
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
-        self._knowledge_dir = knowledge_dir
-        self._git_author = git_author
+        self._knowledge_repo_for_session = knowledge_repo_for_session
         self._base_image = base_image
         self._network_name = network_name
         self._idle_timeout = idle_timeout_minutes * 60
@@ -230,7 +229,7 @@ class SandboxManager:
         self._exec_notified_credentials: dict[str, set[str]] = {}  # dedupe credential UI notifications
         self._get_activated_skills_cb: Callable[[str], list[str]] | None = None
         self._skill_activation_inputs_cb: Callable[[str, str], Awaitable[SkillActivationInputs]] | None = None
-        self._skill_command_aliases_cb: Callable[[str], list[tuple[str, str]]] | None = None
+        self._skill_command_aliases_cb: Callable[[str, str], list[tuple[str, str]]] | None = None
         self._session_lifecycle = SandboxSessionLifecycle(
             runtime=runtime,
             state=SandboxSessionLifecycleState(
@@ -252,13 +251,13 @@ class SandboxManager:
                 exec_notified_credentials=self._exec_notified_credentials,
             ),
             data_dir=data_dir,
-            knowledge_dir=knowledge_dir,
             base_image=base_image,
             network_name=network_name,
             idle_timeout=self._idle_timeout,
             proxy_port=proxy_port,
             sandbox_port=sandbox_port,
-            git_author=git_author,
+            knowledge_repo_name_for_session=self._knowledge_repo_name_for_session,
+            git_author_for_session=self._git_author_for_session,
         )
         self._exec_coordinator = SandboxExecCoordinator(
             runtime=runtime,
@@ -306,13 +305,21 @@ class SandboxManager:
         """Register a callback to retrieve activation inputs for a skill."""
         self._skill_activation_inputs_cb = cb
 
-    def set_skill_command_aliases_callback(self, cb: Callable[[str], list[tuple[str, str]]]) -> None:
+    def set_skill_command_aliases_callback(self, cb: Callable[[str, str], list[tuple[str, str]]]) -> None:
         """Register a callback to retrieve command aliases for a skill."""
         self._skill_command_aliases_cb = cb
 
-    def set_git_author(self, git_author: str) -> None:
-        self._git_author = git_author
-        self._session_lifecycle.set_git_author(git_author)
+    def _repo_for_session(self, session_id: str) -> KnowledgeRepoHandle:
+        return self._knowledge_repo_for_session(session_id)
+
+    def _knowledge_dir_for_session(self, session_id: str) -> Path:
+        return self._repo_for_session(session_id).knowledge_dir
+
+    def _knowledge_repo_name_for_session(self, session_id: str) -> str:
+        return self._knowledge_dir_for_session(session_id).name
+
+    def _git_author_for_session(self, session_id: str) -> str:
+        return self._repo_for_session(session_id).git_store.author_template
 
     async def refresh_git_identities(self) -> None:
         for session_id, session in self._sessions.items():
@@ -325,10 +332,10 @@ class SandboxManager:
             return SkillActivationInputs()
         return await self._skill_activation_inputs_cb(session_id, skill_name)
 
-    def _get_skill_command_aliases(self, skill_name: str) -> list[tuple[str, str]]:
+    def _get_skill_command_aliases(self, session_id: str, skill_name: str) -> list[tuple[str, str]]:
         if self._skill_command_aliases_cb is None:
             return []
-        return self._skill_command_aliases_cb(skill_name)
+        return self._skill_command_aliases_cb(session_id, skill_name)
 
     def _get_or_create_token(self, session_id: str) -> str:
         return self._session_lifecycle.get_or_create_token(session_id)
@@ -600,12 +607,12 @@ class SandboxManager:
 
         # Check that the skill exists in the server-side knowledge store.
         # The sandbox already has it at /workspace/skills/{name} via git clone.
-        master_skill_dir = self._knowledge_dir / "skills" / skill_name
+        master_skill_dir = self._knowledge_dir_for_session(session_id) / "skills" / skill_name
         if not master_skill_dir.exists():
             logger.warning(f"Skill '{skill_name}' not found for session {session_id}")
             return f"Skill '{skill_name}' not found."
 
-        command_aliases = self._get_skill_command_aliases(skill_name)
+        command_aliases = self._get_skill_command_aliases(session_id, skill_name)
 
         activation_msg = ""
         try:
@@ -677,8 +684,8 @@ class SandboxManager:
 
     async def _rerun_skill_setup(self, sc: SessionContainer, skill_name: str) -> str:
         """Restore trusted skill files from git and rerun automatic setup providers."""
-        master = self._knowledge_dir / "skills" / skill_name
-        command_aliases = self._get_skill_command_aliases(skill_name)
+        master = self._knowledge_dir_for_session(sc.session_id) / "skills" / skill_name
+        command_aliases = self._get_skill_command_aliases(sc.session_id, skill_name)
         lines = await self._skill_activation_runner.restore_and_run_detected_providers(
             sc,
             skill_name,

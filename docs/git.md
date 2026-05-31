@@ -1,8 +1,8 @@
 # Git Integration
 
-carapace manages a **knowledge repository** — a Git repo containing the security policy, workspace files, skills, archived session snapshots, and any other durable files the agent works with. The repo lives on the server at `$CARAPACE_DATA_DIR/knowledge/` and is cloned into every sandbox container at `/workspace`.
+carapace manages one Git-backed knowledge repo per user. Each repo contains that user's `SECURITY.md`, workspace files, skills, archived session snapshots, and other durable files the agent works with. With the default layout, the repo for user `alice` lives at `$CARAPACE_DATA_DIR/knowledges/alice/`. Sandboxes clone the repo that matches the session owner into `/workspace`.
 
-Optionally, you can connect an **upstream remote** so the knowledge repo is synchronised with an external Git server (GitHub, Gitea, GitLab, etc.).
+Each user can optionally connect an upstream remote so their knowledge repo is synchronized with an external Git server such as GitHub, Gitea, or GitLab. Remote settings are isolated per owner: one user's remote, branch, token, and author template do not affect any other user's repo.
 
 ## Configuration
 
@@ -13,22 +13,19 @@ users:
   alice:
     config:
       git:
-        remote: https://gitea.example.com/team/knowledge.git
+        remote: https://gitea.example.com/team/alice-knowledge.git
         branch: main
         token: ghp_xxxxxxxxxxxx
 ```
 
-The knowledge repo is still a single shared server repo. Because of that, at most one enabled user may configure a non-empty `config.git.remote`; startup fails if multiple enabled users define one.
+The owning user can also manage these fields from the web UI under Settings -> Account. The token field is write-only: responses report `token_set`, but never return the token value.
 
-The owning user can also manage these fields from the web UI under Settings -> Account. The token field is write-only:
-responses report `token_set`, but never return the token value.
-
-| Field    | Default                    | Description                                                                                                                            |
-| -------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `remote` | `""` (none)                | URL of the upstream Git remote. Leave empty for local-only mode.                                                                       |
-| `branch` | `"main"`                   | Remote branch to fetch from and push to. **Must already exist on the remote.** The local knowledge repo always uses `main` internally. |
-| `author` | `"carapace <carapace@%h>"` | Commit author template. `%s` is replaced with the session ID, `%h` with the hostname.                                                  |
-| `token`  | `null`                     | Authentication token for the remote (see below).                                                                                       |
+| Field    | Default                    | Description                                                                                                                 |
+| -------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `remote` | `""` (none)                | URL of the upstream remote for this user's repo. Leave empty for local-only mode.                                           |
+| `branch` | `"main"`                   | Remote branch to fetch from and push to. **Must already exist on the remote.** The local repo still uses `main` internally. |
+| `author` | `"carapace <carapace@%h>"` | Commit author template for this user's repo. `%s` is replaced with the session ID, `%h` with the hostname.                  |
+| `token`  | `null`                     | Authentication token for the remote (see below).                                                                            |
 
 ### Authentication
 
@@ -38,83 +35,75 @@ The `token` field accepts a literal token string:
 token: ghp_xxxxxxxxxxxx
 ```
 
-It does not support `env` or `file` indirection. Git remote credentials belong to the configured knowledge owner and must not let user-owned config read arbitrary server environment variables or files.
+It does not support `env` or `file` indirection. Git remote credentials belong to the configured user and must not let user-owned config read arbitrary server environment variables or files.
 
-The token is embedded as `x-access-token:<token>` in the remote URL for HTTPS authentication. If no token is configured, the remote is added without credentials (suitable for public repos or SSH URLs).
+The token is embedded as `x-access-token:<token>` in the remote URL for HTTPS authentication. If no token is configured, the remote is added without credentials, which is suitable for public repos or SSH URLs.
 
 ## Remote branch
 
-The `branch` setting in the owning user's git config refers exclusively to the **remote** branch. The `branch` setting controls which **remote** branch carapace fetches from and pushes to. It does **not** affect the local knowledge repo, which always uses a `main` branch internally. This means you can point carapace at any branch on the remote (e.g. `dev`, `production`) without changing how sandboxes or the agent interact with the repo locally.
+The `branch` setting refers exclusively to the remote branch for that user's repo. It controls which remote branch carapace fetches from and pushes to. It does not change the local branch name, which remains `main` internally. This means a user can point carapace at any existing remote branch such as `main`, `dev`, or `production` without changing how sandboxes or the agent interact with the repo locally.
 
-The configured branch **must already exist** on the upstream remote before carapace connects to it. carapace does not create remote branches — it performs `git fetch origin <branch>` and `git merge --ff-only origin/<branch>`, both of which fail if the branch doesn't exist.
+The configured branch must already exist on the upstream remote before carapace connects to it. carapace does not create remote branches. It performs `git fetch origin <branch>` and then fast-forwards local state to `origin/<branch>`.
 
-If you're starting from scratch:
+## What happens on startup
 
-1. Create the remote repository and its default branch (most hosting providers do this automatically).
-2. Set `config.git.branch` in the owning user record to match the remote branch you want to use (e.g. `main`, `dev`).
-3. Start carapace — it will push the initial bootstrap commit to that branch.
+For every enabled user, startup runs the same sequence against that user's repo:
 
-## What happens on first start
+1. Initialize or open the local repo at `$CARAPACE_DATA_DIR/knowledges/<normalized-user>/`.
+2. If `config.git.remote` is set, add or update the `origin` remote for that repo.
+3. Pull the configured remote branch before any bootstrap seeding.
+4. Seed default files such as `SECURITY.md`, `SOUL.md`, `USER.md`, and bundled example skills only if they are still missing.
+5. If bootstrap created new files, commit them and push them to that user's remote.
 
-When the server starts with a remote configured:
+Users without a remote still get a local Git-backed repo. They skip the remote add, pull, and upstream push steps.
 
-1. **Initialise local repo.** If `$CARAPACE_DATA_DIR/knowledge/` has no `.git` directory, `git init -b main` creates one. The local branch is always `main`, regardless of the `branch` setting.
-2. **Add remote.** The upstream URL is registered as `origin` (or updated if it already exists).
-3. **Pull.** carapace fetches from the remote and syncs the local branch. If the local repo is empty (fresh init) and the remote has content, it adopts the remote branch directly (`git reset --hard`). If the local repo already has commits, it does a fast-forward merge. If the remote branch is also empty, this step is a no-op.
-4. **Bootstrap.** Default knowledge files (`SECURITY.md`, `SOUL.md`, `USER.md`, example skills) are seeded **only if they don't already exist** — files pulled from the remote are not overwritten.
-5. **Commit & push.** If the bootstrap created any new files, they are committed and pushed to the remote.
+If a pull would require a non-fast-forward merge, startup fails loudly instead of guessing how to reconcile local and remote state.
 
-On subsequent server restarts the same sequence runs, but typically only step 3 (pull) has any effect, keeping the server in sync with upstream changes.
+## Adding or changing a remote on an existing instance
 
-If the pull encounters a merge conflict (i.e. local and remote have diverged and a fast-forward is not possible), the server **exits with an error**. You'll need to resolve the conflict manually inside the `knowledge/` directory and restart.
+If you add or change `config.git.remote` for a user after the server is already running:
 
-## Adding a remote to an existing instance
-
-If you've been running carapace without a remote and later add `config.git.remote` to the owning user record:
-
-1. **Restart the server.** On startup it registers the remote, pulls (fast-forward only), and pushes any local-only commits upstream.
-2. **Running sessions are unaffected.** Their sandboxes already have a `/workspace` clone from before the remote was added. They continue working normally — agent pushes go to the server's local knowledge repo.
-3. **New sessions** will clone a workspace that includes the remote content.
-4. To explicitly sync a running session, use the `/pull` slash command.
+1. Restart the server. Startup reinitializes only that user's repo runtime, registers the new remote, pulls, and pushes any new bootstrap files if needed.
+2. Running sandboxes are not hot-migrated. They keep the clone they already have.
+3. New sessions for that user clone the refreshed repo.
+4. To explicitly sync an existing sandbox, use the `/pull` slash command inside one of that user's sessions.
 
 ## Sandbox Git workflow
 
-Every session gets its own **sandbox container** with a clone of the knowledge repo at `/workspace`. The clone uses the server's built-in Git HTTP backend — sandboxes never talk to the upstream remote directly.
+Every session gets its own sandbox container with a clone of the owning user's repo at `/workspace`. The clone uses the server's built-in Git HTTP backend. Sandboxes never talk to the upstream remote directly.
 
-```
-┌───────────────────┐     git push/pull      ┌────────────────┐    git push     ┌──────────────┐
-│  Sandbox          │ ◄──────────────────────►│  carapace      │ ──────────────► │  Upstream     │
-│  /workspace       │    (HTTP Smart Proto)   │  knowledge/    │   (on success)  │  Remote       │
-└───────────────────┘                         └────────────────┘                 └──────────────┘
+```text
+Sandbox /workspace  <->  carapace /git/<owner>  <->  owner's upstream remote
 ```
 
-1. **Clone on creation.** When a sandbox starts, `git clone $GIT_REPO_URL /workspace` pulls the latest state from the server. If the workspace already exists (e.g. Kubernetes PVC from a previous run), the clone is skipped.
-2. **Agent commits & pushes.** The agent can run `git add`, `git commit`, and `git push` inside the sandbox. Pushes go to the server's Git HTTP backend.
-3. **Security gate.** Every push triggers a **pre-receive hook** that sends the full diff to the sentinel agent for evaluation. The sentinel can allow or deny the push based on the security policy.
-4. **Upstream propagation.** If the push is accepted _and_ an upstream remote is configured, the server automatically pushes to the external remote.
+1. Clone on creation. When a sandbox starts, `git clone $GIT_REPO_URL /workspace` pulls the latest state for the session owner from the server.
+2. Agent commits and pushes. The agent can run `git add`, `git commit`, and `git push` inside the sandbox. Pushes go to the server's Git HTTP backend.
+3. Owner validation. The Git HTTP backend validates that the session token may only access the repo for that session's owner and rejects cross-user paths.
+4. Security gate. Every push triggers a pre-receive hook that sends the full diff to the sentinel agent for evaluation.
+5. Upstream propagation. If the push is accepted and that user has an upstream remote configured, the server pushes only that user's repo upstream.
 
 ### Git identity
 
-Commits made inside a sandbox use a per-session identity derived from the `author` template:
+Commits made inside a sandbox use a per-session identity derived from the owning user's `author` template:
 
-```
+```text
 carapace Session <session-id> <session-id@carapace.local>
 ```
 
-This makes it easy to trace which session produced which commit in the upstream history.
+This makes it easy to trace which session produced which commit in the repo history.
 
 ## Slash commands
 
-| Command   | Description                                                                                                                                                                          |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/pull`   | Fetch and fast-forward merge from the upstream remote into the server's knowledge repo. Re-scans skills afterwards. Fails if no remote is configured or if there's a merge conflict. |
-| `/push`   | Push the server's knowledge repo to the upstream remote. Fails if no remote is configured.                                                                                           |
-| `/reload` | Destroy the session's sandbox and re-create it on the next command. The new sandbox gets a fresh clone, picking up any changes that were pulled or pushed since the session started. |
+| Command   | Description                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/pull`   | Fetch and fast-forward merge from the session owner's upstream remote into that user's server repo. Re-scans that user's skills afterwards.                   |
+| `/push`   | Push the session owner's server repo to that user's upstream remote. Fails if no remote is configured.                                                        |
+| `/reload` | Destroy the session's sandbox and re-create it on the next command. The new sandbox reclones the same owner's repo and picks up any changes pulled or pushed. |
 
 ## Local-only mode
 
-If no enabled user has `config.git.remote` set (or it is an empty string), carapace runs in local-only mode:
+If a user has no `config.git.remote` set, that user still gets a local Git-backed repo for sandbox clones and security-gated pushes.
 
-- The knowledge repo is still Git-backed (for the sandbox clone workflow and security-gated pushes).
-- `/pull` and `/push` return "No external remote configured."
-- No upstream synchronisation occurs.
+- `/pull` and `/push` in that user's sessions report that no external remote is configured.
+- Another user's remote does not change this user's behavior.
+- Users with a remote and users without one can coexist on the same server without conflict.
