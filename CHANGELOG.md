@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.132.1 (2026-05-31)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: update defaultMode for nginx-auth secret to 0440
+  ([`8b9f08f`](https://github.com/thiesgerken/carapace/commit/8b9f08ff540aa35507ab4eebfaf4ed4d2d164916))
+
 ## v0.132.0 (2026-05-31)
 
 
