@@ -27,6 +27,13 @@ from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
 
+async def _drain_background_tasks(active: Any) -> None:
+    if active.agent_task is not None:
+        await asyncio.gather(active.agent_task, return_exceptions=True)
+    while active._pending_sends:
+        await asyncio.gather(*tuple(active._pending_sends), return_exceptions=True)
+
+
 @pytest.mark.anyio
 async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     """Automatic skill setup reuses approved env/file credentials from the persisted context grant."""
@@ -562,6 +569,7 @@ def test_user_message_from_self(tmp_path: Path):
         engine = _make_engine(tmp_path)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
+        active = engine.get_or_activate(sid)
 
         origin = _FakeSubscriber()
         other = _FakeSubscriber()
@@ -577,6 +585,7 @@ def test_user_message_from_self(tmp_path: Path):
 
         assert origin.user_messages == [("hello", True)]
         assert other.user_messages == [("hello", False)]
+        await _drain_background_tasks(active)
 
     with _patch_sentinel():
         asyncio.run(_run())
@@ -589,6 +598,7 @@ def test_user_message_no_origin(tmp_path: Path):
         engine = _make_engine(tmp_path)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
+        active = engine.get_or_activate(sid)
 
         sub_a = _FakeSubscriber()
         sub_b = _FakeSubscriber()
@@ -604,6 +614,7 @@ def test_user_message_no_origin(tmp_path: Path):
 
         assert sub_a.user_messages == [("hi", False)]
         assert sub_b.user_messages == [("hi", False)]
+        await _drain_background_tasks(active)
 
     with _patch_sentinel():
         asyncio.run(_run())
@@ -697,6 +708,7 @@ def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Pat
             body="done",
         )
         assert active.pending_notifications == {f"done:{sid}:1:attended_turn_completed": {"sub-1"}}
+        await _drain_background_tasks(active)
 
     with _patch_sentinel():
         asyncio.run(_run())
