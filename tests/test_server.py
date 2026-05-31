@@ -412,6 +412,7 @@ def test_admin_user_create_returns_http_error_when_git_bootstrap_fails(client, a
 
     assert resp.status_code == 500
     assert resp.json()["detail"] == "Git settings reload failed: pull failed"
+    assert srv._auth_store.get_user("ada") is None
     git_store = srv._knowledge_repo_registry.get_for_user("ada").git_store
     git_store.commit.assert_not_awaited()
 
@@ -422,7 +423,20 @@ def test_admin_user_config_patch_does_not_reload_git_when_git_config_is_unchange
     runtime = MagicMock()
     runtime.apply_user_config = AsyncMock()
     monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
-    srv._auth_store.create_user(username="ada", password="correct-horse-battery", display_name="Ada")
+    srv._auth_store.create_user(
+        username="ada",
+        password="correct-horse-battery",
+        display_name="Ada",
+        config=UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": "https://gitea.example.test/ada/knowledge.git",
+                    "branch": "main",
+                    "token": "secret-token",
+                }
+            }
+        ),
+    )
 
     resp = client.patch(
         "/api/admin/users/ada",
@@ -432,13 +446,30 @@ def test_admin_user_config_patch_does_not_reload_git_when_git_config_is_unchange
 
     assert resp.status_code == 200
     runtime.apply_user_config.assert_not_awaited()
+    user = srv._auth_store.get_user("ada")
+    assert user is not None
+    assert user.config.git.remote == "https://gitea.example.test/ada/knowledge.git"
+    assert user.config.git.token == "secret-token"
 
 
 def test_admin_user_git_config_patch_reloads_git_runtime(client, admin_auth_headers, monkeypatch):
     runtime = MagicMock()
     runtime.apply_user_config = AsyncMock()
     monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
-    srv._auth_store.create_user(username="ada", password="correct-horse-battery", display_name="Ada")
+    srv._auth_store.create_user(
+        username="ada",
+        password="correct-horse-battery",
+        display_name="Ada",
+        config=UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": "https://gitea.example.test/ada/knowledge.git",
+                    "branch": "main",
+                    "token": "secret-token",
+                }
+            }
+        ),
+    )
 
     resp = client.patch(
         "/api/admin/users/ada",
@@ -450,6 +481,41 @@ def test_admin_user_git_config_patch_reloads_git_runtime(client, admin_auth_head
     runtime.apply_user_config.assert_awaited_once()
     assert runtime.apply_user_config.await_args.args[0] == "ada"
     assert runtime.apply_user_config.await_args.args[1].branch == "prod"
+    assert runtime.apply_user_config.await_args.args[1].token == "secret-token"
+
+
+def test_admin_user_git_config_patch_rolls_back_when_bootstrap_fails(client, admin_auth_headers, monkeypatch):
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock(side_effect=RuntimeError("pull failed"))
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+    srv._auth_store.create_user(
+        username="ada",
+        password="correct-horse-battery",
+        display_name="Ada",
+        config=UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": "https://gitea.example.test/ada/knowledge.git",
+                    "branch": "main",
+                    "token": "secret-token",
+                }
+            }
+        ),
+    )
+
+    resp = client.patch(
+        "/api/admin/users/ada",
+        headers=admin_auth_headers,
+        json={"config": {"git": {"remote": "https://gitea.example.test/ada/new.git", "branch": "prod"}}},
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Git settings reload failed: pull failed"
+    user = srv._auth_store.get_user("ada")
+    assert user is not None
+    assert user.config.git.remote == "https://gitea.example.test/ada/knowledge.git"
+    assert user.config.git.branch == "main"
+    assert user.config.git.token == "secret-token"
 
 
 def test_admin_platform_settings_requires_admin_role(client, auth_headers, admin_auth_headers):

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from loguru import logger
 from pydantic import BaseModel
 
-from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
+from ..auth import AuthStore, AuthUser, UserIdentity, has_admin_role, normalize_username
 from ..bootstrap import ensure_knowledge_dir
 from ..models.credentials import BitwardenCredentialBackendConfig
 from ..models.user import UserConfig
@@ -118,6 +118,38 @@ def _config_with_preserved_backend_passwords(username: str | None, config: UserC
         if backend.basic_auth.password is None:
             raise ValueError(f"basic_auth.password is required for credential backend {backend_name!r}")
     return merged
+
+
+def _deep_merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_dict(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _merge_user_config_patch(username: str, config: UserConfig) -> UserConfig:
+    existing_user = _auth_store().get_user(username)
+    existing_config = existing_user.config if existing_user is not None else UserConfig()
+    merged_payload = _deep_merge_dict(
+        existing_config.model_dump(mode="python"),
+        config.model_dump(mode="python", exclude_unset=True),
+    )
+    return _config_with_preserved_backend_passwords(username, UserConfig.model_validate(merged_payload))
+
+
+def _restore_user_from_snapshot(username: str, snapshot: AuthUser | None) -> None:
+    key = normalize_username(username)
+    store = _auth_store()
+    users_file = store.load_users()
+    if snapshot is None:
+        users_file.users.pop(key, None)
+    else:
+        users_file.users[key] = snapshot.model_copy(deep=True)
+    store.save_users(users_file)
 
 
 def _auth_store() -> AuthStore:
@@ -336,8 +368,10 @@ async def create_admin_user(
     body: AdminUserCreateRequest,
     _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserResponse:
+    store = _auth_store()
+    previous_user = store.get_user(body.username)
     try:
-        _auth_store().create_user(
+        store.create_user(
             username=body.username,
             password=body.password,
             display_name=body.display_name,
@@ -347,7 +381,11 @@ async def create_admin_user(
         )
         await _bootstrap_user_knowledge_repo_if_enabled(body.username)
     except ValueError as exc:
+        _restore_user_from_snapshot(body.username, previous_user)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        _restore_user_from_snapshot(body.username, previous_user)
+        raise
     return _user_response(body.username)
 
 
@@ -357,33 +395,37 @@ async def update_admin_user(
     body: AdminUserUpdateRequest,
     _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> AdminUserResponse:
+    store = _auth_store()
+    existing_user = store.get_user(username)
+    if existing_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    previous_user = existing_user.model_copy(deep=True)
     updates = body.model_dump(exclude_unset=True, exclude={"config", "password"})
     password = body.password if "password" in body.model_fields_set else None
     git_config_changed = False
     if "config" in body.model_fields_set and body.config is not None:
-        existing = _auth_store().get_user(username)
-        if existing is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        merged_config = _config_with_preserved_backend_passwords(username, body.config)
+        merged_config = _merge_user_config_patch(username, body.config)
         updates["config"] = merged_config
-        git_config_changed = merged_config.git != existing.config.git
+        git_config_changed = merged_config.git != previous_user.config.git
     try:
-        existing_user = _auth_store().get_user(username)
-        if existing_user is None:
-            raise KeyError(username)
         was_enabled = existing_user.enabled
         if updates:
             _assert_not_removing_last_admin(username, updates)
         if updates:
-            _auth_store().update_user(username, updates)
+            store.update_user(username, updates)
         if password is not None:
-            _auth_store().set_password(username, password)
+            store.set_password(username, password)
         if ("enabled" in body.model_fields_set and body.enabled is True and not was_enabled) or git_config_changed:
             await _bootstrap_user_knowledge_repo_if_enabled(username)
     except KeyError as exc:
+        _restore_user_from_snapshot(username, previous_user)
         raise HTTPException(status_code=404, detail="User not found") from exc
     except ValueError as exc:
+        _restore_user_from_snapshot(username, previous_user)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        _restore_user_from_snapshot(username, previous_user)
+        raise
     return _user_response(username)
 
 
