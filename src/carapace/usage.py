@@ -51,13 +51,12 @@ class ModelUsage(BaseModel):
 
 
 def _price_for_usage(model_key: str, u: ModelUsage) -> Decimal | None:
-    if u.cost_usd:
-        return u.cost_usd
+    provider_cost = u.cost_usd if u.cost_usd else None
     provider_id, _, model_ref = model_key.partition(":")
     if not model_ref:
         model_ref, provider_id = provider_id, None
     try:
-        return calc_price(
+        token_cost = calc_price(
             PriceUsage(
                 input_tokens=u.input_tokens,
                 output_tokens=u.output_tokens,
@@ -72,7 +71,8 @@ def _price_for_usage(model_key: str, u: ModelUsage) -> Decimal | None:
         ).total_price
     except LookupError:
         logger.debug(f"No pricing data for model {model_key}")
-        return None
+        return provider_cost
+    return max(provider_cost, token_cost) if provider_cost is not None else token_cost
 
 
 def _merge_run_usage_into_bucket(bucket: ModelUsage, usage: RunUsage) -> None:
