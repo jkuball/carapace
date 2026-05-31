@@ -195,7 +195,7 @@ spec:
         - name: nginx-auth
           secret:
             secretName: {{ required "bitwarden standalone basicAuth.existingSecret is required when basic auth is enabled" $basicAuth.existingSecret }}
-            defaultMode: 0400
+            defaultMode: 0440
         {{- end }}
 {{- if $networkPolicyEnabled }}
 ---
