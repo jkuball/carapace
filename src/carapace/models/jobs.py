@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from croniter import CroniterBadCronError, croniter
 from pydantic import BaseModel, Field, model_validator
 
+from ..usernames import normalize_username
+
 
 class JobCronTrigger(BaseModel):
     type: Literal["cron"] = "cron"
@@ -105,9 +107,7 @@ class JobDefinition(JobDefinitionInput):
 
     @model_validator(mode="after")
     def _validate_owner(self) -> JobDefinition:
-        self.user = self.user.strip().lower()
-        if not self.user:
-            raise ValueError("job user must not be empty")
+        self.user = normalize_username(self.user)
         return self
 
 

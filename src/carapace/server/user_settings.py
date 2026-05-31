@@ -26,6 +26,11 @@ from .state import server_module
 server = server_module()
 router = APIRouter()
 
+_KNOWLEDGE_GIT_REMOTE_CONFLICT_DETAIL = (
+    "Knowledge Git remote is already configured for another enabled user. "
+    "The shared knowledge repo supports only one enabled remote owner."
+)
+
 
 @dataclass(frozen=True)
 class MatrixTokenFileBackup:
@@ -353,7 +358,7 @@ def _assert_git_remote_owner(username: str, next_config: UserConfig) -> None:
         if other_user.enabled and other_user.config.git.remote:
             raise HTTPException(
                 status_code=400,
-                detail=f"Knowledge Git remote is already configured for user {other_username!r}",
+                detail=_KNOWLEDGE_GIT_REMOTE_CONFLICT_DETAIL,
             )
 
 
@@ -392,10 +397,9 @@ def _knowledge_git_config_with_candidate(username: str, config: UserConfig) -> K
     if not configured:
         return KnowledgeGitConfig()
     if len(configured) > 1:
-        owners = ", ".join(stored_username for stored_username, _ in configured)
         raise HTTPException(
             status_code=400,
-            detail=f"knowledge Git remote is configured for multiple enabled users: {owners}",
+            detail=_KNOWLEDGE_GIT_REMOTE_CONFLICT_DETAIL,
         )
 
     owner, git = configured[0]

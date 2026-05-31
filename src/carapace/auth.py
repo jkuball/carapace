@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .models.config import AuthConfig
 from .models.user import UserConfig
+from .usernames import normalize_username
 
 _password_hash = PasswordHash.recommended()
 ADMIN_ROLE = "admin"
@@ -387,7 +388,10 @@ class AuthStore:
             return None
 
         now = datetime.now(tz=UTC)
-        user = self.get_user(session_claims.sub)
+        try:
+            user = self.get_user(session_claims.sub)
+        except ValueError:
+            return None
         if user is None:
             return None
         claims = {
@@ -420,8 +424,13 @@ class AuthStore:
         if datetime.fromtimestamp(claims.exp, tz=UTC) <= now:
             return None
 
+        try:
+            normalized_subject = normalize_username(claims.sub)
+        except ValueError:
+            return None
+
         session = self.get_session(claims.sid)
-        if session is None or not session.is_active(now=now) or session.user != normalize_username(claims.sub):
+        if session is None or not session.is_active(now=now) or session.user != normalized_subject:
             return None
         user = self.get_user(session.user)
         if user is None or not user.enabled or user.token_version != claims.ver:
@@ -466,10 +475,6 @@ class AuthStore:
         tmp_path = path.with_suffix(f"{path.suffix}.tmp")
         tmp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         tmp_path.replace(path)
-
-
-def normalize_username(username: str) -> str:
-    return username.strip().lower()
 
 
 def normalize_roles(roles: list[str]) -> list[str]:

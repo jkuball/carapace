@@ -21,6 +21,7 @@ from ..sandbox.state import (
     save_sandbox_snapshot,
 )
 from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
+from ..usernames import normalize_username
 
 
 class SessionMeta(BaseModel):
@@ -29,10 +30,7 @@ class SessionMeta(BaseModel):
     @field_validator("user", mode="before")
     @classmethod
     def _normalize_user(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if not normalized:
-            raise ValueError("session user must not be empty")
-        return normalized
+        return normalize_username(value)
 
 
 def _to_yaml_safe(value: Any) -> Any:

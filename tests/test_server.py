@@ -141,7 +141,7 @@ def client() -> TestClient:
 def test_select_knowledge_git_config_uses_single_enabled_user(tmp_path) -> None:
     store = AuthStore(tmp_path / "git-owner", srv._config.auth)
     store.create_user(
-        username="Thies",
+        username="thies",
         password="secret",
         config=UserConfig.model_validate(
             {
@@ -215,6 +215,13 @@ def test_login_sets_session_cookie(client):
     meta_resp = client.get("/api/meta")
 
     assert meta_resp.status_code == 200
+
+
+def test_login_rejects_noncanonical_username(client):
+    resp = client.post("/api/auth/login", json={"username": " thies ", "password": "secret"})
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "username must not contain leading or trailing whitespace"}
 
 
 def test_logout_revokes_session_cookie(client):
@@ -724,6 +731,68 @@ def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, aut
     )
 
     assert resp.status_code == 200
+
+
+def test_user_settings_allows_updating_existing_git_remote_for_same_user(client, auth_headers, monkeypatch):
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "git": {
+                        "remote": "https://gitea.example.test/thies/knowledge.git",
+                        "branch": "main",
+                        "author": "Thies <thies@example.test>",
+                    }
+                }
+            )
+        },
+    )
+    runtime = MagicMock()
+    runtime.apply_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"git": {"branch": "dev"}},
+    )
+
+    assert resp.status_code == 200
+    user = srv._auth_store.get_user("thies")
+    assert user is not None
+    assert user.config.git.remote == "https://gitea.example.test/thies/knowledge.git"
+    assert user.config.git.branch == "dev"
+    runtime.apply_config.assert_awaited_once()
+
+
+def test_user_settings_git_conflict_does_not_leak_owner_username(client, admin_auth_headers):
+    srv._auth_store.update_user(
+        "thies",
+        {
+            "config": UserConfig.model_validate(
+                {
+                    "git": {
+                        "remote": "https://gitea.example.test/thies/knowledge.git",
+                    }
+                }
+            )
+        },
+    )
+
+    resp = client.patch(
+        "/api/user/settings",
+        headers=admin_auth_headers,
+        json={"git": {"remote": "https://gitea.example.test/admin/knowledge.git"}},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {
+        "detail": (
+            "Knowledge Git remote is already configured for another enabled user. "
+            "The shared knowledge repo supports only one enabled remote owner."
+        )
+    }
 
 
 def test_user_settings_default_changes_reload_enabled_matrix(client, auth_headers, monkeypatch):

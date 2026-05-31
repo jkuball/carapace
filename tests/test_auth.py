@@ -59,8 +59,26 @@ def test_validate_bootstrap_admin_password_raises_when_too_short_with_suggestion
     assert suggestion.isalnum()
 
 
-def test_normalize_username_strips_and_lowercases() -> None:
-    assert normalize_username(" Thies ") == "thies"
+def test_normalize_username_accepts_canonical_usernames() -> None:
+    assert normalize_username("thies") == "thies"
+    assert normalize_username("ada-lovelace_01.test") == "ada-lovelace_01.test"
+
+
+@pytest.mark.parametrize(
+    ("username", "message"),
+    [
+        ("", "username must not be empty"),
+        (" ", "username must not be empty"),
+        (" thies", "username must not contain leading or trailing whitespace"),
+        ("thies ", "username must not contain leading or trailing whitespace"),
+        ("Thies", "username must be lowercase"),
+        ("thies gerken", "username may only contain lowercase letters, digits, '_', '-', or '.'"),
+        ("thies!", "username may only contain lowercase letters, digits, '_', '-', or '.'"),
+    ],
+)
+def test_normalize_username_rejects_noncanonical_usernames(username: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        normalize_username(username)
 
 
 def test_password_hashing_never_accepts_plaintext_hashes() -> None:
@@ -75,12 +93,12 @@ def test_password_hashing_never_accepts_plaintext_hashes() -> None:
         hash_password("")
 
 
-def test_create_user_normalizes_persists_and_verifies_password(tmp_path) -> None:
+def test_create_user_persists_and_verifies_password(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
     config = UserConfig(default_models={"agent": "anthropic:test"})
 
     user = store.create_user(
-        username=" Thies ",
+        username="thies",
         password="secret",
         display_name=" Thies Gerken ",
         email=" thies@example.com ",
@@ -96,8 +114,16 @@ def test_create_user_normalizes_persists_and_verifies_password(tmp_path) -> None
     assert persisted["thies"].email == "thies@example.com"
     assert persisted["thies"].roles == ["admin"]
     assert persisted["thies"].config.default_models.agent == "anthropic:test"
-    assert store.verify_password("THIES", "secret") is not None
+    assert store.verify_password("thies", "secret") is not None
     assert store.verify_password("thies", "wrong") is None
+
+
+def test_verify_password_rejects_invalid_username_format(tmp_path) -> None:
+    store = AuthStore(tmp_path, AuthConfig())
+    store.create_user(username="thies", password="secret")
+
+    with pytest.raises(ValueError, match="username must be lowercase"):
+        store.verify_password("THIES", "secret")
 
 
 def test_user_git_config_rejects_secret_source_objects() -> None:
@@ -112,16 +138,19 @@ def test_user_git_config_rejects_secret_source_objects() -> None:
         )
 
 
-def test_create_user_rejects_empty_and_duplicate_normalized_usernames(tmp_path) -> None:
+def test_create_user_rejects_invalid_and_duplicate_usernames(tmp_path) -> None:
     store = AuthStore(tmp_path, AuthConfig())
 
     with pytest.raises(ValueError, match="username must not be empty"):
         store.create_user(username=" ", password="secret")
 
-    store.create_user(username="Thies", password="secret")
+    with pytest.raises(ValueError, match="username must be lowercase"):
+        store.create_user(username="Thies", password="secret")
+
+    store.create_user(username="thies", password="secret")
 
     with pytest.raises(ValueError, match="already exists"):
-        store.create_user(username=" thies ", password="secret")
+        store.create_user(username="thies", password="secret")
 
 
 def test_ensure_bootstrap_admin_creates_admin_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,7 +218,7 @@ def test_session_token_roundtrip_persists_session_and_identity(tmp_path) -> None
     store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
     store.create_user(username="thies", password="secret", display_name="Thies")
 
-    auth_session = store.create_session(username="THIES", user_agent="pytest")
+    auth_session = store.create_session(username="thies", user_agent="pytest")
     token = store.issue_session_token(auth_session)
     identity = store.validate_session_token(token)
 

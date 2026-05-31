@@ -132,11 +132,15 @@ def _auth_store() -> AuthStore:
 
 
 def _user_response(username: str) -> AdminUserResponse:
-    user = _auth_store().get_user(username)
+    try:
+        normalized_username = normalize_username(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    user = _auth_store().get_user(normalized_username)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return AdminUserResponse(
-        username=normalize_username(username),
+        username=normalized_username,
         enabled=user.enabled,
         token_version=user.token_version,
         display_name=user.display_name,
@@ -229,7 +233,10 @@ def _assert_user_can_be_deleted(username: str, admin_user: UserIdentity) -> None
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: Request, response: Response, body: LoginRequest) -> LoginResponse:
     store = _auth_store()
-    username = normalize_username(body.username)
+    try:
+        username = normalize_username(body.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     user = store.verify_password(username, body.password)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
@@ -336,10 +343,12 @@ async def delete_admin_user(
     username: str,
     admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
 ) -> Response:
-    normalized_username = normalize_username(username)
-    _assert_user_can_be_deleted(normalized_username, admin_user)
     try:
+        normalized_username = normalize_username(username)
+        _assert_user_can_be_deleted(normalized_username, admin_user)
         _auth_store().delete_user(normalized_username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="User not found") from exc
     return Response(status_code=204)

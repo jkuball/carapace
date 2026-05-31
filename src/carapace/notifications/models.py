@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..usernames import normalize_username
+
 NotificationClientType = Literal["web", "matrix", "cli"]
 NotificationFocusState = Literal["visible", "hidden", "inactive"]
 
@@ -35,9 +37,7 @@ class NotificationSubscription(BaseModel):
         self.id = self.id.strip()
         if not self.id:
             raise ValueError("notification subscription id must not be empty")
-        self.user = self.user.strip().lower()
-        if not self.user:
-            raise ValueError("notification subscription user must not be empty")
+        self.user = normalize_username(self.user)
         self.device_name = self.device_name.strip()
         self.endpoint = self.endpoint.strip()
         if not self.endpoint:
