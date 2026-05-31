@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPlatformSettingsPatch, sortModelDrafts } from "./platform-settings-view";
+import { flushReact, installDom, renderReact, runInAct } from "../../test/react-test-utils";
+
+import { buildPlatformSettingsPatch, ModelRow, sortModelDrafts } from "./platform-settings-view";
 
 type PlatformDraft = Parameters<typeof buildPlatformSettingsPatch>[0];
 
@@ -166,4 +168,51 @@ test("sortModelDrafts orders complete rows by provider then model name while kee
     sorted.map((model) => model.rowId),
     ["model-3", "model-4", "model-2", "model-1"],
   );
+});
+
+test("ModelRow reopens incomplete rows after a manual collapse", async () => {
+  const cleanup = installDom();
+
+  try {
+    const view = await renderReact(
+      <ModelRow
+        model={{
+          rowId: "model-1",
+          provider: "openai",
+          name: "",
+          id: "",
+          maxInputTokens: "",
+          thinking: "",
+          thinkingBudgetTokens: "",
+          baseUrl: "",
+          apiKeySource: "none",
+          apiKeyValue: "",
+          apiKeyConfigured: false,
+          apiKeyConfiguredSource: "none",
+        }}
+        disabled={false}
+        onChange={() => undefined}
+        onRemove={() => undefined}
+        t={translate}
+      />,
+    );
+
+    try {
+      const details = view.container.querySelector("details");
+      assert.ok(details instanceof HTMLElement);
+      assert.equal((details as HTMLDetailsElement).open, true);
+
+      await runInAct(() => {
+        (details as HTMLDetailsElement).open = false;
+        details.dispatchEvent(new window.Event("toggle", { bubbles: true }));
+      });
+      await flushReact();
+
+      assert.equal((details as HTMLDetailsElement).open, true);
+    } finally {
+      await view.unmount();
+    }
+  } finally {
+    cleanup();
+  }
 });

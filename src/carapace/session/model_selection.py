@@ -81,11 +81,29 @@ class SessionModelMixin(SessionModelHost):
         for active in self._active.values():
             active.agent_model = None
             if active.sentinel is not None:
-                active.sentinel.set_model_runtime(
-                    model=active.sentinel_model_name or config.agent.sentinel_model,
-                    model_factory=model_factory,
-                    model_settings_resolver=self._resolve_model_settings,
-                )
+                model_name = active.sentinel_model_name or config.agent.sentinel_model
+                try:
+                    active.sentinel.set_model_runtime(
+                        model=model_name,
+                        model_factory=model_factory,
+                        model_settings_resolver=self._resolve_model_settings,
+                    )
+                except Exception as exc:
+                    if active.sentinel_model_name is None:
+                        raise
+                    _logger().warning(
+                        f"Active sentinel model override {active.sentinel_model_name!r} for session "
+                        + f"{active.state.session_id} is no longer valid after platform config update: {exc}. "
+                        + f"Falling back to {config.agent.sentinel_model!r}."
+                    )
+                    active.sentinel.set_model_runtime(
+                        model=config.agent.sentinel_model,
+                        model_factory=model_factory,
+                        model_settings_resolver=self._resolve_model_settings,
+                    )
+                    active.sentinel_model_name = None
+                    active.state.sentinel_model_name = None
+                    self._session_mgr.save_state(active.state)
 
     def _restore_persisted_model_overrides(self, active: ActiveSession) -> None:
         """Validate restored overrides, falling back to defaults when they are no longer usable."""

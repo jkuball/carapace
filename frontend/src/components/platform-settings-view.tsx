@@ -681,8 +681,10 @@ function ProviderInput({ value, disabled, onChange }: { value: string; disabled:
   );
 }
 
-function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
-  const [expanded, setExpanded] = useState(!model.name.trim());
+export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+  const incomplete = isIncompleteModelDraft(model);
+  const [expanded, setExpanded] = useState(incomplete);
+  const open = expanded || incomplete;
   const effectiveId = modelId(model);
   const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
   const provider = model.provider.trim();
@@ -698,7 +700,19 @@ function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraf
   if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
   const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
-    <details className="group rounded-lg border border-border bg-background/70" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <details
+      className="group rounded-lg border border-border bg-background/70"
+      open={open}
+      onToggle={(event) => {
+        const nextOpen = event.currentTarget.open;
+        if (!nextOpen && incomplete) {
+          event.currentTarget.open = true;
+          setExpanded(true);
+          return;
+        }
+        setExpanded(nextOpen);
+      }}
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 space-y-2">
           <div className="break-all font-mono text-sm font-medium">{summaryId}</div>

@@ -457,6 +457,44 @@ def test_apply_platform_model_config_refreshes_active_sentinel_factory(tmp_path:
     assert active.sentinel_model_name == "local:new-model"
 
 
+def test_apply_platform_model_config_clears_stale_active_sentinel_override(tmp_path: Path) -> None:
+    with _patch_sentinel() as sentinel_cls, patch("carapace.session.engine.logger.warning") as warning_mock:
+        engine = _make_engine(tmp_path)
+        state = engine.session_mgr.create_session(user="thies")
+        active = engine.get_or_activate(state.session_id)
+        assert active.sentinel is not None
+
+        active.sentinel_model_name = "openai:missing-sentinel"
+        active.state.sentinel_model_name = "openai:missing-sentinel"
+        engine.session_mgr.save_state(active.state)
+
+        sentinel = sentinel_cls.return_value
+
+        def _set_model_runtime(*, model: str | None = None, **_kwargs: Any) -> None:
+            if model == "openai:missing-sentinel":
+                raise ValueError("missing sentinel model")
+
+        sentinel.set_model_runtime.side_effect = _set_model_runtime
+
+        engine.apply_platform_model_config(
+            engine.config,
+            model_factory=lambda _name: TestModel(),
+            agent_model=TestModel(),
+        )
+
+    assert active.sentinel_model_name is None
+    assert active.state.sentinel_model_name is None
+
+    persisted = engine.session_mgr.load_state(state.session_id)
+    assert persisted is not None
+    assert persisted.sentinel_model_name is None
+
+    assert sentinel.set_model_runtime.call_count == 2
+    assert sentinel.set_model_runtime.call_args_list[0].kwargs["model"] == "openai:missing-sentinel"
+    assert sentinel.set_model_runtime.call_args_list[1].kwargs["model"] == engine.config.agent.sentinel_model
+    warning_mock.assert_called_once()
+
+
 def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path)
