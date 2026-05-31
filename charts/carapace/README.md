@@ -227,6 +227,9 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `frontend.resources`                        | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |
 | `bitwarden.image.tag`                       | `""` (appVersion)                | bitwarden-cli image tag                                             |
 | `bitwarden.nginx.image.tag`                 | pinned nginx digest              | nginx image tag/digest for standalone Basic Auth proxy              |
+| `bitwarden.probes.bwServe.startup.initialDelaySeconds` | `30`                 | Delay before the `bw serve` startup probe runs                      |
+| `bitwarden.probes.nginx.readiness.initialDelaySeconds` | `15`                 | Delay before the nginx readiness probe runs                         |
+| `bitwarden.probes`                          | see `values.yaml`                | Bitwarden `bw serve` and nginx probe timing                         |
 | `bitwarden.persistence.enabled`             | `true`                           | Create a PVC per instance for CLI data (`BITWARDENCLI_APPDATA_DIR`) |
 | `bitwarden.persistence.size`                | `256Mi`                          | Size of each Bitwarden instance PVC                                 |
 | `bitwarden.persistence.storageClassName`    | `""` (cluster default)           | StorageClass for Bitwarden PVCs                                     |

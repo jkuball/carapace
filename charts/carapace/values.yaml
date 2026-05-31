@@ -131,6 +131,28 @@ bitwarden:
     repository: thiesgerken/carapace-bitwarden-cli
     tag: "" # defaults to appVersion
     pullPolicy: IfNotPresent
+  probes:
+    bwServe:
+      startup:
+        initialDelaySeconds: 30
+        periodSeconds: 5
+        failureThreshold: 36
+        timeoutSeconds: 6
+      readiness:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        timeoutSeconds: 6
+      liveness:
+        initialDelaySeconds: 30
+        periodSeconds: 120
+        timeoutSeconds: 65
+    nginx:
+      readiness:
+        initialDelaySeconds: 15
+        periodSeconds: 10
+      liveness:
+        initialDelaySeconds: 15
+        periodSeconds: 30
   nginx:
     image:
       registry: docker.io
