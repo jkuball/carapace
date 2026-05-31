@@ -1,6 +1,42 @@
 # CHANGELOG
 
 
+## v0.134.0 (2026-05-31)
+
+
+### Other
+
+
+- fix: update knowledge directory resolution to use "knowledges"
+  ([`d303d4e`](https://github.com/thiesgerken/carapace/commit/d303d4e10dc2f93e3c1de36035720b495fae78b3))
+
+- auth review issues
+  ([`70f2e05`](https://github.com/thiesgerken/carapace/commit/70f2e05f7aaf3ecb5f61a302ae5017fd14c48e85))
+
+- crc
+  ([`7589e32`](https://github.com/thiesgerken/carapace/commit/7589e32b0414424c85aebcd556d2c2df8f1cf00e))
+
+- test warnings
+  ([`bec7fe1`](https://github.com/thiesgerken/carapace/commit/bec7fe1d1440eeca4c32fe558afb61c67606f434))
+
+- fix tests
+  ([`4f92472`](https://github.com/thiesgerken/carapace/commit/4f92472915a9af5095ab0aed42f1b1cd7b61dc6a))
+
+- crc
+  ([`735cf33`](https://github.com/thiesgerken/carapace/commit/735cf33e9430f7200c9a040556427e5fdc58b70d))
+
+- fixes
+  ([`4a73740`](https://github.com/thiesgerken/carapace/commit/4a73740fc6efff9d4ebc5d47a03b0941523126f6))
+
+- fixes
+  ([`76fa463`](https://github.com/thiesgerken/carapace/commit/76fa463768a4c6069c01d8bf6bd1fb4dc22f5a4c))
+
+### ✨ Features
+
+
+- ✨ feat: individual knowledge repos per user
+  ([`b40496e`](https://github.com/thiesgerken/carapace/commit/b40496e81315712df22ca9ea98d8546baaefb96d))
+
 ## v0.133.1 (2026-05-31)
 
 
