@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.132.0 (2026-05-31)
+
+
+### Other
+
+
+- crc
+  ([`1c970b7`](https://github.com/thiesgerken/carapace/commit/1c970b73da257a01abec1f79eb6595be51019973))
+
+- sort models
+  ([`b18b441`](https://github.com/thiesgerken/carapace/commit/b18b4415ca56ea462c0e59c47e0e9bc453aecd30))
+
+- add second settings link
+  ([`a949300`](https://github.com/thiesgerken/carapace/commit/a9493004f68bf36f7186c82e9c43cd23054bee0a))
+
+- new model on top
+  ([`e716283`](https://github.com/thiesgerken/carapace/commit/e71628364100156d1ad39c79e6d3630c6687fc19))
+
+- fallback pricing
+  ([`f8367ba`](https://github.com/thiesgerken/carapace/commit/f8367ba27a704839fd8616a33aa3225133c018f3))
+
+- take usage from response if possible and better colors
+  ([`b2b6cbc`](https://github.com/thiesgerken/carapace/commit/b2b6cbcfbae569b3b3de5b7d1a7908534001eed7))
+
+- 📋 docs: update stale docs that didn't reflect config or multi user changes
+  ([`723759c`](https://github.com/thiesgerken/carapace/commit/723759c351a3b940437d9a86b9b8bccc40f09e90))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 improve i18n a bit
+  ([`19c0a59`](https://github.com/thiesgerken/carapace/commit/19c0a59b04a666ab5517f5845098863d13269ae4))
+
+### ✨ Features
+
+
+- ✨ feat: support openrouter + small issues with model editing
+  ([`d4306ec`](https://github.com/thiesgerken/carapace/commit/d4306ec2b75f4355c823521467a427b9584fd264))
+
 ## v0.131.1 (2026-05-30)
 
 
