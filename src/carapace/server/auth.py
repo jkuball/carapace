@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
 from ..models.credentials import BitwardenCredentialBackendConfig
 from ..models.user import UserConfig
+from .runtime import KnowledgeGitConfig
 from .state import server_module
 
 server = server_module()
@@ -230,6 +231,30 @@ def _assert_user_can_be_deleted(username: str, admin_user: UserIdentity) -> None
         raise HTTPException(status_code=400, detail="Cannot remove the last enabled admin")
 
 
+async def _bootstrap_user_knowledge_repo_if_enabled(username: str) -> None:
+    normalized_username = normalize_username(username)
+    user = _auth_store().get_user(normalized_username)
+    if user is None or not user.enabled:
+        return
+
+    repo_registry = getattr(server, "_knowledge_repo_registry", None)
+    bootstrap_user_knowledge_repo = getattr(server, "_bootstrap_user_knowledge_repo", None)
+    if repo_registry is None or not callable(bootstrap_user_knowledge_repo):
+        return
+
+    await bootstrap_user_knowledge_repo(
+        repo_registry,
+        normalized_username,
+        KnowledgeGitConfig(
+            owner=normalized_username,
+            remote=user.config.git.remote,
+            branch=user.config.git.branch,
+            author=user.config.git.author,
+            token=user.config.git.token,
+        ),
+    )
+
+
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(request: Request, response: Response, body: LoginRequest) -> LoginResponse:
     store = _auth_store()
@@ -309,6 +334,7 @@ async def create_admin_user(
             roles=body.roles,
             config=_config_with_preserved_backend_passwords(None, body.config),
         )
+        await _bootstrap_user_knowledge_repo_if_enabled(body.username)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _user_response(body.username)
@@ -331,6 +357,8 @@ async def update_admin_user(
             _auth_store().update_user(username, updates)
         if password is not None:
             _auth_store().set_password(username, password)
+        if ("enabled" in body.model_fields_set and body.enabled is True) or "config" in body.model_fields_set:
+            await _bootstrap_user_knowledge_repo_if_enabled(username)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="User not found") from exc
     except ValueError as exc:

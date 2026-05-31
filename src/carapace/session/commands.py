@@ -228,6 +228,7 @@ class SessionCommandMixin:
             return {"command": "pull", "data": {"message": "No external remote configured."}}
         try:
             summary = await git_store.pull_from_remote()
+            self._skill_registry_for_session(session_id).invalidate()
             return {"command": "pull", "data": {"message": summary}}
         except RuntimeError as exc:
             return {"command": "pull", "data": {"message": f"Pull failed: {exc}"}}
