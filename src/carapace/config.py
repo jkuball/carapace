@@ -56,7 +56,7 @@ def _resolve_knowledge_dir(config_path: Path, config: Config) -> Path:
     config_dir = config_path.parent
     if config.knowledge_dir:
         return (config_dir / config.knowledge_dir).resolve()
-    return (config_dir / "knowledge").resolve()
+    return (config_dir / "knowledges").resolve()
 
 
 def load_config(data_dir: Path | None = None) -> Config:

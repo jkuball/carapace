@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from carapace.config import load_config, load_workspace_file, resolve_knowledge_repos_dir, resolve_user_knowledge_dir
+from carapace.config import (
+    _resolve_knowledge_dir,
+    load_config,
+    load_workspace_file,
+    resolve_knowledge_repos_dir,
+    resolve_user_knowledge_dir,
+)
+from carapace.models.config import Config
 
 
 def test_load_config_defaults(tmp_path: Path):
@@ -122,3 +129,10 @@ def test_resolve_user_knowledge_dir_uses_explicit_root(tmp_path: Path) -> None:
 def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="username must be lowercase"):
         resolve_user_knowledge_dir(tmp_path, "Thies")
+
+
+def test_resolve_knowledge_dir_uses_knowledges_when_config_value_is_empty(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config = Config(knowledge_dir="")
+
+    assert _resolve_knowledge_dir(config_path, config) == (tmp_path / "knowledges").resolve()
