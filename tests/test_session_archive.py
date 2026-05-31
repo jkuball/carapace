@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,6 +12,32 @@ from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.config import SessionCommitConfig
 from carapace.session.archive import SessionArchiveService
 from carapace.session.manager import SessionManager
+
+
+def _repo_handle(knowledge_dir: Path, *, git_store: GitStore, owner: str = "thies") -> KnowledgeRepoHandle:
+    return KnowledgeRepoHandle(
+        owner=owner,
+        knowledge_dir=knowledge_dir,
+        git_store=git_store,
+        skill_registry=MagicMock(),
+    )
+
+
+def _archive_service(
+    session_mgr: SessionManager,
+    *,
+    knowledge_dir: Path,
+    git_store: GitStore,
+    config: SessionCommitConfig | None = None,
+    owner: str = "thies",
+    repo_handle: KnowledgeRepoHandle | None = None,
+) -> SessionArchiveService:
+    handle = repo_handle or _repo_handle(knowledge_dir, git_store=git_store, owner=owner)
+    return SessionArchiveService(
+        session_mgr=session_mgr,
+        config=config if config is not None else SessionCommitConfig(),
+        knowledge_repo_for_session=lambda _session_id: handle,
+    )
 
 
 def test_append_events_stamps_timestamp(tmp_path) -> None:
@@ -37,12 +64,7 @@ async def test_archive_service_commits_snapshot(tmp_path) -> None:
     )
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     result = await service.commit_session(state.session_id, trigger="manual")
 
@@ -72,8 +94,6 @@ async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path) 
             {"role": "assistant", "content": "world"},
         ],
     )
-    legacy_git_store = MagicMock(spec=GitStore)
-    legacy_git_store.commit = AsyncMock(return_value=True)
     owner_git_store = MagicMock(spec=GitStore)
     owner_git_store.commit = AsyncMock(return_value=True)
     owner_handle = KnowledgeRepoHandle(
@@ -82,26 +102,25 @@ async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path) 
         git_store=owner_git_store,
         skill_registry=MagicMock(),
     )
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path / "legacy-knowledge",
-        git_store=legacy_git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-        knowledge_repo_for_session=lambda _session_id: owner_handle,
+    service = _archive_service(
+        mgr,
+        knowledge_dir=owner_handle.knowledge_dir,
+        git_store=owner_git_store,
+        repo_handle=owner_handle,
     )
+    legacy_knowledge_dir = tmp_path / "legacy-knowledge"
 
     result = await service.commit_session(state.session_id, trigger="manual")
 
     assert result.committed is True
     assert result.archive_path is not None
     assert (owner_handle.knowledge_dir / result.archive_path).is_file()
-    assert not ((tmp_path / "legacy-knowledge") / result.archive_path).exists()
+    assert not (legacy_knowledge_dir / result.archive_path).exists()
     owner_git_store.commit.assert_awaited_once_with(
         [result.archive_path],
         f"💾 session: add {state.session_id}",
         session_id=state.session_id,
     )
-    legacy_git_store.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -111,12 +130,7 @@ async def test_archive_service_skips_private_sessions(tmp_path) -> None:
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     result = await service.commit_session(state.session_id, trigger="manual")
 
@@ -130,12 +144,7 @@ async def test_archive_service_empty_history_returns_no_archive_path(tmp_path) -
     state = mgr.create_session(user="thies", private=False)
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     result = await service.commit_session(state.session_id, trigger="manual")
 
@@ -157,12 +166,7 @@ async def test_archive_service_skips_unchanged_snapshot_for_different_trigger(tm
     )
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     first = await service.commit_session(state.session_id, trigger="autosave")
     second = await service.commit_session(state.session_id, trigger="manual")
@@ -188,12 +192,7 @@ async def test_archive_service_preserves_concurrent_privacy_update(tmp_path) -> 
         return True
 
     git_store.commit = AsyncMock(side_effect=commit_with_concurrent_privacy_flip)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     result = await service.commit_session(state.session_id, trigger="manual")
     final_state = mgr.load_state(state.session_id)
@@ -223,12 +222,7 @@ async def test_archive_service_serializes_same_session_commits(tmp_path) -> None
         return True
 
     git_store.commit = AsyncMock(side_effect=delayed_commit)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     first_task = asyncio.create_task(service.commit_session(state.session_id, trigger="manual"))
     await asyncio.sleep(0)
@@ -252,12 +246,7 @@ async def test_archive_service_does_not_persist_export_hash_on_commit_failure(tm
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(side_effect=RuntimeError("git commit failed: boom"))
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     with pytest.raises(RuntimeError, match="git commit failed: boom"):
         await service.commit_session(state.session_id, trigger="manual")
@@ -278,12 +267,7 @@ async def test_archive_service_removes_written_file_after_commit_failure(tmp_pat
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(side_effect=RuntimeError("git commit failed: boom"))
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
     archive_file = service.archive_absolute_path_for_state(state)
 
     with pytest.raises(RuntimeError, match="git commit failed: boom"):
@@ -301,12 +285,7 @@ async def test_archive_service_cleans_up_lock_after_archive_delete(tmp_path) -> 
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
     git_store.commit_removals = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     await service.commit_session(state.session_id, trigger="manual")
     archived_state = mgr.load_state(state.session_id)
@@ -324,12 +303,7 @@ async def test_archive_service_uses_update_title_after_first_commit(tmp_path) ->
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
-    service = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
-        session_mgr=mgr,
-        config=SessionCommitConfig(),
-    )
+    service = _archive_service(mgr, knowledge_dir=tmp_path, git_store=git_store)
 
     first = await service.commit_session(state.session_id, trigger="manual")
     mgr.append_events(state.session_id, [{"role": "assistant", "content": "world"}])

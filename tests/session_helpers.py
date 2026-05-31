@@ -190,23 +190,31 @@ def _make_engine(
     config = load_config(tmp_path)
     session_mgr = SessionManager(tmp_path)
     registry = SkillRegistry(tmp_path / "skills")
-    skill_catalog = registry.scan()
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.refresh_sandbox_snapshot = AsyncMock()
     sandbox_mgr.reset_session = AsyncMock()
     sandbox_mgr.get_domain_info.return_value = []
     registry_for_session = credential_registry or CredentialRegistry()
+    git_store = MagicMock(spec=GitStore)
 
     async def credential_registry_for_session(_session_id: str) -> CredentialRegistryProtocol:
         return registry_for_session
 
+    if knowledge_repo_for_session is None:
+        handle = KnowledgeRepoHandle(
+            owner="thies",
+            knowledge_dir=tmp_path,
+            git_store=git_store,
+            skill_registry=registry,
+        )
+
+        def knowledge_repo_for_session(_session_id: str) -> KnowledgeRepoHandle:
+            return handle
+
     return SessionEngine(
         config=config,
         data_dir=tmp_path,
-        knowledge_dir=tmp_path,
-        git_store=MagicMock(spec=GitStore),
         session_mgr=session_mgr,
-        skill_catalog=skill_catalog,
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         credential_registry_for_session=credential_registry_for_session,

@@ -29,7 +29,7 @@ from ..agent.deps import Deps
 from ..agent.loop import run_agent_turn as _run_agent_turn
 from ..credentials import SessionCredentialRegistry
 from ..git.store import GitStore
-from ..knowledge import KnowledgeRepoHandle
+from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
 from ..models.config import Config
 from ..models.credentials import CredentialRegistryProtocol
 from ..models.session import SessionAttributes, SessionState
@@ -112,23 +112,17 @@ class SessionEngine(
         *,
         config: Config,
         data_dir: Path,
-        knowledge_dir: Path,
-        git_store: GitStore,
         session_mgr: SessionManager,
-        skill_catalog: list[SkillInfo],
         agent_model: Model | None,
         sandbox_mgr: SandboxManager,
         credential_registry_for_session: Callable[[str], Awaitable[CredentialRegistryProtocol]],
-        knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
+        knowledge_repo_for_session: KnowledgeRepoResolver,
         model_factory: Callable[[str], Model] | None = None,
         notification_router: NotificationRouter | None = None,
     ) -> None:
         self._config = config
         self._data_dir = data_dir
-        self._knowledge_dir = knowledge_dir
-        self._git_store = git_store
         self._session_mgr = session_mgr
-        self._skill_catalog = skill_catalog
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._model_factory = model_factory
@@ -190,32 +184,20 @@ class SessionEngine(
     def data_dir(self) -> Path:
         return self._data_dir
 
-    @property
-    def skill_catalog(self) -> list[SkillInfo]:
-        return self._skill_catalog
-
-    def _repo_handle_for_session(self, session_id: str) -> KnowledgeRepoHandle | None:
-        if self._knowledge_repo_for_session is None:
-            return None
+    def _repo_handle_for_session(self, session_id: str) -> KnowledgeRepoHandle:
         return self._knowledge_repo_for_session(session_id)
 
     def _knowledge_dir_for_session(self, session_id: str) -> Path:
-        handle = self._repo_handle_for_session(session_id)
-        return handle.knowledge_dir if handle is not None else self._knowledge_dir
+        return self._repo_handle_for_session(session_id).knowledge_dir
 
     def _git_store_for_session(self, session_id: str) -> GitStore:
-        handle = self._repo_handle_for_session(session_id)
-        return handle.git_store if handle is not None else self._git_store
+        return self._repo_handle_for_session(session_id).git_store
 
     def _skill_registry_for_session(self, session_id: str) -> SkillRegistry:
-        handle = self._repo_handle_for_session(session_id)
-        return handle.skill_registry if handle is not None else SkillRegistry(self._knowledge_dir / "skills")
+        return self._repo_handle_for_session(session_id).skill_registry
 
     def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]:
-        handle = self._repo_handle_for_session(session_id)
-        if handle is not None:
-            return handle.skill_registry.scan()
-        return self._skill_catalog
+        return self._repo_handle_for_session(session_id).skill_registry.scan()
 
     @property
     def sandbox_mgr(self) -> SandboxManager:

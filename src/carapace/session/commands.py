@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from ..git.store import GitStore
@@ -19,11 +18,8 @@ from .types import ActiveSession
 class SessionCommandHost(Protocol):
     _active: dict[str, ActiveSession]
     _config: Config
-    _git_store: GitStore
-    _knowledge_dir: Path
     _sandbox_mgr: SandboxManager
     _session_mgr: SessionManager
-    _skill_catalog: list[SkillInfo]
 
     async def _broadcast(self, active: ActiveSession, method: str, *args: Any, **kwargs: Any) -> None: ...
     async def _generate_title(self, active: ActiveSession, events: list[dict[str, Any]]) -> str: ...
@@ -53,11 +49,8 @@ class SessionCommandHost(Protocol):
 class SessionCommandMixin:
     _active: dict[str, ActiveSession]
     _config: Config
-    _git_store: GitStore
-    _knowledge_dir: Path
     _sandbox_mgr: SandboxManager
     _session_mgr: SessionManager
-    _skill_catalog: list[SkillInfo]
 
     if TYPE_CHECKING:
 
@@ -235,8 +228,6 @@ class SessionCommandMixin:
             return {"command": "pull", "data": {"message": "No external remote configured."}}
         try:
             summary = await git_store.pull_from_remote()
-            if git_store is self._git_store:
-                self._skill_catalog = self._skill_registry_for_session(session_id).scan()
             return {"command": "pull", "data": {"message": summary}}
         except RuntimeError as exc:
             return {"command": "pull", "data": {"message": f"Pull failed: {exc}"}}

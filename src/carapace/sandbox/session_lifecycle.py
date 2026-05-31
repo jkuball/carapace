@@ -57,40 +57,29 @@ class SandboxSessionLifecycle:
         runtime: ContainerRuntime,
         state: SandboxSessionLifecycleState,
         data_dir: Path,
-        knowledge_dir: Path,
         base_image: str,
         network_name: str,
         idle_timeout: int,
         proxy_port: int,
         sandbox_port: int,
-        git_author: str,
-        knowledge_repo_name_for_session: Callable[[str], str] | None = None,
-        git_author_for_session: Callable[[str], str] | None = None,
+        knowledge_repo_name_for_session: Callable[[str], str],
+        git_author_for_session: Callable[[str], str],
     ) -> None:
         self._runtime = runtime
         self._state = state
         self._data_dir = data_dir
-        self._knowledge_dir = knowledge_dir
         self._base_image = base_image
         self._network_name = network_name
         self._idle_timeout = idle_timeout
         self._proxy_port = proxy_port
         self._sandbox_port = sandbox_port
-        self._git_author = git_author
         self._knowledge_repo_name_for_session = knowledge_repo_name_for_session
         self._git_author_for_session = git_author_for_session
 
-    def set_git_author(self, git_author: str) -> None:
-        self._git_author = git_author
-
     def _repo_name_for_session(self, session_id: str) -> str:
-        if self._knowledge_repo_name_for_session is None:
-            return self._knowledge_dir.name
         return self._knowledge_repo_name_for_session(session_id)
 
     def _author_for_session(self, session_id: str) -> str:
-        if self._git_author_for_session is None:
-            return self._git_author
         return self._git_author_for_session(session_id)
 
     def _token_path(self, session_id: str) -> Path:

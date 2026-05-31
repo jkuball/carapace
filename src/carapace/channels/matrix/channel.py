@@ -16,7 +16,6 @@ from loguru import logger
 from ...auth import normalize_username
 from ...models.config import Config
 from ...models.matrix import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
-from ...models.skills import SkillInfo
 from ...models.user import UserConfig
 from ...notifications.presence import NotificationPresenceRegistry
 from ...sandbox.manager import SandboxManager
@@ -97,7 +96,6 @@ class MatrixChannel:
         config: MatrixChannelConfig,
         full_config: Config,
         session_mgr: SessionManager,
-        skill_catalog: list[SkillInfo],
         agent_model: Any,
         sandbox_mgr: SandboxManager,
         engine: SessionEngine,
@@ -108,7 +106,6 @@ class MatrixChannel:
         self._config = config
         self._full_config = full_config
         self._session_mgr = session_mgr
-        self._skill_catalog = skill_catalog
         self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._engine = engine

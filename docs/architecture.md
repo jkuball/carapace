@@ -392,7 +392,7 @@ services:
 
 For Kubernetes deployments, the Docker socket is replaced by in-cluster Kubernetes API access — see [kubernetes.md](kubernetes.md).
 
-The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, auth files, session files, notification state, and `jobs.yaml` lives there. The Git-backed knowledge repo lives in a separate `knowledge_dir` (default `./knowledge` relative to the config file, which resolves to `data/knowledge/` in the default setup).
+The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, auth files, session files, notification state, and `jobs.yaml` lives there. Git-backed knowledge state lives under a per-user root at `data/knowledges/<normalized-user>/` in the default setup. Session owner determines which repo, skills tree, archive path, and sandbox clone URL are used.
 
 ## Configuration
 

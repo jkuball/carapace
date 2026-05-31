@@ -22,16 +22,14 @@ class GitHttpHandler:
     def __init__(
         self,
         *,
-        knowledge_dir: Path,
+        knowledge_root: Path,
+        owner_for_session: Callable[[str], str],
         default_branch: str,
         api_port: int = 8320,
         verify_session_token: Callable[[str, str], bool] | None = None,
         on_push_success: Callable[[str], Awaitable[None]] | None = None,
-        owner_for_session: Callable[[str], str] | None = None,
-        knowledge_root: Path | None = None,
     ) -> None:
-        self._knowledge_dir = knowledge_dir
-        self._knowledge_root = knowledge_root or knowledge_dir.parent
+        self._knowledge_root = knowledge_root
         self._default_branch = default_branch
         self._api_port = api_port
         self._verify_session_token = verify_session_token
@@ -39,8 +37,6 @@ class GitHttpHandler:
         self._owner_for_session = owner_for_session
 
     def _repo_name_for_session(self, session_id: str) -> str:
-        if self._owner_for_session is None:
-            return self._knowledge_dir.name
         return self._owner_for_session(session_id)
 
     def authenticate(self, authorization: str | None) -> str | None:

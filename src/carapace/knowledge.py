@@ -22,6 +22,9 @@ class KnowledgeRepoHandle:
     skill_registry: SkillRegistry
 
 
+type KnowledgeRepoResolver = Callable[[str], KnowledgeRepoHandle]
+
+
 class KnowledgeRepoRegistry:
     def __init__(
         self,

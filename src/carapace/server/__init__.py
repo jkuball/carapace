@@ -31,15 +31,14 @@ from .. import get_version
 from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
-from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
+from ..config import _resolve_data_dir, get_config_path, get_data_dir, load_config
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..git.http import GitHttpHandler
-from ..git.store import GitStore
 from ..jobs import JobsScheduler, JobsStore
 from ..knowledge import KnowledgeRepoRegistry
 from ..llm import make_model_factory
 from ..models.config import Config
-from ..models.user import UserConfig, UserGitConfig
+from ..models.user import UserConfig
 from ..notifications.presence import NotificationPresenceRegistry
 from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
@@ -50,7 +49,6 @@ from ..sandbox.proxy import ProxyServer
 from ..sandbox.runtime import ContainerRuntime
 from ..session import SessionEngine, SessionManager
 from ..session.archive import SessionArchiveService
-from ..skills import SkillRegistry
 from ..usage import SessionBudgetExceededError
 from .auth import router as auth_router
 from .auth import verify_ws_token
@@ -292,7 +290,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _config_path = config_path
     _config = load_config()
     _data_dir = _resolve_data_dir(config_path, _config)
-    knowledge_dir = _resolve_knowledge_dir(config_path, _config)
 
     # 2. Bootstrap directories
     ensure_data_dir(_data_dir)
@@ -304,17 +301,12 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     for username, git_config in user_git_configs.items():
         await _bootstrap_user_knowledge_repo(_knowledge_repo_registry, username, git_config)
 
-    # Legacy fallback store for any remaining non-session-routed call sites.
-    git_store = GitStore(knowledge_dir)
-
     if _config.carapace.logfire_token:
         logfire.configure(token=_config.carapace.logfire_token, console=False)
         logfire.instrument_pydantic_ai()
 
     _session_list_cache = SessionListCache(_config.cache)
     session_mgr = SessionManager(_data_dir, on_change=_session_list_cache.invalidate_sync)
-    registry = SkillRegistry(knowledge_dir / "skills")
-    skill_catalog = registry.scan()
     model_factory = make_model_factory(_config)
     agent_model = model_factory(_config.agent.model)
 
@@ -352,19 +344,21 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     proxy_port = _config.sandbox.proxy_port
 
+    def resolve_session_owner(session_id: str) -> str:
+        return session_mgr.load_meta(session_id).user
+
+    def knowledge_repo_for_session(session_id: str):
+        return _knowledge_repo_registry.get_for_session(session_id, resolve_session_owner)
+
     _sandbox_mgr = SandboxManager(
         runtime=runtime,
         data_dir=_data_dir,
-        knowledge_dir=knowledge_dir,
         base_image=base_image,
         network_name=sandbox_network,
         idle_timeout_minutes=_config.sandbox.idle_timeout_minutes,
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
-        git_author=UserGitConfig().author,
-        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
-            session_mgr.load_meta(session_id).user
-        ),
+        knowledge_repo_for_session=knowledge_repo_for_session,
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 
@@ -401,45 +395,35 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             max_payload_bytes=_config.notifications.max_payload_bytes,
             delivery_ttl_seconds=_config.notifications.delivery_ttl_seconds,
         ),
-        owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
+        owner_for_session=resolve_session_owner,
     )
 
     _engine = SessionEngine(
         config=_config,
         data_dir=_data_dir,
-        knowledge_dir=knowledge_dir,
-        git_store=git_store,
         session_mgr=session_mgr,
-        skill_catalog=skill_catalog,
         agent_model=agent_model,
         sandbox_mgr=_sandbox_mgr,
         credential_registry_for_session=_credential_registry_for_session,
-        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
-            session_mgr.load_meta(session_id).user
-        ),
+        knowledge_repo_for_session=knowledge_repo_for_session,
         model_factory=model_factory,
         notification_router=_notification_router,
     )
     _session_archive = SessionArchiveService(
-        knowledge_dir=knowledge_dir,
-        git_store=git_store,
         session_mgr=session_mgr,
         config=_config.sessions.commit,
-        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
-            session_mgr.load_meta(session_id).user
-        ),
+        knowledge_repo_for_session=knowledge_repo_for_session,
     )
     _jobs_store = JobsStore(_data_dir)
     _jobs_scheduler = JobsScheduler(_jobs_store)
 
     # Git HTTP handler — serves the knowledge repo on the sandbox API
     _git_handler = GitHttpHandler(
-        knowledge_dir=knowledge_dir,
         knowledge_root=_knowledge_repo_registry.knowledge_repos_dir,
+        owner_for_session=resolve_session_owner,
         default_branch="main",
         api_port=_config.server.internal_port,
         verify_session_token=_sandbox_mgr.verify_session_token,
-        owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
         on_push_success=_knowledge_git_runtime.push_if_configured,
     )
 
@@ -495,7 +479,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             config=user_config.channels.matrix,
             full_config=_config,
             session_mgr=session_mgr,
-            skill_catalog=skill_catalog,
             agent_model=agent_model,
             sandbox_mgr=_sandbox_mgr,
             engine=_engine,
@@ -511,7 +494,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     logger.info(
         f"carapace server ready — model={_config.agent.model}, "
-        f"user_repos={len(user_git_configs)}, skills={len(skill_catalog)}, proxy_port={proxy_port}"
+        f"user_repos={len(user_git_configs)}, proxy_port={proxy_port}"
         + (
             f", matrix=on ({_matrix_channel_manager.channel_count} user channel(s))"
             if _matrix_channel_manager.channel_count

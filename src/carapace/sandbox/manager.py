@@ -11,7 +11,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ..knowledge import KnowledgeRepoHandle
+from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
 from ..security.context import ApprovalSource, ApprovalVerdict
 from . import file_ops
 from .exec_flow import SandboxExecCoordinator, SandboxExecState
@@ -193,19 +193,15 @@ class SandboxManager:
         self,
         runtime: ContainerRuntime,
         data_dir: Path,
-        knowledge_dir: Path,
+        knowledge_repo_for_session: KnowledgeRepoResolver,
         base_image: str = "carapace-sandbox:latest",
         network_name: str = "carapace-sandbox",
         idle_timeout_minutes: int = 15,
         proxy_port: int = 3128,
         sandbox_port: int = 8322,
-        git_author: str = "carapace <carapace@%h>",
-        knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
-        self._knowledge_dir = knowledge_dir
-        self._git_author = git_author
         self._knowledge_repo_for_session = knowledge_repo_for_session
         self._base_image = base_image
         self._network_name = network_name
@@ -255,13 +251,11 @@ class SandboxManager:
                 exec_notified_credentials=self._exec_notified_credentials,
             ),
             data_dir=data_dir,
-            knowledge_dir=knowledge_dir,
             base_image=base_image,
             network_name=network_name,
             idle_timeout=self._idle_timeout,
             proxy_port=proxy_port,
             sandbox_port=sandbox_port,
-            git_author=git_author,
             knowledge_repo_name_for_session=self._knowledge_repo_name_for_session,
             git_author_for_session=self._git_author_for_session,
         )
@@ -315,27 +309,17 @@ class SandboxManager:
         """Register a callback to retrieve command aliases for a skill."""
         self._skill_command_aliases_cb = cb
 
-    def _repo_for_session(self, session_id: str) -> KnowledgeRepoHandle | None:
-        if self._knowledge_repo_for_session is None:
-            return None
+    def _repo_for_session(self, session_id: str) -> KnowledgeRepoHandle:
         return self._knowledge_repo_for_session(session_id)
 
     def _knowledge_dir_for_session(self, session_id: str) -> Path:
-        handle = self._repo_for_session(session_id)
-        return handle.knowledge_dir if handle is not None else self._knowledge_dir
+        return self._repo_for_session(session_id).knowledge_dir
 
     def _knowledge_repo_name_for_session(self, session_id: str) -> str:
         return self._knowledge_dir_for_session(session_id).name
 
     def _git_author_for_session(self, session_id: str) -> str:
-        handle = self._repo_for_session(session_id)
-        if handle is not None:
-            return handle.git_store.author_template
-        return self._git_author
-
-    def set_git_author(self, git_author: str) -> None:
-        self._git_author = git_author
-        self._session_lifecycle.set_git_author(git_author)
+        return self._repo_for_session(session_id).git_store.author_template
 
     async def refresh_git_identities(self) -> None:
         for session_id, session in self._sessions.items():

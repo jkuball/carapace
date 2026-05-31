@@ -14,13 +14,12 @@ from loguru import logger
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
 
 from ..git.store import GitStore
-from ..knowledge import KnowledgeRepoHandle
+from ..knowledge import KnowledgeRepoResolver
 from ..models.config import SessionCommitConfig
 from ..models.session import SessionState
 from .manager import SessionManager
 
 ArchiveTrigger = Literal["manual", "autosave", "archive"]
-type KnowledgeRepoResolver = Callable[[str], KnowledgeRepoHandle]
 
 _SCHEMA_VERSION = 1
 
@@ -38,14 +37,10 @@ class SessionArchiveService:
     def __init__(
         self,
         *,
-        knowledge_dir: Path,
-        git_store: GitStore,
         session_mgr: SessionManager,
         config: SessionCommitConfig,
-        knowledge_repo_for_session: KnowledgeRepoResolver | None = None,
+        knowledge_repo_for_session: KnowledgeRepoResolver,
     ) -> None:
-        self._knowledge_dir = knowledge_dir
-        self._git_store = git_store
         self._session_mgr = session_mgr
         self._config = config
         self._knowledge_repo_for_session = knowledge_repo_for_session
@@ -66,14 +61,10 @@ class SessionArchiveService:
         return knowledge_dir / self.archive_relative_path_for_state(state)
 
     def _repo_for_session(self, session_id: str) -> tuple[Path, GitStore]:
-        if self._knowledge_repo_for_session is None:
-            return self._knowledge_dir, self._git_store
         handle = self._knowledge_repo_for_session(session_id)
         return handle.knowledge_dir, handle.git_store
 
-    async def _ensure_repo_ready(self, session_id: str, *, knowledge_dir: Path, git_store: GitStore) -> None:
-        if self._knowledge_repo_for_session is None:
-            return
+    async def _ensure_repo_ready(self, *, knowledge_dir: Path, git_store: GitStore) -> None:
         if (knowledge_dir / ".git").exists():
             return
         await git_store.ensure_repo()
@@ -170,7 +161,7 @@ class SessionArchiveService:
                 )
 
             knowledge_dir, git_store = self._repo_for_session(session_id)
-            await self._ensure_repo_ready(session_id, knowledge_dir=knowledge_dir, git_store=git_store)
+            await self._ensure_repo_ready(knowledge_dir=knowledge_dir, git_store=git_store)
             archive_path = self.archive_relative_path_for_state(current_state)
             archive_file = knowledge_dir / archive_path
             committed_at = datetime.now(tz=UTC)

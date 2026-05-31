@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from carapace.git.store import GitStore
+from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.session import SessionState
 from carapace.models.skills import ContextGrant, SkillCredentialDecl, context_grants_session_summary
 from carapace.sandbox.manager import SandboxManager
@@ -16,7 +18,38 @@ from carapace.sandbox.session_lifecycle import SessionContainer
 from carapace.sandbox.state import load_sandbox_snapshot
 from carapace.security.context import ApprovalSource, ContextGrantEntry, CredentialAccessEntry, SessionSecurity
 from carapace.security.sentinel import _format_entry
+from carapace.skills import SkillRegistry
 from tests.runtime_mocks import make_runtime_mock
+
+
+def _sandbox_manager(
+    *,
+    runtime,
+    data_dir: Path,
+    knowledge_dir: Path | None = None,
+    knowledge_repo_for_session=None,
+    **kwargs,
+) -> SandboxManager:
+    if knowledge_repo_for_session is None:
+        if knowledge_dir is None:
+            raise TypeError("knowledge_dir or knowledge_repo_for_session is required in tests")
+        handle = KnowledgeRepoHandle(
+            owner="thies",
+            knowledge_dir=knowledge_dir,
+            git_store=GitStore(knowledge_dir),
+            skill_registry=SkillRegistry(knowledge_dir / "skills"),
+        )
+
+        def knowledge_repo_for_session(_session_id: str) -> KnowledgeRepoHandle:
+            return handle
+
+    return SandboxManager(
+        runtime=runtime,
+        data_dir=data_dir,
+        knowledge_repo_for_session=knowledge_repo_for_session,
+        **kwargs,
+    )
+
 
 # ── ContextGrant model ──────────────────────────────────────────────
 
@@ -157,7 +190,7 @@ class TestSessionStateContextGrants:
 class TestSandboxManagerCredentialCache:
     def _make_manager(self, tmp_path: Path) -> SandboxManager:
         runtime = make_runtime_mock()
-        return SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     def test_cache_and_retrieve(self, tmp_path: Path):
         mgr = self._make_manager(tmp_path)
@@ -179,7 +212,7 @@ class TestSandboxManagerCredentialCache:
     async def test_credential_cache_cleared_on_destroy_session(self, tmp_path: Path):
         runtime = make_runtime_mock()
         runtime.destroy_sandbox = AsyncMock()
-        mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
         mgr.cache_credential("sess-1", "dev/token", "secret-value")
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         await mgr.destroy_session("sess-1")
@@ -195,7 +228,7 @@ class TestSandboxManagerCredentialCache:
                 shutil.rmtree(workspace)
 
         runtime.destroy_sandbox = AsyncMock(side_effect=destroy_sandbox)
-        mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
         token = mgr._session_lifecycle.get_or_create_token("sess-1")
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         workspace.mkdir(parents=True)
@@ -210,7 +243,7 @@ class TestSandboxManagerCredentialCache:
     @pytest.mark.anyio
     async def test_cleanup_session_continues_when_snapshot_refresh_fails(self, tmp_path: Path):
         runtime = make_runtime_mock()
-        mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         mgr.refresh_sandbox_snapshot = AsyncMock(side_effect=[RuntimeError("before"), RuntimeError("after")])
 
@@ -295,7 +328,7 @@ class TestSandboxManagerCredentialCache:
         runtime = make_runtime_mock()
         runtime.is_running = AsyncMock(return_value=False)
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-        mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
         mgr._sessions["sess-1"] = SessionContainer(
             container_id="container-1",
             session_id="sess-1",
@@ -316,7 +349,7 @@ class TestSandboxManagerCredentialCache:
 class TestSandboxManagerContextTracking:
     def _make_manager(self, tmp_path: Path) -> SandboxManager:
         runtime = make_runtime_mock()
-        return SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     def test_no_contexts_by_default(self, tmp_path: Path):
         mgr = self._make_manager(tmp_path)
@@ -378,7 +411,7 @@ class TestApprovalSource:
 class TestExecNotificationDedupe:
     def _make_manager(self, tmp_path: Path) -> SandboxManager:
         runtime = make_runtime_mock()
-        return SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     # -- domain dedupe --
 

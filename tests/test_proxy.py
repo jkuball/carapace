@@ -13,7 +13,8 @@ from carapace.git.store import GitStore
 from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.skills import SkillCarapaceConfig
 from carapace.sandbox.exec_flow import SandboxExecCoordinator, SandboxExecState
-from carapace.sandbox.manager import _CONTEXT_TUNNEL_HELPER, SandboxManager
+from carapace.sandbox.manager import _CONTEXT_TUNNEL_HELPER
+from carapace.sandbox.manager import SandboxManager as _SandboxManager
 from carapace.sandbox.proxy import ProxyServer, domain_matches
 from carapace.sandbox.runtime import (
     ContainerGoneError,
@@ -26,6 +27,36 @@ from carapace.sandbox.session_lifecycle import SessionContainer
 from carapace.sandbox.skill_activation import SKILL_ACTIVATION_PROVIDERS, SkillActivationRunner
 from carapace.skills import SkillRegistry
 from tests.runtime_mocks import make_runtime_mock
+
+
+def _sandbox_manager(
+    *,
+    runtime: Any,
+    data_dir: Path,
+    knowledge_dir: Path | None = None,
+    knowledge_repo_for_session=None,
+    **kwargs: Any,
+) -> _SandboxManager:
+    if knowledge_repo_for_session is None:
+        if knowledge_dir is None:
+            raise TypeError("knowledge_dir or knowledge_repo_for_session is required in tests")
+        handle = KnowledgeRepoHandle(
+            owner="thies",
+            knowledge_dir=knowledge_dir,
+            git_store=GitStore(knowledge_dir),
+            skill_registry=SkillRegistry(knowledge_dir / "skills"),
+        )
+
+        def knowledge_repo_for_session(_session_id: str) -> KnowledgeRepoHandle:
+            return handle
+
+    return _SandboxManager(
+        runtime=runtime,
+        data_dir=data_dir,
+        knowledge_repo_for_session=knowledge_repo_for_session,
+        **kwargs,
+    )
+
 
 # ── domain_matches ──────────────────────────────────────────────────
 
@@ -208,7 +239,7 @@ async def test_handle_http_supports_absolute_https_urls(monkeypatch: pytest.Monk
 class TestSandboxManagerAllowlists:
     def _make_manager(self, tmp_path: Path):
         runtime = make_runtime_mock()
-        return SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     def test_empty_by_default(self, tmp_path: Path):
         mgr = self._make_manager(tmp_path)
@@ -246,7 +277,7 @@ class TestSandboxManagerAllowlists:
 
     def test_proxy_env_uses_owner_repo_name(self, tmp_path: Path):
         runtime = make_runtime_mock()
-        mgr = SandboxManager(
+        mgr = _sandbox_manager(
             runtime=runtime,
             data_dir=tmp_path,
             knowledge_dir=tmp_path,
@@ -332,7 +363,7 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path):
         ]
     )
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
     session_id = "sess-1"
     await mgr.ensure_session(session_id)
     mgr.allow_domains(session_id, {"api.example.com"})
@@ -372,7 +403,7 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
     (skill_dir / "SKILL.md").write_text("---\nname: moneydb\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
     session_id = "sess-1"
 
     # Register callbacks — the activated-skills callback returns "moneydb",
@@ -429,7 +460,7 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
     (skill_dir / "SKILL.md").write_text("---\nname: cred-setup\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
     mgr.set_skill_activation_inputs_callback(
         AsyncMock(
             return_value=SkillActivationInputs(
@@ -474,7 +505,7 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
     (skill_dir / "SKILL.md").write_text("---\nname: restore-retry\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.activate_skill("sess-1", "restore-retry")
     assert "setup.sh completed." in result
@@ -500,7 +531,7 @@ async def test_activate_skill_prefers_pnpm_when_package_and_pnpm_lockfiles_exist
     (skill_dir / "package-lock.json").write_text("{}\n")
     (skill_dir / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.activate_skill("sess-1", "multi-node-lock")
     commands = [call.args[1] for call in runtime.exec.call_args_list]
@@ -535,7 +566,7 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: web\n---\nBody.\n")
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
     mgr.set_skill_command_aliases_callback(
         lambda _session_id, skill_name: (
             [("web", "uv run --directory /workspace/skills/web web-search")] if skill_name == "web" else []
@@ -868,7 +899,7 @@ async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path):
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.exec_command(
         "sess-1",
@@ -901,7 +932,7 @@ async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Pat
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     with pytest.raises(ValueError, match=r"Conflicting network\.tunnels declarations"):
         await mgr.exec_command(
@@ -923,7 +954,7 @@ async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.exec_command(
         "sess-1",
@@ -978,7 +1009,7 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path):
         ]
     )
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.exec_command(
         "sess-1",
@@ -1013,7 +1044,7 @@ async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Pa
         ]
     )
 
-    mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
     result = await mgr.exec_command(
         "sess-1",

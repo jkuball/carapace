@@ -46,7 +46,6 @@ from carapace.security.context import CredentialAccessEntry
 from carapace.server import app, sandbox_app
 from carapace.session import SessionEngine, SessionManager
 from carapace.session.archive import SessionArchiveResult, SessionArchiveService
-from carapace.skills import SkillRegistry
 from carapace.usage import LlmRequestState
 
 _TEST_TOKEN = "test-bearer-token-for-server-tests"
@@ -88,8 +87,6 @@ def _setup_server(tmp_path, monkeypatch):
     config = load_config(tmp_path)
     srv._session_list_cache = _FakeSessionListCache()
     session_mgr = SessionManager(tmp_path, on_change=srv._session_list_cache.invalidate_sync)
-    registry = SkillRegistry(tmp_path / "skills")
-    skill_catalog = registry.scan()
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.get_domain_info.return_value = []
     sandbox_mgr.reset_session = AsyncMock()
@@ -109,28 +106,23 @@ def _setup_server(tmp_path, monkeypatch):
     srv._config = config
     srv._user_credential_registries = {}
     srv._knowledge_repo_registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda _path: git_store)
+
+    def knowledge_repo_for_session(session_id: str):
+        return srv._knowledge_repo_registry.get_for_user(session_mgr.load_meta(session_id).user)
+
     srv._engine = SessionEngine(
         config=config,
         data_dir=tmp_path,
-        knowledge_dir=tmp_path,
-        git_store=git_store,
         session_mgr=session_mgr,
-        skill_catalog=skill_catalog,
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         credential_registry_for_session=credential_registry_for_session,
-        knowledge_repo_for_session=lambda session_id: srv._knowledge_repo_registry.get_for_user(
-            session_mgr.load_meta(session_id).user
-        ),
+        knowledge_repo_for_session=knowledge_repo_for_session,
     )
     srv._session_archive = SessionArchiveService(
-        knowledge_dir=tmp_path,
-        git_store=git_store,
         session_mgr=session_mgr,
         config=config.sessions.commit,
-        knowledge_repo_for_session=lambda session_id: srv._knowledge_repo_registry.get_for_user(
-            session_mgr.load_meta(session_id).user
-        ),
+        knowledge_repo_for_session=knowledge_repo_for_session,
     )
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
@@ -282,7 +274,7 @@ def test_admin_user_management_requires_admin_role(client, auth_headers, admin_a
     create_resp = client.post(
         "/api/admin/users",
         headers=admin_auth_headers,
-        json={"username": "Ada", "password": "correct-horse-battery", "display_name": "Ada"},
+        json={"username": "ada", "password": "correct-horse-battery", "display_name": "Ada"},
     )
 
     assert create_resp.status_code == 201
@@ -603,7 +595,7 @@ def test_admin_user_update_can_clear_email(client, admin_auth_headers):
         "/api/admin/users",
         headers=admin_auth_headers,
         json={
-            "username": "Ada",
+            "username": "ada",
             "password": "correct-horse-battery",
             "display_name": "Ada",
             "email": "ada@example.test",
@@ -622,7 +614,7 @@ def test_admin_user_config_redacts_and_preserves_backend_password(client, admin_
         "/api/admin/users",
         headers=admin_auth_headers,
         json={
-            "username": "Ada",
+            "username": "ada",
             "password": "correct-horse-battery",
             "display_name": "Ada",
             "config": {

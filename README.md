@@ -24,13 +24,13 @@
   <a href="charts/carapace/README.md">⚓ Helm Chart</a>
 </p>
 
-carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its durable context is not hidden inside an app-specific database: personality, policy, skills and archived sessions live in a Git-backed knowledge repo you can inspect, diff, and sync.
+carapace is a self-hosted AI agent with a web UI, CLI, and Matrix channel for operators who want an assistant they can actually reason about. Every meaningful action is evaluated by a dedicated sentinel LLM against your natural-language security policy, executed inside a containerized sandbox, and recorded in an audit trail. Its durable context is not hidden inside an app-specific database: personality, policy, skills, and archived sessions live in Git-backed knowledge repos you can inspect, diff, and sync.
 
 ## Highlights
 
 - 🛡️ Sentinel-gated execution. Every non-trivial action is reviewed by a dedicated security agent that keeps session context, not a static allowlist spreadsheet.
 - ☸️ Kubernetes-ready sandboxes. Docker and Kubernetes runtimes are both supported, with StatefulSet-backed sandbox sessions, per-session PVCs, and idle-to-zero scaling already in place.
-- 🗃️ Git-native knowledge repo. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, and archived sessions live in files you can inspect, diff, sync, and push upstream.
+- 🗃️ Git-native per-user knowledge repos. `SOUL.md`, `USER.md`, `SECURITY.md`, skills, and archived sessions live in files you can inspect, diff, sync, and push upstream.
 - 🚫 No-direct-internet sandboxes. Sandbox workloads do not get ambient internet access; outbound traffic is forced through the proxy path.
 - 🔑 Context-scoped credentials. Secrets stay in your vault, with native Bitwarden support, and are only injected or fetched on demand for exec calls that have the matching approved skill context. Neither the agent nor the backend have a giant `.env` with all of your secrets.
 - 👥 Multi-user. Bootstrap an admin user, then manage users, roles, passwords, per-user models, Matrix, Git, and credential backends from Settings. Invite your family!
@@ -79,7 +79,7 @@ Who doesn't want a personal assistant? OpenClaw showed that this is achievable w
   <img src="docs/assets/screenshots/pancake_tree.png" width="1000">
 </p>
 
-<p align="center"><em>State of the knowledge repo after some sessions and a new skill were added.</em></p>
+<p align="center"><em>State of one user's knowledge repo after some sessions and a new skill were added.</em></p>
 
 <p align="center">
   <img src="docs/assets/screenshots/post_readonly.png" width="1000">
@@ -103,7 +103,7 @@ carapace treats long-term agent state as a repository, not as an opaque internal
 - Its personality and user model live in `SOUL.md` and `USER.md`.
 - Skills are plain files in AgentSkills format.
 - Durable context is markdown and other plain files on disk.
-- Session histories can be archived into the knowledge repo and pushed upstream.
+- Session histories can be archived into the owning user's knowledge repo and pushed upstream.
 
 That makes the system inspectable in a way most agent projects are not. You can review what changed, diff it, sync it, and audit how the agent's knowledge evolves over time.
 
@@ -148,7 +148,7 @@ For the full Docker Compose setup, multi-user auth model, UI-managed configurati
 
 ## Architecture
 
-The server runs the agent loop, session lifecycle, and security system. The CLI, web UI, and Matrix channel are thin clients. The knowledge repo is a first-class part of the design: session output can be promoted into Git-backed knowledge, and outbound Git operations are security-reviewed instead of treated as an afterthought.
+The server runs the agent loop, session lifecycle, and security system. The CLI, web UI, and Matrix channel are thin clients. Owner-scoped knowledge repos are a first-class part of the design: session output can be promoted into Git-backed knowledge, and outbound Git operations are security-reviewed instead of treated as an afterthought.
 
 See [docs/architecture.md](docs/architecture.md) for the diagrams and fuller architecture breakdown.
 
