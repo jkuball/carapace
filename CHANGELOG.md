@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.133.1 (2026-05-31)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: introduce strict username patterns
+  ([`d41bcb9`](https://github.com/thiesgerken/carapace/commit/d41bcb9c39aa2dc26d510267d25b179b6bab8b4a))
+
 ## v0.133.0 (2026-05-31)
 
 
