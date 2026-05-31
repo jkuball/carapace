@@ -136,9 +136,11 @@ class KnowledgeGitRuntime:
         async with self._lock:
             handle = self._repo_registry.ensure_user_repo(owner)
             git_store = handle.git_store
-            previous_config = self.config_for_user(owner)
+            previous_config = self._configs.get(owner)
             previous_branch = git_store.remote_branch
             previous_author = git_store.author_template
+            previous_remote_url = await git_store.get_remote_url()
+            previous_remote_configured = git_store.remote_configured
             try:
                 git_store.remote_branch = next_config.branch
                 git_store.author_template = next_config.author
@@ -157,9 +159,11 @@ class KnowledgeGitRuntime:
                 git_store.remote_branch = previous_branch
                 git_store.author_template = previous_author
                 try:
-                    if previous_config.remote:
+                    if previous_config is not None and previous_config.remote:
                         await git_store.add_remote(previous_config.remote, previous_config.token)
-                    else:
+                    elif previous_remote_url is not None:
+                        await git_store.restore_remote(previous_remote_url)
+                    elif not previous_remote_configured:
                         await git_store.remove_remote()
                     await self._sandbox_mgr.refresh_git_identities()
                 except Exception as rollback_exc:

@@ -31,7 +31,7 @@ from .. import get_version
 from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
-from ..config import _resolve_data_dir, get_config_path, get_data_dir, load_config
+from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..git.http import GitHttpHandler
 from ..jobs import JobsScheduler, JobsStore
@@ -296,7 +296,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _auth_store = AuthStore(_data_dir, _config.auth)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
-    _knowledge_repo_registry = KnowledgeRepoRegistry(_data_dir)
+    _knowledge_repo_registry = KnowledgeRepoRegistry(
+        _data_dir,
+        knowledge_repos_dir=_resolve_knowledge_dir(config_path, _config),
+    )
     user_git_configs = _enabled_user_git_configs(_auth_store)
     for username, git_config in user_git_configs.items():
         await _bootstrap_user_knowledge_repo(_knowledge_repo_registry, username, git_config)

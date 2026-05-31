@@ -18,6 +18,7 @@ def test_load_config_defaults(tmp_path: Path):
     assert cfg.sessions.commit.autosave_inactivity_hours == 4
     assert cfg.sandbox.k8s_session_pvc_size == "1Gi"
     assert cfg.sandbox.k8s_session_pvc_storage_class == ""
+    assert cfg.knowledge_dir == "./knowledges"
 
 
 def test_load_config_creates_missing_file(tmp_path: Path):
@@ -104,8 +105,18 @@ def test_resolve_knowledge_repos_dir_uses_knowledges_under_data_dir(tmp_path: Pa
     assert resolve_knowledge_repos_dir(tmp_path) == (tmp_path / "knowledges").resolve()
 
 
+def test_resolve_knowledge_repos_dir_uses_explicit_root(tmp_path: Path) -> None:
+    explicit = tmp_path / "legacy-knowledge"
+    assert resolve_knowledge_repos_dir(tmp_path, explicit) == explicit.resolve()
+
+
 def test_resolve_user_knowledge_dir_uses_normalized_username(tmp_path: Path) -> None:
     assert resolve_user_knowledge_dir(tmp_path, "thies") == (tmp_path / "knowledges" / "thies").resolve()
+
+
+def test_resolve_user_knowledge_dir_uses_explicit_root(tmp_path: Path) -> None:
+    explicit = tmp_path / "legacy-knowledge"
+    assert resolve_user_knowledge_dir(tmp_path, "thies", knowledge_repos_dir=explicit) == (explicit / "thies").resolve()
 
 
 def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:

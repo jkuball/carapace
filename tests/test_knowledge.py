@@ -46,6 +46,16 @@ def test_knowledge_repo_registry_resolves_session_owner(tmp_path: Path) -> None:
     assert handle.knowledge_dir == (tmp_path / "knowledges" / "ada").resolve()
 
 
+def test_knowledge_repo_registry_uses_explicit_repos_dir(tmp_path: Path) -> None:
+    repos_dir = tmp_path / "legacy-knowledge"
+    registry = KnowledgeRepoRegistry(tmp_path, knowledge_repos_dir=repos_dir)
+
+    handle = registry.get_for_user("thies")
+
+    assert registry.knowledge_repos_dir == repos_dir.resolve()
+    assert handle.knowledge_dir == (repos_dir / "thies").resolve()
+
+
 def test_knowledge_repo_registry_rejects_noncanonical_owner(tmp_path: Path) -> None:
     registry = KnowledgeRepoRegistry(tmp_path)
 

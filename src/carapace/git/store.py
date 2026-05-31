@@ -245,6 +245,23 @@ class GitStore:
         self._remote_configured = True
         logger.info(f"Git remote origin set to {url}")
 
+    async def get_remote_url(self) -> str | None:
+        """Return the current ``origin`` URL if configured."""
+        code, out = await self._run("remote", "get-url", "origin")
+        if code != 0:
+            return None
+        return out or None
+
+    async def restore_remote(self, url: str) -> None:
+        """Restore the ``origin`` remote from a previously captured URL."""
+        code, _ = await self._run("remote", "get-url", "origin")
+        if code == 0:
+            await self._run("remote", "set-url", "origin", url)
+        else:
+            await self._run("remote", "add", "origin", url)
+        self._remote_configured = True
+        logger.info("Git remote origin restored")
+
     async def remove_remote(self) -> None:
         """Remove the ``origin`` remote when upstream sync is disabled."""
         code, _ = await self._run("remote", "get-url", "origin")

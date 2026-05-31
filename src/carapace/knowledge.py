@@ -30,17 +30,19 @@ class KnowledgeRepoRegistry:
         self,
         data_dir: Path,
         *,
+        knowledge_repos_dir: Path | None = None,
         git_store_factory: GitStoreFactory | None = None,
         skill_registry_factory: SkillRegistryFactory | None = None,
     ) -> None:
         self._data_dir = data_dir
+        self._knowledge_repos_dir = resolve_knowledge_repos_dir(data_dir, knowledge_repos_dir)
         self._git_store_factory = git_store_factory or GitStore
         self._skill_registry_factory = skill_registry_factory or SkillRegistry
         self._handles: dict[str, KnowledgeRepoHandle] = {}
 
     @property
     def knowledge_repos_dir(self) -> Path:
-        return resolve_knowledge_repos_dir(self._data_dir)
+        return self._knowledge_repos_dir
 
     def get_for_user(self, username: str) -> KnowledgeRepoHandle:
         owner = normalize_username(username)
@@ -48,7 +50,11 @@ class KnowledgeRepoRegistry:
         if cached is not None:
             return cached
 
-        knowledge_dir = resolve_user_knowledge_dir(self._data_dir, owner)
+        knowledge_dir = resolve_user_knowledge_dir(
+            self._data_dir,
+            owner,
+            knowledge_repos_dir=self._knowledge_repos_dir,
+        )
         handle = KnowledgeRepoHandle(
             owner=owner,
             knowledge_dir=knowledge_dir,

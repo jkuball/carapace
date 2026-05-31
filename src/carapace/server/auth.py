@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketException, status
+from loguru import logger
 from pydantic import BaseModel
 
 from ..auth import AuthStore, UserIdentity, has_admin_role, normalize_username
+from ..bootstrap import ensure_knowledge_dir
 from ..models.credentials import BitwardenCredentialBackendConfig
 from ..models.user import UserConfig
-from .runtime import KnowledgeGitConfig
 from .state import server_module
 
 server = server_module()
@@ -238,21 +239,31 @@ async def _bootstrap_user_knowledge_repo_if_enabled(username: str) -> None:
         return
 
     repo_registry = getattr(server, "_knowledge_repo_registry", None)
-    bootstrap_user_knowledge_repo = getattr(server, "_bootstrap_user_knowledge_repo", None)
-    if repo_registry is None or not callable(bootstrap_user_knowledge_repo):
-        return
+    runtime = getattr(server, "_knowledge_git_runtime", None)
+    if repo_registry is None:
+        raise HTTPException(status_code=503, detail="Knowledge repo registry is not initialized")
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="Git runtime is not initialized")
 
-    await bootstrap_user_knowledge_repo(
-        repo_registry,
-        normalized_username,
-        KnowledgeGitConfig(
-            owner=normalized_username,
-            remote=user.config.git.remote,
-            branch=user.config.git.branch,
-            author=user.config.git.author,
-            token=user.config.git.token,
-        ),
-    )
+    try:
+        await runtime.apply_user_config(normalized_username, user.config.git)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Knowledge Git settings reload failed")
+        raise HTTPException(status_code=500, detail=f"Git settings reload failed: {exc}") from exc
+
+    handle = repo_registry.ensure_user_repo(normalized_username)
+    seeded = ensure_knowledge_dir(handle.knowledge_dir)
+    if not seeded:
+        return
+    try:
+        committed = await handle.git_store.commit(seeded, "🔧 bootstrap: seed default files")
+    except RuntimeError as exc:
+        logger.warning(f"Bootstrap knowledge seed commit failed for user {normalized_username}: {exc}")
+        return
+    if committed and handle.git_store.remote_configured:
+        await handle.git_store.push_to_remote()
 
 
 @router.post("/auth/login", response_model=LoginResponse)
@@ -348,16 +359,26 @@ async def update_admin_user(
 ) -> AdminUserResponse:
     updates = body.model_dump(exclude_unset=True, exclude={"config", "password"})
     password = body.password if "password" in body.model_fields_set else None
+    git_config_changed = False
     if "config" in body.model_fields_set and body.config is not None:
-        updates["config"] = _config_with_preserved_backend_passwords(username, body.config)
+        existing = _auth_store().get_user(username)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        merged_config = _config_with_preserved_backend_passwords(username, body.config)
+        updates["config"] = merged_config
+        git_config_changed = merged_config.git != existing.config.git
     try:
+        existing_user = _auth_store().get_user(username)
+        if existing_user is None:
+            raise KeyError(username)
+        was_enabled = existing_user.enabled
         if updates:
             _assert_not_removing_last_admin(username, updates)
         if updates:
             _auth_store().update_user(username, updates)
         if password is not None:
             _auth_store().set_password(username, password)
-        if ("enabled" in body.model_fields_set and body.enabled is True) or "config" in body.model_fields_set:
+        if ("enabled" in body.model_fields_set and body.enabled is True and not was_enabled) or git_config_changed:
             await _bootstrap_user_knowledge_repo_if_enabled(username)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="User not found") from exc

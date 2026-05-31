@@ -86,6 +86,8 @@ async def test_knowledge_git_runtime_applies_remote_and_updates_sandbox_identity
     git_store.ensure_repo = AsyncMock()
     git_store.pull_from_remote = AsyncMock(return_value="Already up to date.")
     git_store.push_to_remote = AsyncMock()
+    git_store.get_remote_url = AsyncMock(return_value=None)
+    git_store.restore_remote = AsyncMock()
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.refresh_git_identities = AsyncMock()
     runtime = KnowledgeGitRuntime(repo_registry=_repo_registry(tmp_path, git_store), sandbox_mgr=sandbox_mgr)
@@ -124,6 +126,8 @@ async def test_knowledge_git_runtime_rolls_back_when_remote_pull_fails(tmp_path:
     git_store.remove_remote = AsyncMock()
     git_store.ensure_repo = AsyncMock()
     git_store.pull_from_remote = AsyncMock(side_effect=RuntimeError("pull failed"))
+    git_store.get_remote_url = AsyncMock(return_value="https://x-access-token:old-token@git.example.test/old.git")
+    git_store.restore_remote = AsyncMock()
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.refresh_git_identities = AsyncMock()
     runtime = KnowledgeGitRuntime(
@@ -151,24 +155,80 @@ async def test_knowledge_git_runtime_rolls_back_when_remote_pull_fails(tmp_path:
         call("https://git.example.test/new.git", "new-token"),
         call(previous.remote, previous.token),
     ]
+    git_store.restore_remote.assert_not_awaited()
     sandbox_mgr.refresh_git_identities.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_knowledge_git_runtime_rolls_back_to_existing_remote_when_cache_is_empty(tmp_path: Path) -> None:
+    git_store = MagicMock(spec=GitStore)
+    git_store.remote_branch = "main"
+    git_store.author_template = "Thies <thies@example.test>"
+    git_store.remote_configured = True
+    git_store.add_remote = AsyncMock()
+    git_store.remove_remote = AsyncMock()
+    git_store.ensure_repo = AsyncMock()
+    git_store.pull_from_remote = AsyncMock(side_effect=RuntimeError("pull failed"))
+    git_store.get_remote_url = AsyncMock(return_value="https://x-access-token:old-token@git.example.test/old.git")
+    git_store.restore_remote = AsyncMock()
+    sandbox_mgr = MagicMock(spec=SandboxManager)
+    sandbox_mgr.refresh_git_identities = AsyncMock()
+    runtime = KnowledgeGitRuntime(repo_registry=_repo_registry(tmp_path, git_store), sandbox_mgr=sandbox_mgr)
+
+    with pytest.raises(RuntimeError, match="pull failed"):
+        await runtime.apply_user_config(
+            "thies",
+            KnowledgeGitConfig(
+                owner="thies",
+                remote="https://git.example.test/new.git",
+                branch="prod",
+                author="Thies <thies@example.test>",
+                token="new-token",
+            ),
+        )
+
+    git_store.restore_remote.assert_awaited_once_with("https://x-access-token:old-token@git.example.test/old.git")
+    git_store.remove_remote.assert_not_awaited()
 
 
 @pytest.mark.anyio
 async def test_knowledge_git_runtime_push_callback_checks_current_remote_state(tmp_path: Path) -> None:
     git_store = MagicMock(spec=GitStore)
     git_store.remote_configured = False
+    git_store.remote_branch = "main"
+    git_store.author_template = "carapace <carapace@%h>"
     git_store.push_to_remote = AsyncMock()
+    git_store.add_remote = AsyncMock()
+    git_store.remove_remote = AsyncMock()
+    git_store.ensure_repo = AsyncMock()
+    git_store.pull_from_remote = AsyncMock(return_value="Already up to date.")
+    git_store.get_remote_url = AsyncMock(return_value=None)
+    git_store.restore_remote = AsyncMock()
     sandbox_mgr = MagicMock(spec=SandboxManager)
+    sandbox_mgr.refresh_git_identities = AsyncMock()
     runtime = KnowledgeGitRuntime(repo_registry=_repo_registry(tmp_path, git_store), sandbox_mgr=sandbox_mgr)
 
     await runtime.push_if_configured("thies")
     git_store.push_to_remote.assert_not_awaited()
 
+    await runtime.apply_user_config(
+        "thies",
+        KnowledgeGitConfig(
+            owner="thies",
+            remote="https://git.example.test/thies.git",
+            branch="prod",
+            author="Thies <thies@example.test>",
+            token="secret-token",
+        ),
+    )
+    git_store.remote_branch = "main"
+    git_store.author_template = "carapace <carapace@%h>"
     git_store.remote_configured = True
     await runtime.push_if_configured("thies")
 
     git_store.push_to_remote.assert_awaited_once()
+    assert git_store.remote_branch == "prod"
+    assert git_store.author_template == "Thies <thies@example.test>"
 
 
 @pytest.mark.anyio
@@ -183,6 +243,8 @@ async def test_knowledge_git_runtime_keeps_other_user_repo_state_unchanged(tmp_p
         git_store.ensure_repo = AsyncMock()
         git_store.pull_from_remote = AsyncMock(return_value="Already up to date.")
         git_store.push_to_remote = AsyncMock()
+        git_store.get_remote_url = AsyncMock(return_value=None)
+        git_store.restore_remote = AsyncMock()
         return git_store
 
     stores = {

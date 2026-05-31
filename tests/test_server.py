@@ -44,6 +44,7 @@ from carapace.sandbox.manager import SandboxManager
 from carapace.sandbox.state import SessionSandboxSnapshot
 from carapace.security.context import CredentialAccessEntry
 from carapace.server import app, sandbox_app
+from carapace.server.runtime import KnowledgeGitRuntime
 from carapace.session import SessionEngine, SessionManager
 from carapace.session.archive import SessionArchiveResult, SessionArchiveService
 from carapace.usage import LlmRequestState
@@ -99,13 +100,26 @@ def _setup_server(tmp_path, monkeypatch):
         return cred_reg
 
     git_store = MagicMock(spec=GitStore)
+    git_store.remote_branch = "main"
+    git_store.author_template = "carapace <carapace@%h>"
+    git_store.remote_configured = False
     git_store.commit = AsyncMock(return_value=True)
     git_store.ensure_repo = AsyncMock()
+    git_store.add_remote = AsyncMock()
+    git_store.remove_remote = AsyncMock()
+    git_store.pull_from_remote = AsyncMock(return_value="Already up to date.")
+    git_store.push_to_remote = AsyncMock()
+    git_store.get_remote_url = AsyncMock(return_value=None)
+    git_store.restore_remote = AsyncMock()
     srv._data_dir = tmp_path
     srv._config_path = tmp_path / "config.yaml"
     srv._config = config
     srv._user_credential_registries = {}
     srv._knowledge_repo_registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda _path: git_store)
+    srv._knowledge_git_runtime = KnowledgeGitRuntime(
+        repo_registry=srv._knowledge_repo_registry,
+        sandbox_mgr=sandbox_mgr,
+    )
 
     def knowledge_repo_for_session(session_id: str):
         return srv._knowledge_repo_registry.get_for_user(session_mgr.load_meta(session_id).user)
@@ -341,8 +355,9 @@ def test_admin_user_management_requires_admin_role(client, auth_headers, admin_a
 
 
 def test_admin_user_create_bootstraps_enabled_user_repo(client, admin_auth_headers, monkeypatch):
-    bootstrap = AsyncMock()
-    monkeypatch.setattr(srv, "_bootstrap_user_knowledge_repo", bootstrap, raising=False)
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
 
     resp = client.post(
         "/api/admin/users",
@@ -356,29 +371,85 @@ def test_admin_user_create_bootstraps_enabled_user_repo(client, admin_auth_heade
     )
 
     assert resp.status_code == 201
-    bootstrap.assert_awaited_once()
-    assert bootstrap.await_args.args[0] is srv._knowledge_repo_registry
-    assert bootstrap.await_args.args[1] == "ada"
-    config = bootstrap.await_args.args[2]
-    assert config.owner == "ada"
+    runtime.apply_user_config.assert_awaited_once()
+    assert runtime.apply_user_config.await_args.args[0] == "ada"
+    config = runtime.apply_user_config.await_args.args[1]
     assert config.remote == "https://gitea.example.test/ada/knowledge.git"
     assert config.branch == "prod"
+    git_store = srv._knowledge_repo_registry.get_for_user("ada").git_store
+    git_store.commit.assert_awaited_once()
 
 
 def test_admin_user_enable_bootstraps_user_repo(client, admin_auth_headers, monkeypatch):
-    bootstrap = AsyncMock()
-    monkeypatch.setattr(srv, "_bootstrap_user_knowledge_repo", bootstrap, raising=False)
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
     srv._auth_store.create_user(username="ada", password="correct-horse-battery", display_name="Ada")
     srv._auth_store.update_user("ada", {"enabled": False})
 
     resp = client.patch("/api/admin/users/ada", headers=admin_auth_headers, json={"enabled": True})
 
     assert resp.status_code == 200
-    bootstrap.assert_awaited_once()
-    assert bootstrap.await_args.args[0] is srv._knowledge_repo_registry
-    assert bootstrap.await_args.args[1] == "ada"
-    config = bootstrap.await_args.args[2]
-    assert config.owner == "ada"
+    runtime.apply_user_config.assert_awaited_once()
+    assert runtime.apply_user_config.await_args.args[0] == "ada"
+
+
+def test_admin_user_create_returns_http_error_when_git_bootstrap_fails(client, admin_auth_headers, monkeypatch):
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock(side_effect=RuntimeError("pull failed"))
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+
+    resp = client.post(
+        "/api/admin/users",
+        headers=admin_auth_headers,
+        json={
+            "username": "ada",
+            "password": "correct-horse-battery",
+            "display_name": "Ada",
+            "config": {"git": {"remote": "https://gitea.example.test/ada/knowledge.git"}},
+        },
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Git settings reload failed: pull failed"
+    git_store = srv._knowledge_repo_registry.get_for_user("ada").git_store
+    git_store.commit.assert_not_awaited()
+
+
+def test_admin_user_config_patch_does_not_reload_git_when_git_config_is_unchanged(
+    client, admin_auth_headers, monkeypatch
+):
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+    srv._auth_store.create_user(username="ada", password="correct-horse-battery", display_name="Ada")
+
+    resp = client.patch(
+        "/api/admin/users/ada",
+        headers=admin_auth_headers,
+        json={"config": {"channels": {"matrix": {"enabled": True}}}},
+    )
+
+    assert resp.status_code == 200
+    runtime.apply_user_config.assert_not_awaited()
+
+
+def test_admin_user_git_config_patch_reloads_git_runtime(client, admin_auth_headers, monkeypatch):
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
+    srv._auth_store.create_user(username="ada", password="correct-horse-battery", display_name="Ada")
+
+    resp = client.patch(
+        "/api/admin/users/ada",
+        headers=admin_auth_headers,
+        json={"config": {"git": {"remote": "https://gitea.example.test/ada/knowledge.git", "branch": "prod"}}},
+    )
+
+    assert resp.status_code == 200
+    runtime.apply_user_config.assert_awaited_once()
+    assert runtime.apply_user_config.await_args.args[0] == "ada"
+    assert runtime.apply_user_config.await_args.args[1].branch == "prod"
 
 
 def test_admin_platform_settings_requires_admin_role(client, auth_headers, admin_auth_headers):
