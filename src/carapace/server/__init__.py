@@ -36,6 +36,7 @@ from ..credentials import CredentialBackendError, CredentialRegistry, build_cred
 from ..git.http import GitHttpHandler
 from ..git.store import GitStore
 from ..jobs import JobsScheduler, JobsStore
+from ..knowledge import KnowledgeRepoRegistry
 from ..llm import make_model_factory
 from ..models.config import Config
 from ..models.user import UserConfig, UserGitConfig
@@ -79,6 +80,7 @@ _config_path: Path
 _config: Config
 _engine: SessionEngine
 _git_handler: GitHttpHandler
+_knowledge_repo_registry: KnowledgeRepoRegistry
 _knowledge_git_runtime: KnowledgeGitRuntime
 _matrix_channel_manager: MatrixChannelManager
 _user_credential_registries: dict[str, tuple[str, CredentialRegistry]]
@@ -92,26 +94,54 @@ _notification_router: NotificationRouter
 _auth_store: AuthStore
 
 
-def _select_knowledge_git_config(auth_store: AuthStore) -> KnowledgeGitConfig:
-    configured: list[tuple[str, UserGitConfig]] = []
+def _enabled_user_git_configs(auth_store: AuthStore) -> dict[str, KnowledgeGitConfig]:
+    configs: dict[str, KnowledgeGitConfig] = {}
     for username, user in sorted(auth_store.load_users().users.items()):
-        if user.enabled and user.config.git.remote:
-            configured.append((username, user.config.git))
+        if not user.enabled:
+            continue
+        configs[username] = KnowledgeGitConfig(
+            owner=username,
+            remote=user.config.git.remote,
+            branch=user.config.git.branch,
+            author=user.config.git.author,
+            token=user.config.git.token,
+        )
+    return configs
 
-    if not configured:
-        return KnowledgeGitConfig()
-    if len(configured) > 1:
-        owners = ", ".join(username for username, _ in configured)
-        raise RuntimeError(f"knowledge Git remote is configured for multiple enabled users: {owners}")
 
-    owner, git = configured[0]
-    return KnowledgeGitConfig(
-        owner=owner,
-        remote=git.remote,
-        branch=git.branch,
-        author=git.author,
-        token=git.token,
-    )
+async def _bootstrap_user_knowledge_repo(
+    repo_registry: KnowledgeRepoRegistry,
+    username: str,
+    config: KnowledgeGitConfig,
+) -> None:
+    handle = repo_registry.ensure_user_repo(username)
+    git_store = handle.git_store
+    git_store.remote_branch = config.branch
+    git_store.author_template = config.author
+    await git_store.ensure_repo()
+
+    if config.remote:
+        logger.info(f"Using knowledge Git remote from user {username}")
+        await git_store.add_remote(config.remote, config.token)
+        try:
+            summary = await git_store.pull_from_remote()
+            logger.info(f"Pulled from remote for user {username}: {summary}")
+        except RuntimeError as exc:
+            logger.error(str(exc))
+            raise SystemExit(1) from exc
+    else:
+        await git_store.remove_remote()
+
+    seeded = ensure_knowledge_dir(handle.knowledge_dir)
+    if not seeded:
+        return
+    try:
+        committed = await git_store.commit(seeded, "🔧 bootstrap: seed default files")
+    except RuntimeError as exc:
+        logger.warning(f"Bootstrap knowledge seed commit failed for user {username}: {exc}")
+        return
+    if committed and git_store.remote_configured:
+        await git_store.push_to_remote()
 
 
 _SESSION_COMMIT_SWEEP_SECONDS = 15 * 60
@@ -269,39 +299,13 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _auth_store = AuthStore(_data_dir, _config.auth)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
-    knowledge_git = _select_knowledge_git_config(_auth_store)
+    _knowledge_repo_registry = KnowledgeRepoRegistry(_data_dir)
+    user_git_configs = _enabled_user_git_configs(_auth_store)
+    for username, git_config in user_git_configs.items():
+        await _bootstrap_user_knowledge_repo(_knowledge_repo_registry, username, git_config)
 
-    # 3. Git-backed knowledge store
-    git_store = GitStore(
-        knowledge_dir,
-        remote_branch=knowledge_git.branch,
-        author=knowledge_git.author,
-    )
-    await git_store.ensure_repo()
-
-    # Pull from external remote if configured
-    if knowledge_git.remote:
-        logger.info(f"Using knowledge Git remote from user {knowledge_git.owner}")
-        await git_store.add_remote(knowledge_git.remote, knowledge_git.token)
-        try:
-            summary = await git_store.pull_from_remote()
-            logger.info(f"Pulled from remote: {summary}")
-        except RuntimeError as exc:
-            logger.error(str(exc))
-            raise SystemExit(1) from exc
-    else:
-        await git_store.remove_remote()
-
-    # Bootstrap knowledge files (after pull so we don't override remote content)
-    seeded = ensure_knowledge_dir(knowledge_dir)
-    if seeded:
-        try:
-            committed = await git_store.commit(seeded, "🔧 bootstrap: seed default files")
-        except RuntimeError as exc:
-            logger.warning(f"Bootstrap knowledge seed commit failed: {exc}")
-        else:
-            if committed and git_store.remote_configured:
-                await git_store.push_to_remote()
+    # Legacy fallback store for any remaining non-session-routed call sites.
+    git_store = GitStore(knowledge_dir)
 
     if _config.carapace.logfire_token:
         logfire.configure(token=_config.carapace.logfire_token, console=False)
@@ -357,14 +361,17 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         idle_timeout_minutes=_config.sandbox.idle_timeout_minutes,
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
-        git_author=knowledge_git.author,
+        git_author=UserGitConfig().author,
+        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
+            session_mgr.load_meta(session_id).user
+        ),
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
 
     _knowledge_git_runtime = KnowledgeGitRuntime(
-        git_store=git_store,
+        repo_registry=_knowledge_repo_registry,
         sandbox_mgr=_sandbox_mgr,
-        current_config=knowledge_git,
+        current_configs=user_git_configs,
     )
 
     if _config.sandbox.cleanup_orphans_on_startup:
@@ -407,6 +414,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         agent_model=agent_model,
         sandbox_mgr=_sandbox_mgr,
         credential_registry_for_session=_credential_registry_for_session,
+        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
+            session_mgr.load_meta(session_id).user
+        ),
         model_factory=model_factory,
         notification_router=_notification_router,
     )
@@ -415,6 +425,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         git_store=git_store,
         session_mgr=session_mgr,
         config=_config.sessions.commit,
+        knowledge_repo_for_session=lambda session_id: _knowledge_repo_registry.get_for_user(
+            session_mgr.load_meta(session_id).user
+        ),
     )
     _jobs_store = JobsStore(_data_dir)
     _jobs_scheduler = JobsScheduler(_jobs_store)
@@ -422,9 +435,11 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Git HTTP handler — serves the knowledge repo on the sandbox API
     _git_handler = GitHttpHandler(
         knowledge_dir=knowledge_dir,
+        knowledge_root=_knowledge_repo_registry.knowledge_repos_dir,
         default_branch="main",
         api_port=_config.server.internal_port,
         verify_session_token=_sandbox_mgr.verify_session_token,
+        owner_for_session=lambda session_id: session_mgr.load_meta(session_id).user,
         on_push_success=_knowledge_git_runtime.push_if_configured,
     )
 
@@ -496,7 +511,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     logger.info(
         f"carapace server ready — model={_config.agent.model}, "
-        f"skills={len(skill_catalog)}, proxy_port={proxy_port}"
+        f"user_repos={len(user_git_configs)}, skills={len(skill_catalog)}, proxy_port={proxy_port}"
         + (
             f", matrix=on ({_matrix_channel_manager.channel_count} user channel(s))"
             if _matrix_channel_manager.channel_count

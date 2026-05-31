@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from carapace.git.store import GitStore
+from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.skills import SkillCarapaceConfig
 from carapace.sandbox.exec_flow import SandboxExecCoordinator, SandboxExecState
 from carapace.sandbox.manager import _CONTEXT_TUNNEL_HELPER, SandboxManager
@@ -241,6 +243,24 @@ class TestSandboxManagerAllowlists:
         mgr = self._make_manager(tmp_path)
         env = mgr._build_proxy_env("sess-1", "tok", "http://172.18.0.2:3128")
         assert env["CARAPACE_SESSION_ID"] == "sess-1"
+
+    def test_proxy_env_uses_owner_repo_name(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        mgr = SandboxManager(
+            runtime=runtime,
+            data_dir=tmp_path,
+            knowledge_dir=tmp_path,
+            knowledge_repo_for_session=lambda _session_id: KnowledgeRepoHandle(
+                owner="ada",
+                knowledge_dir=tmp_path / "knowledges" / "ada",
+                git_store=GitStore(tmp_path / "knowledges" / "ada"),
+                skill_registry=SkillRegistry(tmp_path / "knowledges" / "ada" / "skills"),
+            ),
+        )
+
+        env = mgr._build_proxy_env("sess-1", "tok", "http://172.18.0.2:3128")
+
+        assert env["GIT_REPO_URL"].endswith("/git/ada")
 
     def test_proxy_env_no_git_identity_vars(self, tmp_path: Path):
         """Git identity is configured via git config inside the container, not env vars."""
@@ -517,7 +537,7 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
 
     mgr = SandboxManager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
     mgr.set_skill_command_aliases_callback(
-        lambda skill_name: (
+        lambda _session_id, skill_name: (
             [("web", "uv run --directory /workspace/skills/web web-search")] if skill_name == "web" else []
         )
     )

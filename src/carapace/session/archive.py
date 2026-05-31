@@ -14,11 +14,13 @@ from loguru import logger
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
 
 from ..git.store import GitStore
+from ..knowledge import KnowledgeRepoHandle
 from ..models.config import SessionCommitConfig
 from ..models.session import SessionState
 from .manager import SessionManager
 
 ArchiveTrigger = Literal["manual", "autosave", "archive"]
+type KnowledgeRepoResolver = Callable[[str], KnowledgeRepoHandle]
 
 _SCHEMA_VERSION = 1
 
@@ -40,11 +42,13 @@ class SessionArchiveService:
         git_store: GitStore,
         session_mgr: SessionManager,
         config: SessionCommitConfig,
+        knowledge_repo_for_session: KnowledgeRepoResolver | None = None,
     ) -> None:
         self._knowledge_dir = knowledge_dir
         self._git_store = git_store
         self._session_mgr = session_mgr
         self._config = config
+        self._knowledge_repo_for_session = knowledge_repo_for_session
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._session_lock_refs: dict[str, int] = {}
 
@@ -58,7 +62,21 @@ class SessionArchiveService:
         return relative.as_posix()
 
     def archive_absolute_path_for_state(self, state: SessionState) -> Path:
-        return self._knowledge_dir / self.archive_relative_path_for_state(state)
+        knowledge_dir, _ = self._repo_for_session(state.session_id)
+        return knowledge_dir / self.archive_relative_path_for_state(state)
+
+    def _repo_for_session(self, session_id: str) -> tuple[Path, GitStore]:
+        if self._knowledge_repo_for_session is None:
+            return self._knowledge_dir, self._git_store
+        handle = self._knowledge_repo_for_session(session_id)
+        return handle.knowledge_dir, handle.git_store
+
+    async def _ensure_repo_ready(self, session_id: str, *, knowledge_dir: Path, git_store: GitStore) -> None:
+        if self._knowledge_repo_for_session is None:
+            return
+        if (knowledge_dir / ".git").exists():
+            return
+        await git_store.ensure_repo()
 
     def _get_session_lock(self, session_id: str) -> asyncio.Lock:
         lock = self._session_locks.get(session_id)
@@ -151,8 +169,10 @@ class SessionArchiveService:
                     reason="Session has no history to archive yet",
                 )
 
+            knowledge_dir, git_store = self._repo_for_session(session_id)
+            await self._ensure_repo_ready(session_id, knowledge_dir=knowledge_dir, git_store=git_store)
             archive_path = self.archive_relative_path_for_state(current_state)
-            archive_file = self._knowledge_dir / archive_path
+            archive_file = knowledge_dir / archive_path
             committed_at = datetime.now(tz=UTC)
             session_payload = {
                 "session_id": current_state.session_id,
@@ -198,14 +218,14 @@ class SessionArchiveService:
             commit_action = "add" if current_state.knowledge_last_committed_at is None else "update"
 
             try:
-                commit_made = await self._git_store.commit(
+                commit_made = await git_store.commit(
                     [archive_path],
                     f"💾 session: {commit_action} {session_id}",
                     session_id=session_id,
                 )
             except RuntimeError:
                 archive_file.unlink(missing_ok=True)
-                self._prune_empty_archive_dirs(archive_file.parent)
+                self._prune_empty_archive_dirs(archive_file.parent, knowledge_dir=knowledge_dir)
                 raise
 
             latest_state = self._session_mgr.load_state(session_id)
@@ -238,13 +258,14 @@ class SessionArchiveService:
                 return False
 
             archive_path = state.knowledge_last_archive_path or self.archive_relative_path_for_state(state)
-            archive_file = self._knowledge_dir / archive_path
+            knowledge_dir, git_store = self._repo_for_session(state.session_id)
+            archive_file = knowledge_dir / archive_path
             if not archive_file.exists():
                 return False
 
             archive_file.unlink()
-            self._prune_empty_archive_dirs(archive_file.parent)
-            commit_made = await self._git_store.commit_removals(
+            self._prune_empty_archive_dirs(archive_file.parent, knowledge_dir=knowledge_dir)
+            commit_made = await git_store.commit_removals(
                 [archive_path],
                 f"🗑️ session: remove archive {state.session_id}",
                 session_id=state.session_id,
@@ -269,8 +290,8 @@ class SessionArchiveService:
             json.dumps(stable_payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
-    def _prune_empty_archive_dirs(self, start_dir: Path) -> None:
-        stop_dir = (self._knowledge_dir / self._config.path_prefix).resolve()
+    def _prune_empty_archive_dirs(self, start_dir: Path, *, knowledge_dir: Path) -> None:
+        stop_dir = (knowledge_dir / self._config.path_prefix).resolve()
         current = start_dir.resolve()
         while current != stop_dir and current.is_dir() and stop_dir in current.parents:
             try:

@@ -64,6 +64,8 @@ class SandboxSessionLifecycle:
         proxy_port: int,
         sandbox_port: int,
         git_author: str,
+        knowledge_repo_name_for_session: Callable[[str], str] | None = None,
+        git_author_for_session: Callable[[str], str] | None = None,
     ) -> None:
         self._runtime = runtime
         self._state = state
@@ -75,9 +77,21 @@ class SandboxSessionLifecycle:
         self._proxy_port = proxy_port
         self._sandbox_port = sandbox_port
         self._git_author = git_author
+        self._knowledge_repo_name_for_session = knowledge_repo_name_for_session
+        self._git_author_for_session = git_author_for_session
 
     def set_git_author(self, git_author: str) -> None:
         self._git_author = git_author
+
+    def _repo_name_for_session(self, session_id: str) -> str:
+        if self._knowledge_repo_name_for_session is None:
+            return self._knowledge_dir.name
+        return self._knowledge_repo_name_for_session(session_id)
+
+    def _author_for_session(self, session_id: str) -> str:
+        if self._git_author_for_session is None:
+            return self._git_author
+        return self._git_author_for_session(session_id)
 
     def _token_path(self, session_id: str) -> Path:
         return self._data_dir / "sessions" / session_id / "token"
@@ -126,9 +140,8 @@ class SandboxSessionLifecycle:
         authed_url = f"{scheme}://{session_id}:{proxy_token}@{rest}"
         no_proxy_host = rest.rsplit(":", 1)[0]
         no_proxy = ",".join([no_proxy_host, "localhost", "127.0.0.1"])
-        git_url = (
-            f"{scheme}://{session_id}:{proxy_token}@{no_proxy_host}:{self._sandbox_port}/git/{self._knowledge_dir.name}"
-        )
+        repo_name = self._repo_name_for_session(session_id)
+        git_url = f"{scheme}://{session_id}:{proxy_token}@{no_proxy_host}:{self._sandbox_port}/git/{repo_name}"
         return {
             "HTTP_PROXY": authed_url,
             "HTTPS_PROXY": authed_url,
@@ -282,7 +295,7 @@ class SandboxSessionLifecycle:
 
     async def setup_git_identity(self, container_id: str, session_id: str) -> None:
         """Configure git user.name and user.email inside the sandbox."""
-        name_tpl = self._git_author.replace("%s", session_id)
+        name_tpl = self._author_for_session(session_id).replace("%s", session_id)
         if "<" in name_tpl and name_tpl.endswith(">"):
             name, _, email = name_tpl.rpartition("<")
             name, email = name.strip(), email.rstrip(">").strip()

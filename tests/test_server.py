@@ -21,10 +21,11 @@ import carapace.server.jobs as server_jobs
 import carapace.server.platform_settings as platform_settings
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
-from carapace.config import load_config
+from carapace.config import load_config, resolve_user_knowledge_dir
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
+from carapace.knowledge import KnowledgeRepoRegistry
 from carapace.models.config import AgentConfig
 from carapace.models.credentials import (
     BasicAuthConfig,
@@ -93,6 +94,7 @@ def _setup_server(tmp_path, monkeypatch):
     sandbox_mgr.get_domain_info.return_value = []
     sandbox_mgr.reset_session = AsyncMock()
     sandbox_mgr.destroy_session = AsyncMock()
+    sandbox_mgr.refresh_git_identities = AsyncMock()
 
     cred_reg = CredentialRegistry()
 
@@ -101,10 +103,12 @@ def _setup_server(tmp_path, monkeypatch):
 
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
+    git_store.ensure_repo = AsyncMock()
     srv._data_dir = tmp_path
     srv._config_path = tmp_path / "config.yaml"
     srv._config = config
     srv._user_credential_registries = {}
+    srv._knowledge_repo_registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda _path: git_store)
     srv._engine = SessionEngine(
         config=config,
         data_dir=tmp_path,
@@ -115,12 +119,18 @@ def _setup_server(tmp_path, monkeypatch):
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         credential_registry_for_session=credential_registry_for_session,
+        knowledge_repo_for_session=lambda session_id: srv._knowledge_repo_registry.get_for_user(
+            session_mgr.load_meta(session_id).user
+        ),
     )
     srv._session_archive = SessionArchiveService(
         knowledge_dir=tmp_path,
         git_store=git_store,
         session_mgr=session_mgr,
         config=config.sessions.commit,
+        knowledge_repo_for_session=lambda session_id: srv._knowledge_repo_registry.get_for_user(
+            session_mgr.load_meta(session_id).user
+        ),
     )
     srv._jobs_store = JobsStore(tmp_path)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
@@ -138,7 +148,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_select_knowledge_git_config_uses_single_enabled_user(tmp_path) -> None:
+def test_enabled_user_git_configs_returns_all_enabled_users(tmp_path) -> None:
     store = AuthStore(tmp_path / "git-owner", srv._config.auth)
     store.create_user(
         username="thies",
@@ -154,39 +164,60 @@ def test_select_knowledge_git_config_uses_single_enabled_user(tmp_path) -> None:
             }
         ),
     )
+    store.create_user(
+        username="ada",
+        password="secret",
+        config=UserConfig.model_validate(
+            {
+                "git": {
+                    "remote": "https://gitea.example.com/ada/knowledge.git",
+                    "branch": "main",
+                }
+            }
+        ),
+    )
 
-    selected = srv._select_knowledge_git_config(store)
+    selected = srv._enabled_user_git_configs(store)
 
-    assert selected.owner == "thies"
-    assert selected.remote == "https://gitea.example.com/team/knowledge.git"
-    assert selected.branch == "dev"
-    assert selected.author == "Thies <thies@example.com>"
-    assert selected.token == "token-value"
+    assert set(selected) == {"ada", "thies"}
+    assert selected["thies"].remote == "https://gitea.example.com/team/knowledge.git"
+    assert selected["thies"].branch == "dev"
+    assert selected["thies"].author == "Thies <thies@example.com>"
+    assert selected["thies"].token == "token-value"
+    assert selected["ada"].remote == "https://gitea.example.com/ada/knowledge.git"
 
 
-def test_select_knowledge_git_config_rejects_multiple_enabled_user_remotes(tmp_path) -> None:
+def test_enabled_user_git_configs_skips_disabled_users(tmp_path) -> None:
     store = AuthStore(tmp_path / "git-owners", srv._config.auth)
-    for username in ("alice", "bob"):
-        store.create_user(
-            username=username,
-            password="secret",
-            config=UserConfig.model_validate({"git": {"remote": f"https://gitea.example.com/{username}.git"}}),
-        )
+    store.create_user(
+        username="alice",
+        password="secret",
+        config=UserConfig.model_validate({"git": {"remote": "https://gitea.example.com/alice.git"}}),
+    )
+    store.update_user("alice", {"enabled": False})
+    store.create_user(
+        username="bob",
+        password="secret",
+        config=UserConfig.model_validate({"git": {"remote": "https://gitea.example.com/bob.git"}}),
+    )
 
-    with pytest.raises(RuntimeError, match="multiple enabled users"):
-        srv._select_knowledge_git_config(store)
+    selected = srv._enabled_user_git_configs(store)
+
+    assert set(selected) == {"bob"}
 
 
 @pytest.fixture()
 def auth_headers() -> dict[str, str]:
-    auth_session = srv._auth_store.create_session(username="thies")
-    token = srv._auth_store.issue_session_token(auth_session)
-    return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
+    return _headers_for_user("thies")
 
 
 @pytest.fixture()
 def admin_auth_headers() -> dict[str, str]:
-    auth_session = srv._auth_store.create_session(username="admin")
+    return _headers_for_user("admin")
+
+
+def _headers_for_user(username: str) -> dict[str, str]:
+    auth_session = srv._auth_store.create_session(username=username)
     token = srv._auth_store.issue_session_token(auth_session)
     return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
 
@@ -749,7 +780,7 @@ def test_user_settings_allows_updating_existing_git_remote_for_same_user(client,
         },
     )
     runtime = MagicMock()
-    runtime.apply_config = AsyncMock()
+    runtime.apply_user_config = AsyncMock()
     monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
 
     resp = client.patch(
@@ -763,10 +794,10 @@ def test_user_settings_allows_updating_existing_git_remote_for_same_user(client,
     assert user is not None
     assert user.config.git.remote == "https://gitea.example.test/thies/knowledge.git"
     assert user.config.git.branch == "dev"
-    runtime.apply_config.assert_awaited_once()
+    runtime.apply_user_config.assert_awaited_once()
 
 
-def test_user_settings_git_conflict_does_not_leak_owner_username(client, admin_auth_headers):
+def test_user_settings_allows_multiple_enabled_users_to_configure_git(client, admin_auth_headers, monkeypatch):
     srv._auth_store.update_user(
         "thies",
         {
@@ -779,6 +810,9 @@ def test_user_settings_git_conflict_does_not_leak_owner_username(client, admin_a
             )
         },
     )
+    runtime = MagicMock()
+    runtime.apply_user_config = AsyncMock()
+    monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
 
     resp = client.patch(
         "/api/user/settings",
@@ -786,13 +820,11 @@ def test_user_settings_git_conflict_does_not_leak_owner_username(client, admin_a
         json={"git": {"remote": "https://gitea.example.test/admin/knowledge.git"}},
     )
 
-    assert resp.status_code == 400
-    assert resp.json() == {
-        "detail": (
-            "Knowledge Git remote is already configured for another enabled user. "
-            "The shared knowledge repo supports only one enabled remote owner."
-        )
-    }
+    assert resp.status_code == 200
+    user = srv._auth_store.get_user("admin")
+    assert user is not None
+    assert user.config.git.remote == "https://gitea.example.test/admin/knowledge.git"
+    runtime.apply_user_config.assert_awaited_once()
 
 
 def test_user_settings_default_changes_reload_enabled_matrix(client, auth_headers, monkeypatch):
@@ -818,7 +850,7 @@ def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth
     manager = MagicMock()
     manager.reload_user = AsyncMock(side_effect=[HTTPException(status_code=500, detail="matrix failed"), None])
     runtime = MagicMock()
-    runtime.apply_config = AsyncMock()
+    runtime.apply_user_config = AsyncMock()
     monkeypatch.setattr(srv, "_matrix_channel_manager", manager, raising=False)
     monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
 
@@ -834,12 +866,12 @@ def test_user_settings_attempts_git_reload_when_matrix_reload_fails(client, auth
     assert resp.status_code == 500
     assert "matrix failed" in resp.json()["detail"]
     assert manager.reload_user.await_count == 2
-    assert runtime.apply_config.await_count == 2
+    assert runtime.apply_user_config.await_count == 2
 
 
 def test_user_settings_does_not_persist_git_when_reload_fails(client, auth_headers, monkeypatch):
     runtime = MagicMock()
-    runtime.apply_config = AsyncMock(side_effect=HTTPException(status_code=500, detail="git failed"))
+    runtime.apply_user_config = AsyncMock(side_effect=HTTPException(status_code=500, detail="git failed"))
     monkeypatch.setattr(srv, "_knowledge_git_runtime", runtime, raising=False)
 
     resp = client.patch(
@@ -1415,6 +1447,38 @@ def test_get_session(client, auth_headers):
     assert resp.json()["session_id"] == sid
 
 
+def test_admin_cannot_see_other_users_sessions_in_list(client, admin_auth_headers):
+    srv._auth_store.create_user(username="ada", password="secret")
+    ada_headers = _headers_for_user("ada")
+    create_resp = client.post("/api/sessions", headers=ada_headers)
+
+    assert create_resp.status_code == 200
+
+    list_resp = client.get("/api/sessions", headers=admin_auth_headers)
+
+    assert list_resp.status_code == 200
+    assert list_resp.json()["items"] == []
+
+
+def test_admin_cannot_access_other_users_session_endpoints(client, admin_auth_headers):
+    srv._auth_store.create_user(username="ada", password="secret")
+    ada_headers = _headers_for_user("ada")
+    create_resp = client.post("/api/sessions", headers=ada_headers)
+    sid = create_resp.json()["session_id"]
+
+    history_resp = client.get(f"/api/sessions/{sid}/history", headers=admin_auth_headers)
+    session_resp = client.get(f"/api/sessions/{sid}", headers=admin_auth_headers)
+    sandbox_resp = client.get(f"/api/sessions/{sid}/sandbox", headers=admin_auth_headers)
+    commit_resp = client.post(f"/api/sessions/{sid}/knowledge/commit", headers=admin_auth_headers)
+    delete_resp = client.delete(f"/api/sessions/{sid}", headers=admin_auth_headers)
+
+    assert history_resp.status_code == 404
+    assert session_resp.status_code == 404
+    assert sandbox_resp.status_code == 404
+    assert commit_resp.status_code == 404
+    assert delete_resp.status_code == 404
+
+
 def test_get_session_includes_total_cost_usd(client, auth_headers, monkeypatch):
     create_resp = client.post("/api/sessions", headers=auth_headers)
     sid = create_resp.json()["session_id"]
@@ -1986,7 +2050,7 @@ def test_update_session_archives_non_private_session_into_knowledge_repo(client,
     assert resp.json()["attributes"]["archived"] is True
     archive_path = resp.json()["knowledge_last_archive_path"]
     assert archive_path is not None
-    archive_file = tmp_path / archive_path
+    archive_file = resolve_user_knowledge_dir(tmp_path, "thies") / archive_path
     assert archive_file.exists()
     payload = archive_file.read_text()
     assert '"archived": true' in payload
@@ -2166,7 +2230,7 @@ def test_commit_session_knowledge_writes_archive(client, auth_headers, tmp_path)
     assert data["session"]["message_count"] == 2
     archive_path = data["archive_path"]
     assert archive_path is not None
-    archive_file = tmp_path / archive_path
+    archive_file = resolve_user_knowledge_dir(tmp_path, "thies") / archive_path
     assert archive_file.is_file()
     payload = archive_file.read_text()
     assert sid in payload
@@ -2213,7 +2277,7 @@ def test_delete_session_removes_archived_knowledge(client, auth_headers, tmp_pat
     commit_resp = client.post(f"/api/sessions/{sid}/knowledge/commit", headers=auth_headers)
     archive_path = commit_resp.json()["archive_path"]
     assert archive_path is not None
-    archive_file = tmp_path / archive_path
+    archive_file = resolve_user_knowledge_dir(tmp_path, "thies") / archive_path
     assert archive_file.exists()
 
     resp = client.delete(f"/api/sessions/{sid}", headers=auth_headers)
@@ -2228,7 +2292,7 @@ def test_archiving_session_does_not_remove_knowledge_archive(client, auth_header
     commit_resp = client.post(f"/api/sessions/{sid}/knowledge/commit", headers=auth_headers)
     archive_path = commit_resp.json()["archive_path"]
     assert archive_path is not None
-    archive_file = tmp_path / archive_path
+    archive_file = resolve_user_knowledge_dir(tmp_path, "thies") / archive_path
     assert archive_file.exists()
 
     resp = client.patch(
@@ -2249,7 +2313,7 @@ def test_delete_private_session_keeps_committed_knowledge(client, auth_headers, 
     commit_resp = client.post(f"/api/sessions/{sid}/knowledge/commit", headers=auth_headers)
     archive_path = commit_resp.json()["archive_path"]
     assert archive_path is not None
-    archive_file = tmp_path / archive_path
+    archive_file = resolve_user_knowledge_dir(tmp_path, "thies") / archive_path
     assert archive_file.exists()
 
     patch_resp = client.patch(

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from carapace.config import load_config, load_workspace_file
+from carapace.config import load_config, load_workspace_file, resolve_knowledge_repos_dir, resolve_user_knowledge_dir
 
 
 def test_load_config_defaults(tmp_path: Path):
@@ -98,3 +98,16 @@ def test_load_workspace_file(tmp_path: Path):
     (tmp_path / "SECURITY.md").write_text("# Test Policy\nBe safe.")
     result = load_workspace_file(tmp_path, "SECURITY.md")
     assert "Test Policy" in result
+
+
+def test_resolve_knowledge_repos_dir_uses_knowledges_under_data_dir(tmp_path: Path) -> None:
+    assert resolve_knowledge_repos_dir(tmp_path) == (tmp_path / "knowledges").resolve()
+
+
+def test_resolve_user_knowledge_dir_uses_normalized_username(tmp_path: Path) -> None:
+    assert resolve_user_knowledge_dir(tmp_path, "thies") == (tmp_path / "knowledges" / "thies").resolve()
+
+
+def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="username must be lowercase"):
+        resolve_user_knowledge_dir(tmp_path, "Thies")

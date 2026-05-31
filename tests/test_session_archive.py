@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from carapace.git.store import GitStore
+from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.config import SessionCommitConfig
 from carapace.session.archive import SessionArchiveService
 from carapace.session.manager import SessionManager
@@ -58,6 +59,49 @@ async def test_archive_service_commits_snapshot(tmp_path) -> None:
         f"💾 session: add {state.session_id}",
         session_id=state.session_id,
     )
+
+
+@pytest.mark.asyncio
+async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path) -> None:
+    mgr = SessionManager(tmp_path)
+    state = mgr.create_session(user="ada", private=False)
+    mgr.append_events(
+        state.session_id,
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"},
+        ],
+    )
+    legacy_git_store = MagicMock(spec=GitStore)
+    legacy_git_store.commit = AsyncMock(return_value=True)
+    owner_git_store = MagicMock(spec=GitStore)
+    owner_git_store.commit = AsyncMock(return_value=True)
+    owner_handle = KnowledgeRepoHandle(
+        owner="ada",
+        knowledge_dir=tmp_path / "knowledges" / "ada",
+        git_store=owner_git_store,
+        skill_registry=MagicMock(),
+    )
+    service = SessionArchiveService(
+        knowledge_dir=tmp_path / "legacy-knowledge",
+        git_store=legacy_git_store,
+        session_mgr=mgr,
+        config=SessionCommitConfig(),
+        knowledge_repo_for_session=lambda _session_id: owner_handle,
+    )
+
+    result = await service.commit_session(state.session_id, trigger="manual")
+
+    assert result.committed is True
+    assert result.archive_path is not None
+    assert (owner_handle.knowledge_dir / result.archive_path).is_file()
+    assert not ((tmp_path / "legacy-knowledge") / result.archive_path).exists()
+    owner_git_store.commit.assert_awaited_once_with(
+        [result.archive_path],
+        f"💾 session: add {state.session_id}",
+        session_id=state.session_id,
+    )
+    legacy_git_store.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

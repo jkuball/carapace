@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from .models.config import Config
+from .usernames import normalize_username
 
 
 def get_config_path() -> Path:
@@ -31,6 +32,16 @@ def _resolve_data_dir(config_path: Path, config: Config | None = None) -> Path:
     if config and config.data_dir:
         return (config_dir / config.data_dir).resolve()
     return config_dir.resolve()
+
+
+def resolve_knowledge_repos_dir(data_dir: Path) -> Path:
+    """Return the parent directory containing all per-user knowledge repos."""
+    return (data_dir / "knowledges").resolve()
+
+
+def resolve_user_knowledge_dir(data_dir: Path, username: str) -> Path:
+    """Return the canonical knowledge repo path for a specific user."""
+    return (resolve_knowledge_repos_dir(data_dir) / normalize_username(username)).resolve()
 
 
 def _resolve_knowledge_dir(config_path: Path, config: Config) -> Path:

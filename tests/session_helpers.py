@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,6 +13,7 @@ from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
+from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.credentials import CredentialRegistryProtocol
 from carapace.models.tooling import ToolResult
 from carapace.sandbox.manager import SandboxManager
@@ -179,7 +181,11 @@ def _sentinel_set_model_mock(active: ActiveSession) -> MagicMock:
     return cast(MagicMock, cast(Any, active.sentinel.set_model))
 
 
-def _make_engine(tmp_path: Path, credential_registry: CredentialRegistryProtocol | None = None) -> SessionEngine:
+def _make_engine(
+    tmp_path: Path,
+    credential_registry: CredentialRegistryProtocol | None = None,
+    knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
+) -> SessionEngine:
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
     session_mgr = SessionManager(tmp_path)
@@ -204,5 +210,6 @@ def _make_engine(tmp_path: Path, credential_registry: CredentialRegistryProtocol
         agent_model=None,
         sandbox_mgr=sandbox_mgr,
         credential_registry_for_session=credential_registry_for_session,
+        knowledge_repo_for_session=knowledge_repo_for_session,
         model_factory=lambda _name: TestModel(),
     )

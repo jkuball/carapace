@@ -442,3 +442,22 @@ class TestGitHttpHandlerHandle:
             body=b"",
         )
         assert status == 403
+
+    async def test_cross_user_repo_path_returns_403(self):
+        h = GitHttpHandler(
+            knowledge_dir=Path("/tmp/legacy-knowledge"),
+            knowledge_root=Path("/tmp/knowledges"),
+            default_branch="main",
+            owner_for_session=lambda session_id: "thies" if session_id == "sess-1" else "ada",
+        )
+
+        status, _headers, _body = await h.handle(
+            session_id="sess-1",
+            method="GET",
+            path="/git/ada/info/refs",
+            query_string="service=git-upload-pack",
+            content_type=None,
+            body=b"",
+        )
+
+        assert status == 403

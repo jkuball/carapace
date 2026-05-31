@@ -31,6 +31,9 @@ class SessionCommandHost(Protocol):
     async def _handle_model_selector_command(
         self, active: ActiveSession, arg: str, *, slash_line: str
     ) -> dict[str, Any]: ...
+    def _git_store_for_session(self, session_id: str) -> GitStore: ...
+    def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]: ...
+    def _skill_registry_for_session(self, session_id: str) -> SkillRegistry: ...
     def _budget_gauges(self, active: ActiveSession) -> list[Any]: ...
     def _usage_last_llm_payload_row(
         self, active: ActiveSession, source: Literal["agent", "sentinel"]
@@ -64,6 +67,9 @@ class SessionCommandMixin:
         async def _handle_model_selector_command(
             self, active: ActiveSession, arg: str, *, slash_line: str
         ) -> dict[str, Any]: ...
+        def _git_store_for_session(self, session_id: str) -> GitStore: ...
+        def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]: ...
+        def _skill_registry_for_session(self, session_id: str) -> SkillRegistry: ...
         def _budget_gauges(self, active: ActiveSession) -> list[Any]: ...
         def _usage_last_llm_payload_row(
             self, active: ActiveSession, source: Literal["agent", "sentinel"]
@@ -108,7 +114,10 @@ class SessionCommandMixin:
             }
 
         if cmd == "/skills":
-            skills = [{"name": s.name, "description": s.description.strip()} for s in self._skill_catalog]
+            skills = [
+                {"name": skill.name, "description": skill.description.strip()}
+                for skill in self._skill_catalog_for_session(session_id)
+            ]
             return {"command": "skills", "data": skills}
 
         if cmd == "/retitle":
@@ -161,10 +170,10 @@ class SessionCommandMixin:
             return self._handle_budget_command(active, parts)
 
         if cmd == "/pull":
-            return await self._handle_pull_command()
+            return await self._handle_pull_command(session_id)
 
         if cmd == "/push":
-            return await self._handle_push_command()
+            return await self._handle_push_command(session_id)
 
         if cmd == "/reload":
             return await self._handle_reload_command(session_id)
@@ -208,24 +217,26 @@ class SessionCommandMixin:
             "data": self._budget_command_payload(active, message=message),
         }
 
-    async def _handle_push_command(self) -> dict[str, Any]:
+    async def _handle_push_command(self, session_id: str) -> dict[str, Any]:
         """Handle the ``/push`` slash command — push to external remote."""
-        if not self._git_store.remote_configured:
+        git_store = self._git_store_for_session(session_id)
+        if not git_store.remote_configured:
             return {"command": "push", "data": {"message": "No external remote configured."}}
         try:
-            await self._git_store.push_to_remote()
+            await git_store.push_to_remote()
             return {"command": "push", "data": {"message": "Pushed to external remote."}}
         except Exception as exc:
             return {"command": "push", "data": {"message": f"Push failed: {exc}"}}
 
-    async def _handle_pull_command(self) -> dict[str, Any]:
+    async def _handle_pull_command(self, session_id: str) -> dict[str, Any]:
         """Handle the ``/pull`` slash command — pull from external remote."""
-        if not self._git_store.remote_configured:
+        git_store = self._git_store_for_session(session_id)
+        if not git_store.remote_configured:
             return {"command": "pull", "data": {"message": "No external remote configured."}}
         try:
-            summary = await self._git_store.pull_from_remote()
-            registry = SkillRegistry(self._knowledge_dir / "skills")
-            self._skill_catalog = registry.scan()
+            summary = await git_store.pull_from_remote()
+            if git_store is self._git_store:
+                self._skill_catalog = self._skill_registry_for_session(session_id).scan()
             return {"command": "pull", "data": {"message": summary}}
         except RuntimeError as exc:
             return {"command": "pull", "data": {"message": f"Pull failed: {exc}"}}
