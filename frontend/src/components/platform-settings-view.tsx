@@ -514,7 +514,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
         <Section
           title={t("sections.catalog")}
           action={(
-            <SecondaryButton disabled={fieldsDisabled} onClick={() => updateDraft({ models: [...draft.models, newModelDraft()] })}>
+            <SecondaryButton disabled={fieldsDisabled} onClick={() => updateDraft({ models: [newModelDraft(), ...draft.models] })}>
               <Plus className="h-4 w-4" />
               {t("actions.addModel")}
             </SecondaryButton>
