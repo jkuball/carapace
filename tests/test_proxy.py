@@ -293,6 +293,38 @@ class TestSandboxManagerAllowlists:
 
         assert env["GIT_REPO_URL"].endswith("/git/ada")
 
+    def test_proxy_env_keeps_two_session_repos_isolated(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        handles = {
+            "sess-thies": KnowledgeRepoHandle(
+                owner="thies",
+                knowledge_dir=tmp_path / "knowledges" / "thies",
+                git_store=GitStore(tmp_path / "knowledges" / "thies"),
+                skill_registry=SkillRegistry(tmp_path / "knowledges" / "thies" / "skills"),
+            ),
+            "sess-ada": KnowledgeRepoHandle(
+                owner="ada",
+                knowledge_dir=tmp_path / "knowledges" / "ada",
+                git_store=GitStore(tmp_path / "knowledges" / "ada"),
+                skill_registry=SkillRegistry(tmp_path / "knowledges" / "ada" / "skills"),
+            ),
+        }
+
+        def knowledge_repo_for_session(session_id: str) -> KnowledgeRepoHandle:
+            return handles[session_id]
+
+        mgr = _sandbox_manager(
+            runtime=runtime,
+            data_dir=tmp_path,
+            knowledge_repo_for_session=knowledge_repo_for_session,
+        )
+
+        thies_env = mgr._build_proxy_env("sess-thies", "tok-a", "http://172.18.0.2:3128")
+        ada_env = mgr._build_proxy_env("sess-ada", "tok-b", "http://172.18.0.2:3128")
+
+        assert thies_env["GIT_REPO_URL"].endswith("/git/thies")
+        assert ada_env["GIT_REPO_URL"].endswith("/git/ada")
+
     def test_proxy_env_no_git_identity_vars(self, tmp_path: Path):
         """Git identity is configured via git config inside the container, not env vars."""
         mgr = self._make_manager(tmp_path)

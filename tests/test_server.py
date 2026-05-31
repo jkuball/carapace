@@ -198,6 +198,61 @@ def test_enabled_user_git_configs_skips_disabled_users(tmp_path) -> None:
     assert set(selected) == {"bob"}
 
 
+@pytest.mark.anyio
+async def test_bootstrap_user_knowledge_repo_pulls_remote_before_seeding(tmp_path, monkeypatch) -> None:
+    call_order: list[str] = []
+    git_store = MagicMock(spec=GitStore)
+    git_store.remote_branch = "main"
+    git_store.author_template = "carapace <carapace@%h>"
+    git_store.remote_configured = True
+
+    async def ensure_repo() -> None:
+        call_order.append("ensure_repo")
+
+    async def add_remote(_remote: str, _token: str | None) -> None:
+        call_order.append("add_remote")
+
+    async def pull_from_remote() -> str:
+        call_order.append("pull")
+        return "Already up to date."
+
+    async def commit(_paths, _message: str) -> bool:
+        call_order.append("commit")
+        return True
+
+    async def push_to_remote() -> None:
+        call_order.append("push")
+
+    git_store.ensure_repo = AsyncMock(side_effect=ensure_repo)
+    git_store.add_remote = AsyncMock(side_effect=add_remote)
+    git_store.pull_from_remote = AsyncMock(side_effect=pull_from_remote)
+    git_store.commit = AsyncMock(side_effect=commit)
+    git_store.push_to_remote = AsyncMock(side_effect=push_to_remote)
+    git_store.remove_remote = AsyncMock()
+
+    def ensure_knowledge_dir(_knowledge_dir):
+        call_order.append("seed")
+        return [tmp_path / "knowledges" / "thies" / "USER.md"]
+
+    monkeypatch.setattr(srv, "ensure_knowledge_dir", ensure_knowledge_dir)
+
+    registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda _path: git_store)
+    config = srv.KnowledgeGitConfig(
+        owner="thies",
+        remote="https://gitea.example.test/thies/knowledge.git",
+        branch="prod",
+        author="Thies <thies@example.test>",
+        token="secret-token",
+    )
+
+    await srv._bootstrap_user_knowledge_repo(registry, "thies", config)
+
+    assert call_order == ["ensure_repo", "add_remote", "pull", "seed", "commit", "push"]
+    assert git_store.remote_branch == "prod"
+    assert git_store.author_template == "Thies <thies@example.test>"
+    git_store.remove_remote.assert_not_awaited()
+
+
 @pytest.fixture()
 def auth_headers() -> dict[str, str]:
     return _headers_for_user("thies")

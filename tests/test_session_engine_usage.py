@@ -227,7 +227,7 @@ def test_handle_slash_command_usage_includes_tool_call_total(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_skills_uses_owner_specific_catalog(tmp_path: Path) -> None:
+def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: Path) -> None:
     with _patch_sentinel():
         registry = KnowledgeRepoRegistry(tmp_path)
         thies_skill = registry.ensure_user_repo("thies").knowledge_dir / "skills" / "alpha"
@@ -243,18 +243,32 @@ def test_handle_slash_command_skills_uses_owner_specific_catalog(tmp_path: Path)
             encoding="utf-8",
         )
 
-        engine = _make_engine(tmp_path, knowledge_repo_for_session=lambda _session_id: registry.get_for_user("thies"))
-        state = engine.session_mgr.create_session(user="thies")
-        sid = state.session_id
-        engine.get_or_activate(sid)
+        engine = None
+
+        def knowledge_repo_for_session(session_id: str):
+            assert engine is not None
+            owner = engine.session_mgr.load_meta(session_id).user
+            return registry.get_for_user(owner)
+
+        engine = _make_engine(tmp_path, knowledge_repo_for_session=knowledge_repo_for_session)
+        thies_state = engine.session_mgr.create_session(user="thies")
+        ada_state = engine.session_mgr.create_session(user="ada")
+        thies_sid = thies_state.session_id
+        ada_sid = ada_state.session_id
+        engine.get_or_activate(thies_sid)
+        engine.get_or_activate(ada_sid)
 
         async def _run() -> None:
-            result = await engine.handle_slash_command(sid, "/skills")
+            thies_result = await engine.handle_slash_command(thies_sid, "/skills")
+            ada_result = await engine.handle_slash_command(ada_sid, "/skills")
 
-            assert result is not None
-            assert result["data"] == [{"name": "alpha", "description": "Owner skill"}]
+            assert thies_result is not None
+            assert ada_result is not None
+            assert thies_result["data"] == [{"name": "alpha", "description": "Owner skill"}]
+            assert ada_result["data"] == [{"name": "beta", "description": "Other skill"}]
 
         asyncio.run(_run())
+        assert engine._knowledge_dir_for_session(thies_sid) != engine._knowledge_dir_for_session(ada_sid)
 
 
 def test_turn_usage_payload_contains_budget_gauges_without_agent_usage(tmp_path: Path):

@@ -169,3 +169,62 @@ async def test_knowledge_git_runtime_push_callback_checks_current_remote_state(t
     await runtime.push_if_configured("thies")
 
     git_store.push_to_remote.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_knowledge_git_runtime_keeps_other_user_repo_state_unchanged(tmp_path: Path) -> None:
+    def make_git_store(branch: str, author: str) -> MagicMock:
+        git_store = MagicMock(spec=GitStore)
+        git_store.remote_branch = branch
+        git_store.author_template = author
+        git_store.remote_configured = False
+        git_store.add_remote = AsyncMock()
+        git_store.remove_remote = AsyncMock()
+        git_store.ensure_repo = AsyncMock()
+        git_store.pull_from_remote = AsyncMock(return_value="Already up to date.")
+        git_store.push_to_remote = AsyncMock()
+        return git_store
+
+    stores = {
+        "thies": make_git_store("main", "carapace <carapace@%h>"),
+        "ada": make_git_store("stable", "Ada <ada@example.test>"),
+    }
+    repo_registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda path: stores[path.name])
+    sandbox_mgr = MagicMock(spec=SandboxManager)
+    sandbox_mgr.refresh_git_identities = AsyncMock()
+    runtime = KnowledgeGitRuntime(
+        repo_registry=repo_registry,
+        sandbox_mgr=sandbox_mgr,
+        current_configs={
+            "ada": KnowledgeGitConfig(
+                owner="ada",
+                remote="https://git.example.test/ada.git",
+                branch="stable",
+                author="Ada <ada@example.test>",
+                token="ada-token",
+            )
+        },
+    )
+
+    repo_registry.get_for_user("thies")
+    repo_registry.get_for_user("ada")
+
+    thies_config = KnowledgeGitConfig(
+        owner="thies",
+        remote="https://git.example.test/thies.git",
+        branch="prod",
+        author="Thies <thies@example.test>",
+        token="thies-token",
+    )
+
+    await runtime.apply_user_config("thies", thies_config)
+
+    assert runtime.config_for_user("thies") == thies_config
+    assert runtime.config_for_user("ada") is not None
+    assert stores["thies"].remote_branch == "prod"
+    assert stores["thies"].author_template == "Thies <thies@example.test>"
+    stores["thies"].add_remote.assert_awaited_once_with("https://git.example.test/thies.git", "thies-token")
+    stores["ada"].ensure_repo.assert_not_awaited()
+    stores["ada"].add_remote.assert_not_awaited()
+    assert stores["ada"].remote_branch == "stable"
+    assert stores["ada"].author_template == "Ada <ada@example.test>"

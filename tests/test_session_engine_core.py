@@ -270,6 +270,7 @@ def test_fork_session_copies_transcript_and_security_context(tmp_path: Path) -> 
     response_part = forked_history[1].parts[0]
     assert isinstance(response_part, TextPart)
     assert response_part.content == "reply one"
+    assert engine.session_mgr.load_meta(forked.session_id).user == "thies"
     assert engine.session_mgr.load_usage(forked.session_id).models == {}
     assert engine.session_mgr.load_sandbox_snapshot(forked.session_id) is None
     assert len(engine.session_mgr.load_events(sid)) == 5

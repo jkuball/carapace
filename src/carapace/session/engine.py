@@ -554,6 +554,7 @@ class SessionEngine(
             msg = "Agent is busy — cancel first"
             raise RuntimeError(msg)
 
+        source_meta = self._session_mgr.load_meta(session_id)
         source_state = active.state.model_copy(deep=True)
         events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
         turns = self._completed_event_turns(events)
@@ -597,6 +598,7 @@ class SessionEngine(
         )
 
         self._session_mgr.save_state(forked_state)
+        self._session_mgr.save_meta(forked_session_id, source_meta.model_copy(deep=True))
         self._session_mgr.save_events(forked_session_id, forked_events)
         self._session_mgr.save_history(forked_session_id, forked_history)
         self._session_mgr.clear_llm_request_state(forked_session_id)
