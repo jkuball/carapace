@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPlatformSettingsPatch } from "./platform-settings-view";
+import { buildPlatformSettingsPatch, sortModelDrafts } from "./platform-settings-view";
 
 type PlatformDraft = Parameters<typeof buildPlatformSettingsPatch>[0];
 
@@ -100,4 +100,70 @@ test("buildPlatformSettingsPatch includes OpenRouter API key fields without base
   assert.deepEqual(model.api_key, { source: "env", value: "OPENROUTER_API_KEY" });
   assert.equal(Object.hasOwn(model, "base_url"), false);
   assert.equal(Object.hasOwn(model, "thinking_budget_tokens"), false);
+});
+
+test("sortModelDrafts orders complete rows by provider then model name while keeping incomplete rows first", () => {
+  const sorted = sortModelDrafts([
+    {
+      rowId: "model-1",
+      provider: "openai",
+      name: "gpt-4o-mini",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-2",
+      provider: "anthropic",
+      name: "claude-sonnet-4-6",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-3",
+      provider: "openai",
+      name: "",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+    {
+      rowId: "model-4",
+      provider: "anthropic",
+      name: "claude-haiku-4-5",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    },
+  ]);
+
+  assert.deepEqual(
+    sorted.map((model) => model.rowId),
+    ["model-3", "model-4", "model-2", "model-1"],
+  );
 });

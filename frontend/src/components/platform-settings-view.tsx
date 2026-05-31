@@ -162,6 +162,35 @@ function modelId(model: Pick<ModelDraft, "provider" | "name" | "id">): string {
   return model.id.trim() || `${model.provider.trim()}:${model.name.trim()}`;
 }
 
+function compareModelText(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { sensitivity: "base" });
+}
+
+function isIncompleteModelDraft(model: Pick<ModelDraft, "provider" | "name">): boolean {
+  return !model.provider.trim() || !model.name.trim();
+}
+
+export function sortModelDrafts(models: ModelDraft[]): ModelDraft[] {
+  return [...models].sort((left, right) => {
+    const leftIncomplete = isIncompleteModelDraft(left);
+    const rightIncomplete = isIncompleteModelDraft(right);
+    if (leftIncomplete !== rightIncomplete) {
+      return leftIncomplete ? -1 : 1;
+    }
+    if (leftIncomplete && rightIncomplete) {
+      return 0;
+    }
+
+    const providerOrder = compareModelText(left.provider.trim(), right.provider.trim());
+    if (providerOrder !== 0) return providerOrder;
+
+    const nameOrder = compareModelText(left.name.trim(), right.name.trim());
+    if (nameOrder !== 0) return nameOrder;
+
+    return compareModelText(modelId(left), modelId(right));
+  });
+}
+
 function isOpenAICompatibleProvider(provider: string): boolean {
   const normalized = provider.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-chat";
@@ -216,7 +245,7 @@ function draftFromSettings(response: PlatformSettingsResponseInfo): PlatformDraf
   return {
     defaultModels: { ...response.settings.default_models },
     budget: budgetDraftFromSettings(response.settings.default_budget),
-    models: response.settings.available_models.map(modelDraftFromSettings),
+    models: sortModelDrafts(response.settings.available_models.map(modelDraftFromSettings)),
   };
 }
 
@@ -353,7 +382,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
 }
 
 function draftModelOptions(models: ModelDraft[]): AvailableModelInfo[] {
-  return models
+  return sortModelDrafts(models)
     .filter((model) => model.provider.trim() && model.name.trim())
     .map((model) => ({
       id: modelId(model),
