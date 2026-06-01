@@ -394,6 +394,113 @@ def test_admin_user_enable_bootstraps_user_repo(client, admin_auth_headers, monk
     assert runtime.apply_user_config.await_args.args[0] == "ada"
 
 
+@pytest.mark.anyio
+async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_path, monkeypatch):
+    config = srv._config.model_copy(deep=True)
+    config.sandbox.cleanup_orphans_on_startup = False
+
+    class _FakeRuntime:
+        def image_exists(self, _image: str) -> bool:
+            return True
+
+        async def get_self_network_info(self) -> dict[str, str]:
+            return {}
+
+        async def resolve_self_network_name(self, name: str) -> str:
+            return name
+
+        async def ensure_network(self, _name: str, *, internal: bool) -> None:
+            assert internal is True
+
+    class _FakeProxyServer:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def start(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            return None
+
+    class _FakeUvicornServer:
+        def __init__(self, _config) -> None:
+            self.should_exit = False
+
+        async def serve(self) -> None:
+            return None
+
+    class _FakeUpdatePrices:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    class _FakeSessionListCache:
+        async def start(self) -> None:
+            return None
+
+        async def close(self) -> None:
+            return None
+
+        def invalidate_sync(self) -> None:
+            return None
+
+    class _FakeSessionEngine:
+        def __init__(self, *, session_mgr, **_kwargs) -> None:
+            self.session_mgr = session_mgr
+
+        def is_agent_running(self, _session_id: str) -> bool:
+            return False
+
+    class _FakeSessionArchiveService:
+        enabled = False
+
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+    class _FakeMatrixChannelManager:
+        channel_count = 0
+
+        def __init__(self, _factory) -> None:
+            pass
+
+        async def stop_all(self) -> None:
+            return None
+
+    sandbox_mgr = MagicMock(spec=SandboxManager)
+    sandbox_mgr.verify_session_token.return_value = True
+    sandbox_mgr.cleanup_all = AsyncMock()
+
+    monkeypatch.delattr(srv, "_knowledge_repo_registry", raising=False)
+    monkeypatch.setattr(srv, "get_config_path", lambda: tmp_path / "config.yaml")
+    monkeypatch.setattr(srv, "load_config", lambda *args, **kwargs: config)
+    monkeypatch.setattr(srv, "_resolve_data_dir", lambda _config_path, _config: tmp_path)
+    monkeypatch.setattr(srv, "_resolve_knowledge_dir", lambda _config_path, _config: tmp_path / "knowledges")
+    monkeypatch.setattr(srv, "make_model_factory", lambda _config: lambda _model_name: None)
+    monkeypatch.setattr(srv, "_create_sandbox_runtime", lambda _config, _data_dir: _FakeRuntime())
+    monkeypatch.setattr(srv, "SessionListCache", lambda _cache_config: _FakeSessionListCache())
+    monkeypatch.setattr(srv, "SandboxManager", lambda **_kwargs: sandbox_mgr)
+    monkeypatch.setattr(srv, "GitHttpHandler", lambda **_kwargs: MagicMock())
+    monkeypatch.setattr(srv, "ProxyServer", _FakeProxyServer)
+    monkeypatch.setattr(srv.uvicorn, "Server", _FakeUvicornServer)
+    monkeypatch.setattr(srv, "UpdatePrices", _FakeUpdatePrices)
+    monkeypatch.setattr(srv, "SessionEngine", _FakeSessionEngine)
+    monkeypatch.setattr(srv, "SessionArchiveService", _FakeSessionArchiveService)
+    monkeypatch.setattr(srv, "JobsStore", lambda _data_dir: MagicMock())
+    monkeypatch.setattr(srv, "JobsScheduler", lambda _store: MagicMock())
+    monkeypatch.setattr(srv, "MatrixChannelManager", _FakeMatrixChannelManager)
+    monkeypatch.setattr(srv, "_jobs_scheduler_loop", AsyncMock())
+
+    async with srv._lifespan(app):
+        registry = getattr(srv, "_knowledge_repo_registry", None)
+
+        assert isinstance(registry, KnowledgeRepoRegistry)
+        assert registry.knowledge_repos_dir == tmp_path / "knowledges"
+
+    sandbox_mgr.cleanup_all.assert_awaited_once()
+
+
 def test_admin_user_create_returns_http_error_when_git_bootstrap_fails(client, admin_auth_headers, monkeypatch):
     runtime = MagicMock()
     runtime.apply_user_config = AsyncMock(side_effect=RuntimeError("pull failed"))

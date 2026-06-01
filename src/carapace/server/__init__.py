@@ -273,6 +273,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _config, \
         _engine, \
         _git_handler, \
+        _knowledge_repo_registry, \
         _knowledge_git_runtime, \
         _matrix_channel_manager, \
         _user_credential_registries, \
