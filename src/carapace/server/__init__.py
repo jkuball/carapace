@@ -543,6 +543,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_NO_STORE_API_PREFIX = "/api"
+
+
+def _should_disable_cache(path: str, method: str) -> bool:
+    if method not in {"GET", "HEAD"}:
+        return False
+    return path == _NO_STORE_API_PREFIX or path.startswith(f"{_NO_STORE_API_PREFIX}/")
+
+
+@app.middleware("http")
+async def add_cache_control_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    if _should_disable_cache(request.url.path, request.method):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return response
+
 
 class _InterceptHandler(logging.Handler):
     """Route stdlib logging records to loguru."""

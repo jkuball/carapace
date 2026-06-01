@@ -32,12 +32,22 @@ function emitAuthRequired(input: RequestInfo | URL): void {
   window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
 }
 
+function requestMethod(input: RequestInfo | URL, init: RequestInit): string {
+  if (init.method) return init.method;
+  if (input instanceof Request) return input.method;
+  return "GET";
+}
+
 async function fetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
 ): Promise<Response> {
+  const method = requestMethod(input, init).toUpperCase();
   const response = await globalThis.fetch(input, {
     ...init,
+    cache:
+      init.cache ??
+      (method === "GET" || method === "HEAD" ? "no-store" : undefined),
     credentials: "include",
   });
   if (response.status === 401) {
