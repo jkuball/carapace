@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.134.4 (2026-06-01)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: enable switching attended -> unattended again
+  ([`f3ac0b2`](https://github.com/thiesgerken/carapace/commit/f3ac0b239b28e3672b81113865d72a904f3c07a3))
+
 ## v0.134.3 (2026-06-01)
 
 
