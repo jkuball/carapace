@@ -802,6 +802,50 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
   return groupChildToolCalls(messages);
 }
 
+export function countSubmittedUserMessages(messages: ChatMessage[]): number {
+  return messages.filter(
+    (message) => message.kind === "user" && !message.content.startsWith("/"),
+  ).length;
+}
+
+export function nextUnattendedInputLockBaseline({
+  previousSessionId,
+  sessionId,
+  previousUnattended,
+  sessionUnattended,
+  previousBaseline,
+  submittedUserMessageCount,
+}: {
+  previousSessionId: string;
+  sessionId: string;
+  previousUnattended: boolean;
+  sessionUnattended: boolean;
+  previousBaseline: number | null;
+  submittedUserMessageCount: number;
+}): number | null {
+  if (!sessionUnattended) {
+    return null;
+  }
+  if (previousSessionId !== sessionId) {
+    return 0;
+  }
+  if (!previousUnattended) {
+    return submittedUserMessageCount;
+  }
+  return previousBaseline ?? 0;
+}
+
+export function isUnattendedInputLocked(
+  sessionUnattended: boolean,
+  submittedUserMessageCount: number,
+  baseline: number | null,
+): boolean {
+  if (!sessionUnattended) {
+    return false;
+  }
+  return submittedUserMessageCount > (baseline ?? 0);
+}
+
 export function ChatView({
   server,
   token,
@@ -859,6 +903,11 @@ export function ChatView({
   const sendRef = useRef<(msg: ClientMessage) => void>(() => {});
   const onSandboxUpdateRef = useRef(onSandboxUpdate);
   const sandboxRef = useRef(sandbox);
+  const previousSessionIdRef = useRef(sessionId);
+  const previousSessionUnattendedRef = useRef(session?.attributes.unattended ?? false);
+  const unattendedInputLockBaselineRef = useRef<number | null>(
+    session?.attributes.unattended ? 0 : null,
+  );
 
   useEffect(() => {
     if (updatingSessionAttribute == null) {
@@ -1871,10 +1920,20 @@ export function ChatView({
   const sessionUnattended = session?.attributes.unattended ?? false;
   const sessionAskMode = session?.attributes.ask_mode ?? false;
   const sessionYoloMode = session?.attributes.yolo_mode ?? false;
-  const hasSubmittedUserMessage = messages.some(
-    (message) => message.kind === "user" && !message.content.startsWith("/"),
+  const submittedUserMessageCount = countSubmittedUserMessages(messages);
+  const unattendedInputLockBaseline = nextUnattendedInputLockBaseline({
+    previousSessionId: previousSessionIdRef.current,
+    sessionId,
+    previousUnattended: previousSessionUnattendedRef.current,
+    sessionUnattended,
+    previousBaseline: unattendedInputLockBaselineRef.current,
+    submittedUserMessageCount,
+  });
+  const unattendedInputLocked = isUnattendedInputLocked(
+    sessionUnattended,
+    submittedUserMessageCount,
+    unattendedInputLockBaseline,
   );
-  const unattendedInputLocked = sessionUnattended && hasSubmittedUserMessage;
   const sessionPrivate = session?.attributes.private ?? false;
   const sessionPinned = session?.attributes.pinned ?? false;
   const sessionFavorite = session?.attributes.favorite ?? false;
@@ -1938,6 +1997,12 @@ export function ChatView({
   const fallbackSourceJobId = latestJobRun ? null : sourceJobId;
   const totalCostUsd = session?.total_cost_usd ?? 0;
   const jobLinkClass = "-mx-1 inline-flex items-center gap-1 rounded px-1 font-mono text-xs leading-5 text-foreground transition-colors hover:bg-muted";
+  useEffect(() => {
+    previousSessionIdRef.current = sessionId;
+    previousSessionUnattendedRef.current = sessionUnattended;
+    unattendedInputLockBaselineRef.current = unattendedInputLockBaseline;
+  }, [sessionId, sessionUnattended, unattendedInputLockBaseline]);
+
   const renderJobSettingsLink = (jobId: string) => {
     if (!onOpenJobSettings) {
       return jobId;
