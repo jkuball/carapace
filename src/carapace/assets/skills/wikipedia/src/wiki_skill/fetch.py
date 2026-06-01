@@ -7,6 +7,8 @@ import urllib.parse
 
 import httpx
 
+WIKIPEDIA_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"}
+
 
 def fetch_article(page_title: str, lang: str = "de") -> dict:
     """Fetch a Wikipedia article's plaintext extract via the TextExtracts API."""
@@ -24,7 +26,7 @@ def fetch_article(page_title: str, lang: str = "de") -> dict:
         "origin": "*",
     }
 
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=15.0, headers=WIKIPEDIA_HEADERS) as client:
         resp = client.get(base_url, params=params)
 
     if resp.status_code != 200:
@@ -77,7 +79,7 @@ def _search_suggestions(base_url: str, query: str) -> list[str]:
         "origin": "*",
     }
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=10.0, headers=WIKIPEDIA_HEADERS) as client:
             resp = client.get(base_url, params=params)
         if resp.status_code == 200:
             results = resp.json().get("query", {}).get("search", [])

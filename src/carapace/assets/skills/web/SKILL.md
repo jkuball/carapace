@@ -11,8 +11,8 @@ metadata:
       domains:
         - api.search.brave.com
     credentials:
-      - vault_path: vault/7720115d-7e6a-47b8-af1e-f4eaec0b23b9
-        description: Brave Search Lumi API Key
+      - vault_path: vault/brave-api-key
+        description: Brave Search carapace API Key
         env_var: BRAVE_API_KEY
     commands:
       - name: web_search

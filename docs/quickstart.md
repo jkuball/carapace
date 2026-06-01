@@ -270,7 +270,25 @@ users:
             #   - "deadbeef-..."
 ```
 
-## 7. Personalise
+## 7. Test the bundled web skill (optional)
+
+This is a good smoke test for the credential flow you just set up.
+
+The bundled `web` skill uses Brave Search by default and expects a credential at `vault/brave-api-key`, which carapace injects as `BRAVE_API_KEY` when the skill runs.
+
+If you use the file backend, add the key to your secrets file:
+
+```bash
+echo "brave-api-key=your-brave-search-api-key" >> data/secrets.env
+```
+
+Then make sure the credential is reachable as `vault/brave-api-key`. The simplest option is a file credential backend named `vault` that points at `data/secrets.env`. If you use a different backend name or path shape, update the bundled web skill metadata to match.
+
+You can get a Brave Search API key at <https://brave.com/search/api/>.
+
+Once that is in place, activate the `web` skill and run a simple `web_search` call. If the command succeeds, you have verified both the credential lookup and the per-exec skill injection path.
+
+## 8. Personalise
 
 Edit the workspace files in your own knowledge repo to shape carapace's behaviour. With the default config, user `alice` would edit files under `data/knowledges/alice/`:
 

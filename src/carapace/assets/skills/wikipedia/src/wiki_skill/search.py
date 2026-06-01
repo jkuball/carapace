@@ -7,6 +7,8 @@ import urllib.parse
 
 import httpx
 
+WIKIPEDIA_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"}
+
 
 def search_wikipedia(
     query: str,
@@ -23,7 +25,7 @@ def search_wikipedia(
         "origin": "*",
     }
 
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=15.0, headers=WIKIPEDIA_HEADERS) as client:
         resp = client.get(base_url, params=params)
 
     if resp.status_code != 200:
