@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/thiesgerken/carapace/actions/workflows/release.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/thiesgerken/carapace/release.yml"></a>
-  <a href="https://github.com/thiesgerken/carapace/releases"><img alt="Release" src="https://img.shields.io/badge/release-v1.0.0-0F766E"></a>
+  <a href="https://github.com/thiesgerken/carapace/releases"><img alt="Release" src="https://img.shields.io/github/v/release/thiesgerken/carapace?display_name=tag"></a>
   <a href="https://www.python.org/"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0F766E"></a>
   <a href="charts/carapace/README.md"><img alt="Helm chart" src="https://img.shields.io/badge/helm-chart-0F766E?logo=helm&logoColor=white"></a>
