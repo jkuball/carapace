@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.135.0 (2026-06-01)
+
+
+### ✨ Features
+
+
+- ✨ feat: if a tool output is too long, redirect it to a file
+  ([`119a3ea`](https://github.com/thiesgerken/carapace/commit/119a3ea9a587f4137e64a4721f4a6b5740e3c130))
+
 ## v0.134.4 (2026-06-01)
 
 
