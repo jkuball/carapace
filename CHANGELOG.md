@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.134.3 (2026-06-01)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: disable some caching for frontend and backend to avoid refresh loops
+  ([`2ff5c95`](https://github.com/thiesgerken/carapace/commit/2ff5c955e81bd050a0201a486e4e88234e53f18a))
+
 ## v0.134.2 (2026-06-01)
 
 
