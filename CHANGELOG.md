@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.134.2 (2026-06-01)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: improve bundled skills
+  ([`f72ac46`](https://github.com/thiesgerken/carapace/commit/f72ac46063b7882c4d72e4a5ce292acc4ad800ef))
+
 ## v0.134.1 (2026-06-01)
 
 
