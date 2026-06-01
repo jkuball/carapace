@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.134.1 (2026-06-01)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: initialize knowledge repo registry on startup
+  ([`8b0cc34`](https://github.com/thiesgerken/carapace/commit/8b0cc34b23a7c6374cd49fd5f9f7e41b57e67612))
+
+### Other
+
+
+- 📋 docs: fix ci badge
+  ([`ff2461c`](https://github.com/thiesgerken/carapace/commit/ff2461c1e18351ca907784bb19469e75cb6494e6))
+
+- 📋 docs: fix ci badge
+  ([`d8ab672`](https://github.com/thiesgerken/carapace/commit/d8ab672947ad2909e90566c063d8df6af7803c4a))
+
+- 📋 docs: fix ci badge
+  ([`24a9837`](https://github.com/thiesgerken/carapace/commit/24a9837e5cd97be81aad341a43716680cbc5957f))
+
+- 📋 docs: fix ci badge
+  ([`7901154`](https://github.com/thiesgerken/carapace/commit/7901154eb305c4c0896f568ce7b74462c02531a2))
+
 ## v0.134.0 (2026-05-31)
 
 
