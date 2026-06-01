@@ -34,6 +34,7 @@ from .deps import Deps, TaskDone, TaskFailed
 
 _WORKSPACE_ROOT = PurePosixPath("/workspace")
 _SKILLS_ROOT = PurePosixPath("skills")
+_EXEC_OUTPUT_SPILL_ROOT = PurePosixPath("/tmp/carapace-tool-output")
 _SKILL_PATH_PATTERN = re.compile(r"(?<![\w.-])(?:/workspace/)?skills/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
@@ -243,6 +244,43 @@ def truncate_tool_output(text: str, max_chars: int) -> str:
         return text
     suffix = f"\n\n[Output truncated: {len(text)} characters total, limit {max_chars}.]"
     return text[:max_chars] + suffix
+
+
+def truncate_exec_output_with_saved_path(text: str, max_chars: int, spill_path: str) -> str:
+    """Return an exec preview that includes where the full output was saved."""
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    preview_chars = max(max_chars // 2, 1)
+    suffix = (
+        f"\n\n[Output truncated, showing only {preview_chars} of {len(text)} characters."
+        + f"Full output saved to {spill_path}.]"
+    )
+    if max_chars <= 0:
+        return suffix[:max_chars]
+    return text[:preview_chars] + suffix
+
+
+async def _prepare_exec_tool_result(ctx: RunContext[Deps], result: str) -> str:
+    """Save oversized exec output to a temp file before generic tool-result truncation runs."""
+    max_chars = ctx.deps.config.agent.tool_output_max_chars
+    if max_chars <= 0 or len(result) <= max_chars:
+        return result
+
+    session_id = ctx.deps.session_state.session_id
+    spill_path = (_EXEC_OUTPUT_SPILL_ROOT / session_id / f"{secrets.token_hex(8)}.txt").as_posix()
+    try:
+        write_result = await ctx.deps.sandbox.file_write(session_id, spill_path, result)
+    except Exception as exc:
+        logger.warning(f"Failed to save exec output spill file for session {session_id}: {exc}")
+        return result
+
+    if write_result.exit_code != 0:
+        logger.warning(
+            f"Failed to save exec output spill file for session {session_id} at {spill_path}: {write_result.output}"
+        )
+        return result
+
+    return truncate_exec_output_with_saved_path(result, max_chars, spill_path)
 
 
 def _emit_tool_result(
@@ -875,6 +913,8 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         if warnings:
             warning_block = "\n\n".join(warnings)
             result = f"{result}\n\n{warning_block}" if result else warning_block
+
+        result = await _prepare_exec_tool_result(ctx, result)
 
         ctx.deps.security.append(
             ToolResultEntry(tool="exec", status="error" if exit_code != 0 else "success"),
