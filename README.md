@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/thiesgerken/carapace/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/thiesgerken/carapace/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/thiesgerken/carapace/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/thiesgerken/carapace/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/thiesgerken/carapace/releases"><img alt="Release" src="https://img.shields.io/github/v/release/thiesgerken/carapace?display_name=tag"></a>
   <a href="https://www.python.org/"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0F766E"></a>
