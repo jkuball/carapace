@@ -59,6 +59,20 @@ helmCharts:
     valuesFile: values.yaml
 ```
 
+Pull request builds also publish preview images tagged as `pr<PR number>` and a matching OCI chart package. The preview chart uses `appVersion=pr<PR number>`, so the default image tags resolve to the PR images automatically.
+
+Example for PR 99 when the base chart version is `0.28.0`:
+
+```bash
+helm install carapace oci://ghcr.io/thiesgerken/charts/carapace \
+  --namespace carapace \
+  --version 0.28.0-pr.99 \
+  --set ingress.hostname=carapace.example.com \
+  --set 'envFrom[0].secretRef.name=carapace-secrets'
+```
+
+The chart version stays tied to the chart's current base version. If `Chart.yaml` moves to `0.29.0`, the preview for PR 99 becomes `0.29.0-pr.99`.
+
 ## Upgrade
 
 ```bash
@@ -75,7 +89,7 @@ helm uninstall carapace -n carapace
 
 ## Configuration
 
-All images default to the chart's `appVersion` tag, which is kept in sync with the project version by semantic-release.
+All images default to the chart's `appVersion` tag. Release charts use the semantic-release project version, and PR preview charts use `pr<PR number>`.
 
 ### Required configuration
 

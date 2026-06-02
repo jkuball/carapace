@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.135.1 (2026-06-02)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: use EmojiText component for session titles in ChatView and JobsView
+  ([`5b8e1a9`](https://github.com/thiesgerken/carapace/commit/5b8e1a96f05550b698ad139059e756fc16a8caa9))
+
 ## v0.135.0 (2026-06-01)
 
 
