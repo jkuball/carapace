@@ -400,6 +400,24 @@ class TestSandboxManagerCredentialCache:
         assert second.name == "carapace-sandbox-warm-2"
 
     @pytest.mark.anyio
+    async def test_ensure_warm_pool_shrinks_extra_unattached_sandboxes(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.list_pool_sandboxes = AsyncMock(
+            side_effect=[
+                {"warm-1": "warm-container-1", "warm-2": "warm-container-2"},
+                {"warm-1": "warm-container-1", "warm-2": "warm-container-2"},
+            ]
+        )
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr._session_lifecycle.ensure_warm_sandbox = AsyncMock(side_effect=["warm-container-1", "warm-container-2"])
+
+        warmed = await mgr.ensure_warm_pool(1)
+
+        assert warmed == 1
+        runtime.destroy_sandbox.assert_awaited_once_with("warm-2", "carapace-sandbox-warm-2", "warm-container-2")
+
+    @pytest.mark.anyio
     async def test_ensure_session_claims_k8s_warm_sandbox(self, tmp_path: Path):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
@@ -418,6 +436,7 @@ class TestSandboxManagerCredentialCache:
             ]
         )
         mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
 
@@ -499,6 +518,46 @@ class TestSandboxManagerCredentialCache:
         assert second_sc.sandbox_id == "sess-2"
         runtime.claim_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1", "sess-1")
         runtime.create_sandbox.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_ensure_session_replenishes_warm_pool_after_claim(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        claimed = SessionContainer(
+            container_id="warm-pod-1",
+            session_id="sess-1",
+            sandbox_id="warm-1",
+            ip_address="10.1.1.4",
+            created_at=1.0,
+            last_used=1.0,
+        )
+        mgr._session_lifecycle.claim_warm_sandbox = AsyncMock(return_value=claimed)
+        mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
+
+        sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+
+        assert needs_runtime_setup is True
+        assert sc is claimed
+        mgr._session_lifecycle.ensure_warm_pool.assert_awaited_once_with(1)
+
+    @pytest.mark.anyio
+    async def test_ensure_session_reattaches_claimed_warm_sandbox_after_restart(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.sandbox_exists = AsyncMock(return_value=None)
+        runtime.list_sandboxes = AsyncMock(return_value={"sess-1": "carapace-sandbox-warm-1-0"})
+        runtime.is_running = AsyncMock(return_value=True)
+        runtime.get_ip = AsyncMock(return_value="10.1.1.4")
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+
+        sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+
+        assert needs_runtime_setup is False
+        assert sc.container_id == "carapace-sandbox-warm-1-0"
+        assert sc.sandbox_id == "warm-1"
+        runtime.claim_warm_sandbox.assert_not_awaited()
+        runtime.create_sandbox.assert_not_awaited()
 
     @pytest.mark.anyio
     async def test_ensure_warm_pool_is_noop_for_docker_runtime(self, tmp_path: Path):

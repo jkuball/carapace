@@ -160,6 +160,14 @@ class SandboxSessionLifecycle:
             return container_id.removesuffix("-0")
         return self.sandbox_name(session_id)
 
+    def sandbox_id_for_live_resource(self, session_id: str, container_id: str) -> str:
+        """Return the sandbox ID associated with a live sandbox entry."""
+        sandbox_name = self.sandbox_name_for_live_resource(session_id, container_id)
+        prefix = "carapace-sandbox-"
+        if sandbox_name.startswith(prefix):
+            return sandbox_name.removeprefix(prefix)
+        return self.sandbox_id_for_session(session_id)
+
     def warm_pool_sandbox_id(self, slot: int) -> str:
         """Return the stable sandbox ID for a warm-pool slot."""
         return f"{self._WARM_POOL_PREFIX}{slot}"
@@ -252,6 +260,11 @@ class SandboxSessionLifecycle:
             self.prepare_session_recreate(session_id)
         else:
             existing_id = await self._runtime.sandbox_exists(sandbox_name)
+            if not existing_id and self._runtime.runtime_kind == "kubernetes":
+                existing_id = (await self._runtime.list_sandboxes()).get(session_id)
+                if isinstance(existing_id, str) and existing_id:
+                    sandbox_name = self.sandbox_name_for_live_resource(session_id, existing_id)
+                    sandbox_id = self.sandbox_id_for_live_resource(session_id, existing_id)
             if isinstance(existing_id, str) and existing_id:
                 try:
                     if await self._runtime.is_running(existing_id):
@@ -301,6 +314,10 @@ class SandboxSessionLifecycle:
 
             claimed = await self.claim_warm_sandbox(session_id, env)
             if claimed is not None:
+                try:
+                    await self.ensure_warm_pool(self._warm_pool_size)
+                except Exception:
+                    logger.opt(exception=True).warning("Failed to replenish warm sandbox pool after claim")
                 return claimed, True
 
             sandbox_config = SandboxConfig(
@@ -348,13 +365,19 @@ class SandboxSessionLifecycle:
     async def ensure_warm_pool(self, target_size: int) -> int:
         """Ensure *target_size* unattached warm sandboxes exist and are running."""
         if target_size <= 0 or self._runtime.runtime_kind != "kubernetes":
-            return 0
+            target_size = 0
 
         pool = await self._runtime.list_pool_sandboxes()
         for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
             await self.ensure_warm_sandbox(sandbox_id)
 
         pool = await self._runtime.list_pool_sandboxes()
+        while len(pool) > target_size:
+            sandbox_id = sorted(pool, key=self._warm_pool_sort_key, reverse=True)[0]
+            container_id = pool.pop(sandbox_id)
+            sandbox_name = self.sandbox_name_for_id(sandbox_id)
+            await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, container_id)
+
         while len(pool) < target_size:
             sandbox_id = await self._next_available_warm_sandbox_id()
             pool[sandbox_id] = await self.ensure_warm_sandbox(sandbox_id)
