@@ -171,7 +171,7 @@ jobs:
       - name: Package PR Helm chart
         id: package
         run: |
-          base_version=$(awk '/^version:/ { print $2; exit }' charts/carapace/Chart.yaml)
+          base_version=$(awk -F '"' '/^version = "/ { print $2; exit }' pyproject.toml)
           pr_number='${{ github.event.pull_request.number }}'
           chart_version="${base_version}-pr.${pr_number}"
           app_version="pr${pr_number}"
