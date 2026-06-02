@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "pretest": "pnpm prepare:emoji",
     "test": "node --import tsx --test src/lib/*.test.ts src/components/*.test.tsx src/hooks/*.test.tsx test/*.test.js"
   },
   "dependencies": {
