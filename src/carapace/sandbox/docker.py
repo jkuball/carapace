@@ -279,29 +279,13 @@ class DockerRuntime(ContainerRuntime):
                 all=True,
                 filters={"label": ["carapace.managed=true"]},
             )
-            return {
-                c.labels["carapace.session"]: c.id or ""
-                for c in containers
-                if "carapace.session" in c.labels and c.labels.get("carapace.pool") != "true"
-            }
+            return {c.labels["carapace.session"]: c.id or "" for c in containers if "carapace.session" in c.labels}
 
         return await asyncio.to_thread(_list)
 
     async def list_pool_sandboxes(self) -> dict[str, str]:
-        """List warm-pool containers, returning ``{sandbox_id: container_id}``."""
-
-        def _list() -> dict[str, str]:
-            containers = self._client.containers.list(
-                all=True,
-                filters={"label": ["carapace.managed=true", "carapace.pool=true"]},
-            )
-            return {
-                c.labels.get("carapace.sandbox", c.labels.get("carapace.session", "")): c.id or ""
-                for c in containers
-                if c.labels.get("carapace.pool") == "true"
-            }
-
-        return await asyncio.to_thread(_list)
+        """Docker does not participate in warm-pool inventory."""
+        return {}
 
     async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
         """Docker warm sandboxes cannot be claimed safely yet due immutable labels and bind mounts."""
