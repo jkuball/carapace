@@ -47,6 +47,7 @@ export interface SessionSandboxSnapshot {
   exists: boolean;
   runtime?: SandboxRuntimeKind | null;
   status: SandboxStatus;
+  sandbox_id?: string | null;
   resource_id?: string | null;
   resource_kind?: string | null;
   storage_present: boolean;

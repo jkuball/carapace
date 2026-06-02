@@ -43,3 +43,44 @@ async def test_inspect_sandbox_missing_with_workspace_returns_scaled_down(tmp_pa
     assert inspection.exists is False
     assert inspection.status == "scaled_down"
     assert inspection.storage_present is True
+
+
+@pytest.mark.asyncio
+async def test_list_sandboxes_skips_pool_containers(tmp_path: Path) -> None:
+    runtime = _make_runtime(tmp_path)
+    session_container = MagicMock()
+    session_container.id = "container-1"
+    session_container.labels = {"carapace.session": "sess-1", "carapace.managed": "true"}
+    pool_container = MagicMock()
+    pool_container.id = "container-2"
+    pool_container.labels = {
+        "carapace.session": "warm-1",
+        "carapace.managed": "true",
+        "carapace.pool": "true",
+    }
+    runtime._client.containers.list.return_value = [session_container, pool_container]
+
+    sandboxes = await runtime.list_sandboxes()
+
+    assert sandboxes == {"sess-1": "container-1"}
+
+
+@pytest.mark.asyncio
+async def test_list_pool_sandboxes_returns_pool_containers(tmp_path: Path) -> None:
+    runtime = _make_runtime(tmp_path)
+    session_container = MagicMock()
+    session_container.id = "container-1"
+    session_container.labels = {"carapace.session": "sess-1", "carapace.managed": "true"}
+    pool_container = MagicMock()
+    pool_container.id = "container-2"
+    pool_container.labels = {
+        "carapace.session": "warm-1",
+        "carapace.sandbox": "warm-1",
+        "carapace.managed": "true",
+        "carapace.pool": "true",
+    }
+    runtime._client.containers.list.return_value = [session_container, pool_container]
+
+    sandboxes = await runtime.list_pool_sandboxes()
+
+    assert sandboxes == {"warm-1": "container-2"}

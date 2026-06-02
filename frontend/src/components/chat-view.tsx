@@ -88,6 +88,11 @@ function sandboxStorageLabel(
   return details.join(" · ");
 }
 
+function sandboxIdentifier(snapshot: SessionSandboxSnapshot | null): string | null {
+  const sandboxId = snapshot?.sandbox_id?.trim();
+  return sandboxId ? sandboxId : null;
+}
+
 function thinkingUsageMeta(usage?: TurnUsage | null): {
   reasoningDurationMs?: number;
   reasoningTokens?: number;
@@ -261,6 +266,7 @@ function optimisticPendingSandbox(
     exists: snapshot?.exists ?? false,
     runtime: snapshot?.runtime,
     status: "pending",
+    sandbox_id: snapshot?.sandbox_id,
     resource_id: snapshot?.resource_id,
     resource_kind: snapshot?.resource_kind,
     storage_present: snapshot?.storage_present ?? false,
@@ -2361,6 +2367,12 @@ export function ChatView({
             </span>
           </div>
           <div className="text-xs text-muted-foreground">{sandboxStorageLabel(sandbox, t)}</div>
+          {sandboxIdentifier(sandbox) ? (
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <span>{t("sandbox.fields.id")}</span>
+              <span className="break-all font-mono text-foreground">{sandboxIdentifier(sandbox)}</span>
+            </div>
+          ) : null}
         </div>
       </section>
 

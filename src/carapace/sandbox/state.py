@@ -14,6 +14,7 @@ class SessionSandboxSnapshot(BaseModel):
     exists: bool = False
     runtime: SandboxRuntimeKind | None = None
     status: SandboxStatus = "missing"
+    sandbox_id: str | None = None
     resource_id: str | None = None
     resource_kind: str | None = None
     storage_present: bool = False

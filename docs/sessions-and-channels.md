@@ -83,7 +83,7 @@ carapace can optionally commit session histories into the Git-backed knowledge r
 ## Session lifecycle
 
 - Sessions are **persistent** — they survive carapace restarts
-- **Containers** are ephemeral: destroyed after an idle timeout (configurable, default 15 min). When the user sends a new message after containers expire, they are recreated. See [sandbox.md](sandbox.md).
+- **Containers** are ephemeral: destroyed after an idle timeout (configurable, default 60 min). When the user sends a new message after containers expire, they are recreated. See [sandbox.md](sandbox.md).
 - **Title generation**: After the 1st and 3rd user messages, a title is auto-generated using a lightweight LLM model
 - **Privacy**: Sessions start public by default unless the creator explicitly marks them private
 - **Deletion**: Sessions can be deleted via the REST API (`DELETE /api/sessions/{id}`), which also cleans up any running sandbox container and may remove the committed `conversation.json` from the knowledge repo

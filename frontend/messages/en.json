@@ -750,6 +750,9 @@
                 "used": "{size} used",
                 "none": "no sandbox storage",
                 "allocated": "{size} allocated"
+            },
+            "fields": {
+                "id": "Sandbox ID"
             }
         },
         "knowledge": {

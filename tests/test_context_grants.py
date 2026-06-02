@@ -341,6 +341,79 @@ class TestSandboxManagerCredentialCache:
 
         assert needs_runtime_setup is True
         runtime.resume_sandbox.assert_awaited_once_with("carapace-sandbox-sess-1")
+        runtime.write_stdout_log.assert_awaited_once()
+        assert runtime.write_stdout_log.await_args.args[0] == "container-1"
+        assert "event=resume" in runtime.write_stdout_log.await_args.args[1]
+        assert "sandbox_id=sess-1" in runtime.write_stdout_log.await_args.args[1]
+        assert "session_id=sess-1" in runtime.write_stdout_log.await_args.args[1]
+
+    @pytest.mark.anyio
+    async def test_ensure_warm_pool_creates_unattached_sandboxes(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.list_pool_sandboxes = AsyncMock(
+            side_effect=[
+                {},
+                {"warm-1": "warm-container-1"},
+                {"warm-1": "warm-container-1", "warm-2": "warm-container-2"},
+            ]
+        )
+        runtime.sandbox_exists = AsyncMock(side_effect=[None, None, "warm-container-1", None, None])
+        runtime.create_sandbox = AsyncMock(side_effect=["warm-container-1", "warm-container-2"])
+        runtime.logs = AsyncMock(return_value="carapace sandbox ready")
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+
+        warmed = await mgr.ensure_warm_pool(2)
+
+        assert warmed == 2
+        assert runtime.create_sandbox.await_count == 2
+        first = runtime.create_sandbox.await_args_list[0].args[0]
+        second = runtime.create_sandbox.await_args_list[1].args[0]
+        assert first.name == "carapace-sandbox-warm-1"
+        assert first.sandbox_id == "warm-1"
+        assert first.session_id == "warm-1"
+        assert first.labels["carapace.pool"] == "true"
+        assert first.labels["carapace.session"] == "warm-1"
+        assert first.environment == {}
+        assert "setup-proxy.sh" not in " ".join(first.command)
+        assert second.name == "carapace-sandbox-warm-2"
+
+    @pytest.mark.anyio
+    async def test_ensure_session_claims_k8s_warm_sandbox(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.sandbox_exists = AsyncMock(return_value=None)
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-1": "warm-pod-1"})
+        runtime.claim_warm_sandbox = AsyncMock(return_value=True)
+        runtime.get_ip = AsyncMock(return_value="10.1.1.4")
+        runtime.logs = AsyncMock(return_value="carapace sandbox ready")
+        runtime.exec = AsyncMock(
+            side_effect=[
+                ExecResult(exit_code=1, output=""),
+                ExecResult(exit_code=0, output=""),
+                ExecResult(exit_code=0, output=""),
+                ExecResult(exit_code=0, output=""),
+            ]
+        )
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+
+        sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+
+        assert needs_runtime_setup is True
+        assert sc.sandbox_id == "warm-1"
+        assert sc.container_id == "warm-pod-1"
+        runtime.create_sandbox.assert_not_awaited()
+        runtime.claim_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1", "sess-1")
+        runtime.write_stdout_log.assert_awaited_once()
+        assert "event=claim" in runtime.write_stdout_log.await_args.args[1]
+
+        clone_call = runtime.exec.await_args_list[1]
+        assert clone_call.args[1] == "git clone $GIT_REPO_URL /workspace"
+        assert clone_call.kwargs["env"]["CARAPACE_SESSION_ID"] == "sess-1"
+        assert clone_call.kwargs["env"]["GIT_REPO_URL"].endswith(f"/git/{tmp_path.name}")
+
+        snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
+        assert snapshot is not None
+        assert snapshot.sandbox_id == "warm-1"
 
 
 # ── SandboxManager context tracking ─────────────────────────────────

@@ -199,6 +199,7 @@ class SandboxManager:
         idle_timeout_minutes: int = 15,
         proxy_port: int = 3128,
         sandbox_port: int = 8322,
+        warm_pool_size: int = 0,
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
@@ -256,6 +257,7 @@ class SandboxManager:
             idle_timeout=self._idle_timeout,
             proxy_port=proxy_port,
             sandbox_port=sandbox_port,
+            warm_pool_size=warm_pool_size,
             knowledge_repo_name_for_session=self._knowledge_repo_name_for_session,
             git_author_for_session=self._git_author_for_session,
         )
@@ -327,6 +329,9 @@ class SandboxManager:
                 continue
             await self._session_lifecycle.setup_git_identity(session.container_id, session_id)
 
+    async def ensure_warm_pool(self, target_size: int) -> int:
+        return await self._session_lifecycle.ensure_warm_pool(target_size)
+
     async def _get_skill_activation_inputs(self, session_id: str, skill_name: str) -> SkillActivationInputs:
         if self._skill_activation_inputs_cb is None:
             return SkillActivationInputs()
@@ -358,6 +363,7 @@ class SandboxManager:
             exists=existing.exists if existing is not None else False,
             runtime=self._runtime.runtime_kind,
             status=status,
+            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
             resource_id=existing.resource_id if existing is not None else None,
             resource_kind=existing.resource_kind if existing is not None else None,
             storage_present=existing.storage_present if existing is not None else False,
@@ -438,6 +444,7 @@ class SandboxManager:
             exists=inspection.exists,
             runtime=self._runtime.runtime_kind,
             status=inspection.status,
+            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
             resource_id=inspection.resource_id,
             resource_kind=inspection.resource_kind,
             storage_present=inspection.storage_present,
@@ -855,7 +862,11 @@ class SandboxManager:
         await self._session_lifecycle.reset_session(session_id)
         save_sandbox_snapshot(
             self._sandbox_snapshot_path(session_id),
-            SessionSandboxSnapshot(runtime=self._runtime.runtime_kind, updated_at=datetime.now(tz=UTC)),
+            SessionSandboxSnapshot(
+                runtime=self._runtime.runtime_kind,
+                sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+                updated_at=datetime.now(tz=UTC),
+            ),
         )
 
     async def cleanup_idle(self) -> None:

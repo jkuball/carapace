@@ -13,11 +13,13 @@ from pydantic import BaseModel
 
 from ..security.context import ApprovalSource, ApprovalVerdict
 from .runtime import ContainerRuntime, SandboxConfig
+from .state import load_sandbox_snapshot
 
 
 class SessionContainer(BaseModel):
     container_id: str
     session_id: str
+    sandbox_id: str | None = None
     ip_address: str | None = None
     created_at: float
     last_used: float
@@ -50,6 +52,7 @@ class SandboxSessionLifecycleState:
 class SandboxSessionLifecycle:
     _READY_MARKER = "carapace sandbox ready"
     _COMMIT_TRAILER_KEY = "carapace-session"
+    _WARM_POOL_PREFIX = "warm-"
 
     def __init__(
         self,
@@ -62,6 +65,7 @@ class SandboxSessionLifecycle:
         idle_timeout: int,
         proxy_port: int,
         sandbox_port: int,
+        warm_pool_size: int,
         knowledge_repo_name_for_session: Callable[[str], str],
         git_author_for_session: Callable[[str], str],
     ) -> None:
@@ -73,6 +77,7 @@ class SandboxSessionLifecycle:
         self._idle_timeout = idle_timeout
         self._proxy_port = proxy_port
         self._sandbox_port = sandbox_port
+        self._warm_pool_size = warm_pool_size
         self._knowledge_repo_name_for_session = knowledge_repo_name_for_session
         self._git_author_for_session = git_author_for_session
 
@@ -84,6 +89,9 @@ class SandboxSessionLifecycle:
 
     def _token_path(self, session_id: str) -> Path:
         return self._data_dir / "sessions" / session_id / "token"
+
+    def _sandbox_snapshot_path(self, session_id: str) -> Path:
+        return self._data_dir / "sessions" / session_id / "sandbox.yaml"
 
     def _load_persisted_token(self, session_id: str) -> str | None:
         token_path = self._token_path(session_id)
@@ -116,9 +124,41 @@ class SandboxSessionLifecycle:
         self._state.token_to_session[token] = session_id
         return token
 
+    def default_sandbox_id(self, session_id: str) -> str:
+        """Return the default sandbox identifier for a session."""
+        return session_id
+
+    def sandbox_id_for_session(self, session_id: str) -> str:
+        """Return the sandbox identifier currently assigned to *session_id*."""
+        sc = self._state.sessions.get(session_id)
+        if sc is not None and sc.sandbox_id:
+            return sc.sandbox_id
+        snapshot = load_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        if snapshot is not None and snapshot.sandbox_id:
+            return snapshot.sandbox_id
+        return self.default_sandbox_id(session_id)
+
+    def sandbox_name_for_id(self, sandbox_id: str) -> str:
+        """Derive the sandbox resource name for a sandbox identifier."""
+        return f"carapace-sandbox-{sandbox_id}"
+
     def sandbox_name(self, session_id: str) -> str:
         """Derive the sandbox resource name for a session."""
-        return f"carapace-sandbox-{session_id}"
+        return self.sandbox_name_for_id(self.sandbox_id_for_session(session_id))
+
+    def warm_pool_sandbox_id(self, slot: int) -> str:
+        """Return the stable sandbox ID for a warm-pool slot."""
+        return f"{self._WARM_POOL_PREFIX}{slot}"
+
+    def _sandbox_command(self, *, configure_proxy: bool) -> list[str]:
+        prefix = "setup-proxy.sh && " if configure_proxy else ""
+        return ["sh", "-c", f"{prefix}echo '{self._READY_MARKER}' && exec sleep infinity"]
+
+    def _warm_pool_sort_key(self, sandbox_id: str) -> tuple[int, str]:
+        suffix = sandbox_id.removeprefix(self._WARM_POOL_PREFIX)
+        if suffix.isdigit():
+            return int(suffix), sandbox_id
+        return 10**9, sandbox_id
 
     def build_proxy_env(self, session_id: str, proxy_token: str, proxy_url: str) -> dict[str, str]:
         """Build HTTP_PROXY / NO_PROXY env vars for session containers."""
@@ -147,6 +187,23 @@ class SandboxSessionLifecycle:
             "CARAPACE_SESSION_ID": session_id,
         }
 
+    async def log_assignment(
+        self,
+        container_id: str,
+        *,
+        sandbox_id: str,
+        session_id: str,
+        event: str,
+    ) -> None:
+        """Emit a sandbox-assignment line into the container stdout."""
+        message = f"carapace sandbox assignment event={event} sandbox_id={sandbox_id} session_id={session_id}"
+        try:
+            await self._runtime.write_stdout_log(container_id, message)
+        except Exception:
+            logger.opt(exception=True).warning(
+                f"Failed to write sandbox assignment log for session {session_id} ({container_id[:12]})"
+            )
+
     async def ensure_session(self, session_id: str) -> tuple[SessionContainer, bool]:
         """Return ``(container, needs_runtime_setup)``.
 
@@ -154,7 +211,8 @@ class SandboxSessionLifecycle:
         resumed after being stopped. In those cases, skill setup must rerun because
         runtime-only state like generated command shims is lost.
         """
-        sandbox_name = self.sandbox_name(session_id)
+        sandbox_id = self.sandbox_id_for_session(session_id)
+        sandbox_name = self.sandbox_name_for_id(sandbox_id)
 
         if session_id in self._state.sessions:
             sc = self._state.sessions[session_id]
@@ -166,6 +224,12 @@ class SandboxSessionLifecycle:
                 await self._runtime.resume_sandbox(sandbox_name)
                 sc.last_used = time.time()
                 await self.wait_for_ready(sc.container_id, session_id)
+                await self.log_assignment(
+                    sc.container_id,
+                    sandbox_id=sc.sandbox_id or sandbox_id,
+                    session_id=session_id,
+                    event="resume",
+                )
                 logger.info(f"Resumed sandbox {sandbox_name} for session {session_id}")
                 return sc, True
             except Exception:
@@ -188,11 +252,18 @@ class SandboxSessionLifecycle:
                     sc = SessionContainer(
                         container_id=existing_id,
                         session_id=session_id,
+                        sandbox_id=sandbox_id,
                         ip_address=ip,
                         created_at=time.time(),
                         last_used=time.time(),
                     )
                     self._state.sessions[session_id] = sc
+                    await self.log_assignment(
+                        existing_id,
+                        sandbox_id=sandbox_id,
+                        session_id=session_id,
+                        event="reattach" if not needs_runtime_setup else "resume",
+                    )
                     return sc, needs_runtime_setup
                 except Exception:
                     logger.opt(exception=True).debug(
@@ -212,24 +283,35 @@ class SandboxSessionLifecycle:
             logger.info(f"Proxy URL for session {session_id}: {proxy_url}")
 
             env = self.build_proxy_env(session_id, proxy_token, proxy_url)
-            command: list[str] = [
-                "sh",
-                "-c",
-                "setup-proxy.sh && echo 'carapace sandbox ready' && exec sleep infinity",
-            ]
+            command = self._sandbox_command(configure_proxy=True)
+
+            claimed = await self.claim_warm_sandbox(session_id, env)
+            if claimed is not None:
+                return claimed, True
 
             sandbox_config = SandboxConfig(
                 name=sandbox_name,
+                sandbox_id=sandbox_id,
                 session_id=session_id,
                 image=self._base_image,
-                labels={"carapace.session": session_id, "carapace.managed": "true"},
+                labels={
+                    "carapace.session": session_id,
+                    "carapace.sandbox": sandbox_id,
+                    "carapace.managed": "true",
+                },
                 environment=env,
                 command=command,
             )
             container_id = await self._runtime.create_sandbox(sandbox_config)
             ip = await self._runtime.get_ip(container_id, self._network_name)
             await self.wait_for_ready(container_id, session_id)
-            await self.clone_knowledge_repo(container_id, session_id)
+            await self.log_assignment(
+                container_id,
+                sandbox_id=sandbox_id,
+                session_id=session_id,
+                event="create",
+            )
+            await self.clone_knowledge_repo(container_id, session_id, env=env)
         except BaseException:
             self.cleanup_tracking(session_id)
             raise
@@ -237,6 +319,7 @@ class SandboxSessionLifecycle:
         sc = SessionContainer(
             container_id=container_id,
             session_id=session_id,
+            sandbox_id=sandbox_id,
             ip_address=ip,
             created_at=time.time(),
             last_used=time.time(),
@@ -247,6 +330,118 @@ class SandboxSessionLifecycle:
         self._state.sessions[session_id] = sc
         logger.info(f"Created sandbox container {container_id[:12]} for session {session_id} (IP: {ip})")
         return sc, True
+
+    async def ensure_warm_pool(self, target_size: int) -> int:
+        """Ensure *target_size* unattached warm sandboxes exist and are running."""
+        pool = await self._runtime.list_pool_sandboxes()
+        for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+            await self.ensure_warm_sandbox(sandbox_id)
+
+        pool = await self._runtime.list_pool_sandboxes()
+        while len(pool) < target_size:
+            sandbox_id = await self._next_available_warm_sandbox_id()
+            pool[sandbox_id] = await self.ensure_warm_sandbox(sandbox_id)
+        return len(pool)
+
+    async def _next_available_warm_sandbox_id(self) -> str:
+        slot = 1
+        while True:
+            sandbox_id = self.warm_pool_sandbox_id(slot)
+            existing_id = await self._runtime.sandbox_exists(self.sandbox_name_for_id(sandbox_id))
+            if not existing_id:
+                return sandbox_id
+            slot += 1
+
+    async def claim_warm_sandbox(self, session_id: str, env: dict[str, str]) -> SessionContainer | None:
+        """Attach an existing warm sandbox to *session_id* when supported by the runtime."""
+        if self._warm_pool_size <= 0 or self._runtime.runtime_kind != "kubernetes":
+            return None
+
+        assigned = {sc.sandbox_id for sc in self._state.sessions.values() if sc.sandbox_id}
+        pool = await self._runtime.list_pool_sandboxes()
+        for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+            if sandbox_id in assigned:
+                continue
+
+            container_id = pool[sandbox_id]
+            sandbox_name = self.sandbox_name_for_id(sandbox_id)
+            try:
+                if not await self._runtime.is_running(container_id):
+                    await self._runtime.resume_sandbox(sandbox_name)
+                    await self.wait_for_ready(container_id, session_id)
+                claimed = await self._runtime.claim_warm_sandbox(sandbox_name, session_id)
+                if not claimed:
+                    continue
+                ip = await self._runtime.get_ip(container_id, self._network_name)
+                sc = SessionContainer(
+                    container_id=container_id,
+                    session_id=session_id,
+                    sandbox_id=sandbox_id,
+                    ip_address=ip,
+                    created_at=time.time(),
+                    last_used=time.time(),
+                    session_env=dict(env),
+                )
+                stashed_env = self._state.stashed_session_env.pop(session_id, None)
+                if stashed_env:
+                    sc.session_env.update(stashed_env)
+                self._state.sessions[session_id] = sc
+                await self.log_assignment(
+                    container_id,
+                    sandbox_id=sandbox_id,
+                    session_id=session_id,
+                    event="claim",
+                )
+                await self.clone_knowledge_repo(container_id, session_id, env=sc.session_env)
+                logger.info(f"Claimed warm sandbox {sandbox_name} for session {session_id}")
+                return sc
+            except BaseException:
+                self._state.sessions.pop(session_id, None)
+                self._state.stashed_session_env.pop(session_id, None)
+                try:
+                    await self._runtime.destroy_sandbox(session_id, sandbox_name, container_id)
+                except Exception:
+                    logger.opt(exception=True).warning(
+                        f"Failed to destroy warm sandbox {sandbox_name} after failed claim for {session_id}"
+                    )
+                raise
+        return None
+
+    async def ensure_warm_sandbox(self, sandbox_id: str) -> str:
+        """Ensure an unattached warm sandbox exists for *sandbox_id*."""
+        sandbox_name = self.sandbox_name_for_id(sandbox_id)
+        existing_id = await self._runtime.sandbox_exists(sandbox_name)
+        if isinstance(existing_id, str) and existing_id:
+            if await self._runtime.is_running(existing_id):
+                return existing_id
+            try:
+                await self._runtime.resume_sandbox(sandbox_name)
+                await self.wait_for_ready(existing_id, sandbox_id)
+                logger.info(f"Resumed warm sandbox {sandbox_name}")
+                return existing_id
+            except Exception:
+                logger.opt(exception=True).debug(f"Resume failed for warm sandbox {sandbox_name}, will recreate")
+                await self.log_container_tail(existing_id, sandbox_id)
+                await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, existing_id)
+
+        sandbox_config = SandboxConfig(
+            name=sandbox_name,
+            sandbox_id=sandbox_id,
+            session_id=sandbox_id,
+            image=self._base_image,
+            labels={
+                "carapace.session": sandbox_id,
+                "carapace.sandbox": sandbox_id,
+                "carapace.pool": "true",
+                "carapace.managed": "true",
+            },
+            environment={},
+            command=self._sandbox_command(configure_proxy=False),
+        )
+        container_id = await self._runtime.create_sandbox(sandbox_config)
+        await self.wait_for_ready(container_id, sandbox_id)
+        logger.info(f"Created warm sandbox {sandbox_name} ({container_id[:12]})")
+        return container_id
 
     async def log_container_tail(self, container_id: str, session_id: str) -> None:
         """Log the last lines of a dead/stopped container for troubleshooting."""
@@ -266,14 +461,25 @@ class SandboxSessionLifecycle:
             await asyncio.sleep(1)
         logger.warning(f"Sandbox for {session_id} did not become ready within 30s")
 
-    async def clone_knowledge_repo(self, container_id: str, session_id: str) -> None:
+    async def clone_knowledge_repo(
+        self,
+        container_id: str,
+        session_id: str,
+        *,
+        env: dict[str, str] | None = None,
+    ) -> None:
         """Clone the knowledge repo into the sandbox if not already present."""
         probe = await self._runtime.exec(container_id, "test -d /workspace/.git", timeout=5)
         if probe.exit_code == 0:
             logger.debug(f"Knowledge repo already present in sandbox for {session_id}")
             return
 
-        result = await self._runtime.exec(container_id, "git clone $GIT_REPO_URL /workspace", timeout=60)
+        result = await self._runtime.exec(
+            container_id,
+            "git clone $GIT_REPO_URL /workspace",
+            timeout=60,
+            env=env,
+        )
         if result.exit_code != 0:
             raise RuntimeError(
                 f"Git clone failed in sandbox for {session_id} (exit {result.exit_code}): {result.output}"

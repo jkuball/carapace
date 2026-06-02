@@ -102,6 +102,7 @@ class SandboxConfig(BaseModel):
     """
 
     name: str
+    sandbox_id: str
     session_id: str
     image: str
     labels: dict[str, str] = {}
@@ -143,6 +144,14 @@ class ContainerRuntime(Protocol):
         """Return ``{session_id: container_or_pod_id}`` for all managed sandboxes."""
         ...
 
+    async def list_pool_sandboxes(self) -> dict[str, str]:
+        """Return ``{sandbox_id: container_or_pod_id}`` for unattached warm-pool sandboxes."""
+        ...
+
+    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
+        """Mark a warm sandbox as claimed for *session_id* if the runtime supports it."""
+        ...
+
     async def inspect_sandbox(
         self,
         session_id: str,
@@ -169,3 +178,4 @@ class ContainerRuntime(Protocol):
     async def ensure_network(self, name: str, *, internal: bool = False) -> None: ...
     async def get_self_network_info(self) -> dict[str, str]: ...
     async def logs(self, container_id: str, tail: int = 40) -> str: ...
+    async def write_stdout_log(self, container_id: str, message: str) -> None: ...
