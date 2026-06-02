@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
+import { EmojiText } from "@/components/emoji-text";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SessionOptionTiles } from "@/components/session-option-tiles";
 import { useAppLocale } from "@/components/locale-provider";
@@ -2108,7 +2109,9 @@ export function ChatView({
 
         <dl className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 text-sm">
           <dt className="text-muted-foreground">{t("session.title")}</dt>
-          <dd className="break-words font-semibold text-foreground">{sessionDisplayTitle}</dd>
+          <dd className="break-words font-semibold text-foreground">
+            {session?.title?.trim() ? <EmojiText text={sessionDisplayTitle} /> : sessionDisplayTitle}
+          </dd>
 
           <dt className="text-muted-foreground">{t("session.id")}</dt>
           <dd className="flex items-center gap-2">
@@ -2451,7 +2454,9 @@ export function ChatView({
           <div className="border-b border-border px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="flex items-center justify-between gap-3 sm:items-start">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-foreground">{sessionDisplayTitle}</div>
+                <div className="truncate text-sm font-semibold text-foreground">
+                  {session?.title?.trim() ? <EmojiText text={sessionDisplayTitle} /> : sessionDisplayTitle}
+                </div>
                 <div className="mt-1 hidden truncate font-mono text-xs text-muted-foreground sm:block">
                   {sessionId}
                 </div>
@@ -2553,7 +2558,9 @@ export function ChatView({
               <div className="flex items-start justify-between gap-3 px-4 py-2.5">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground">{t("mobile.details")}</div>
-                  <div className="truncate text-xs text-muted-foreground">{sessionDisplayTitle}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {session?.title?.trim() ? <EmojiText text={sessionDisplayTitle} /> : sessionDisplayTitle}
+                  </div>
                 </div>
                 <button
                   type="button"
