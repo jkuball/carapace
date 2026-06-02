@@ -24,17 +24,16 @@ def test_truncate_tool_output_truncates():
     assert "limit 4" in out
 
 
-def test_truncate_exec_output_with_saved_path_includes_read_hint():
+def test_truncate_exec_output_with_saved_path_includes_saved_path():
     text = "abcdefghij" * 80
     spill_path = "/tmp/out.txt"
 
     out = truncate_exec_output_with_saved_path(text, 320, spill_path)
-    preview, _, suffix = out.partition("\n\n[Output truncated:")
+    preview, _, suffix = out.partition("\n\n[Output truncated")
 
     assert len(out) <= 320
     assert len(preview) == 160
     assert preview == text[:160]
     assert spill_path in out
-    assert f'read(path="{spill_path}")' in out
-    assert suffix.lstrip().startswith("800 characters total")
-    assert "800 characters total" in out
+    assert suffix.startswith(", showing only 160 of 800 characters.Full output saved to /tmp/out.txt.]")
+    assert "800 characters total" not in out
