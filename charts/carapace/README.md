@@ -116,10 +116,10 @@ extraEnv:
   - name: CARAPACE_LOG_LEVEL
     value: debug
   - name: CARAPACE_SANDBOX_WARM_POOL_SIZE
-    value: "2"
+    value: "1"
 ```
 
-On Kubernetes, `CARAPACE_SANDBOX_WARM_POOL_SIZE` keeps generic base-image sandboxes ready for faster claims. When a session claims one, the claimed `sandbox_id` is persisted and shown in the web UI sandbox inspector.
+On Kubernetes, `CARAPACE_SANDBOX_WARM_POOL_SIZE` keeps generic warm sandboxes ready for faster claims.
 
 ### Application configuration
 
