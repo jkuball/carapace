@@ -533,7 +533,7 @@ async def test_claim_warm_sandbox_patches_claimed_session_label() -> None:
     patch_doc = sts.patch.await_args.args[0]
     assert patch_doc["metadata"]["labels"]["carapace.claimed-session"] == "sess-2"
     assert "carapace.pool" not in patch_doc["metadata"]["labels"]
-    assert patch_doc["spec"]["template"]["metadata"]["labels"]["carapace.claimed-session"] == "sess-2"
+    assert "spec" not in patch_doc
 
 
 @pytest.mark.asyncio

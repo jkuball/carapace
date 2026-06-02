@@ -864,7 +864,7 @@ class SandboxManager:
             self._sandbox_snapshot_path(session_id),
             SessionSandboxSnapshot(
                 runtime=self._runtime.runtime_kind,
-                sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+                sandbox_id=self._session_lifecycle.default_sandbox_id(session_id),
                 updated_at=datetime.now(tz=UTC),
             ),
         )

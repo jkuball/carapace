@@ -582,14 +582,9 @@ class KubernetesRuntime(ContainerRuntime):
         metadata_labels.pop("carapace.pool", None)
         metadata_labels["carapace.claimed-session"] = session_id
 
-        template_labels = dict(sts.raw.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {}))
-        template_labels.pop("carapace.pool", None)
-        template_labels["carapace.claimed-session"] = session_id
-
         await sts.patch(
             {
                 "metadata": {"labels": metadata_labels},
-                "spec": {"template": {"metadata": {"labels": template_labels}}},
             }
         )
         return True

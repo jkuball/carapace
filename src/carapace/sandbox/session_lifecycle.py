@@ -146,6 +146,19 @@ class SandboxSessionLifecycle:
         """Derive the sandbox resource name for a session."""
         return self.sandbox_name_for_id(self.sandbox_id_for_session(session_id))
 
+    def assigned_sandbox_id(self, session_id: str, sc: object | None = None) -> str:
+        """Return the assigned sandbox ID, preferring live session state when available."""
+        sandbox_id = getattr(sc, "sandbox_id", None)
+        if isinstance(sandbox_id, str) and sandbox_id:
+            return sandbox_id
+        return self.sandbox_id_for_session(session_id)
+
+    def sandbox_name_for_live_resource(self, session_id: str, container_id: str) -> str:
+        """Return the actual resource name for a live sandbox entry."""
+        if self._runtime.runtime_kind == "kubernetes" and container_id.endswith("-0"):
+            return container_id.removesuffix("-0")
+        return self.sandbox_name(session_id)
+
     def warm_pool_sandbox_id(self, slot: int) -> str:
         """Return the stable sandbox ID for a warm-pool slot."""
         return f"{self._WARM_POOL_PREFIX}{slot}"
@@ -333,6 +346,9 @@ class SandboxSessionLifecycle:
 
     async def ensure_warm_pool(self, target_size: int) -> int:
         """Ensure *target_size* unattached warm sandboxes exist and are running."""
+        if target_size <= 0 or self._runtime.runtime_kind != "kubernetes":
+            return 0
+
         pool = await self._runtime.list_pool_sandboxes()
         for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
             await self.ensure_warm_sandbox(sandbox_id)
@@ -404,7 +420,11 @@ class SandboxSessionLifecycle:
                     logger.opt(exception=True).warning(
                         f"Failed to destroy warm sandbox {sandbox_name} after failed claim for {session_id}"
                     )
-                raise
+                logger.opt(exception=True).warning(
+                    f"Failed to claim warm sandbox {sandbox_name} for {session_id}, falling back to cold create"
+                )
+                continue
+
         return None
 
     async def ensure_warm_sandbox(self, sandbox_id: str) -> str:
@@ -546,13 +566,14 @@ class SandboxSessionLifecycle:
         """Suspend the sandbox while preserving broader session state."""
         sc = self._state.sessions.pop(session_id, None)
         if sc:
-            await self._runtime.suspend_sandbox(self.sandbox_name(session_id), sc.container_id)
+            sandbox_name = self.sandbox_name_for_id(self.assigned_sandbox_id(session_id, sc))
+            await self._runtime.suspend_sandbox(sandbox_name, sc.container_id)
             logger.info(f"Suspended sandbox for session {session_id}")
 
     async def destroy_session(self, session_id: str) -> None:
         """Permanently remove the sandbox and purge all tracking state."""
         sc = self._state.sessions.pop(session_id, None)
-        sandbox_name = self.sandbox_name(session_id)
+        sandbox_name = self.sandbox_name_for_id(self.assigned_sandbox_id(session_id, sc))
         if sc:
             await self._runtime.destroy_sandbox(session_id, sandbox_name, sc.container_id)
             logger.info(f"Destroyed sandbox for session {session_id}")
@@ -581,7 +602,7 @@ class SandboxSessionLifecycle:
     async def reset_session(self, session_id: str) -> None:
         """Full sandbox reset: destroy and let ``ensure_session`` create a fresh one."""
         sc = self._state.sessions.pop(session_id, None)
-        sandbox_name = self.sandbox_name(session_id)
+        sandbox_name = self.sandbox_name_for_id(self.assigned_sandbox_id(session_id, sc))
         if sc:
             await self._runtime.destroy_sandbox(session_id, sandbox_name, sc.container_id)
             logger.info(f"Reset sandbox for session {session_id}")
@@ -623,7 +644,7 @@ class SandboxSessionLifecycle:
         live = await self._runtime.list_sandboxes()
         orphans = {sid: cid for sid, cid in live.items() if sid not in known_sessions}
         for sid, container_id in orphans.items():
-            sandbox_name = self.sandbox_name(sid)
+            sandbox_name = self.sandbox_name_for_live_resource(sid, container_id)
             await self._runtime.destroy_sandbox(sid, sandbox_name, container_id)
             logger.info(f"Removed orphaned sandbox for deleted session {sid}")
         return len(orphans)

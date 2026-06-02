@@ -389,7 +389,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if removed:
             logger.info(f"Cleaned up {removed} orphaned sandbox(es)")
 
-    if _config.sandbox.warm_pool_size > 0:
+    if _config.sandbox.warm_pool_size > 0 and _config.sandbox.runtime == "kubernetes":
         warmed = await _sandbox_mgr.ensure_warm_pool(_config.sandbox.warm_pool_size)
         logger.info(f"Ensured {warmed} warm sandbox(es)")
 
@@ -489,7 +489,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     cleanup_task = asyncio.create_task(_idle_cleanup_loop(_sandbox_mgr))
     warm_pool_task = None
-    if _config.sandbox.warm_pool_size > 0:
+    if _config.sandbox.warm_pool_size > 0 and _config.sandbox.runtime == "kubernetes":
         warm_pool_task = asyncio.create_task(_warm_pool_loop(_sandbox_mgr, _config.sandbox.warm_pool_size))
     archive_task = asyncio.create_task(_session_archive_loop())
     jobs_task = asyncio.create_task(_jobs_scheduler_loop())
