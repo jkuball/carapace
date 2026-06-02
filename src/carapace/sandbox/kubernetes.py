@@ -579,6 +579,11 @@ class KubernetesRuntime(ContainerRuntime):
         sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
 
         metadata_labels = dict(sts.raw.get("metadata", {}).get("labels", {}))
+        if metadata_labels.get("carapace.pool") != "true":
+            return False
+        existing_claim = metadata_labels.get("carapace.claimed-session")
+        if existing_claim and existing_claim != session_id:
+            return False
         metadata_labels.pop("carapace.pool", None)
         metadata_labels["carapace.claimed-session"] = session_id
 

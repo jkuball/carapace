@@ -537,6 +537,30 @@ async def test_claim_warm_sandbox_patches_claimed_session_label() -> None:
 
 
 @pytest.mark.asyncio
+async def test_claim_warm_sandbox_returns_false_when_already_claimed() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+
+    sts = AsyncMock()
+    sts.raw = {
+        "metadata": {
+            "labels": {
+                "carapace.sandbox": "warm-1",
+                "carapace.session": "warm-1",
+                "carapace.claimed-session": "sess-1",
+            }
+        },
+    }
+
+    with patch("carapace.sandbox.kubernetes.StatefulSet") as mock_sts_cls:
+        mock_sts_cls.get = AsyncMock(return_value=sts)
+        claimed = await rt.claim_warm_sandbox("carapace-sandbox-warm-1", "sess-2")
+
+    assert claimed is False
+    sts.patch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_delete_session_pvc_if_exists() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock()

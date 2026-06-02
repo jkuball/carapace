@@ -80,6 +80,7 @@ class SandboxSessionLifecycle:
         self._warm_pool_size = warm_pool_size
         self._knowledge_repo_name_for_session = knowledge_repo_name_for_session
         self._git_author_for_session = git_author_for_session
+        self._warm_claim_lock = asyncio.Lock()
 
     def _repo_name_for_session(self, session_id: str) -> str:
         return self._knowledge_repo_name_for_session(session_id)
@@ -373,57 +374,59 @@ class SandboxSessionLifecycle:
         if self._warm_pool_size <= 0 or self._runtime.runtime_kind != "kubernetes":
             return None
 
-        assigned = {sc.sandbox_id for sc in self._state.sessions.values() if sc.sandbox_id}
-        pool = await self._runtime.list_pool_sandboxes()
-        for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
-            if sandbox_id in assigned:
-                continue
-
-            container_id = pool[sandbox_id]
-            sandbox_name = self.sandbox_name_for_id(sandbox_id)
-            try:
-                if not await self._runtime.is_running(container_id):
-                    await self._runtime.resume_sandbox(sandbox_name)
-                    await self.wait_for_ready(container_id, session_id)
-                claimed = await self._runtime.claim_warm_sandbox(sandbox_name, session_id)
-                if not claimed:
+        async with self._warm_claim_lock:
+            assigned = {sc.sandbox_id for sc in self._state.sessions.values() if sc.sandbox_id}
+            pool = await self._runtime.list_pool_sandboxes()
+            for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+                if sandbox_id in assigned:
                     continue
-                ip = await self._runtime.get_ip(container_id, self._network_name)
-                sc = SessionContainer(
-                    container_id=container_id,
-                    session_id=session_id,
-                    sandbox_id=sandbox_id,
-                    ip_address=ip,
-                    created_at=time.time(),
-                    last_used=time.time(),
-                    session_env=dict(env),
-                )
-                stashed_env = self._state.stashed_session_env.pop(session_id, None)
-                if stashed_env:
-                    sc.session_env.update(stashed_env)
-                self._state.sessions[session_id] = sc
-                await self.log_assignment(
-                    container_id,
-                    sandbox_id=sandbox_id,
-                    session_id=session_id,
-                    event="claim",
-                )
-                await self.clone_knowledge_repo(container_id, session_id, env=sc.session_env)
-                logger.info(f"Claimed warm sandbox {sandbox_name} for session {session_id}")
-                return sc
-            except BaseException:
-                self._state.sessions.pop(session_id, None)
-                self._state.stashed_session_env.pop(session_id, None)
+
+                container_id = pool[sandbox_id]
+                sandbox_name = self.sandbox_name_for_id(sandbox_id)
                 try:
-                    await self._runtime.destroy_sandbox(session_id, sandbox_name, container_id)
-                except Exception:
-                    logger.opt(exception=True).warning(
-                        f"Failed to destroy warm sandbox {sandbox_name} after failed claim for {session_id}"
+                    if not await self._runtime.is_running(container_id):
+                        await self._runtime.resume_sandbox(sandbox_name)
+                        await self.wait_for_ready(container_id, session_id)
+                    claimed = await self._runtime.claim_warm_sandbox(sandbox_name, session_id)
+                    if not claimed:
+                        continue
+                    ip = await self._runtime.get_ip(container_id, self._network_name)
+                    sc = SessionContainer(
+                        container_id=container_id,
+                        session_id=session_id,
+                        sandbox_id=sandbox_id,
+                        ip_address=ip,
+                        created_at=time.time(),
+                        last_used=time.time(),
+                        session_env=dict(env),
                     )
-                logger.opt(exception=True).warning(
-                    f"Failed to claim warm sandbox {sandbox_name} for {session_id}, falling back to cold create"
-                )
-                continue
+                    stashed_env = self._state.stashed_session_env.pop(session_id, None)
+                    if stashed_env:
+                        sc.session_env.update(stashed_env)
+                    self._state.sessions[session_id] = sc
+                    await self.log_assignment(
+                        container_id,
+                        sandbox_id=sandbox_id,
+                        session_id=session_id,
+                        event="claim",
+                    )
+                    await self.setup_proxy(container_id, session_id, sc.session_env)
+                    await self.clone_knowledge_repo(container_id, session_id, env=sc.session_env)
+                    logger.info(f"Claimed warm sandbox {sandbox_name} for session {session_id}")
+                    return sc
+                except BaseException:
+                    self._state.sessions.pop(session_id, None)
+                    self._state.stashed_session_env.pop(session_id, None)
+                    try:
+                        await self._runtime.destroy_sandbox(session_id, sandbox_name, container_id)
+                    except Exception:
+                        logger.opt(exception=True).warning(
+                            f"Failed to destroy warm sandbox {sandbox_name} after failed claim for {session_id}"
+                        )
+                    logger.opt(exception=True).warning(
+                        f"Failed to claim warm sandbox {sandbox_name} for {session_id}, falling back to cold create"
+                    )
+                    continue
 
         return None
 
@@ -507,6 +510,14 @@ class SandboxSessionLifecycle:
 
         await self.setup_git_identity(container_id, session_id)
         await self.install_commit_msg_hook(container_id, session_id)
+
+    async def setup_proxy(self, container_id: str, session_id: str, env: dict[str, str]) -> None:
+        """Run sandbox proxy bootstrap so claimed warm sandboxes match cold-start behavior."""
+        result = await self._runtime.exec(container_id, "setup-proxy.sh", timeout=30, env=env)
+        if result.exit_code != 0:
+            raise RuntimeError(
+                f"Proxy setup failed in sandbox for {session_id} (exit {result.exit_code}): {result.output}"
+            )
 
     async def setup_git_identity(self, container_id: str, session_id: str) -> None:
         """Configure git user.name and user.email inside the sandbox."""

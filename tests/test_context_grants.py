@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -409,6 +410,7 @@ class TestSandboxManagerCredentialCache:
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
         runtime.exec = AsyncMock(
             side_effect=[
+                ExecResult(exit_code=0, output=""),
                 ExecResult(exit_code=1, output=""),
                 ExecResult(exit_code=0, output=""),
                 ExecResult(exit_code=0, output=""),
@@ -426,8 +428,10 @@ class TestSandboxManagerCredentialCache:
         runtime.claim_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1", "sess-1")
         runtime.write_stdout_log.assert_awaited_once()
         assert "event=claim" in runtime.write_stdout_log.await_args.args[1]
+        assert runtime.exec.await_args_list[0].args[1] == "setup-proxy.sh"
+        assert runtime.exec.await_args_list[0].kwargs["env"]["CARAPACE_SESSION_ID"] == "sess-1"
 
-        clone_call = runtime.exec.await_args_list[1]
+        clone_call = runtime.exec.await_args_list[2]
         assert clone_call.args[1] == "git clone $GIT_REPO_URL /workspace"
         assert clone_call.kwargs["env"]["CARAPACE_SESSION_ID"] == "sess-1"
         assert clone_call.kwargs["env"]["GIT_REPO_URL"].endswith(f"/git/{tmp_path.name}")
@@ -448,6 +452,7 @@ class TestSandboxManagerCredentialCache:
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
         runtime.exec = AsyncMock(
             side_effect=[
+                ExecResult(exit_code=0, output=""),
                 ExecResult(exit_code=1, output=""),
                 ExecResult(exit_code=1, output="clone failed"),
                 ExecResult(exit_code=1, output=""),
@@ -464,6 +469,35 @@ class TestSandboxManagerCredentialCache:
         assert sc.sandbox_id == "sess-1"
         assert sc.container_id == "cold-pod-1"
         runtime.destroy_sandbox.assert_awaited_once_with("sess-1", "carapace-sandbox-warm-1", "warm-pod-1")
+        runtime.create_sandbox.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_concurrent_warm_claims_do_not_share_same_sandbox(self, tmp_path: Path):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.sandbox_exists = AsyncMock(return_value=None)
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-1": "warm-pod-1"})
+        runtime.claim_warm_sandbox = AsyncMock(return_value=True)
+        runtime.get_ip = AsyncMock(side_effect=["10.1.1.4", "10.1.1.9"])
+        runtime.create_sandbox = AsyncMock(return_value="cold-pod-2")
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr._session_lifecycle.wait_for_ready = AsyncMock()
+        mgr._session_lifecycle.log_assignment = AsyncMock()
+        mgr._session_lifecycle.setup_proxy = AsyncMock()
+        mgr._session_lifecycle.clone_knowledge_repo = AsyncMock()
+
+        first, second = await asyncio.gather(
+            mgr.ensure_session("sess-1"),
+            mgr.ensure_session("sess-2"),
+        )
+
+        first_sc, first_setup = first
+        second_sc, second_setup = second
+        assert first_setup is True
+        assert second_setup is True
+        assert first_sc.sandbox_id == "warm-1"
+        assert second_sc.sandbox_id == "sess-2"
+        runtime.claim_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1", "sess-1")
         runtime.create_sandbox.assert_awaited_once()
 
     @pytest.mark.anyio
