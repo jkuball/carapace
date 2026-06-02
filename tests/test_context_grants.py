@@ -504,6 +504,7 @@ class TestSandboxManagerCredentialCache:
         mgr._session_lifecycle.log_assignment = AsyncMock()
         mgr._session_lifecycle.setup_proxy = AsyncMock()
         mgr._session_lifecycle.clone_knowledge_repo = AsyncMock()
+        mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
 
         first, second = await asyncio.gather(
             mgr.ensure_session("sess-1"),

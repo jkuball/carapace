@@ -364,7 +364,9 @@ class SandboxSessionLifecycle:
 
     async def ensure_warm_pool(self, target_size: int) -> int:
         """Ensure *target_size* unattached warm sandboxes exist and are running."""
-        if target_size <= 0 or self._runtime.runtime_kind != "kubernetes":
+        if self._runtime.runtime_kind != "kubernetes":
+            return 0
+        if target_size <= 0:
             target_size = 0
 
         pool = await self._runtime.list_pool_sandboxes()
