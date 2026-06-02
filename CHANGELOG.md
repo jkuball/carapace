@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.135.2 (2026-06-02)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`1f080b2`](https://github.com/thiesgerken/carapace/commit/1f080b2f9a9ae7f2551be9dfe2bfa695cffa041e))
+
+- ⬆️ chore: upgrade pnpm to 11.5.0
+  ([`26b6a2a`](https://github.com/thiesgerken/carapace/commit/26b6a2a15a4c4fe156f985917f83592a2bf67800))
+
+### Other
+
+
+- fix hash
+  ([`fb1f051`](https://github.com/thiesgerken/carapace/commit/fb1f051ffffbd0d72c2342002c71f11bcaaf581e))
+
+- fix backend test
+  ([`3268f35`](https://github.com/thiesgerken/carapace/commit/3268f353a7d18ccc4673cb74ddf3a738f2683825))
+
+- add pretest
+  ([`4d8369b`](https://github.com/thiesgerken/carapace/commit/4d8369b2c9c6099fbd11b8d95cd6882e70131238))
+
+- 💚 ci: publish pr docker images + helm chart
+  ([`3779fa5`](https://github.com/thiesgerken/carapace/commit/3779fa5a019a1073bc688c46a0d9f92229d41d09))
+
 ## v0.135.1 (2026-06-02)
 
 
