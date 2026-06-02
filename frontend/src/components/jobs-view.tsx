@@ -5,6 +5,7 @@ import "cronstrue/locales/de";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Loader2, Pause, Play, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { EmojiText } from "@/components/emoji-text";
 import {
   type AvailableModelInfo,
   createJob,
@@ -1255,7 +1256,9 @@ export function JobsView({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-foreground">{session.title?.trim() || session.session_id}</div>
+                            <div className="truncate text-sm font-medium text-foreground">
+                              {session.title?.trim() ? <EmojiText text={session.title.trim()} /> : session.session_id}
+                            </div>
                             <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{session.session_id}</div>
                           </div>
                           <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
