@@ -226,13 +226,17 @@ async def _idle_cleanup_loop(sandbox_mgr: SandboxManager) -> None:
 
 
 async def _warm_pool_loop(sandbox_mgr: SandboxManager, target_size: int) -> None:
-    """Periodically keep the warm sandbox pool at its target size."""
+    """Keep the warm sandbox pool at its target size.
+
+    Runs an initial pass immediately (in the background, so it never blocks API
+    startup) and then maintains the pool on an interval.
+    """
     while True:
-        await asyncio.sleep(60)
         try:
             await sandbox_mgr.ensure_warm_pool(target_size)
         except Exception as exc:
             logger.warning(f"Warm sandbox pool maintenance error: {exc}")
+        await asyncio.sleep(60)
 
 
 async def _session_archive_loop() -> None:
@@ -389,9 +393,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if removed:
             logger.info(f"Cleaned up {removed} orphaned sandbox(es)")
 
-    if _config.sandbox.warm_pool_size > 0 and _config.sandbox.runtime == "kubernetes":
-        warmed = await _sandbox_mgr.ensure_warm_pool(_config.sandbox.warm_pool_size)
-        logger.info(f"Ensured {warmed} warm sandbox(es)")
+    # Warm pool is provisioned by _warm_pool_loop (background task) so it never
+    # blocks API startup; its first iteration runs immediately.
 
     _user_credential_registries = {}
 
