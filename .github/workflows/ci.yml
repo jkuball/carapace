@@ -173,16 +173,25 @@ jobs:
         run: |
           base_version=$(awk -F '"' '/^version = "/ { print $2; exit }' pyproject.toml)
           pr_number='${{ github.event.pull_request.number }}'
+          short_sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)
           chart_version="${base_version}-pr.${pr_number}"
+          chart_version_sha="${chart_version}.${short_sha}"
           app_version="pr${pr_number}"
 
           mkdir -p dist
+          # Short version (overwritten each push) plus an immutable per-commit
+          # version so ArgoCD can pin to the SHA tag and force a refetch.
           helm package charts/carapace \
             --destination dist \
             --version "$chart_version" \
             --app-version "$app_version"
+          helm package charts/carapace \
+            --destination dist \
+            --version "$chart_version_sha" \
+            --app-version "$app_version"
 
           echo "chart_version=$chart_version" >> "$GITHUB_OUTPUT"
+          echo "chart_version_sha=$chart_version_sha" >> "$GITHUB_OUTPUT"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
 
       - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
@@ -196,19 +205,23 @@ jobs:
           helm push \
             "dist/carapace-${{ steps.package.outputs.chart_version }}.tgz" \
             oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push \
+            "dist/carapace-${{ steps.package.outputs.chart_version_sha }}.tgz" \
+            oci://ghcr.io/${{ github.repository_owner }}/charts
 
       - name: Upload PR Helm chart artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: carapace-chart-pr${{ github.event.pull_request.number }}
-          path: dist/carapace-${{ steps.package.outputs.chart_version }}.tgz
+          path: dist/carapace-*.tgz
 
       - name: Print PR preview tags
         run: |
           echo "::notice title=PR preview image tag::${{ steps.package.outputs.app_version }}"
-          echo "::notice title=PR preview chart version::${{ steps.package.outputs.chart_version }}"
+          echo "::notice title=PR preview chart version::${{ steps.package.outputs.chart_version_sha }}"
           echo "Use image tag: ${{ steps.package.outputs.app_version }}"
           echo "Use chart version: ${{ steps.package.outputs.chart_version }}"
+          echo "Pin to commit: ${{ steps.package.outputs.chart_version_sha }}"
 
           {
             echo "## PR preview artifacts"
@@ -224,4 +237,5 @@ jobs:
             echo
             echo "Chart:"
             echo "- oci://ghcr.io/${{ github.repository_owner }}/charts/carapace --version ${{ steps.package.outputs.chart_version }}"
+            echo "- Pin to commit (forces ArgoCD refetch): --version ${{ steps.package.outputs.chart_version_sha }}"
           } >> "$GITHUB_STEP_SUMMARY"
