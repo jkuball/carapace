@@ -584,12 +584,20 @@ class KubernetesRuntime(ContainerRuntime):
         existing_claim = metadata_labels.get("carapace.claimed-session")
         if existing_claim and existing_claim != session_id:
             return False
-        metadata_labels.pop("carapace.pool", None)
-        metadata_labels["carapace.claimed-session"] = session_id
 
+        # A merge patch deletes a label only when set to null; omitting the key
+        # leaves it untouched. Clear carapace.pool explicitly so list_pool_sandboxes
+        # stops counting this StatefulSet, and record the owning session. The pod
+        # template (and its selector labels) is intentionally left unchanged.
         await sts.patch(
             {
-                "metadata": {"labels": metadata_labels},
+                "metadata": {
+                    "labels": {
+                        "carapace.pool": None,
+                        "carapace.claimed-session": session_id,
+                        "carapace.session": session_id,
+                    }
+                }
             }
         )
         return True
