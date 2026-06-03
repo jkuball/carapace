@@ -182,6 +182,20 @@ class SandboxSessionLifecycle:
             return int(suffix), sandbox_id
         return 10**9, sandbox_id
 
+    async def build_session_proxy_env(self, session_id: str) -> dict[str, str]:
+        """Resolve the proxy URL and build the session's proxy env vars."""
+        proxy_token = self.get_or_create_token(session_id)
+        host_ip = await self._runtime.get_host_ip(self._network_name)
+        if not host_ip:
+            raise RuntimeError(
+                f"Cannot build proxy env for session {session_id}: "
+                f"no IP found on network '{self._network_name}'. "
+                "Is the proxy network configured correctly?"
+            )
+        proxy_url = f"http://{host_ip}:{self._proxy_port}"
+        logger.info(f"Proxy URL for session {session_id}: {proxy_url}")
+        return self.build_proxy_env(session_id, proxy_token, proxy_url)
+
     def build_proxy_env(self, session_id: str, proxy_token: str, proxy_url: str) -> dict[str, str]:
         """Build HTTP_PROXY / NO_PROXY env vars for session containers."""
         if not proxy_url:
@@ -284,6 +298,17 @@ class SandboxSessionLifecycle:
                         created_at=time.time(),
                         last_used=time.time(),
                     )
+                    # Claimed warm sandboxes carry no proxy env in their pod spec, so
+                    # rebuild it here; exec relies on session_env to reach the proxy.
+                    try:
+                        sc.session_env = await self.build_session_proxy_env(session_id)
+                    except Exception:
+                        logger.opt(exception=True).warning(
+                            f"Failed to rebuild proxy env on reattach for session {session_id}"
+                        )
+                    stashed_env = self._state.stashed_session_env.pop(session_id, None)
+                    if stashed_env:
+                        sc.session_env.update(stashed_env)
                     self._state.sessions[session_id] = sc
                     await self.log_assignment(
                         existing_id,
@@ -297,19 +322,8 @@ class SandboxSessionLifecycle:
                         f"Failed to re-attach/resume orphaned sandbox {sandbox_name}, will recreate"
                     )
 
-        proxy_token = self.get_or_create_token(session_id)
         try:
-            host_ip = await self._runtime.get_host_ip(self._network_name)
-            if not host_ip:
-                raise RuntimeError(
-                    f"Cannot create sandbox for session {session_id}: "
-                    f"no IP found on network '{self._network_name}'. "
-                    "Is the proxy network configured correctly?"
-                )
-            proxy_url = f"http://{host_ip}:{self._proxy_port}"
-            logger.info(f"Proxy URL for session {session_id}: {proxy_url}")
-
-            env = self.build_proxy_env(session_id, proxy_token, proxy_url)
+            env = await self.build_session_proxy_env(session_id)
             command = self._sandbox_command(configure_proxy=True)
 
             claimed = await self.claim_warm_sandbox(session_id, env)
