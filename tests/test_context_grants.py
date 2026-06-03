@@ -401,7 +401,9 @@ class TestSandboxManagerCredentialCache:
         assert first.sandbox_id == "warm-1"
         assert first.session_id == "warm-1"
         assert first.labels["carapace.pool"] == "true"
-        assert first.labels["carapace.session"] == "warm-1"
+        assert first.labels["carapace.sandbox"] == "warm-1"
+        # Pool members have no owning session until claimed.
+        assert "carapace.session" not in first.labels
         assert first.environment == {}
         assert "setup-proxy.sh" not in " ".join(first.command)
         assert second.name == "carapace-sandbox-warm-2"

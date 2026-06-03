@@ -430,7 +430,10 @@ class KubernetesRuntime(ContainerRuntime):
                     "whenScaled": "Retain",
                 },
                 "selector": {
-                    "matchLabels": {"carapace.session": config.labels.get("carapace.session", sts_name)},
+                    # Key off the stable sandbox id, not the session: a pool member has
+                    # no owning session yet, and claiming one must not require changing
+                    # the (immutable) selector. carapace.session is set on claim instead.
+                    "matchLabels": {"carapace.sandbox": config.labels.get("carapace.sandbox", sts_name)},
                 },
                 "template": {
                     "metadata": {"labels": labels},
@@ -544,10 +547,6 @@ class KubernetesRuntime(ContainerRuntime):
             api=api,
         ):
             sts = cast(StatefulSet, sts)
-            claimed_session = sts.labels.get("carapace.claimed-session")
-            if claimed_session:
-                result[claimed_session] = f"{sts.name}-0"
-                continue
             if sts.labels.get("carapace.pool") == "true":
                 continue
             session_id = sts.labels.get("carapace.session")
@@ -578,23 +577,20 @@ class KubernetesRuntime(ContainerRuntime):
         api = await self._ensure_api()
         sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
 
-        metadata_labels = dict(sts.raw.get("metadata", {}).get("labels", {}))
+        metadata_labels = sts.raw.get("metadata", {}).get("labels", {})
         if metadata_labels.get("carapace.pool") != "true":
-            return False
-        existing_claim = metadata_labels.get("carapace.claimed-session")
-        if existing_claim and existing_claim != session_id:
+            # Not an unclaimed pool member (already claimed or not a pool sandbox).
             return False
 
-        # A merge patch deletes a label only when set to null; omitting the key
-        # leaves it untouched. Clear carapace.pool explicitly so list_pool_sandboxes
-        # stops counting this StatefulSet, and record the owning session. The pod
-        # template (and its selector labels) is intentionally left unchanged.
+        # Claim the pool member: drop the pool marker and stamp the owning session.
+        # A merge patch deletes a label only via an explicit null — omitting the key
+        # would leave carapace.pool in place. carapace.session is safe to set because
+        # the selector keys off the immutable carapace.sandbox.
         await sts.patch(
             {
                 "metadata": {
                     "labels": {
                         "carapace.pool": None,
-                        "carapace.claimed-session": session_id,
                         "carapace.session": session_id,
                     }
                 }

@@ -509,7 +509,9 @@ class SandboxSessionLifecycle:
             session_id=sandbox_id,
             image=self._base_image,
             labels={
-                "carapace.session": sandbox_id,
+                # No carapace.session yet: a pool member has no owning session until
+                # claimed. The selector keys off carapace.sandbox; carapace.session is
+                # stamped on claim.
                 "carapace.sandbox": sandbox_id,
                 "carapace.pool": "true",
                 "carapace.managed": "true",

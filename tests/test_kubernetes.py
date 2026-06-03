@@ -480,10 +480,10 @@ async def test_list_sandboxes_skips_pool_statefulsets() -> None:
     rt._ensure_api = AsyncMock(return_value=object())
 
     session_sts = MagicMock()
-    session_sts.labels = {"carapace.session": "sess-1"}
+    session_sts.labels = {"carapace.session": "sess-1", "carapace.sandbox": "sess-1"}
     session_sts.name = "carapace-sandbox-sess-1"
     pool_sts = MagicMock()
-    pool_sts.labels = {"carapace.session": "warm-1", "carapace.pool": "true"}
+    pool_sts.labels = {"carapace.sandbox": "warm-1", "carapace.pool": "true"}
     pool_sts.name = "carapace-sandbox-warm-1"
 
     async def _statefulsets():
@@ -497,12 +497,13 @@ async def test_list_sandboxes_skips_pool_statefulsets() -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_sandboxes_prefers_claimed_session_label() -> None:
+async def test_list_sandboxes_maps_claimed_warm_by_session_label() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
 
     claimed_sts = MagicMock()
-    claimed_sts.labels = {"carapace.session": "warm-1", "carapace.claimed-session": "sess-2"}
+    # A claimed warm sandbox: pool marker gone, session stamped, sandbox id stable.
+    claimed_sts.labels = {"carapace.sandbox": "warm-1", "carapace.session": "sess-2"}
     claimed_sts.name = "carapace-sandbox-warm-1"
 
     async def _statefulsets():
@@ -515,14 +516,14 @@ async def test_list_sandboxes_prefers_claimed_session_label() -> None:
 
 
 @pytest.mark.asyncio
-async def test_claim_warm_sandbox_patches_claimed_session_label() -> None:
+async def test_claim_warm_sandbox_stamps_session_and_clears_pool() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
 
     sts = AsyncMock()
     sts.raw = {
-        "metadata": {"labels": {"carapace.pool": "true", "carapace.session": "warm-1", "carapace.sandbox": "warm-1"}},
-        "spec": {"template": {"metadata": {"labels": {"carapace.pool": "true", "carapace.session": "warm-1"}}}},
+        "metadata": {"labels": {"carapace.pool": "true", "carapace.sandbox": "warm-1"}},
+        "spec": {"template": {"metadata": {"labels": {"carapace.pool": "true", "carapace.sandbox": "warm-1"}}}},
     }
 
     with patch("carapace.sandbox.kubernetes.StatefulSet") as mock_sts_cls:
@@ -532,25 +533,26 @@ async def test_claim_warm_sandbox_patches_claimed_session_label() -> None:
     assert claimed is True
     patch_doc = sts.patch.await_args.args[0]
     labels = patch_doc["metadata"]["labels"]
-    assert labels["carapace.claimed-session"] == "sess-2"
+    assert labels["carapace.session"] == "sess-2"
     # Merge patch deletes a label only via an explicit null, not by omission.
     assert labels["carapace.pool"] is None
-    assert labels["carapace.session"] == "sess-2"
+    # The selector (carapace.sandbox) and the pod template must not be touched.
+    assert "carapace.sandbox" not in labels
     assert "spec" not in patch_doc
 
 
 @pytest.mark.asyncio
-async def test_claim_warm_sandbox_returns_false_when_already_claimed() -> None:
+async def test_claim_warm_sandbox_returns_false_when_not_in_pool() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
 
     sts = AsyncMock()
+    # Already claimed: pool marker is gone, so it is no longer claimable.
     sts.raw = {
         "metadata": {
             "labels": {
                 "carapace.sandbox": "warm-1",
-                "carapace.session": "warm-1",
-                "carapace.claimed-session": "sess-1",
+                "carapace.session": "sess-1",
             }
         },
     }
