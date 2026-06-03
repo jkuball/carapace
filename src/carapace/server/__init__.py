@@ -225,6 +225,16 @@ async def _idle_cleanup_loop(sandbox_mgr: SandboxManager) -> None:
             logger.warning(f"Sandbox idle cleanup error: {exc}")
 
 
+async def _warm_pool_loop(sandbox_mgr: SandboxManager, target_size: int) -> None:
+    """Periodically keep the warm sandbox pool at its target size."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await sandbox_mgr.ensure_warm_pool(target_size)
+        except Exception as exc:
+            logger.warning(f"Warm sandbox pool maintenance error: {exc}")
+
+
 async def _session_archive_loop() -> None:
     """Periodically archive inactive sessions into the knowledge repo."""
     while True:
@@ -362,6 +372,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         idle_timeout_minutes=_config.sandbox.idle_timeout_minutes,
         proxy_port=proxy_port,
         sandbox_port=_config.server.sandbox_port,
+        warm_pool_size=_config.sandbox.warm_pool_size,
         knowledge_repo_for_session=knowledge_repo_for_session,
     )
     logger.info(f"Sandbox enabled (image={base_image}, network={sandbox_network})")
@@ -377,6 +388,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         removed = await _sandbox_mgr.cleanup_orphaned_sandboxes(known)
         if removed:
             logger.info(f"Cleaned up {removed} orphaned sandbox(es)")
+
+    if _config.sandbox.warm_pool_size > 0 and _config.sandbox.runtime == "kubernetes":
+        warmed = await _sandbox_mgr.ensure_warm_pool(_config.sandbox.warm_pool_size)
+        logger.info(f"Ensured {warmed} warm sandbox(es)")
 
     _user_credential_registries = {}
 
@@ -473,6 +488,11 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     price_updater.start()
 
     cleanup_task = asyncio.create_task(_idle_cleanup_loop(_sandbox_mgr))
+    warm_pool_task = None
+    # Run on Kubernetes regardless of size: a target of 0 tears down any
+    # leftover pool StatefulSets after the feature is disabled or shrunk.
+    if _config.sandbox.runtime == "kubernetes":
+        warm_pool_task = asyncio.create_task(_warm_pool_loop(_sandbox_mgr, _config.sandbox.warm_pool_size))
     archive_task = asyncio.create_task(_session_archive_loop())
     jobs_task = asyncio.create_task(_jobs_scheduler_loop())
 
@@ -508,6 +528,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     yield
     logger.info("Server shutting down…")
     cleanup_task.cancel()
+    if warm_pool_task is not None:
+        warm_pool_task.cancel()
     archive_task.cancel()
     jobs_task.cancel()
     await _matrix_channel_manager.stop_all()

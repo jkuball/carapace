@@ -183,6 +183,7 @@ def test_save_and_load_sandbox_snapshot(tmp_path: Path) -> None:
         exists=True,
         runtime="kubernetes",
         status="scaled_down",
+        sandbox_id="warm-1",
         resource_id="carapace-sandbox-abc-0",
         resource_kind="statefulset",
         storage_present=True,
@@ -198,6 +199,7 @@ def test_save_and_load_sandbox_snapshot(tmp_path: Path) -> None:
     assert reloaded is not None
     assert reloaded.runtime == "kubernetes"
     assert reloaded.status == "scaled_down"
+    assert reloaded.sandbox_id == "warm-1"
     assert reloaded.last_measured_used_bytes == 123_456
 
     mgr.clear_sandbox_snapshot(state.session_id)

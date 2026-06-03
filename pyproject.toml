@@ -54,10 +54,10 @@ packages = ["src/carapace"]
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["frontend/package.json:version"]
-version_pattern = [
-    'charts/carapace/Chart.yaml:^version: (?P<version>.+)$',
-    'charts/carapace/Chart.yaml:^appVersion: "(?P<version>.+)"$',
+version_variables = [
+    "frontend/package.json:version",
+    "charts/carapace/Chart.yaml:version",
+    "charts/carapace/Chart.yaml:appVersion",
 ]
 allow_zero_version = true
 commit_parser = "emoji"

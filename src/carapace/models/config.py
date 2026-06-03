@@ -199,6 +199,8 @@ class SandboxConfig(BaseSettings):
     network_name: str = "carapace-sandbox"
     # Port of the HTTP proxy sidecar that sandbox traffic is routed through.
     proxy_port: int = 3128
+    # Number of generic warm sandboxes to keep ready ahead of assignment (Kubernetes runtime only).
+    warm_pool_size: int = Field(default=0, ge=0)
     # Kubernetes namespace where sandbox pods are created.
     k8s_namespace: str = "carapace"
     # PVC claim name for the shared data volume mounted into sandbox pods.

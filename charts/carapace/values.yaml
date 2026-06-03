@@ -5,6 +5,9 @@ image:
   tag: "" # defaults to appVersion
   pullPolicy: IfNotPresent
 
+# -- Server log level (debug, info, warning, error)
+logLevel: info
+
 frontend:
   enabled: true
   image:
@@ -61,6 +64,8 @@ sandbox:
     storageClass: ""
   # -- Preferred Sandboxes CR name for sandbox StatefulSets; set to null for the release default or "" for Deployment fallback
   sandboxesName:
+  # -- Number of generic warm sandboxes to keep ready for faster claims (0 disables)
+  warmPoolSize: 1
 
 # -- Ingress configuration (Gateway API HTTPRoute)
 ingress:

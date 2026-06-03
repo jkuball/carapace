@@ -79,7 +79,9 @@ Set **`CARAPACE_SANDBOX_K8S_OWNER_REF=false`** to omit `ownerReferences` entirel
 
 ### Idle lifecycle
 
-When a session is idle (configurable timeout, default 15 min), the StatefulSet is scaled to **0 replicas**. The PVC is retained (`whenScaled: Retain`), preserving the workspace, skill venvs, and all session files. When the session resumes, the StatefulSet is scaled back to 1 replica — the pod mounts the existing PVC and is immediately ready (no git clone or venv rebuild needed).
+When a session is idle (configurable timeout, default 60 min), the StatefulSet is scaled to **0 replicas**. The PVC is retained (`whenScaled: Retain`), preserving the workspace, skill venvs, and all session files. When the session resumes, the StatefulSet is scaled back to 1 replica — the pod mounts the existing PVC and is immediately ready (no git clone or venv rebuild needed).
+
+If `CARAPACE_SANDBOX_WARM_POOL_SIZE` is greater than `0`, the server also keeps that many unattached generic warm sandboxes ready. New sessions can claim one of those prestarted StatefulSets instead of waiting for a full cold start. After a successful claim, carapace immediately refills the pool toward the configured target. The claimed sandbox keeps its original unique `sandbox_id` such as `pool-3f9c…`, which is persisted in the session snapshot and shown in the web UI's sandbox inspector.
 
 When a session is permanently deleted (or the user runs `/reload`), the entire StatefulSet is deleted. The PVC is automatically cleaned up via the retention policy (`whenDeleted: Delete`).
 
@@ -95,6 +97,8 @@ env:
     value: kubernetes
   - name: CARAPACE_SANDBOX_BASE_IMAGE
     value: ghcr.io/thiesgerken/carapace-sandbox:latest # pin this to a specific version!
+  - name: CARAPACE_SANDBOX_WARM_POOL_SIZE
+    value: "1" # keep one generic warm sandbox ready for faster claims (Helm: sandbox.warmPoolSize)
   - name: CARAPACE_SANDBOX_K8S_NAMESPACE
     value: carapace
   - name: CARAPACE_SANDBOX_K8S_PVC_CLAIM
@@ -187,7 +191,8 @@ When the server runs inside Kubernetes (the `KUBERNETES_SERVICE_HOST` env var is
 | ------------------------------------------------ | ------------------------- | ---------------------------------------------------------- |
 | `CARAPACE_SANDBOX_RUNTIME`                       | `docker`                  | `docker` or `kubernetes`                                   |
 | `CARAPACE_SANDBOX_BASE_IMAGE`                    | `carapace-sandbox:latest` | Sandbox container image (pin version)                      |
-| `CARAPACE_SANDBOX_IDLE_TIMEOUT_MINUTES`          | `15`                      | Idle sandbox cleanup interval                              |
+| `CARAPACE_SANDBOX_IDLE_TIMEOUT_MINUTES`          | `60`                      | Idle sandbox cleanup interval                              |
+| `CARAPACE_SANDBOX_WARM_POOL_SIZE`                | `0`                       | Number of generic warm sandboxes to keep ready             |
 | `CARAPACE_SANDBOX_PROXY_PORT`                    | `3128`                    | HTTP proxy port for domain filtering                       |
 | `CARAPACE_SANDBOX_K8S_NAMESPACE`                 | `carapace`                | Namespace for sandbox pods                                 |
 | `CARAPACE_SANDBOX_K8S_PVC_CLAIM`                 | `carapace-data`           | Server data PVC claim name                                 |

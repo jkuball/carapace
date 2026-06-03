@@ -14,6 +14,8 @@ def make_runtime_mock() -> MagicMock:
     runtime.destroy_sandbox = AsyncMock()
     runtime.sandbox_exists = AsyncMock(return_value=None)
     runtime.list_sandboxes = AsyncMock(return_value={})
+    runtime.list_pool_sandboxes = AsyncMock(return_value={})
+    runtime.claim_warm_sandbox = AsyncMock(return_value=False)
     runtime.inspect_sandbox = AsyncMock(
         side_effect=lambda _session_id, _name, container_id=None: SandboxInspection(
             exists=container_id is not None,
@@ -31,4 +33,5 @@ def make_runtime_mock() -> MagicMock:
     runtime.ensure_network = AsyncMock()
     runtime.get_self_network_info = AsyncMock(return_value={"network": "bridge"})
     runtime.logs = AsyncMock(return_value="")
+    runtime.write_stdout_log = AsyncMock()
     return runtime

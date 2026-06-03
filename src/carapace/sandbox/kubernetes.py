@@ -430,7 +430,10 @@ class KubernetesRuntime(ContainerRuntime):
                     "whenScaled": "Retain",
                 },
                 "selector": {
-                    "matchLabels": {"carapace.session": config.labels.get("carapace.session", sts_name)},
+                    # Key off the stable sandbox id, not the session: a pool member has
+                    # no owning session yet, and claiming one must not require changing
+                    # the (immutable) selector. carapace.session is set on claim instead.
+                    "matchLabels": {"carapace.sandbox": config.labels.get("carapace.sandbox", sts_name)},
                 },
                 "template": {
                     "metadata": {"labels": labels},
@@ -544,10 +547,56 @@ class KubernetesRuntime(ContainerRuntime):
             api=api,
         ):
             sts = cast(StatefulSet, sts)
+            if sts.labels.get("carapace.pool") == "true":
+                continue
             session_id = sts.labels.get("carapace.session")
             if session_id:
                 result[session_id] = f"{sts.name}-0"
         return result
+
+    async def list_pool_sandboxes(self) -> dict[str, str]:
+        """List unattached warm-pool StatefulSets, returning ``{sandbox_id: pod_name}``."""
+        api = await self._ensure_api()
+        result: dict[str, str] = {}
+        async for sts in StatefulSet.list(
+            namespace=self._namespace,
+            label_selector="app.kubernetes.io/managed-by=carapace-server",
+            api=api,
+        ):
+            sts = cast(StatefulSet, sts)
+            if sts.labels.get("carapace.pool") != "true":
+                continue
+            sandbox_id = sts.labels.get("carapace.sandbox") or sts.labels.get("carapace.session")
+            if sandbox_id:
+                result[sandbox_id] = f"{sts.name}-0"
+        return result
+
+    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
+        """Relabel a warm-pool StatefulSet as claimed by *session_id*."""
+        sts_name = _sanitize_pod_name(name)
+        api = await self._ensure_api()
+        sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
+
+        metadata_labels = sts.raw.get("metadata", {}).get("labels", {})
+        if metadata_labels.get("carapace.pool") != "true":
+            # Not an unclaimed pool member (already claimed or not a pool sandbox).
+            return False
+
+        # Claim the pool member: drop the pool marker and stamp the owning session.
+        # A merge patch deletes a label only via an explicit null — omitting the key
+        # would leave carapace.pool in place. carapace.session is safe to set because
+        # the selector keys off the immutable carapace.sandbox.
+        await sts.patch(
+            {
+                "metadata": {
+                    "labels": {
+                        "carapace.pool": None,
+                        "carapace.session": session_id,
+                    }
+                }
+            }
+        )
+        return True
 
     def _session_pvc_name(self, name: str) -> str:
         return f"session-data-{_sanitize_pod_name(name)}-0"
@@ -813,3 +862,13 @@ class KubernetesRuntime(ContainerRuntime):
         except socket.gaierror:
             logger.warning(f"Could not resolve {svc_dns}")
             return None
+
+    async def write_stdout_log(self, container_id: str, message: str) -> None:
+        quoted_message = shlex.quote(message)
+        result = await self.exec(
+            container_id,
+            f"printf '%s\\n' {quoted_message} > /proc/1/fd/1",
+            timeout=5,
+        )
+        if result.exit_code != 0:
+            raise RuntimeError(f"stdout log write failed: {result.output}")

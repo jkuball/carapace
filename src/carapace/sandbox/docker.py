@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import shutil
 from pathlib import Path
 from typing import cast
@@ -282,6 +283,14 @@ class DockerRuntime(ContainerRuntime):
 
         return await asyncio.to_thread(_list)
 
+    async def list_pool_sandboxes(self) -> dict[str, str]:
+        """Docker does not participate in warm-pool inventory."""
+        return {}
+
+    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
+        """Docker warm sandboxes cannot be claimed safely yet due immutable labels and bind mounts."""
+        return False
+
     async def inspect_sandbox(
         self,
         session_id: str,
@@ -557,6 +566,16 @@ class DockerRuntime(ContainerRuntime):
         if gw:
             logger.debug(f"Using network gateway {gw} as host IP for '{network}' (not running in Docker)")
         return gw
+
+    async def write_stdout_log(self, container_id: str, message: str) -> None:
+        quoted_message = shlex.quote(message)
+        result = await self.exec(
+            container_id,
+            f"printf '%s\\n' {quoted_message} > /proc/1/fd/1",
+            timeout=5,
+        )
+        if result.exit_code != 0:
+            raise RuntimeError(f"stdout log write failed: {result.output}")
 
     async def _get_network_gateway(self, network: str) -> str | None:
         """Return the gateway IP of a Docker bridge *network*.

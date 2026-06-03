@@ -82,11 +82,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:pr${{ github.event.pull_request.number }}
+          tags: |
+            ghcr.io/${{ github.repository }}:pr${{ github.event.pull_request.number }}
+            ghcr.io/${{ github.repository }}:pr${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -103,11 +108,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: frontend
           push: true
-          tags: ghcr.io/${{ github.repository }}-frontend:pr${{ github.event.pull_request.number }}
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:pr${{ github.event.pull_request.number }}
+            ghcr.io/${{ github.repository }}-frontend:pr${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -124,11 +134,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: sandbox
           push: true
-          tags: ghcr.io/${{ github.repository }}-sandbox:pr${{ github.event.pull_request.number }}
+          tags: |
+            ghcr.io/${{ github.repository }}-sandbox:pr${{ github.event.pull_request.number }}
+            ghcr.io/${{ github.repository }}-sandbox:pr${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -145,11 +160,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: bitwarden-cli
           push: true
-          tags: ghcr.io/${{ github.repository }}-bitwarden-cli:pr${{ github.event.pull_request.number }}
+          tags: |
+            ghcr.io/${{ github.repository }}-bitwarden-cli:pr${{ github.event.pull_request.number }}
+            ghcr.io/${{ github.repository }}-bitwarden-cli:pr${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -171,19 +191,31 @@ jobs:
       - name: Package PR Helm chart
         id: package
         run: |
-          base_version=$(awk '/^version:/ { print $2; exit }' charts/carapace/Chart.yaml)
+          base_version=$(awk -F '"' '/^version = "/ { print $2; exit }' pyproject.toml)
           pr_number='${{ github.event.pull_request.number }}'
+          short_sha=$(echo '${{ github.event.pull_request.head.sha }}' | cut -c1-7)
           chart_version="${base_version}-pr.${pr_number}"
+          chart_version_sha="${chart_version}.${short_sha}"
           app_version="pr${pr_number}"
+          app_version_sha="pr${pr_number}-${short_sha}"
 
           mkdir -p dist
+          # Short version (overwritten each push) tracks the mutable prN image tag.
+          # The SHA version pins immutable prN-<sha> images, so pinning ArgoCD to it
+          # forces both a chart refetch and a re-pull of the actual code.
           helm package charts/carapace \
             --destination dist \
             --version "$chart_version" \
             --app-version "$app_version"
+          helm package charts/carapace \
+            --destination dist \
+            --version "$chart_version_sha" \
+            --app-version "$app_version_sha"
 
           echo "chart_version=$chart_version" >> "$GITHUB_OUTPUT"
+          echo "chart_version_sha=$chart_version_sha" >> "$GITHUB_OUTPUT"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "app_version_sha=$app_version_sha" >> "$GITHUB_OUTPUT"
 
       - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
@@ -196,32 +228,37 @@ jobs:
           helm push \
             "dist/carapace-${{ steps.package.outputs.chart_version }}.tgz" \
             oci://ghcr.io/${{ github.repository_owner }}/charts
+          helm push \
+            "dist/carapace-${{ steps.package.outputs.chart_version_sha }}.tgz" \
+            oci://ghcr.io/${{ github.repository_owner }}/charts
 
       - name: Upload PR Helm chart artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: carapace-chart-pr${{ github.event.pull_request.number }}
-          path: dist/carapace-${{ steps.package.outputs.chart_version }}.tgz
+          path: dist/carapace-*.tgz
 
       - name: Print PR preview tags
         run: |
           echo "::notice title=PR preview image tag::${{ steps.package.outputs.app_version }}"
-          echo "::notice title=PR preview chart version::${{ steps.package.outputs.chart_version }}"
+          echo "::notice title=PR preview chart version::${{ steps.package.outputs.chart_version_sha }}"
           echo "Use image tag: ${{ steps.package.outputs.app_version }}"
           echo "Use chart version: ${{ steps.package.outputs.chart_version }}"
+          echo "Pin to commit: ${{ steps.package.outputs.chart_version_sha }}"
 
           {
             echo "## PR preview artifacts"
             echo
-            echo "Use image tag: ${{ steps.package.outputs.app_version }}"
-            echo "Use chart version: ${{ steps.package.outputs.chart_version }}"
+            echo "Mutable image tag: ${{ steps.package.outputs.app_version }}"
+            echo "Immutable image tag: ${{ steps.package.outputs.app_version_sha }}"
             echo
-            echo "Images:"
-            echo "- ghcr.io/${{ github.repository }}:${{ steps.package.outputs.app_version }}"
-            echo "- ghcr.io/${{ github.repository }}-frontend:${{ steps.package.outputs.app_version }}"
-            echo "- ghcr.io/${{ github.repository }}-sandbox:${{ steps.package.outputs.app_version }}"
-            echo "- ghcr.io/${{ github.repository }}-bitwarden-cli:${{ steps.package.outputs.app_version }}"
+            echo "Images (mutable / immutable):"
+            echo "- ghcr.io/${{ github.repository }}:${{ steps.package.outputs.app_version }} | :${{ steps.package.outputs.app_version_sha }}"
+            echo "- ghcr.io/${{ github.repository }}-frontend:${{ steps.package.outputs.app_version }} | :${{ steps.package.outputs.app_version_sha }}"
+            echo "- ghcr.io/${{ github.repository }}-sandbox:${{ steps.package.outputs.app_version }} | :${{ steps.package.outputs.app_version_sha }}"
+            echo "- ghcr.io/${{ github.repository }}-bitwarden-cli:${{ steps.package.outputs.app_version }} | :${{ steps.package.outputs.app_version_sha }}"
             echo
             echo "Chart:"
-            echo "- oci://ghcr.io/${{ github.repository_owner }}/charts/carapace --version ${{ steps.package.outputs.chart_version }}"
+            echo "- oci://ghcr.io/${{ github.repository_owner }}/charts/carapace --version ${{ steps.package.outputs.chart_version }} (mutable images)"
+            echo "- Pin to commit (forces ArgoCD refetch + re-pull): --version ${{ steps.package.outputs.chart_version_sha }}"
           } >> "$GITHUB_STEP_SUMMARY"
