@@ -53,6 +53,7 @@ class SandboxSessionLifecycle:
     _READY_MARKER = "carapace sandbox ready"
     _COMMIT_TRAILER_KEY = "carapace-session"
     _WARM_POOL_PREFIX = "pool-"
+    _READY_TIMEOUT_SECONDS = 180
 
     def __init__(
         self,
@@ -534,13 +535,13 @@ class SandboxSessionLifecycle:
             logger.opt(exception=True).warning(f"Could not retrieve logs from container {container_id[:12]}")
 
     async def wait_for_ready(self, container_id: str, session_id: str) -> None:
-        """Poll container logs until the ready marker appears (up to 30s)."""
-        for _ in range(30):
+        """Poll container logs until the ready marker appears."""
+        for _ in range(self._READY_TIMEOUT_SECONDS):
             log_output = await self._runtime.logs(container_id, tail=10)
             if self._READY_MARKER in log_output:
                 return
             await asyncio.sleep(1)
-        logger.warning(f"Sandbox for {session_id} did not become ready within 30s")
+        logger.warning(f"Sandbox for {session_id} did not become ready within {self._READY_TIMEOUT_SECONDS}s")
 
     async def clone_knowledge_repo(
         self,

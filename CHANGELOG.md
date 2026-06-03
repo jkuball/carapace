@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.136.1 (2026-06-03)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: non-blocking warm-pool startup and longer readiness timeout
+  ([`15314ff`](https://github.com/thiesgerken/carapace/commit/15314ffb639b58e6b58feed30bec65d371ea91db))
+
+  API startup awaited the initial ensure_warm_pool, so the server only began serving after the pool was up. Provision the pool via the background _warm_pool_loop instead (first iteration runs immediately). Also raise the sandbox readiness timeout from 30s to 180s, since image pull and pod scheduling commonly exceed 30s.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.0 (2026-06-03)
 
 
