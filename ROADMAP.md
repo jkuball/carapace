@@ -15,7 +15,6 @@
 
 - [ ] an actual database backend instead of files
 - [ ] api keys, mainly for subagents
-- [ ] keep a warm sandbox to be used as any time, the cold start in k8s is too much
 
 ## Workspace
 
