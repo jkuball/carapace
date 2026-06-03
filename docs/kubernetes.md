@@ -98,7 +98,7 @@ env:
   - name: CARAPACE_SANDBOX_BASE_IMAGE
     value: ghcr.io/thiesgerken/carapace-sandbox:latest # pin this to a specific version!
   - name: CARAPACE_SANDBOX_WARM_POOL_SIZE
-    value: "1" # optional: keep one generic warm sandbox ready for faster claims
+    value: "1" # keep one generic warm sandbox ready for faster claims (Helm: sandbox.warmPoolSize)
   - name: CARAPACE_SANDBOX_K8S_NAMESPACE
     value: carapace
   - name: CARAPACE_SANDBOX_K8S_PVC_CLAIM

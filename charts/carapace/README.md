@@ -115,11 +115,9 @@ envFrom:
 extraEnv:
   - name: CARAPACE_LOG_LEVEL
     value: debug
-  - name: CARAPACE_SANDBOX_WARM_POOL_SIZE
-    value: "1"
 ```
 
-On Kubernetes, `CARAPACE_SANDBOX_WARM_POOL_SIZE` keeps generic warm sandboxes ready for faster claims.
+`sandbox.warmPoolSize` (default `1`) keeps that many generic warm sandboxes ready for faster claims; set it to `0` to disable.
 
 ### Application configuration
 
