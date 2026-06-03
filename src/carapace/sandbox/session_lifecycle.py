@@ -7,7 +7,6 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from loguru import logger
 from pydantic import BaseModel
@@ -190,9 +189,11 @@ class SandboxSessionLifecycle:
 
         A random id (never a recycled sequence) makes it impossible for a deleted
         sandbox's id to be reused and accidentally reattach a stale session to a
-        sandbox now owned by someone else.
+        sandbox now owned by someone else. Kept short (12 hex chars) so the derived
+        StatefulSet name plus k8s's controller-revision-hash stays within the 63-byte
+        label limit.
         """
-        return f"{self._WARM_POOL_PREFIX}{uuid4().hex}"
+        return f"{self._WARM_POOL_PREFIX}{secrets.token_hex(6)}"
 
     def _sandbox_command(self, *, configure_proxy: bool) -> list[str]:
         prefix = "setup-proxy.sh && " if configure_proxy else ""
