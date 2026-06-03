@@ -9,7 +9,7 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, Thinking
 from ..auth import UserIdentity
 from ..models.tooling import normalize_tool_call_args
 from ..security.context import ApprovalSource, ApprovalVerdict
-from ..ws_models import FinalStatus
+from ..ws_models import Attachment, FinalStatus
 from .auth import verify_token
 from .state import server_module
 
@@ -68,6 +68,7 @@ class HistoryMessage(BaseModel):
     tool_id: str | None = None
     parent_tool_id: str | None = None
     exit_code: int | None = None
+    attachments: list[Attachment] | None = None
 
     @model_validator(mode="after")
     def _contexts_from_args_when_missing(self) -> Self:

@@ -52,6 +52,7 @@ from ..usage import (
 )
 from ..ws_models import (
     ApprovalResponse,
+    Attachment,
     EscalationResponse,
 )
 from .approvals import SessionApprovalMixin
@@ -480,6 +481,7 @@ class SessionEngine(
         content: str,
         *,
         origin: SessionSubscriber | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> None:
         """Start an agent turn.  Safe to call from any channel."""
         active = self._ensure_active(session_id)
@@ -497,7 +499,7 @@ class SessionEngine(
         await self.clear_pending_notifications(session_id)
 
         active.agent_task = asyncio.create_task(
-            self._run_turn(active, content, origin=origin),
+            self._run_turn(active, content, origin=origin, attachments=attachments or []),
             name=f"agent-turn-{session_id}",
         )
 

@@ -512,6 +512,67 @@ export async function wipeSandbox(
   return res.json();
 }
 
+export interface UploadedFile {
+  name: string;
+  path: string;
+}
+
+export function uploadSandboxFile(
+  server: string,
+  sessionId: string,
+  file: File,
+  opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+): Promise<UploadedFile> {
+  return new Promise<UploadedFile>((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${server}/api/sessions/${sessionId}/sandbox/files`);
+    xhr.withCredentials = true;
+
+    if (xhr.upload && opts.onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) opts.onProgress!(e.loaded / e.total);
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as UploadedFile);
+        } catch {
+          reject(new Error("Invalid upload response"));
+        }
+        return;
+      }
+      let detail = `Upload failed: ${xhr.status}`;
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (isRecord(body)) {
+          const d = readString(body, "detail");
+          if (d) detail = d;
+        }
+      } catch {
+        // keep generic message
+      }
+      reject(new Error(detail));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      opts.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+
+    xhr.send(form);
+  });
+}
+
 export async function fetchHistory(
   server: string,
   token: string,

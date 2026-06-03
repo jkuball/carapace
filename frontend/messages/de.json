@@ -406,6 +406,9 @@
         "queued": "Warteschlange: {message}",
         "startVoiceInput": "Spracheingabe starten",
         "stopVoiceInput": "Spracheingabe stoppen",
+        "attachFile": "Datei anhängen",
+        "attachFileUnavailable": "Sandbox starten, um Dateien hochzuladen",
+        "removeAttachment": "Entfernen",
         "placeholder": "Nachricht an carapace…",
         "usageBreakdown": {
             "systemLine": "System: {percent}%",

@@ -27,7 +27,7 @@ from ..ws_models import ApprovalRequest, ApprovalResponse, EscalationResponse, F
 class SessionSubscriber(Protocol):
     """Channel callback surface for session events."""
 
-    async def on_user_message(self, content: str, *, from_self: bool) -> None: ...
+    async def on_user_message(self, content: str, *, from_self: bool, attachments: list[Any] | None = None) -> None: ...
     async def on_tool_call(
         self,
         tool: str,

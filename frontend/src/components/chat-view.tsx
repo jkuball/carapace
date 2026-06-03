@@ -22,10 +22,12 @@ import {
   startSandbox,
   stopSandbox,
   updateSession,
+  uploadSandboxFile,
   wipeSandbox,
   wsUrl,
 } from "@/lib/api";
 import type {
+  Attachment,
   ChatMessage,
   ClientMessage,
   EscalationDecision,
@@ -564,7 +566,11 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
     const entry = history[index];
 
     if (entry.role === "user") {
-      messages.push({ kind: "user", content: entry.content });
+      messages.push({
+        kind: "user",
+        content: entry.content,
+        attachments: entry.attachments,
+      });
       continue;
     }
 
@@ -906,6 +912,7 @@ export function ChatView({
   const isAtBottomRef = useRef(true);
   const lastThinkingStartedAtRef = useRef<string | null>(null);
   const queueRef = useRef<string | null>(null);
+  const queuedAttachmentsRef = useRef<Attachment[]>([]);
   const resetRollbackRef = useRef<ChatMessage[] | null>(null);
   const sendRef = useRef<(msg: ClientMessage) => void>(() => {});
   const onSandboxUpdateRef = useRef(onSandboxUpdate);
@@ -1079,10 +1086,16 @@ export function ChatView({
   const finishWaiting = useCallback(() => {
     clearToolLoading();
     const queued = queueRef.current;
-    if (queued) {
+    if (queued !== null || queuedAttachmentsRef.current.length > 0) {
+      const queuedAttachments = queuedAttachmentsRef.current;
       queueRef.current = null;
+      queuedAttachmentsRef.current = [];
       setQueuedMessage(null);
-      sendRef.current({ type: "message", content: queued });
+      sendRef.current({
+        type: "message",
+        content: queued ?? "",
+        attachments: queuedAttachments,
+      });
       markSessionKnowledgeChanged();
       // stay in waiting state
     } else {
@@ -1393,7 +1406,7 @@ export function ChatView({
           }
           setMessages((prev) => [
             ...prev,
-            { kind: "user", content: msg.content },
+            { kind: "user", content: msg.content, attachments: msg.attachments },
           ]);
           break;
         case "token":
@@ -1443,6 +1456,7 @@ export function ChatView({
   const onWsDisconnect = useCallback(() => {
     resetRollbackRef.current = null;
     queueRef.current = null;
+    queuedAttachmentsRef.current = [];
     lastThinkingStartedAtRef.current = null;
     setQueuedMessage(null);
     clearToolLoading();
@@ -1492,14 +1506,23 @@ export function ChatView({
       el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
   }, []);
 
-  function handleSend(content: string) {
+  const uploadFile = useCallback(
+    (
+      file: File,
+      opts?: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
+    ) => uploadSandboxFile(server, sessionId, file, opts ?? {}),
+    [server, sessionId],
+  );
+
+  function handleSend(content: string, attachments: Attachment[] = []) {
     resetRollbackRef.current = null;
     if (waiting) {
       queueRef.current = content;
+      queuedAttachmentsRef.current = attachments;
       setQueuedMessage(content);
     } else {
       lastThinkingStartedAtRef.current = null;
-      send({ type: "message", content });
+      send({ type: "message", content, attachments });
       markSessionKnowledgeChanged(true);
       setWaiting(true);
     }
@@ -1508,6 +1531,7 @@ export function ChatView({
   function handleInterrupt(content: string) {
     resetRollbackRef.current = null;
     queueRef.current = content;
+    queuedAttachmentsRef.current = [];
     setQueuedMessage(content);
     send({ type: "cancel" });
   }
@@ -1520,6 +1544,7 @@ export function ChatView({
 
     resetRollbackRef.current = currentMessages;
     queueRef.current = null;
+    queuedAttachmentsRef.current = [];
     setQueuedMessage(null);
     lastThinkingStartedAtRef.current = null;
     setLlmActivity(null);
@@ -2532,6 +2557,8 @@ export function ChatView({
             commands={commands}
             availableModelEntries={availableModelEntries}
             usage={usage}
+            sandboxRunning={sandbox?.status === "running"}
+            uploadFile={uploadFile}
           />
         </div>
 

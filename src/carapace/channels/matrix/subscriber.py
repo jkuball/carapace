@@ -63,7 +63,7 @@ class MatrixSubscriber:
         except asyncio.CancelledError:
             pass
 
-    async def on_user_message(self, content: str, *, from_self: bool) -> None:
+    async def on_user_message(self, content: str, *, from_self: bool, attachments: list[Any] | None = None) -> None:
         if from_self:
             return  # Matrix client already shows the sender's own message
         # Cross-channel message (e.g. from web UI) — forward to the room
