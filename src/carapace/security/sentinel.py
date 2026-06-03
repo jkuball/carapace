@@ -487,8 +487,7 @@ class Sentinel:
             instructions=self._load_system_prompt,
             capabilities=[LlmRequestLogCapability(source="sentinel")],
             model_settings=model_settings,
-            output_retries=2,
-            tool_retries=1,
+            retries={"tools": 1, "output": 2},
         )
 
         self._register_agent_tools(agent)

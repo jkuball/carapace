@@ -66,8 +66,7 @@ async def generate_title(
         instructions=_SYSTEM_PROMPT,
         model_settings=model_settings,
         capabilities=[LlmRequestLogCapability(source="titler")],
-        tool_retries=1,
-        output_retries=2,
+        retries={"tools": 1, "output": 2},
     )
     try:
         if before_llm_call is not None:
