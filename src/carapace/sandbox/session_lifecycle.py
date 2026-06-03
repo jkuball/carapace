@@ -7,6 +7,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from loguru import logger
 from pydantic import BaseModel
@@ -52,7 +53,7 @@ class SandboxSessionLifecycleState:
 class SandboxSessionLifecycle:
     _READY_MARKER = "carapace sandbox ready"
     _COMMIT_TRAILER_KEY = "carapace-session"
-    _WARM_POOL_PREFIX = "warm-"
+    _WARM_POOL_PREFIX = "pool-"
 
     def __init__(
         self,
@@ -184,19 +185,18 @@ class SandboxSessionLifecycle:
             return sandbox_name.removeprefix(prefix)
         return self.sandbox_id_for_session(session_id)
 
-    def warm_pool_sandbox_id(self, slot: int) -> str:
-        """Return the stable sandbox ID for a warm-pool slot."""
-        return f"{self._WARM_POOL_PREFIX}{slot}"
+    def new_pool_sandbox_id(self) -> str:
+        """Return a fresh, unique sandbox ID for a warm-pool member.
+
+        A random id (never a recycled sequence) makes it impossible for a deleted
+        sandbox's id to be reused and accidentally reattach a stale session to a
+        sandbox now owned by someone else.
+        """
+        return f"{self._WARM_POOL_PREFIX}{uuid4().hex}"
 
     def _sandbox_command(self, *, configure_proxy: bool) -> list[str]:
         prefix = "setup-proxy.sh && " if configure_proxy else ""
         return ["sh", "-c", f"{prefix}echo '{self._READY_MARKER}' && exec sleep infinity"]
-
-    def _warm_pool_sort_key(self, sandbox_id: str) -> tuple[int, str]:
-        suffix = sandbox_id.removeprefix(self._WARM_POOL_PREFIX)
-        if suffix.isdigit():
-            return int(suffix), sandbox_id
-        return 10**9, sandbox_id
 
     async def build_session_proxy_env(self, session_id: str) -> dict[str, str]:
         """Resolve the proxy URL and build the session's proxy env vars."""
@@ -290,11 +290,19 @@ class SandboxSessionLifecycle:
             self.prepare_session_recreate(session_id)
         else:
             existing_id = await self._runtime.sandbox_exists(sandbox_name)
-            if not existing_id and self._runtime.runtime_kind == "kubernetes":
-                existing_id = (await self._runtime.list_sandboxes()).get(session_id)
-                if isinstance(existing_id, str) and existing_id:
-                    sandbox_name = self.sandbox_name_for_live_resource(session_id, existing_id)
-                    sandbox_id = self.sandbox_id_for_live_resource(session_id, existing_id)
+            if self._runtime.runtime_kind == "kubernetes":
+                owned = (await self._runtime.list_sandboxes()).get(session_id)
+                if existing_id and owned != existing_id:
+                    # The sandbox at our snapshot's name is labelled for a different
+                    # session. Pool ids are random uuids, so this should never happen;
+                    # never silently hijack another session's sandbox.
+                    raise RuntimeError(
+                        f"Sandbox {sandbox_name} exists but is owned by another session, not {session_id}"
+                    )
+                if not existing_id and isinstance(owned, str) and owned:
+                    existing_id = owned
+                    sandbox_name = self.sandbox_name_for_live_resource(session_id, owned)
+                    sandbox_id = self.sandbox_id_for_live_resource(session_id, owned)
             if isinstance(existing_id, str) and existing_id:
                 try:
                     if await self._runtime.is_running(existing_id):
@@ -401,29 +409,20 @@ class SandboxSessionLifecycle:
         # recreates, or destroys a pool entry while a claim is mid-flight.
         async with self._warm_claim_lock:
             pool = await self._runtime.list_pool_sandboxes()
-            for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+            for sandbox_id in sorted(pool):
                 await self.ensure_warm_sandbox(sandbox_id)
 
             pool = await self._runtime.list_pool_sandboxes()
             while len(pool) > target_size:
-                sandbox_id = sorted(pool, key=self._warm_pool_sort_key, reverse=True)[0]
+                sandbox_id = sorted(pool)[-1]
                 container_id = pool.pop(sandbox_id)
                 sandbox_name = self.sandbox_name_for_id(sandbox_id)
                 await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, container_id)
 
             while len(pool) < target_size:
-                sandbox_id = await self._next_available_warm_sandbox_id()
+                sandbox_id = self.new_pool_sandbox_id()
                 pool[sandbox_id] = await self.ensure_warm_sandbox(sandbox_id)
             return len(pool)
-
-    async def _next_available_warm_sandbox_id(self) -> str:
-        slot = 1
-        while True:
-            sandbox_id = self.warm_pool_sandbox_id(slot)
-            existing_id = await self._runtime.sandbox_exists(self.sandbox_name_for_id(sandbox_id))
-            if not existing_id:
-                return sandbox_id
-            slot += 1
 
     async def claim_warm_sandbox(self, session_id: str, env: dict[str, str]) -> SessionContainer | None:
         """Attach an existing warm sandbox to *session_id* when supported by the runtime."""
@@ -433,7 +432,7 @@ class SandboxSessionLifecycle:
         async with self._warm_claim_lock:
             assigned = {sc.sandbox_id for sc in self._state.sessions.values() if sc.sandbox_id}
             pool = await self._runtime.list_pool_sandboxes()
-            for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+            for sandbox_id in sorted(pool):
                 if sandbox_id in assigned:
                     continue
 

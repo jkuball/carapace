@@ -379,15 +379,9 @@ class TestSandboxManagerCredentialCache:
     async def test_ensure_warm_pool_creates_unattached_sandboxes(self, tmp_path: Path):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
-        runtime.list_pool_sandboxes = AsyncMock(
-            side_effect=[
-                {},
-                {"warm-1": "warm-container-1"},
-                {"warm-1": "warm-container-1", "warm-2": "warm-container-2"},
-            ]
-        )
-        runtime.sandbox_exists = AsyncMock(side_effect=[None, None, "warm-container-1", None, None])
-        runtime.create_sandbox = AsyncMock(side_effect=["warm-container-1", "warm-container-2"])
+        runtime.list_pool_sandboxes = AsyncMock(side_effect=[{}, {}, {}])
+        runtime.sandbox_exists = AsyncMock(return_value=None)
+        runtime.create_sandbox = AsyncMock(side_effect=["pool-container-1", "pool-container-2"])
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
         mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
 
@@ -397,16 +391,18 @@ class TestSandboxManagerCredentialCache:
         assert runtime.create_sandbox.await_count == 2
         first = runtime.create_sandbox.await_args_list[0].args[0]
         second = runtime.create_sandbox.await_args_list[1].args[0]
-        assert first.name == "carapace-sandbox-warm-1"
-        assert first.sandbox_id == "warm-1"
-        assert first.session_id == "warm-1"
+        # Pool members get unique uuid-based ids, not a recycled sequence.
+        assert first.sandbox_id.startswith("pool-")
+        assert first.name == f"carapace-sandbox-{first.sandbox_id}"
+        assert first.session_id == first.sandbox_id
         assert first.labels["carapace.pool"] == "true"
-        assert first.labels["carapace.sandbox"] == "warm-1"
+        assert first.labels["carapace.sandbox"] == first.sandbox_id
         # Pool members have no owning session until claimed.
         assert "carapace.session" not in first.labels
         assert first.environment == {}
         assert "setup-proxy.sh" not in " ".join(first.command)
-        assert second.name == "carapace-sandbox-warm-2"
+        assert second.sandbox_id.startswith("pool-")
+        assert second.sandbox_id != first.sandbox_id
 
     @pytest.mark.anyio
     async def test_ensure_warm_pool_shrinks_extra_unattached_sandboxes(self, tmp_path: Path):

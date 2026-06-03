@@ -4,7 +4,7 @@ All agent tool invocations — script execution, shell commands, file operations
 
 ## Execution model
 
-Each session resolves to a logical sandbox identified by `sandbox_id`. By default that ID matches the session ID. When the Kubernetes warm pool is enabled, a session may instead claim a prestarted generic sandbox such as `warm-1`, so `sandbox_id` and `session_id` can differ. The sandbox inspector in the web UI surfaces that current `sandbox_id` so claimed warm sandboxes are visible.
+Each session resolves to a logical sandbox identified by `sandbox_id`. By default that ID matches the session ID. When the Kubernetes warm pool is enabled, a session may instead claim a prestarted generic sandbox with a unique id such as `pool-3f9c…`, so `sandbox_id` and `session_id` can differ. The sandbox inspector in the web UI surfaces that current `sandbox_id` so claimed warm sandboxes are visible.
 
 The active sandbox provides the agent with a workspace where it can read files, run commands, and interact with skills.
 
@@ -101,7 +101,7 @@ Important semantics:
 - **Creation**: A container is created (or ensured running) when a session needs it — typically on the first tool call
 - **Reuse**: The container stays running for the session's duration. Multiple tool calls reuse the same container.
 - **Idle timeout**: Configurable (default: 60 min). In Docker mode, idle containers are destroyed. In Kubernetes mode, the StatefulSet is scaled to 0 replicas — the PVC is retained, so venvs and workspace state survive.
-- **Warm pool**: If `CARAPACE_SANDBOX_WARM_POOL_SIZE > 0`, carapace maintains that many unattached base-image sandboxes ahead of time. On Kubernetes, new sessions claim one of these warm sandboxes before falling back to cold creation. The claimed sandbox keeps its own `sandbox_id` (for example `warm-1`) while still being attached to the session.
+- **Warm pool**: If `CARAPACE_SANDBOX_WARM_POOL_SIZE > 0`, carapace maintains that many unattached base-image sandboxes ahead of time. On Kubernetes, new sessions claim one of these warm sandboxes before falling back to cold creation. The claimed sandbox keeps its own unique `sandbox_id` (for example `pool-3f9c…`) while still being attached to the session.
 - **Re-warming**: When the user sends a new message after the container expired, a new container is created (Docker: fresh container with same bind mounts; Kubernetes: StatefulSet scaled back to 1 replica, PVC still attached). carapace restores committed provider files from the pushed upstream revision and reruns the matching automatic setup providers for activated skills. Approved skill credentials are made available before that setup runs so `setup.sh` can materialize local config files if needed.
 - **Reset** (`/reload`): Fully destroys the container and workspace (including the PVC in Kubernetes mode) and creates a fresh sandbox with a new git clone on the next command.
 
