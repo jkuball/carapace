@@ -113,9 +113,11 @@ envFrom:
       name: carapace-env # optional ConfigMap for non-sensitive environment variables
 
 extraEnv:
-  - name: CARAPACE_LOG_LEVEL
-    value: debug
+  - name: SOME_OTHER_VAR
+    value: foo
 ```
+
+Set the server log level via `logLevel` (default `info`; `debug`, `warning`, `error`).
 
 `sandbox.warmPoolSize` (default `1`) keeps that many generic warm sandboxes ready for faster claims; set it to `0` to disable.
 

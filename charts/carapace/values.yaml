@@ -5,6 +5,9 @@ image:
   tag: "" # defaults to appVersion
   pullPolicy: IfNotPresent
 
+# -- Server log level (debug, info, warning, error)
+logLevel: info
+
 frontend:
   enabled: true
   image:

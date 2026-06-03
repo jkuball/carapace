@@ -42,6 +42,8 @@ spec:
           env:
             - name: CARAPACE_CONFIG
               value: /var/lib/carapace/config.yaml
+            - name: CARAPACE_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
             - name: CARAPACE_SERVER_PORT
               value: {{ .Values.server.apiPort | quote }}
             - name: CARAPACE_SERVER_SANDBOX_PORT
