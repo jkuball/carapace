@@ -374,6 +374,10 @@ class SandboxSessionLifecycle:
             sc.session_env.update(stashed_env)
         self._state.sessions[session_id] = sc
         logger.info(f"Created sandbox container {container_id[:12]} for session {session_id} (IP: {ip})")
+        try:
+            await self.ensure_warm_pool(self._warm_pool_size)
+        except Exception:
+            logger.opt(exception=True).warning("Failed to replenish warm sandbox pool after cold create")
         return sc, True
 
     async def ensure_warm_pool(self, target_size: int) -> int:
@@ -383,21 +387,24 @@ class SandboxSessionLifecycle:
         if target_size <= 0:
             target_size = 0
 
-        pool = await self._runtime.list_pool_sandboxes()
-        for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
-            await self.ensure_warm_sandbox(sandbox_id)
+        # Serialize against claim_warm_sandbox so pool maintenance never resumes,
+        # recreates, or destroys a pool entry while a claim is mid-flight.
+        async with self._warm_claim_lock:
+            pool = await self._runtime.list_pool_sandboxes()
+            for sandbox_id in sorted(pool, key=self._warm_pool_sort_key):
+                await self.ensure_warm_sandbox(sandbox_id)
 
-        pool = await self._runtime.list_pool_sandboxes()
-        while len(pool) > target_size:
-            sandbox_id = sorted(pool, key=self._warm_pool_sort_key, reverse=True)[0]
-            container_id = pool.pop(sandbox_id)
-            sandbox_name = self.sandbox_name_for_id(sandbox_id)
-            await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, container_id)
+            pool = await self._runtime.list_pool_sandboxes()
+            while len(pool) > target_size:
+                sandbox_id = sorted(pool, key=self._warm_pool_sort_key, reverse=True)[0]
+                container_id = pool.pop(sandbox_id)
+                sandbox_name = self.sandbox_name_for_id(sandbox_id)
+                await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, container_id)
 
-        while len(pool) < target_size:
-            sandbox_id = await self._next_available_warm_sandbox_id()
-            pool[sandbox_id] = await self.ensure_warm_sandbox(sandbox_id)
-        return len(pool)
+            while len(pool) < target_size:
+                sandbox_id = await self._next_available_warm_sandbox_id()
+                pool[sandbox_id] = await self.ensure_warm_sandbox(sandbox_id)
+            return len(pool)
 
     async def _next_available_warm_sandbox_id(self) -> str:
         slot = 1

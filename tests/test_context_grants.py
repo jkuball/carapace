@@ -488,7 +488,12 @@ class TestSandboxManagerCredentialCache:
         assert sc.sandbox_id == "sess-1"
         assert sc.container_id == "cold-pod-1"
         runtime.destroy_sandbox.assert_awaited_once_with("sess-1", "carapace-sandbox-warm-1", "warm-pod-1")
-        runtime.create_sandbox.assert_awaited_once()
+        # First create is the cold-create fallback; a second create refills the pool.
+        cold_config = runtime.create_sandbox.await_args_list[0].args[0]
+        assert cold_config.session_id == "sess-1"
+        assert "carapace.pool" not in cold_config.labels
+        refill_config = runtime.create_sandbox.await_args_list[1].args[0]
+        assert refill_config.labels.get("carapace.pool") == "true"
 
     @pytest.mark.anyio
     async def test_concurrent_warm_claims_do_not_share_same_sandbox(self, tmp_path: Path):
