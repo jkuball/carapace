@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.135.4 (2026-06-03)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates to df4cb1c
+  ([`4a838a2`](https://github.com/thiesgerken/carapace/commit/4a838a2054ec4539d83aca82b4b720fadab0c966))
+
 ## v0.135.3 (2026-06-03)
 
 
