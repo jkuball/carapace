@@ -1,6 +1,135 @@
 # CHANGELOG
 
 
+## v0.136.0 (2026-06-03)
+
+
+### Other
+
+
+- fix: shorten warm-pool sandbox id to fit 63-byte label limit
+  ([`7e111f1`](https://github.com/thiesgerken/carapace/commit/7e111f18a86efbc3c2e16bdafe0c5cf782ef1c78))
+
+  uuid4().hex (32 chars) made the StatefulSet name plus k8s's controller-revision-hash exceed the 63-byte label limit. Use a 12-hex-char random suffix (secrets.token_hex(6)) instead.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: migrate to pydantic-ai retries dict
+  ([`873209a`](https://github.com/thiesgerken/carapace/commit/873209a16d6c5ec0f8d72a296bb71b73a5f41e86))
+
+  Replace deprecated Agent(tool_retries=, output_retries=) with retries={'tools': , 'output': } (removed in pydantic-ai v2.0).
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- refactor: random uuid ids for warm-pool sandboxes
+  ([`20db501`](https://github.com/thiesgerken/carapace/commit/20db5014eb320eb0199d6257d34ff685d70cbc23))
+
+  Sequential warm-N ids were recycled: if a claimed sandbox's StatefulSet was deleted out-of-band, the pool would recreate the same warm-N name and a stale session could reattach by name to a sandbox now owned by another session. Give pool members unique pool-<uuid4> ids that are never reused, and on reattach error out if a name-matched sandbox is not labelled for the requesting session (should never happen, but never hijack).
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- refactor: key sandbox selector on sandbox id, session label = owner
+  ([`9fb7c28`](https://github.com/thiesgerken/carapace/commit/9fb7c28f84d5678ffb376346e48f54b4bc65535d))
+
+  The StatefulSet pod selector keyed on carapace.session, which is immutable, forcing pool members to be seeded with a fake session (the slot id, e.g. warm-1) and requiring a separate claimed-session label to track the real owner.
+
+  Key the selector on carapace.sandbox (the stable, immutable identity) instead. Pool members are now created with no carapace.session; claiming one stamps carapace.session with the owning session id and clears carapace.pool. Drops the redundant carapace.claimed-session label and simplifies list_sandboxes.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: actually clear carapace.pool label on warm claim
+  ([`dc1a32e`](https://github.com/thiesgerken/carapace/commit/dc1a32e8888191ae8af9e33b63def992e123800d))
+
+  The claim merge-patch popped carapace.pool from the labels dict, but a merge patch only deletes a label when set to null — omitting the key leaves it. So claimed StatefulSets kept pool=true, list_pool_sandboxes counted them, the pool always looked full, and no replacement warm sandbox was created. Set the label to null explicitly and record the owning session via carapace.session / carapace.claimed-session.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ci: push immutable per-commit PR image tags
+  ([`ff43609`](https://github.com/thiesgerken/carapace/commit/ff436097d36ad6be6b9f994495baa892a5ef9137))
+
+  PR images were tagged only with the mutable prN tag, which images default to via Chart.AppVersion. With pullPolicy IfNotPresent, a chart bump wouldn't re-pull the actual code. Also tag each image prN-<sha> and set the SHA chart's app-version to it, so pinning ArgoCD to the SHA chart version forces both a refetch and a re-pull.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: replenish warm pool in background after claim
+  ([`b030130`](https://github.com/thiesgerken/carapace/commit/b03013049c44d8f66962b3fe594aca7d9e99e866))
+
+  The post-claim/post-cold-create ensure_warm_pool was awaited inline, so session start blocked on the replacement pod's create + wait_for_ready (up to 30s) under _warm_claim_lock. Schedule it as a background task so the new warm sandbox starts provisioning immediately without delaying the session.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ci: publish PR chart with commit-hash version
+  ([`dfa692d`](https://github.com/thiesgerken/carapace/commit/dfa692d151bc6a5924715222c8dbbca6f585e5ce))
+
+  The -pr.N chart version is identical on every push, so ArgoCD won't refetch. Also package and push an immutable -pr.N.<sha> version; pin ArgoCD targetRevision to it to force a refresh.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat(chart): expose logLevel value
+  ([`ac989dd`](https://github.com/thiesgerken/carapace/commit/ac989ddf1e508047f2e706d7943246fc10f992f9))
+
+  Add a first-class logLevel Helm value (default info) wired to CARAPACE_LOG_LEVEL, instead of setting it manually via extraEnv.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat(chart): expose sandbox.warmPoolSize value
+  ([`edb513c`](https://github.com/thiesgerken/carapace/commit/edb513c497c179e7fb7bab66c58b69d1ce0a1e64))
+
+  Add a first-class sandbox.warmPoolSize Helm value (default 1) wired to CARAPACE_SANDBOX_WARM_POOL_SIZE, instead of requiring users to set the env var manually via extraEnv. Update README and k8s docs accordingly.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: tear down warm pool when size is 0
+  ([`4df7d0b`](https://github.com/thiesgerken/carapace/commit/4df7d0bd7450ba61956b5af6017000f044b52184))
+
+  Run the warm-pool loop on Kubernetes regardless of warm_pool_size; a target of 0 destroys leftover carapace.pool StatefulSets after the feature is disabled or shrunk, instead of leaking them until manual cleanup.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: serialize warm-pool maintenance and refill after cold create
+  ([`0fa7730`](https://github.com/thiesgerken/carapace/commit/0fa7730f37682a9e2cc362fa2eeddf8df6183660))
+
+  - Guard ensure_warm_pool with _warm_claim_lock so periodic maintenance
+    never resumes/recreates/destroys a pool entry mid-claim.
+  - Replenish the pool after a cold-create fallback instead of waiting for
+    the 60s background loop.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: rebuild proxy env on warm-sandbox reattach
+  ([`07490cc`](https://github.com/thiesgerken/carapace/commit/07490cc836c075c8d557662981bf870f883bfdbc))
+
+  Claimed warm sandboxes carry no proxy env in their pod spec; exec relies on session_env. The reattach/resume path rebuilt SessionContainer without it, so after idle cleanup or server restart exec ran with no proxy vars. Rebuild session_env (and merge stashed env) on reattach.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix tests + code
+  ([`95bea8d`](https://github.com/thiesgerken/carapace/commit/95bea8d00c6726ce82411c0555ac5a6201a5779b))
+
+- version variables
+  ([`6aa4880`](https://github.com/thiesgerken/carapace/commit/6aa4880b2d62274977fb19ab4f1c19346750242f))
+
+- more crc
+  ([`23b2e4e`](https://github.com/thiesgerken/carapace/commit/23b2e4e45ee23eaf6225eb963fc85d82cc2bfc8d))
+
+- simplify
+  ([`6910f0d`](https://github.com/thiesgerken/carapace/commit/6910f0d087cecf31c1d0690962d3939c607f0158))
+
+- crc
+  ([`9a5e034`](https://github.com/thiesgerken/carapace/commit/9a5e0348634e5ece3998403eed67d30a92ad5ea9))
+
+- reduce CARAPACE_SANDBOX_WARM_POOL_SIZE from 2 to 1 for optimized resource usage
+  ([`49a308f`](https://github.com/thiesgerken/carapace/commit/49a308fabcfa96563899143643d0228cd8aa3431))
+
+- crc
+  ([`65414cc`](https://github.com/thiesgerken/carapace/commit/65414cc21dfab20a6a4e223fdc63d0f093cc3e78))
+
+### ✨ Features
+
+
+- ✨ feat: keep a pool of warm sandboxes
+  ([`4d959f8`](https://github.com/thiesgerken/carapace/commit/4d959f8bfd9c5af2c3878de6ad769fa54d62678a))
+
 ## v0.135.4 (2026-06-03)
 
 
