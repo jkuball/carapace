@@ -81,6 +81,22 @@ class SandboxSessionLifecycle:
         self._knowledge_repo_name_for_session = knowledge_repo_name_for_session
         self._git_author_for_session = git_author_for_session
         self._warm_claim_lock = asyncio.Lock()
+        self._warm_refill_tasks: set[asyncio.Task[int]] = set()
+
+    def schedule_warm_pool_refill(self) -> None:
+        """Replenish the warm pool in the background without blocking session start."""
+        if self._runtime.runtime_kind != "kubernetes":
+            return
+        task = asyncio.create_task(self._refill_warm_pool())
+        self._warm_refill_tasks.add(task)
+        task.add_done_callback(self._warm_refill_tasks.discard)
+
+    async def _refill_warm_pool(self) -> int:
+        try:
+            return await self.ensure_warm_pool(self._warm_pool_size)
+        except Exception:
+            logger.opt(exception=True).warning("Failed to replenish warm sandbox pool")
+            return 0
 
     def _repo_name_for_session(self, session_id: str) -> str:
         return self._knowledge_repo_name_for_session(session_id)
@@ -328,10 +344,7 @@ class SandboxSessionLifecycle:
 
             claimed = await self.claim_warm_sandbox(session_id, env)
             if claimed is not None:
-                try:
-                    await self.ensure_warm_pool(self._warm_pool_size)
-                except Exception:
-                    logger.opt(exception=True).warning("Failed to replenish warm sandbox pool after claim")
+                self.schedule_warm_pool_refill()
                 return claimed, True
 
             sandbox_config = SandboxConfig(
@@ -374,10 +387,7 @@ class SandboxSessionLifecycle:
             sc.session_env.update(stashed_env)
         self._state.sessions[session_id] = sc
         logger.info(f"Created sandbox container {container_id[:12]} for session {session_id} (IP: {ip})")
-        try:
-            await self.ensure_warm_pool(self._warm_pool_size)
-        except Exception:
-            logger.opt(exception=True).warning("Failed to replenish warm sandbox pool after cold create")
+        self.schedule_warm_pool_refill()
         return sc, True
 
     async def ensure_warm_pool(self, target_size: int) -> int:

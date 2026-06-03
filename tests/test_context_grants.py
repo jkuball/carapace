@@ -52,6 +52,13 @@ def _sandbox_manager(
     )
 
 
+async def _drain_warm_refill(mgr: SandboxManager) -> None:
+    """Await any background warm-pool refill tasks scheduled by ensure_session."""
+    tasks = list(mgr._session_lifecycle._warm_refill_tasks)
+    if tasks:
+        await asyncio.gather(*tasks)
+
+
 # ── ContextGrant model ──────────────────────────────────────────────
 
 
@@ -439,6 +446,7 @@ class TestSandboxManagerCredentialCache:
         mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+        await _drain_warm_refill(mgr)
 
         assert needs_runtime_setup is True
         assert sc.sandbox_id == "warm-1"
@@ -483,12 +491,13 @@ class TestSandboxManagerCredentialCache:
         mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+        await _drain_warm_refill(mgr)
 
         assert needs_runtime_setup is True
         assert sc.sandbox_id == "sess-1"
         assert sc.container_id == "cold-pod-1"
         runtime.destroy_sandbox.assert_awaited_once_with("sess-1", "carapace-sandbox-warm-1", "warm-pod-1")
-        # First create is the cold-create fallback; a second create refills the pool.
+        # First create is the cold-create fallback; the background refill adds a pool member.
         cold_config = runtime.create_sandbox.await_args_list[0].args[0]
         assert cold_config.session_id == "sess-1"
         assert "carapace.pool" not in cold_config.labels
@@ -515,6 +524,7 @@ class TestSandboxManagerCredentialCache:
             mgr.ensure_session("sess-1"),
             mgr.ensure_session("sess-2"),
         )
+        await _drain_warm_refill(mgr)
 
         first_sc, first_setup = first
         second_sc, second_setup = second
@@ -542,6 +552,7 @@ class TestSandboxManagerCredentialCache:
         mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
+        await _drain_warm_refill(mgr)
 
         assert needs_runtime_setup is True
         assert sc is claimed
