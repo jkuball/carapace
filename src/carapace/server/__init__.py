@@ -489,7 +489,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     cleanup_task = asyncio.create_task(_idle_cleanup_loop(_sandbox_mgr))
     warm_pool_task = None
-    if _config.sandbox.warm_pool_size > 0 and _config.sandbox.runtime == "kubernetes":
+    # Run on Kubernetes regardless of size: a target of 0 tears down any
+    # leftover pool StatefulSets after the feature is disabled or shrunk.
+    if _config.sandbox.runtime == "kubernetes":
         warm_pool_task = asyncio.create_task(_warm_pool_loop(_sandbox_mgr, _config.sandbox.warm_pool_size))
     archive_task = asyncio.create_task(_session_archive_loop())
     jobs_task = asyncio.create_task(_jobs_scheduler_loop())
