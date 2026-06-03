@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.135.3 (2026-06-03)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade GitHub Artifact Actions to v7.0.1
+  ([`e9b00dd`](https://github.com/thiesgerken/carapace/commit/e9b00dd29423a49cb79c881b35f6ad343db28d35))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v8.2.0
+  ([`76863a5`](https://github.com/thiesgerken/carapace/commit/76863a55272562fab9fa36cd42656702343c11d9))
+
 ## v0.135.2 (2026-06-02)
 
 
