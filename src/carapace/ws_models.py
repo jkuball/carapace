@@ -41,9 +41,17 @@ SLASH_COMMANDS: list[dict[str, str]] = [
 # --- Client → Server ---
 
 
+class Attachment(BaseModel):
+    """A file the user uploaded into the sandbox before sending a message."""
+
+    name: str
+    path: str
+
+
 class UserMessage(BaseModel):
     type: Literal["message"] = "message"
     content: str
+    attachments: list[Attachment] = []
 
 
 class ApprovalResponse(BaseModel):
@@ -280,6 +288,7 @@ class UserMessageNotification(BaseModel):
 
     type: Literal["user_message"] = "user_message"
     content: str
+    attachments: list[Attachment] = []
 
 
 ServerEnvelope = (

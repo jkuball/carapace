@@ -55,7 +55,7 @@ class _FakeSubscriber(SessionSubscriber):
         self.title_updates: list[tuple[str, TurnUsage | None]] = []
         self.llm_activity_updates: list[LlmRequestState | None] = []
 
-    async def on_user_message(self, content: str, *, from_self: bool) -> None:
+    async def on_user_message(self, content: str, *, from_self: bool, attachments: list | None = None) -> None:
         self.user_messages.append((content, from_self))
 
     async def on_tool_call(

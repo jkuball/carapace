@@ -714,6 +714,35 @@ def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Pat
         asyncio.run(_run())
 
 
+def test_retry_latest_turn_preserves_attachments(tmp_path: Path):
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        engine.get_or_activate(sid)
+        engine.session_mgr.append_events(
+            sid,
+            [
+                {
+                    "role": "user",
+                    "content": "look at this",
+                    "attachments": [{"name": "abc.png", "path": "/tmp/abc-1a2b.png"}],
+                },
+                {"role": "assistant", "content": "ok"},
+            ],
+        )
+        engine.submit_message = AsyncMock()
+        engine._rewrite_session_transcript = lambda *_a, **_k: None
+
+        await engine.retry_latest_turn(sid)
+
+        engine.submit_message.assert_awaited_once()
+        kwargs = engine.submit_message.await_args.kwargs
+        assert [a.path for a in kwargs["attachments"]] == ["/tmp/abc-1a2b.png"]
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
 def test_finalize_failed_turn_dispatches_unattended_failure_notification(tmp_path: Path):
     async def _run() -> None:
         engine = _make_engine(tmp_path)

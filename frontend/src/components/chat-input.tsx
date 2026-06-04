@@ -2,10 +2,25 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Clock, Mic, MicOff, Square } from "lucide-react";
+import { ArrowUp, Clock, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AvailableModelInfo, SlashCommand } from "@/lib/api";
-import type { BudgetGauge, TurnUsage, TurnUsageBreakdownPct } from "@/lib/types";
+import type { AvailableModelInfo, SlashCommand, UploadedFile } from "@/lib/api";
+import type {
+  Attachment,
+  BudgetGauge,
+  TurnUsage,
+  TurnUsageBreakdownPct,
+} from "@/lib/types";
+
+interface PendingAttachment {
+  id: string;
+  name: string;
+  status: "uploading" | "done" | "error";
+  progress: number;
+  path?: string;
+  error?: string;
+  controller: AbortController;
+}
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -80,7 +95,7 @@ const MODEL_COMMANDS = ["/model"];
 const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title"]);
 
 interface ChatInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, attachments?: Attachment[]) => void;
   onCancel?: () => void;
   onInterrupt?: (content: string) => void;
   connected: boolean;
@@ -91,6 +106,11 @@ interface ChatInputProps {
   commands?: SlashCommand[];
   availableModelEntries?: AvailableModelInfo[];
   usage?: TurnUsage | null;
+  sandboxRunning?: boolean;
+  uploadFile?: (
+    file: File,
+    opts?: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
+  ) => Promise<UploadedFile>;
 }
 
 export function ChatInput({
@@ -105,12 +125,70 @@ export function ChatInput({
   commands = [],
   availableModelEntries = [],
   usage,
+  sandboxRunning = false,
+  uploadFile,
 }: ChatInputProps) {
   const t = useTranslations("chatInput");
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const canUpload = sandboxRunning && !!uploadFile && !disabled;
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      if (!canUpload || !uploadFile) return;
+      for (const file of Array.from(files)) {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const controller = new AbortController();
+        setAttachments((prev) => [
+          ...prev,
+          { id, name: file.name, status: "uploading", progress: 0, controller },
+        ]);
+        uploadFile(file, {
+          signal: controller.signal,
+          onProgress: (fraction) =>
+            setAttachments((prev) =>
+              prev.map((a) => (a.id === id ? { ...a, progress: fraction } : a)),
+            ),
+        })
+          .then((res) =>
+            setAttachments((prev) =>
+              prev.map((a) =>
+                a.id === id
+                  ? { ...a, status: "done", progress: 1, path: res.path, name: res.name }
+                  : a,
+              ),
+            ),
+          )
+          .catch((err: unknown) => {
+            if (err instanceof DOMException && err.name === "AbortError") {
+              setAttachments((prev) => prev.filter((a) => a.id !== id));
+              return;
+            }
+            const message = err instanceof Error ? err.message : String(err);
+            setAttachments((prev) =>
+              prev.map((a) =>
+                a.id === id ? { ...a, status: "error", error: message } : a,
+              ),
+            );
+          });
+      }
+    },
+    [canUpload, uploadFile],
+  );
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target?.status === "uploading") target.controller.abort();
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -318,13 +396,34 @@ export function ChatInput({
     }
   }, []);
 
+  const uploading = attachments.some((a) => a.status === "uploading");
+  const completedAttachments = useMemo(
+    () =>
+      attachments
+        .filter((a) => a.status === "done" && a.path)
+        .map((a): Attachment => ({ name: a.name, path: a.path as string })),
+    [attachments],
+  );
+
   const submit = useCallback(() => {
     const trimmed = value.trim();
-    if (disabled || !trimmed || !connected) return;
+    if (disabled || !connected || uploading) return;
+    if (!trimmed && completedAttachments.length === 0) return;
     if (waiting && queuedMessage) return;
-    onSend(trimmed);
+    onSend(trimmed, completedAttachments);
     clearInput();
-  }, [value, disabled, connected, waiting, queuedMessage, onSend, clearInput]);
+    setAttachments([]);
+  }, [
+    value,
+    disabled,
+    connected,
+    uploading,
+    completedAttachments,
+    waiting,
+    queuedMessage,
+    onSend,
+    clearInput,
+  ]);
 
   const interrupt = useCallback(() => {
     const trimmed = value.trim();
@@ -387,6 +486,7 @@ export function ChatInput({
   }
 
   const hasText = value.trim().length > 0;
+  const canSend = (hasText || completedAttachments.length > 0) && !uploading;
   const disabledPlaceholderText = disabledPlaceholder ?? t("disabled");
 
   let tooltip: string;
@@ -482,14 +582,56 @@ export function ChatInput({
           </div>
         )}
 
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {attachments.map((att) => (
+              <AttachmentChip
+                key={att.id}
+                attachment={att}
+                onRemove={() => removeAttachment(att.id)}
+              />
+            ))}
+          </div>
+        )}
+
         <div
+          onDragOver={(e) => {
+            if (!canUpload) return;
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={(e) => {
+            if (!canUpload) return;
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+          }}
+          onPaste={(e) => {
+            if (!canUpload || !e.clipboardData.files.length) return;
+            addFiles(e.clipboardData.files);
+          }}
           className={cn(
             "flex items-end gap-2",
             "rounded-xl border border-border bg-muted/30 px-3 py-2",
             "focus-within:ring-2 focus-within:ring-ring/30 focus-within:border-ring",
             "transition-colors",
+            isDragging && "ring-2 ring-ring/50 border-ring",
           )}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
           <textarea
             ref={textareaRef}
             value={value}
@@ -504,6 +646,21 @@ export function ChatInput({
               disabled && "cursor-not-allowed text-muted-foreground",
             )}
           />
+          {uploadFile && !disabled && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!canUpload}
+              title={canUpload ? t("attachFile") : t("attachFileUnavailable")}
+              className={cn(
+                "shrink-0 rounded-lg p-2 transition-colors",
+                "text-muted-foreground hover:bg-muted",
+                "disabled:opacity-30 disabled:cursor-not-allowed",
+              )}
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+          )}
           {isSpeechSupported && !disabled && (
             <button
               type="button"
@@ -525,7 +682,7 @@ export function ChatInput({
           )}
           <button
             onClick={waiting ? onCancel : submit}
-            disabled={waiting ? !onCancel : disabled || !connected || !hasText}
+            disabled={waiting ? !onCancel : disabled || !connected || !canSend}
             title={tooltip}
             className={cn(
               "shrink-0 rounded-lg p-2 transition-colors",
@@ -858,5 +1015,47 @@ function BudgetGaugeRow({
       onClick={onClickUsage}
       reached={gauge.reached}
     />
+  );
+}
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: PendingAttachment;
+  onRemove: () => void;
+}) {
+  const t = useTranslations("chatInput");
+  const isError = attachment.status === "error";
+  return (
+    <div
+      title={isError ? attachment.error : attachment.path ?? attachment.name}
+      className={cn(
+        "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs",
+        isError
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : "border-border bg-muted/50 text-foreground",
+      )}
+    >
+      {attachment.status === "uploading" ? (
+        <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+      ) : (
+        <Paperclip className="h-3 w-3 shrink-0" />
+      )}
+      <span className="max-w-40 truncate">{attachment.name}</span>
+      {attachment.status === "uploading" && (
+        <span className="tabular-nums text-muted-foreground">
+          {Math.round(attachment.progress * 100)}%
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        title={t("removeAttachment")}
+        className="shrink-0 rounded p-0.5 hover:bg-muted"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
   );
 }

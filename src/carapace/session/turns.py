@@ -40,7 +40,8 @@ from ..notifications.router import NotificationRouter, build_turn_outcome_notifi
 from ..sandbox.manager import SandboxManager
 from ..security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
 from ..usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
-from ..ws_models import ApprovalRequest, ApprovalResponse, FinalStatus, TurnUsage
+from ..ws_models import ApprovalRequest, ApprovalResponse, Attachment, FinalStatus, TurnUsage
+from .attachments import augment_prompt
 from .manager import SessionManager
 from .types import ActiveSession, SessionSubscriber, TurnExecutionResult
 
@@ -175,9 +176,14 @@ class SessionTurnMixin(SessionTurnHost):
         user_input: str,
         *,
         origin: SessionSubscriber | None = None,
+        attachments: list[Attachment] | None = None,
     ) -> None:
         """Execute a single agent turn with semaphore-bounded LLM access."""
         session_id = active.state.session_id
+        attachments = attachments or []
+        # The user's bubble shows only *user_input*; the agent prompt (and history.yaml)
+        # gets a hidden preamble describing any uploaded files.
+        agent_input = augment_prompt(user_input, attachments)
         latest_messages: list[ModelMessage] | None = None
 
         def _set_latest_messages(snapshot: list[Any]) -> None:
@@ -267,6 +273,7 @@ class SessionTurnMixin(SessionTurnHost):
                     session_id,
                     user_input,
                     origin=origin,
+                    attachments=attachments,
                     tool_call_callback=_tool_call_cb,
                     tool_result_callback=_tool_result_cb,
                 )
@@ -281,7 +288,7 @@ class SessionTurnMixin(SessionTurnHost):
 
                 turn_result = await self._execute_agent_turn(
                     active,
-                    user_input,
+                    agent_input,
                     deps,
                     message_history,
                     send_approval_request=_send_approval,
@@ -303,7 +310,7 @@ class SessionTurnMixin(SessionTurnHost):
             await self._finalize_failed_turn(
                 active,
                 session_id,
-                user_input,
+                agent_input,
                 latest_messages=latest_messages,
                 terminal_message="The previous turn was interrupted before completion.",
                 save_progress=True,
@@ -314,7 +321,7 @@ class SessionTurnMixin(SessionTurnHost):
             await self._finalize_failed_turn(
                 active,
                 session_id,
-                user_input,
+                agent_input,
                 latest_messages=latest_messages,
                 terminal_message=str(exc),
                 save_progress=True,
@@ -330,7 +337,7 @@ class SessionTurnMixin(SessionTurnHost):
             await self._finalize_failed_turn(
                 active,
                 session_id,
-                user_input,
+                agent_input,
                 latest_messages=latest_messages,
                 terminal_message="The previous turn failed before completion.",
             )
@@ -340,7 +347,7 @@ class SessionTurnMixin(SessionTurnHost):
             await self._finalize_failed_turn(
                 active,
                 session_id,
-                user_input,
+                agent_input,
                 latest_messages=latest_messages,
                 terminal_message="The previous turn failed before completion.",
             )
@@ -361,6 +368,7 @@ class SessionTurnMixin(SessionTurnHost):
         user_input: str,
         *,
         origin: SessionSubscriber | None,
+        attachments: list[Attachment] | None = None,
         tool_call_callback: ToolCallCallback,
         tool_result_callback: Callable[[ToolResult], None],
     ) -> tuple[Deps, list[ModelMessage]]:
@@ -373,10 +381,16 @@ class SessionTurnMixin(SessionTurnHost):
             tool_call_callback=tool_call_callback,
             tool_result_callback=tool_result_callback,
         )
-        self._session_mgr.append_events(session_id, [{"role": "user", "content": user_input}])
+        attachments = attachments or []
+        # Persist/broadcast the original text + attachment metadata (not the hidden preamble),
+        # so the UI bubble stays clean and reload rebuilds chips from events.
+        event: dict[str, Any] = {"role": "user", "content": user_input}
+        if attachments:
+            event["attachments"] = [att.model_dump() for att in attachments]
+        self._session_mgr.append_events(session_id, [event])
         for sub in list(active.subscribers):
             try:
-                await sub.on_user_message(user_input, from_self=(sub is origin))
+                await sub.on_user_message(user_input, from_self=(sub is origin), attachments=attachments)
             except Exception as exc:
                 logger.warning(f"Subscriber on_user_message failed: {exc}")
 

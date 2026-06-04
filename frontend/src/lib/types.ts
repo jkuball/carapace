@@ -157,9 +157,15 @@ export interface JobRunResult {
   session: SessionInfo;
 }
 
+export interface Attachment {
+  name: string;
+  path: string;
+}
+
 export interface HistoryMessage {
   role: string;
   content: string;
+  attachments?: Attachment[];
   final_status?: "success" | "warning";
   event_index?: number;
   reasoning_duration_ms?: number;
@@ -380,6 +386,7 @@ export interface StatusUpdate {
 export interface UserMessageNotification {
   type: "user_message";
   content: string;
+  attachments?: Attachment[];
 }
 
 export type ServerMessage =
@@ -405,6 +412,7 @@ export type ServerMessage =
 export interface UserMessage {
   type: "message";
   content: string;
+  attachments?: Attachment[];
 }
 
 export interface ApprovalResponse {
@@ -447,7 +455,7 @@ export type ClientMessage =
 // Chat UI messages
 
 export type ChatMessage =
-  | { kind: "user"; content: string }
+  | { kind: "user"; content: string; attachments?: Attachment[] }
   | {
       kind: "assistant";
       content: string;

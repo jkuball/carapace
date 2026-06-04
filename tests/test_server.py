@@ -3294,3 +3294,74 @@ def test_ws_unknown_command_is_agent_message(client, auth_headers, monkeypatch):
         msg = ws.receive_json()
         assert msg["type"] == "done"
         assert msg["content"] == "treated as text"
+
+
+def _make_session(user: str = "thies") -> str:
+    state = srv._engine.session_mgr.create_session(user=user)
+    return state.session_id
+
+
+def test_upload_sandbox_file_requires_running(client, auth_headers, monkeypatch):
+    sid = _make_session()
+    monkeypatch.setattr(
+        srv._engine.session_mgr,
+        "load_sandbox_snapshot",
+        lambda _sid: SessionSandboxSnapshot(exists=True, status="stopped"),
+    )
+    resp = client.post(
+        f"/api/sessions/{sid}/sandbox/files",
+        headers=auth_headers,
+        files={"file": ("abc.png", b"data", "image/png")},
+    )
+    assert resp.status_code == 409
+
+
+def test_upload_sandbox_file_streams_to_tmp(client, auth_headers, monkeypatch):
+    sid = _make_session()
+    monkeypatch.setattr(
+        srv._engine.session_mgr,
+        "load_sandbox_snapshot",
+        lambda _sid: SessionSandboxSnapshot(exists=True, status="running"),
+    )
+    srv._engine.sandbox_mgr.upload_tmp_file = AsyncMock(return_value="/tmp/abc-1a2b.png")
+    resp = client.post(
+        f"/api/sessions/{sid}/sandbox/files",
+        headers=auth_headers,
+        files={"file": ("abc.png", b"data", "image/png")},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"name": "abc.png", "path": "/tmp/abc-1a2b.png"}
+    srv._engine.sandbox_mgr.upload_tmp_file.assert_awaited_once()
+
+
+def test_upload_sandbox_file_rejects_archived(client, auth_headers, monkeypatch):
+    sid = _make_session()
+    state = srv._engine.session_mgr.load_state(sid)
+    state.attributes.archived = True
+    srv._engine.session_mgr._save_state(state)
+    monkeypatch.setattr(
+        srv._engine.session_mgr,
+        "load_sandbox_snapshot",
+        lambda _sid: SessionSandboxSnapshot(exists=True, status="running"),
+    )
+    resp = client.post(
+        f"/api/sessions/{sid}/sandbox/files",
+        headers=auth_headers,
+        files={"file": ("abc.png", b"data", "image/png")},
+    )
+    assert resp.status_code == 409
+
+
+def test_upload_sandbox_file_rejected_for_other_user(client, admin_auth_headers, monkeypatch):
+    sid = _make_session(user="thies")
+    monkeypatch.setattr(
+        srv._engine.session_mgr,
+        "load_sandbox_snapshot",
+        lambda _sid: SessionSandboxSnapshot(exists=True, status="running"),
+    )
+    resp = client.post(
+        f"/api/sessions/{sid}/sandbox/files",
+        headers=admin_auth_headers,
+        files={"file": ("abc.png", b"data", "image/png")},
+    )
+    assert resp.status_code == 404

@@ -406,6 +406,9 @@
         "queued": "Queued: {message}",
         "startVoiceInput": "Start voice input",
         "stopVoiceInput": "Stop voice input",
+        "attachFile": "Attach file",
+        "attachFileUnavailable": "Start the sandbox to upload files",
+        "removeAttachment": "Remove",
         "placeholder": "Message carapace…",
         "usageBreakdown": {
             "systemLine": "system: {percent}%",

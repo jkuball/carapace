@@ -115,8 +115,8 @@ class WebSocketSubscriber:
         except Exception as exc:
             logger.warning(f"WebSocket send failed: {exc}")
 
-    async def on_user_message(self, content: str, *, from_self: bool) -> None:
-        await self._safe_send(UserMessageNotification(content=content))
+    async def on_user_message(self, content: str, *, from_self: bool, attachments: list[Any] | None = None) -> None:
+        await self._safe_send(UserMessageNotification(content=content, attachments=list(attachments or [])))
 
     async def on_tool_call(
         self,
@@ -421,10 +421,14 @@ async def chat_ws(
                 continue
 
             user_input = client_msg.content.strip()
-            if not user_input:
+            # Only trust attachment paths the upload endpoint could have produced (under /tmp);
+            # the client echoes these back, so drop anything pointing elsewhere.
+            attachments = [a for a in client_msg.attachments if a.path.startswith("/tmp/")]
+            if not user_input and not attachments:
                 continue
 
-            if user_input.startswith("/"):
+            # Slash commands carry no attachments; an attachment-only message is a normal turn.
+            if user_input.startswith("/") and not attachments:
                 if user_input.lower() in ("/quit", "/exit"):
                     await websocket.close(code=1000)
                     break
@@ -455,7 +459,7 @@ async def chat_ws(
                         )
                     continue
 
-            await server._engine.submit_message(session_id, user_input, origin=sub)
+            await server._engine.submit_message(session_id, user_input, origin=sub, attachments=attachments)
 
     except WebSocketDisconnect as exc:
         logger.info(f"Client disconnected from session {session_id} (code={exc.code})")

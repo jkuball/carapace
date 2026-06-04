@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import os
 import re
+import secrets
 import shlex
 import textwrap
 from asyncio.locks import Lock
@@ -166,6 +169,14 @@ async def _run() -> None:
 if __name__ == "__main__":
     asyncio.run(_run())
 """
+
+
+class UploadError(Exception):
+    """Writing an uploaded file into the sandbox failed."""
+
+
+class UploadTooLargeError(UploadError):
+    """Uploaded file exceeded the allowed size."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -605,6 +616,56 @@ class SandboxManager:
             new_string,
             replace_all=replace_all,
         )
+
+    _UPLOAD_CHUNK_BYTES = 256 * 1024
+
+    async def upload_tmp_file(
+        self,
+        session_id: str,
+        filename: str,
+        read_chunk: Callable[[int], Awaitable[bytes]],
+        *,
+        max_bytes: int,
+    ) -> str:
+        """Stream an uploaded file into the sandbox ``/tmp`` and return its absolute path.
+
+        Reads from *read_chunk* (e.g. ``UploadFile.read``) and appends each chunk as
+        base64-decoded bytes via ``exec_command`` — works on every runtime since it needs
+        no exec stdin. If ``/tmp/<name>`` already exists a short hash is inserted before the
+        extension to avoid collisions. Raises ``UploadTooLargeError`` past *max_bytes* and
+        ``UploadError`` on a write failure, removing any partial file first.
+        """
+        base = os.path.basename(filename).strip() or "upload"
+        stem, suffix = os.path.splitext(base)
+        if not stem:
+            stem, suffix = suffix, ""
+        target = f"/tmp/{stem}{suffix}"
+        probe = await self.exec_command(session_id, f"test -e {shlex.quote(target)} && echo EXISTS || true", timeout=10)
+        if "EXISTS" in probe.output:
+            target = f"/tmp/{stem}-{secrets.token_hex(4)}{suffix}"
+        qpath = shlex.quote(target)
+
+        total = 0
+        wrote_any = False
+        while True:
+            chunk = await read_chunk(self._UPLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                await self.exec_command(session_id, f"rm -f {qpath}", timeout=10)
+                raise UploadTooLargeError(f"File exceeds {max_bytes} bytes")
+            b64 = base64.b64encode(chunk).decode()
+            redirect = ">>" if wrote_any else ">"
+            result = await self.exec_command(session_id, f"printf %s {b64} | base64 -d {redirect} {qpath}", timeout=120)
+            if result.exit_code != 0:
+                await self.exec_command(session_id, f"rm -f {qpath}", timeout=10)
+                raise UploadError(f"Failed to write upload to sandbox: {result.output}")
+            wrote_any = True
+
+        if not wrote_any:
+            await self.exec_command(session_id, f": > {qpath}", timeout=10)
+        return target
 
     async def activate_skill(self, session_id: str, skill_name: str) -> str:
         if err := _validate_skill_name(skill_name):

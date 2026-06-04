@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, RotateCcw, Undo2 } from "lucide-react";
+import { AlertTriangle, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, Paperclip, RotateCcw, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
@@ -335,7 +335,26 @@ export function Message({
               "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
             )}
           >
-            <MarkdownContent content={message.content} />
+            {message.content ? <MarkdownContent content={message.content} /> : null}
+            {message.attachments && message.attachments.length > 0 ? (
+              <div
+                className={cn(
+                  "flex flex-wrap justify-end gap-1.5",
+                  message.content ? "mt-2" : "",
+                )}
+              >
+                {message.attachments.map((att) => (
+                  <span
+                    key={att.path}
+                    title={att.path}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-background/50 px-2 py-1 text-xs"
+                  >
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="max-w-40 truncate">{att.name}</span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       );
