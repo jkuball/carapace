@@ -36,6 +36,7 @@ SAFE_TOOLS: frozenset[str] = frozenset(
         "write",
         "str_replace",
         "list_skills",
+        "send_file",
     }
 )
 

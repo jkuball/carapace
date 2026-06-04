@@ -3,19 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, File as FileIcon } from "lucide-react";
 import { fetchSentFile, sentFileUrl } from "@/lib/api";
-import { cn } from "@/lib/utils";
-
-export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+import { cn, formatBytes } from "@/lib/utils";
 
 /** Renders a persisted file: inline image preview for images, plus a name/size/download chip. */
 export function FilePreview({
@@ -82,7 +70,7 @@ export function FilePreview({
         <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="truncate font-medium text-foreground/85">{name}</span>
         {size != null && (
-          <span className="shrink-0 text-muted-foreground">{formatFileSize(size)}</span>
+          <span className="shrink-0 text-muted-foreground">{formatBytes(size)}</span>
         )}
         {downloadHref && (
           <a

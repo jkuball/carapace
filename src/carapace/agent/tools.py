@@ -794,7 +794,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         return _emit_tool_result(ctx, "read", result, exit_code)
 
     @agent.tool
-    async def send_file(ctx: RunContext[Deps], path: str, title: str | None = None) -> str:
+    async def send_file(ctx: RunContext[Deps], path: str, title: str | None = None) -> str | ToolDenied:
         """Expose a file or image to the user so they can view or download it in the chat.
 
         Use this for outputs you produce that the user should keep or look at: generated
@@ -804,6 +804,27 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         shuts down. Max 50 MB.
         """
         from ..session import sent_files
+
+        # send_file reads the file out and publishes it, so it runs through the same
+        # safe-list / sentinel / skill-activation checks as the read tool.
+        if denied_message := _read_skill_access_denial(
+            path,
+            ctx.deps.knowledge_dir,
+            ctx.deps.session_state.activated_skills,
+        ):
+            if ctx.deps.tool_call_callback:
+                ctx.deps.tool_call_callback(
+                    "send_file",
+                    {"path": path, "title": title},
+                    "[blocked: skill not activated]",
+                    "skill",
+                    "deny",
+                    "skill not activated",
+                )
+            return _emit_tool_result(ctx, "send_file", denied_message, exit_code=1)
+
+        if not ctx.tool_call_approved and (denied := await _gate(ctx, "send_file", {"path": path, "title": title})):
+            return denied
 
         session_id = ctx.deps.session_state.session_id
         name = title or PurePosixPath(path).name or "file"

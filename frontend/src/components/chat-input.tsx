@@ -3,8 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatFileSize } from "./file-preview";
+import { cn, formatBytes } from "@/lib/utils";
 import type { AvailableModelInfo, SlashCommand, UploadedFile } from "@/lib/api";
 import type {
   Attachment,
@@ -1068,7 +1067,7 @@ function AttachmentChip({
         </span>
       ) : attachment.size != null ? (
         <span className="shrink-0 text-muted-foreground">
-          {formatFileSize(attachment.size)}
+          {formatBytes(attachment.size)}
         </span>
       ) : null}
       <button
