@@ -1,8 +1,61 @@
 # CHANGELOG
 
 
+## v0.136.2 (2026-06-04)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Lock file maintenance
+  ([`1a05912`](https://github.com/thiesgerken/carapace/commit/1a059123a92d020f0809af3d8f7736a200b6afe9))
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`af0567d`](https://github.com/thiesgerken/carapace/commit/af0567d0541a291da0096cd2036d7cc5ea11393a))
+
+### Other
+
+
+- fix: forward file attachments over Matrix cross-channel
+  ([`093369d`](https://github.com/thiesgerken/carapace/commit/093369de5446d37ba0c2828cf288b41c82571f9f))
+
+  Matrix on_user_message ignored attachments, so web-UI uploads showed only the text (or an empty body for attachment-only sends). Append file names and their /tmp paths, and skip sending when there's nothing to show.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: address Bugbot review on file uploads
+  ([`63a9472`](https://github.com/thiesgerken/carapace/commit/63a9472bfe9c9dfb51ea4ef936d21146e7fded36))
+
+  - retry_latest_turn: re-pass stored attachments so retries keep the preamble
+  - websocket: only accept client attachment paths under /tmp
+  - upload endpoint: reject archived sessions (409), matching up/down/wipe
+  - chat-view: queued attachment-only sends show the banner and block re-queue
+  - tests for retry attachment retention and archived upload rejection
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.1 (2026-06-03)
 
+
+### Other
+
+
+- 📋 docs: remove done item from todo list
+  ([`31fb8bd`](https://github.com/thiesgerken/carapace/commit/31fb8bd2e7a7f05429136a4911b17bc6df84f043))
+
+- feat: upload files to sandbox /tmp from chat input
+  ([`406ee50`](https://github.com/thiesgerken/carapace/commit/406ee508c927e4e064d271ebbf34e7e3139ac5db))
+
+  Add file attachments to the chat composer. Files stream into the running sandbox's /tmp via chunked base64 appends (cross-runtime, no exec stdin), show as chips in the input, and on send the agent prompt gets a hidden preamble describing where each file landed. The user's bubble stays clean; only the LLM/history sees the preamble.
+
+  - POST /api/sessions/{id}/sandbox/files (running-only, 50MB cap)
+  - SandboxManager.upload_tmp_file with collision hashing
+  - Attachment model threaded through turn; original text in events,
+    augmented prompt in history.yaml
+  - chat-input: attach button + drag-drop + paste, progress chips
+  - tests for preamble, streaming write, and the endpoint
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ### 🐛 Bug Fixes
 
