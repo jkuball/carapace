@@ -617,7 +617,11 @@ class SandboxManager:
             replace_all=replace_all,
         )
 
-    _UPLOAD_CHUNK_BYTES = 256 * 1024
+    # Each chunk is base64-encoded and inlined as a single shell argument
+    # (``printf %s <b64>``). Linux caps one argv string at MAX_ARG_STRLEN (128 KiB),
+    # so the base64 (4/3 of the raw chunk) must stay well under that or execve fails
+    # with "Argument list too long". 64 KiB raw -> ~85 KiB base64, comfortably below.
+    _UPLOAD_CHUNK_BYTES = 64 * 1024
 
     async def upload_tmp_file(
         self,
