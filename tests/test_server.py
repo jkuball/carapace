@@ -711,6 +711,38 @@ def test_admin_platform_settings_updates_config_and_runtime(client, admin_auth_h
     assert raw["agent"]["available_models"][1]["api_key"] == {"env": "ANTHROPIC_API_KEY"}
 
 
+def test_admin_platform_settings_roundtrips_vision_flag(client, admin_auth_headers):
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-sonnet-4-6",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-sonnet-4-6", "vision": True},
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    models = {m["id"]: m for m in resp.json()["settings"]["available_models"]}
+    assert models["anthropic:claude-sonnet-4-6"]["vision"] is True
+    assert models["anthropic:claude-haiku-4-5"]["vision"] is False
+    by_id = {e.model_id: e for e in srv._config.agent.available_models}
+    assert by_id["anthropic:claude-sonnet-4-6"].vision is True
+    raw = yaml.safe_load((srv._config_path).read_text())
+    vision_row = next(r for r in raw["agent"]["available_models"] if r["name"] == "claude-sonnet-4-6")
+    assert vision_row["vision"] is True
+    # default-false rows omit the key
+    haiku_row = next(r for r in raw["agent"]["available_models"] if r["name"] == "claude-haiku-4-5")
+    assert "vision" not in haiku_row
+
+
 def test_admin_platform_settings_preserves_on_disk_agent_fields(client, admin_auth_headers):
     srv._config.agent = AgentConfig()
     srv._config_path.write_text(

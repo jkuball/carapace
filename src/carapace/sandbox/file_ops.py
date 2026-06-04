@@ -7,16 +7,18 @@ from typing import Protocol
 
 from loguru import logger
 
+from .container_scripts import SANDBOX_FILE_READ_BYTES_SCRIPT, build_file_read_script
 from .container_scripts import (
     SANDBOX_STR_REPLACE_SCRIPT as _STR_REPLACE_SCRIPT,
 )
-from .container_scripts import build_file_read_script
 from .runtime import ExecResult
 
 # Maximum characters returned for a single text file read (body only; headers are extra).
 MAX_READ_OUTPUT_CHARS = 65536
 # Maximum ``limit`` (line window) accepted by the agent read tool.
 READ_TOOL_MAX_LINE_WINDOW = 1000
+# Maximum size of an image returned to the model as a raw multimodal block (Anthropic ≈ 5 MB/image).
+READ_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 # Printed between read-tool metadata and file body (agents/UI can split on this line).
 SANDBOX_READ_BODY_SEPARATOR = "-" * 24
 
@@ -79,6 +81,30 @@ class SandboxFileOps:
         if output.startswith("::DIR::\n"):
             return f"Directory listing of {path}/:\n" + output[len("::DIR::\n") :]
         return output or "(empty file)"
+
+    async def file_read_bytes(
+        self,
+        session_id: str,
+        path: str,
+        *,
+        max_bytes: int = READ_IMAGE_MAX_BYTES,
+    ) -> bytes | str:
+        """Return raw file bytes (base64 over the wire), or an error/too-big message string."""
+        pq = shlex.quote(path)
+        cmd = f"python3 -c {shlex.quote(SANDBOX_FILE_READ_BYTES_SCRIPT)} {pq} {int(max_bytes)}"
+        result = await self._exec_in_session(session_id, cmd, timeout=30)
+        if result.exit_code != 0:
+            return result.output or f"Error: cannot read {path}"
+        output = result.output
+        if output.startswith("::TOOBIG::"):
+            size = output[len("::TOOBIG::") :].strip()
+            return f"File too large to return as an image: {size} bytes (limit {max_bytes})."
+        if output.startswith("::B64::"):
+            try:
+                return base64.b64decode(output[len("::B64::") :])
+            except ValueError as exc:  # binascii.Error subclasses ValueError
+                return f"Error: cannot decode {path}: {exc}"
+        return output or f"Error: cannot read {path}"
 
     async def file_write(
         self,

@@ -11,11 +11,12 @@ import httpx
 from loguru import logger
 from pydantic import Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
+from pydantic_ai.messages import BinaryContent, ToolReturn
 
 from .. import security as security
 from ..config import load_workspace_file
 from ..credentials import CredentialBackendError
-from ..llm import model_settings_for_config
+from ..llm import model_settings_for_config, model_supports_vision
 from ..models.credentials import CredentialMetadata
 from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
 from ..models.tooling import SentFileInfo, ToolResult, normalize_tool_call_args
@@ -38,6 +39,62 @@ _WORKSPACE_ROOT = PurePosixPath("/workspace")
 _SKILLS_ROOT = PurePosixPath("skills")
 _EXEC_OUTPUT_SPILL_ROOT = PurePosixPath("/tmp/carapace-tool-output")
 _SKILL_PATH_PATTERN = re.compile(r"(?<![\w.-])(?:/workspace/)?skills/(?P<skill>[A-Za-z0-9][A-Za-z0-9._-]*)")
+
+# Raster image suffixes the model can ingest directly. SVG is intentionally excluded
+# (text/XML source; the Anthropic API rejects image/svg+xml) so it falls through to a text read.
+_RASTER_IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+
+
+def _image_media_type(path: str) -> str | None:
+    """Return the image media type for a raster image path, or None (incl. SVG, non-images)."""
+    return _RASTER_IMAGE_MEDIA_TYPES.get(PurePosixPath(path).suffix.lower())
+
+
+_READ_TOOL_DESCRIPTION_TEXT = """\
+Read a path under `/workspace` (or list a directory).
+
+Relative ``path`` values are resolved from ``/workspace``. Absolute paths are used as-is.
+
+**Files:** You get a short header, a line of dashes, then the text. The header
+says total lines, which lines you received (1-based, like an editor), and whether
+output was cut short. If you need more, call again with a higher ``offset``:
+that is how many lines to skip from the start. Each call returns at most
+``limit`` lines (default 100, max 1000) and about 64k characters of body text—if
+you hit either cap, read the header and continue with a larger ``offset``.
+
+**Binaries:** You do not get file bytes, only size and a brief ``file``-style type.
+Use ``exec`` if you need something else (e.g. ``hexdump``, ``xxd``).
+
+**Directories:** Lists entry names; ``offset``/``limit`` do not apply to listings."""
+
+_READ_TOOL_DESCRIPTION_VISION = """\
+Read a path under `/workspace` (or list a directory).
+
+Relative ``path`` values are resolved from ``/workspace``. Absolute paths are used as-is.
+
+**Files:** You get a short header, a line of dashes, then the text. The header
+says total lines, which lines you received (1-based, like an editor), and whether
+output was cut short. If you need more, call again with a higher ``offset``:
+that is how many lines to skip from the start. Each call returns at most
+``limit`` lines (default 100, max 1000) and about 64k characters of body text—if
+you hit either cap, read the header and continue with a larger ``offset``.
+
+**Images:** A plain ``read(path)`` on a raster image (png, jpg, jpeg, gif, webp)
+returns the image itself into your context so you can see it—no ``offset``/``limit``.
+To read such a file as text/source instead (e.g. inspect raw bytes, or for SVGs and
+other text-based formats), pass ``offset`` or ``limit`` and you get the normal text
+view. Images larger than ~5 MB fall back to the binary stub.
+
+**Binaries:** For non-image binaries you do not get file bytes, only size and a brief
+``file``-style type. Use ``exec`` if you need something else (e.g. ``hexdump``, ``xxd``).
+
+**Directories:** Lists entry names; ``offset``/``limit`` do not apply to listings."""
 
 
 def _normalize_workspace_path(path: str) -> PurePosixPath:
@@ -305,6 +362,21 @@ def _emit_tool_result(
     return limited
 
 
+def _emit_image_result(
+    ctx: RunContext[Deps],
+    path: str,
+    data: bytes,
+    media_type: str,
+) -> ToolReturn:
+    """Notify subscribers with a text summary and return the image as a multimodal tool result."""
+    summary = f"Read image {path} ({media_type}, {len(data)} bytes)."
+    _notify_result(ctx, "read", summary)
+    return ToolReturn(
+        return_value=summary,
+        content=[summary, BinaryContent(data=data, media_type=media_type)],
+    )
+
+
 def _log_sandbox_tool_exception(tool: str, session_id: str) -> None:
     """Log full traceback for sandbox tool failures (must run inside ``except``)."""
     logger.exception(f"Sandbox tool {tool!r} failed (session {session_id})")
@@ -517,6 +589,7 @@ def build_system_prompt(deps: Deps) -> str:
 
 def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | DeferredToolRequests]:
     system_prompt = build_system_prompt(deps)
+    supports_vision = model_supports_vision(deps.config, deps.agent_model_id)
 
     output_type: list[Any]
     if deps.session_state.attributes.unattended:
@@ -667,29 +740,16 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
 
     # --- Filesystem (sandboxed — runs inside the Docker container) ---
 
-    @agent.tool
+    @agent.tool(description=_READ_TOOL_DESCRIPTION_VISION if supports_vision else _READ_TOOL_DESCRIPTION_TEXT)
     async def read(
         ctx: RunContext[Deps],
         path: str,
-        offset: Annotated[int, Field(ge=0)] = 0,
-        limit: Annotated[int, Field(ge=1, le=READ_TOOL_MAX_LINE_WINDOW)] = 100,
-    ) -> str | ToolDenied:
-        """Read a path under `/workspace` (or list a directory).
-
-        Relative ``path`` values are resolved from ``/workspace``. Absolute paths are used as-is.
-
-        **Files:** You get a short header, a line of dashes, then the text. The header
-        says total lines, which lines you received (1-based, like an editor), and whether
-        output was cut short. If you need more, call again with a higher ``offset``:
-        that is how many lines to skip from the start. Each call returns at most
-        ``limit`` lines (default 100, max 1000) and about 64k characters of body text—if
-        you hit either cap, read the header and continue with a larger ``offset``.
-
-        **Binaries:** You do not get file bytes, only size and a brief ``file``-style type.
-        Use ``exec`` if you need something else (e.g. ``hexdump``, ``xxd``).
-
-        **Directories:** Lists entry names; ``offset``/``limit`` do not apply to listings.
-        """
+        offset: Annotated[int, Field(ge=0)] | None = None,
+        limit: Annotated[int, Field(ge=1, le=READ_TOOL_MAX_LINE_WINDOW)] | None = None,
+    ) -> str | ToolDenied | ToolReturn:
+        text_offset = offset or 0
+        text_limit = limit if limit is not None else 100
+        line_numbers_given = offset is not None or limit is not None
         if denied_message := _read_skill_access_denial(
             path,
             ctx.deps.knowledge_dir,
@@ -698,7 +758,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             if ctx.deps.tool_call_callback:
                 ctx.deps.tool_call_callback(
                     "read",
-                    {"path": path, "offset": offset, "limit": limit},
+                    {"path": path, "offset": text_offset, "limit": text_limit},
                     "[blocked: skill not activated]",
                     "skill",
                     "deny",
@@ -707,14 +767,26 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             return _emit_tool_result(ctx, "read", denied_message, exit_code=1)
 
         if not ctx.tool_call_approved and (
-            denied := await _gate(ctx, "read", {"path": path, "offset": offset, "limit": limit})
+            denied := await _gate(ctx, "read", {"path": path, "offset": text_offset, "limit": text_limit})
         ):
             return denied
 
         session_id = ctx.deps.session_state.session_id
+
+        media_type = _image_media_type(path)
+        if media_type is not None and not line_numbers_given and supports_vision:
+            try:
+                data = await ctx.deps.sandbox.file_read_bytes(session_id, path)
+            except Exception as exc:
+                _log_sandbox_tool_exception("read", session_id)
+                return _emit_tool_result(ctx, "read", f"Error: {exc}", exit_code=-1)
+            if isinstance(data, bytes):
+                return _emit_image_result(ctx, path, data, media_type)
+            # str => too-big / error: fall through to the normal text read so the agent still gets a stub.
+
         exit_code = 0
         try:
-            result = await ctx.deps.sandbox.file_read(session_id, path, offset=offset, limit=limit)
+            result = await ctx.deps.sandbox.file_read(session_id, path, offset=text_offset, limit=text_limit)
         except Exception as exc:
             _log_sandbox_tool_exception("read", session_id)
             result = f"Error: {exc}"

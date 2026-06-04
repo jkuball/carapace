@@ -54,6 +54,7 @@ class PublicPlatformModelEntry(PlatformSettingsModel):
     thinking: bool | Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
     thinking_budget_tokens: int | None = None
     base_url: str | None = None
+    vision: bool = False
     api_key: PublicModelSecret = PublicModelSecret()
 
 
@@ -90,6 +91,7 @@ class PlatformModelEntryPatch(PlatformSettingsModel):
     thinking: bool | Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
     thinking_budget_tokens: int | None = Field(default=None, ge=0)
     base_url: str | None = None
+    vision: bool = False
     api_key: PlatformSecretPatch | None = None
 
     @field_validator("provider", "name", "id", "base_url", mode="before")
@@ -173,6 +175,7 @@ def _public_model_entry(entry: AvailableModelEntry) -> PublicPlatformModelEntry:
         thinking=entry.thinking,
         thinking_budget_tokens=entry.thinking_budget_tokens,
         base_url=entry.base_url,
+        vision=entry.vision,
         api_key=_public_secret(entry.api_key),
     )
 
@@ -247,6 +250,7 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
                 thinking=patch.thinking,
                 thinking_budget_tokens=patch.thinking_budget_tokens if openai_compatible else None,
                 base_url=patch.base_url if openai_compatible else None,
+                vision=patch.vision,
                 api_key=(
                     _secret_from_patch(patch.api_key, existing.api_key if existing is not None else None)
                     if supports_api_key
@@ -295,6 +299,8 @@ def _model_entry_to_yaml(entry: AvailableModelEntry) -> dict[str, Any]:
         data["thinking_budget_tokens"] = entry.thinking_budget_tokens
     if entry.base_url is not None:
         data["base_url"] = entry.base_url
+    if entry.vision:
+        data["vision"] = entry.vision
     secret = _secret_to_yaml(entry.api_key)
     if secret is not None:
         data["api_key"] = secret

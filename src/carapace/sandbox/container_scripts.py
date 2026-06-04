@@ -178,3 +178,37 @@ sys.stdout.write("".join(body_parts))
 def build_file_read_script(body_separator: str) -> str:
     """Return the read script with ``body_separator`` as the header/body divider line."""
     return SANDBOX_FILE_READ_SCRIPT_TEMPLATE.replace(FILE_READ_BODY_SEPARATOR_TOKEN, body_separator)
+
+
+# argv: path, max_bytes. Prints "::TOOBIG::<size>" when the file exceeds the cap,
+# otherwise "::B64::" followed by the base64 of the file bytes (text-safe transport).
+SANDBOX_FILE_READ_BYTES_SCRIPT = """\
+import base64, os, sys
+p, cap_s = sys.argv[1], sys.argv[2]
+max_bytes = int(cap_s)
+if not os.path.lexists(p):
+    print(f"Error: path not found: {p}")
+    sys.exit(1)
+if not os.access(p, os.R_OK):
+    print(f"Error: permission denied: {p}")
+    sys.exit(1)
+if not os.path.isfile(p):
+    print(f"Error: not a regular file: {p}")
+    sys.exit(1)
+try:
+    size = os.stat(p).st_size
+except OSError as e:
+    print(f"Error: stat {p}: {e}")
+    sys.exit(1)
+if size > max_bytes:
+    print(f"::TOOBIG::{size}")
+    sys.exit(0)
+try:
+    with open(p, "rb") as f:
+        data = f.read()
+except OSError as e:
+    print(f"Error: cannot read {p}: {e}")
+    sys.exit(1)
+sys.stdout.write("::B64::")
+sys.stdout.write(base64.b64encode(data).decode())
+"""
