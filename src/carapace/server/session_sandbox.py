@@ -111,14 +111,16 @@ async def upload_session_sandbox_file(
             tee_read,
             max_bytes=MAX_UPLOAD_BYTES,
         )
-    except UploadTooLargeError as exc:
+    except BaseException as exc:
+        # Any failure (size limit, write error, stopped sandbox, I/O) must not leave a
+        # sidecar-less blob behind in sessions/{id}/files/.
         handle.close()
         dest.unlink(missing_ok=True)
-        raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except UploadError as exc:
-        handle.close()
-        dest.unlink(missing_ok=True)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if isinstance(exc, UploadTooLargeError):
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        if isinstance(exc, UploadError):
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise
     finally:
         if not handle.closed:
             handle.close()
