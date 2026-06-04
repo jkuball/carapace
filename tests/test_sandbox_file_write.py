@@ -28,71 +28,104 @@ def _reconstruct(commands: list[str]) -> bytes:
 
 
 def test_small_write_is_single_command() -> None:
-    commands = _file_write_commands("/tmp/x.txt", "hello", mode=None, quote=True)
-    assert len(commands) == 1
-    assert commands[0].startswith('mkdir -p "$(dirname')
-    assert _reconstruct(commands) == b"hello"
+    writes, chmod = _file_write_commands("/tmp/x.txt", "hello", mode=None, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert writes[0].startswith('mkdir -p "$(dirname')
+    assert _reconstruct(writes) == b"hello"
 
 
-def test_mode_folds_into_last_command() -> None:
+def test_mode_folds_into_sole_write() -> None:
     # Single chunk + mode stays one exec (preserves prior behaviour for credential writes).
-    commands = _file_write_commands("/tmp/x", "v", mode=0o400, quote=True)
-    assert len(commands) == 1
-    assert commands[0].endswith("&& chmod 0400 /tmp/x")
+    writes, chmod = _file_write_commands("/tmp/x", "v", mode=0o400, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert writes[0].endswith("&& chmod 0400 /tmp/x")
 
 
 def test_large_write_chunks_stay_within_arg_limit() -> None:
     content = "A" * (300 * 1024)
-    commands = _file_write_commands("/tmp/big.bin", content, mode=0o644, quote=True)
-    assert len(commands) > 1
-    assert all(len(cmd) < MAX_ARG_STRLEN for cmd in commands)
+    writes, chmod = _file_write_commands("/tmp/big.bin", content, mode=0o644, quote=True)
+    assert len(writes) > 1
+    assert all(len(cmd) < MAX_ARG_STRLEN for cmd in writes)
     # First truncates, the rest append.
-    assert " > /tmp/big.bin" in commands[0]
-    assert all(" >> /tmp/big.bin" in cmd for cmd in commands[1:])
-    # chmod folded into the final append, not a separate exec.
-    assert commands[-1].endswith("&& chmod 0644 /tmp/big.bin")
-    assert _reconstruct(commands).decode() == content
+    assert " > /tmp/big.bin" in writes[0]
+    assert all(" >> /tmp/big.bin" in cmd for cmd in writes[1:])
+    # Multi-chunk: chmod is a separate trailing command, not folded into a data write.
+    assert chmod == "chmod 0644 /tmp/big.bin"
+    assert all("chmod" not in cmd for cmd in writes)
+    assert _reconstruct(writes).decode() == content
 
 
 def test_empty_content_truncates_file() -> None:
-    commands = _file_write_commands("/tmp/x", "", mode=None, quote=True)
-    assert len(commands) == 1
-    assert " > /tmp/x" in commands[0]
-    assert _reconstruct(commands) == b""
+    writes, chmod = _file_write_commands("/tmp/x", "", mode=None, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert " > /tmp/x" in writes[0]
+    assert _reconstruct(writes) == b""
 
 
 def test_chunk_boundary_count() -> None:
     content = "B" * (_FILE_WRITE_CHUNK_BYTES * 2 + 1)
-    commands = _file_write_commands("/tmp/x", content, mode=None, quote=True)
-    assert len(commands) == 3
-    assert _reconstruct(commands).decode() == content
+    writes, chmod = _file_write_commands("/tmp/x", content, mode=None, quote=True)
+    assert len(writes) == 3
+    assert chmod is None
+    assert _reconstruct(writes).decode() == content
+
+
+async def _run(exec_one, content, *, mode=None, path="/tmp/f") -> tuple[ExecResult, list[str]]:
+    calls: list[str] = []
+
+    async def wrapped(cmd: str) -> ExecResult:
+        calls.append(cmd)
+        return await exec_one(cmd, calls)
+
+    result = await SandboxFileOps._run_file_write(wrapped, path, content, mode=mode, quote=True)
+    return result, calls
 
 
 @pytest.mark.asyncio
-async def test_multichunk_failure_removes_partial_file() -> None:
-    calls: list[str] = []
-
-    async def exec_one(cmd: str) -> ExecResult:
-        # Fail on the first append (file already truncated by the first command).
-        fail = ">>" in cmd and not any(">>" in c for c in calls)
-        calls.append(cmd)
+async def test_multichunk_partial_failure_removes_file() -> None:
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        # Fail on the first append, after the first command already truncated+wrote.
+        fail = ">>" in cmd and not any(">>" in c for c in calls[:-1])
         return ExecResult(exit_code=1, output="boom") if fail else ExecResult(exit_code=0, output="")
 
-    result = await SandboxFileOps._run_file_write(
-        exec_one, "/tmp/big", "C" * (_FILE_WRITE_CHUNK_BYTES * 2), mode=None, quote=True
-    )
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
     assert result.exit_code == 1
-    assert any(c.startswith("rm -f /tmp/big") for c in calls)
+    assert any(c.startswith("rm -f /tmp/f") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_first_command_failure_leaves_existing_file() -> None:
+    # mkdir/truncate fails before any chunk is written — must not delete a pre-existing file.
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        return ExecResult(exit_code=1, output="denied")
+
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
+    assert result.exit_code == 1
+    assert not any(c.startswith("rm -f") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_chmod_failure_keeps_written_file() -> None:
+    # All data appended successfully; only the trailing chmod fails — keep the file.
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        if cmd.startswith("chmod"):
+            return ExecResult(exit_code=1, output="chmod denied")
+        return ExecResult(exit_code=0, output="")
+
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2), mode=0o644)
+    assert result.exit_code == 1
+    assert any(c.startswith("chmod") for c in calls)
+    assert not any(c.startswith("rm -f") for c in calls)
 
 
 @pytest.mark.asyncio
 async def test_single_chunk_failure_does_not_remove_file() -> None:
-    calls: list[str] = []
-
-    async def exec_one(cmd: str) -> ExecResult:
-        calls.append(cmd)
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
         return ExecResult(exit_code=1, output="denied")
 
-    result = await SandboxFileOps._run_file_write(exec_one, "/tmp/x", "small", mode=None, quote=True)
+    result, calls = await _run(exec_one, "small")
     assert result.exit_code == 1
     assert not any(c.startswith("rm -f") for c in calls)

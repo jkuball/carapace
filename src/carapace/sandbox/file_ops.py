@@ -51,25 +51,32 @@ def _shell_path(path: str, *, quote: bool) -> str:
 _FILE_WRITE_CHUNK_BYTES = 64 * 1024
 
 
-def _file_write_commands(path: str, content: str, *, mode: int | None, quote: bool) -> list[str]:
-    """Shell commands writing *content* in argv-safe base64 chunks (avoids "Argument list too long").
+def _file_write_commands(path: str, content: str, *, mode: int | None, quote: bool) -> tuple[list[str], str | None]:
+    """Return ``(writes, chmod)`` for writing *content* in argv-safe base64 chunks.
 
-    The first command creates the parent directory and truncates the file; later
-    commands append. An optional ``chmod`` runs last. Empty content truncates the file.
+    Avoids "Argument list too long": each chunk's base64 is one shell argument. The
+    first write creates the parent dir and truncates; later writes append. ``chmod`` is
+    folded into the sole write when there is exactly one (keeps a credential write a
+    single exec) and returned separately for multi-chunk writes, so a ``chmod`` failure
+    isn't mistaken for a partial write. Empty content truncates the file.
     """
     shell_path = _shell_path(path, quote=quote)
     data = content.encode()
-    commands: list[str] = []
+    writes: list[str] = []
     for start in range(0, len(data) or 1, _FILE_WRITE_CHUNK_BYTES):
         b64 = base64.b64encode(data[start : start + _FILE_WRITE_CHUNK_BYTES]).decode()
-        if not commands:
-            commands.append(f'mkdir -p "$(dirname {shell_path})" && printf %s {b64} | base64 -d > {shell_path}')
+        if not writes:
+            writes.append(f'mkdir -p "$(dirname {shell_path})" && printf %s {b64} | base64 -d > {shell_path}')
         else:
-            commands.append(f"printf %s {b64} | base64 -d >> {shell_path}")
+            writes.append(f"printf %s {b64} | base64 -d >> {shell_path}")
+    chmod: str | None = None
     if mode is not None:
-        # Fold chmod into the last write so a single-chunk write stays one exec.
-        commands[-1] += f" && chmod {mode:04o} {shell_path}"
-    return commands
+        chmod_cmd = f"chmod {mode:04o} {shell_path}"
+        if len(writes) == 1:
+            writes[0] += f" && {chmod_cmd}"
+        else:
+            chmod = chmod_cmd
+    return writes, chmod
 
 
 def _line_count(content: str) -> int:
@@ -135,20 +142,28 @@ class SandboxFileOps:
         mode: int | None,
         quote: bool,
     ) -> ExecResult:
-        """Run the chunked write commands in order, stopping at the first failure.
+        """Run the chunked write, cleaning up only a genuinely partial file.
 
-        A multi-chunk write truncates the file on the first command and appends on the
-        rest, so a mid-stream failure can leave a partial file — remove it (like
-        ``upload_tmp_file``). A single command either fully writes or fails atomically.
+        If a write fails *after* an earlier chunk already truncated and wrote the file,
+        the file holds partial content — remove it (like ``upload_tmp_file``). A failure
+        on the very first command leaves any pre-existing file untouched, and a ``chmod``
+        failure happens after the content is fully written, so neither triggers cleanup.
         """
-        commands = _file_write_commands(path, content, mode=mode, quote=quote)
-        for cmd in commands:
+        writes, chmod_cmd = _file_write_commands(path, content, mode=mode, quote=quote)
+        wrote_any = False
+        for cmd in writes:
             result = await exec_one(cmd)
             if result.exit_code != 0:
-                if len(commands) > 1:
+                if wrote_any:
                     with contextlib.suppress(Exception):
                         await exec_one(f"rm -f {_shell_path(path, quote=quote)}")
                 output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
+                return ExecResult(exit_code=result.exit_code, output=output)
+            wrote_any = True
+        if chmod_cmd is not None:
+            result = await exec_one(chmod_cmd)
+            if result.exit_code != 0:
+                output = result.output or f"Error: cannot chmod {path} (exit {result.exit_code})."
                 return ExecResult(exit_code=result.exit_code, output=output)
         lines = _line_count(content)
         return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
