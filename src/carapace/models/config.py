@@ -98,6 +98,10 @@ class AvailableModelEntry(ConfigModel):
         default=None,
         description="OpenAI-compatible API base URL (openai / openai-chat rows only).",
     )
+    vision: bool = Field(
+        default=False,
+        description="Model accepts image input; enables raw-image read-tool results.",
+    )
     api_key: Secret | None = Field(default=None, exclude=True)
 
     @model_validator(mode="before")

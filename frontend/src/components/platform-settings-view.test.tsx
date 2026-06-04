@@ -41,6 +41,7 @@ test("buildPlatformSettingsPatch omits OpenAI-only fields for other providers", 
       thinking: "",
       thinkingBudgetTokens: "128",
       baseUrl: "http://127.0.0.1:1234/v1",
+      vision: false,
       apiKeySource: "raw",
       apiKeyValue: "",
       apiKeyConfigured: true,
@@ -67,6 +68,7 @@ test("buildPlatformSettingsPatch reuses configured raw OpenAI secrets", () => {
       thinking: "",
       thinkingBudgetTokens: "",
       baseUrl: "http://127.0.0.1:1234/v1",
+      vision: false,
       apiKeySource: "raw",
       apiKeyValue: "",
       apiKeyConfigured: true,
@@ -89,6 +91,7 @@ test("buildPlatformSettingsPatch includes OpenRouter API key fields without base
       thinking: "",
       thinkingBudgetTokens: "128",
       baseUrl: "https://openrouter.ai/api/v1",
+      vision: false,
       apiKeySource: "env",
       apiKeyValue: "OPENROUTER_API_KEY",
       apiKeyConfigured: false,
@@ -104,6 +107,29 @@ test("buildPlatformSettingsPatch includes OpenRouter API key fields without base
   assert.equal(Object.hasOwn(model, "thinking_budget_tokens"), false);
 });
 
+test("buildPlatformSettingsPatch carries the vision flag", () => {
+  const patch = buildPlatformSettingsPatch(
+    draftWithModel({
+      rowId: "model-1",
+      provider: "anthropic",
+      name: "claude-sonnet-4-6",
+      id: "",
+      maxInputTokens: "",
+      thinking: "",
+      thinkingBudgetTokens: "",
+      baseUrl: "",
+      vision: true,
+      apiKeySource: "none",
+      apiKeyValue: "",
+      apiKeyConfigured: false,
+      apiKeyConfiguredSource: "none",
+    }),
+    translate,
+  );
+
+  assert.equal(patch.available_models[0]?.vision, true);
+});
+
 test("sortModelDrafts orders complete rows by provider then model name while keeping incomplete rows first", () => {
   const sorted = sortModelDrafts([
     {
@@ -115,6 +141,7 @@ test("sortModelDrafts orders complete rows by provider then model name while kee
       thinking: "",
       thinkingBudgetTokens: "",
       baseUrl: "",
+      vision: false,
       apiKeySource: "none",
       apiKeyValue: "",
       apiKeyConfigured: false,
@@ -129,6 +156,7 @@ test("sortModelDrafts orders complete rows by provider then model name while kee
       thinking: "",
       thinkingBudgetTokens: "",
       baseUrl: "",
+      vision: false,
       apiKeySource: "none",
       apiKeyValue: "",
       apiKeyConfigured: false,
@@ -143,6 +171,7 @@ test("sortModelDrafts orders complete rows by provider then model name while kee
       thinking: "",
       thinkingBudgetTokens: "",
       baseUrl: "",
+      vision: false,
       apiKeySource: "none",
       apiKeyValue: "",
       apiKeyConfigured: false,
@@ -157,6 +186,7 @@ test("sortModelDrafts orders complete rows by provider then model name while kee
       thinking: "",
       thinkingBudgetTokens: "",
       baseUrl: "",
+      vision: false,
       apiKeySource: "none",
       apiKeyValue: "",
       apiKeyConfigured: false,
@@ -185,6 +215,7 @@ test("ModelRow reopens incomplete rows after a manual collapse", async () => {
           thinking: "",
           thinkingBudgetTokens: "",
           baseUrl: "",
+          vision: false,
           apiKeySource: "none",
           apiKeyValue: "",
           apiKeyConfigured: false,

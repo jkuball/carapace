@@ -61,6 +61,14 @@ def resolve_available_model_entry(config: Config, model_name: str):
     return entry
 
 
+def model_supports_vision(config: Config, model_name: str) -> bool:
+    """Whether the registered model accepts image input. Unknown ids are treated as text-only."""
+    try:
+        return resolve_available_model_entry(config, model_name).vision
+    except ValueError:
+        return False
+
+
 def model_settings_for_entry(
     entry,
     *,
