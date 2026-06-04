@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import shlex
 from collections.abc import Awaitable, Callable
 from typing import Protocol
@@ -43,13 +44,39 @@ def _shell_path(path: str, *, quote: bool) -> str:
     return shlex.quote(path) if quote else f'"{path}"'
 
 
-def _file_write_shell_command(path: str, content: str, *, mode: int | None, quote: bool) -> str:
+# Each chunk's base64 is inlined as a single shell argument (``printf %s <b64>``).
+# Linux caps one argv string at MAX_ARG_STRLEN (128 KiB), so keep the base64
+# (4/3 of the raw chunk) well under that or execve fails with "Argument list too
+# long". 64 KiB raw -> ~85 KiB base64.
+_FILE_WRITE_CHUNK_BYTES = 64 * 1024
+
+
+def _file_write_commands(path: str, content: str, *, mode: int | None, quote: bool) -> tuple[list[str], str | None]:
+    """Return ``(writes, chmod)`` for writing *content* in argv-safe base64 chunks.
+
+    Avoids "Argument list too long": each chunk's base64 is one shell argument. The
+    first write creates the parent dir and truncates; later writes append. ``chmod`` is
+    folded into the sole write when there is exactly one (keeps a credential write a
+    single exec) and returned separately for multi-chunk writes, so a ``chmod`` failure
+    isn't mistaken for a partial write. Empty content truncates the file.
+    """
     shell_path = _shell_path(path, quote=quote)
-    content_b64 = base64.b64encode(content.encode()).decode()
-    cmd = f'mkdir -p "$(dirname {shell_path})" && printf %s {content_b64} | base64 -d > {shell_path}'
+    data = content.encode()
+    writes: list[str] = []
+    for start in range(0, len(data) or 1, _FILE_WRITE_CHUNK_BYTES):
+        b64 = base64.b64encode(data[start : start + _FILE_WRITE_CHUNK_BYTES]).decode()
+        if not writes:
+            writes.append(f'mkdir -p "$(dirname {shell_path})" && printf %s {b64} | base64 -d > {shell_path}')
+        else:
+            writes.append(f"printf %s {b64} | base64 -d >> {shell_path}")
+    chmod: str | None = None
     if mode is not None:
-        cmd += f" && chmod {mode:04o} {shell_path}"
-    return cmd
+        chmod_cmd = f"chmod {mode:04o} {shell_path}"
+        if len(writes) == 1:
+            writes[0] += f" && {chmod_cmd}"
+        else:
+            chmod = chmod_cmd
+    return writes, chmod
 
 
 def _line_count(content: str) -> int:
@@ -106,6 +133,41 @@ class SandboxFileOps:
                 return f"Error: cannot decode {path}: {exc}"
         return output or f"Error: cannot read {path}"
 
+    @staticmethod
+    async def _run_file_write(
+        exec_one: Callable[[str], Awaitable[ExecResult]],
+        path: str,
+        content: str,
+        *,
+        mode: int | None,
+        quote: bool,
+    ) -> ExecResult:
+        """Run the chunked write, cleaning up only a genuinely partial file.
+
+        If a write fails *after* an earlier chunk already truncated and wrote the file,
+        the file holds partial content — remove it (like ``upload_tmp_file``). A failure
+        on the very first command leaves any pre-existing file untouched, and a ``chmod``
+        failure happens after the content is fully written, so neither triggers cleanup.
+        """
+        writes, chmod_cmd = _file_write_commands(path, content, mode=mode, quote=quote)
+        wrote_any = False
+        for cmd in writes:
+            result = await exec_one(cmd)
+            if result.exit_code != 0:
+                if wrote_any:
+                    with contextlib.suppress(Exception):
+                        await exec_one(f"rm -f {_shell_path(path, quote=quote)}")
+                output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
+                return ExecResult(exit_code=result.exit_code, output=output)
+            wrote_any = True
+        if chmod_cmd is not None:
+            result = await exec_one(chmod_cmd)
+            if result.exit_code != 0:
+                output = result.output or f"Error: cannot chmod {path} (exit {result.exit_code})."
+                return ExecResult(exit_code=result.exit_code, output=output)
+        lines = _line_count(content)
+        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+
     async def file_write(
         self,
         session_id: str,
@@ -117,13 +179,13 @@ class SandboxFileOps:
         quote: bool = True,
     ) -> ExecResult:
         """Write content to a file inside the sandbox."""
-        cmd = _file_write_shell_command(path, content, mode=mode, quote=quote)
-        result = await self._exec_in_session(session_id, cmd, timeout=10, workdir=workdir)
-        if result.exit_code != 0:
-            output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
-            return ExecResult(exit_code=result.exit_code, output=output)
-        lines = _line_count(content)
-        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+        return await self._run_file_write(
+            lambda cmd: self._exec_in_session(session_id, cmd, timeout=10, workdir=workdir),
+            path,
+            content,
+            mode=mode,
+            quote=quote,
+        )
 
     async def file_str_replace(
         self,
@@ -155,13 +217,13 @@ class SandboxFileOps:
         quote: bool = True,
     ) -> ExecResult:
         """Write a file using an existing container while the exec lock is already held."""
-        cmd = _file_write_shell_command(path, content, mode=mode, quote=quote)
-        result = await self._exec_in_container(sc, cmd, timeout=10, workdir=workdir)
-        if result.exit_code != 0:
-            output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
-            return ExecResult(exit_code=result.exit_code, output=output)
-        lines = _line_count(content)
-        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+        return await self._run_file_write(
+            lambda cmd: self._exec_in_container(sc, cmd, timeout=10, workdir=workdir),
+            path,
+            content,
+            mode=mode,
+            quote=quote,
+        )
 
     async def file_delete_in_container(
         self,

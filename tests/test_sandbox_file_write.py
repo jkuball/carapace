@@ -1,0 +1,131 @@
+"""Tests for chunked sandbox file writes (avoiding shell "Argument list too long")."""
+
+from __future__ import annotations
+
+import base64
+import re
+
+import pytest
+
+from carapace.sandbox.file_ops import (
+    _FILE_WRITE_CHUNK_BYTES,
+    SandboxFileOps,
+    _file_write_commands,
+)
+from carapace.sandbox.runtime import ExecResult
+
+# Linux caps a single argv string at MAX_ARG_STRLEN (128 KiB).
+MAX_ARG_STRLEN = 128 * 1024
+
+
+def _reconstruct(commands: list[str]) -> bytes:
+    """Decode the base64 payloads back into the bytes the commands would write."""
+    out = bytearray()
+    for cmd in commands:
+        for b64 in re.findall(r"printf %s (\S+) \| base64 -d", cmd):
+            out += base64.b64decode(b64)
+    return bytes(out)
+
+
+def test_small_write_is_single_command() -> None:
+    writes, chmod = _file_write_commands("/tmp/x.txt", "hello", mode=None, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert writes[0].startswith('mkdir -p "$(dirname')
+    assert _reconstruct(writes) == b"hello"
+
+
+def test_mode_folds_into_sole_write() -> None:
+    # Single chunk + mode stays one exec (preserves prior behaviour for credential writes).
+    writes, chmod = _file_write_commands("/tmp/x", "v", mode=0o400, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert writes[0].endswith("&& chmod 0400 /tmp/x")
+
+
+def test_large_write_chunks_stay_within_arg_limit() -> None:
+    content = "A" * (300 * 1024)
+    writes, chmod = _file_write_commands("/tmp/big.bin", content, mode=0o644, quote=True)
+    assert len(writes) > 1
+    assert all(len(cmd) < MAX_ARG_STRLEN for cmd in writes)
+    # First truncates, the rest append.
+    assert " > /tmp/big.bin" in writes[0]
+    assert all(" >> /tmp/big.bin" in cmd for cmd in writes[1:])
+    # Multi-chunk: chmod is a separate trailing command, not folded into a data write.
+    assert chmod == "chmod 0644 /tmp/big.bin"
+    assert all("chmod" not in cmd for cmd in writes)
+    assert _reconstruct(writes).decode() == content
+
+
+def test_empty_content_truncates_file() -> None:
+    writes, chmod = _file_write_commands("/tmp/x", "", mode=None, quote=True)
+    assert len(writes) == 1
+    assert chmod is None
+    assert " > /tmp/x" in writes[0]
+    assert _reconstruct(writes) == b""
+
+
+def test_chunk_boundary_count() -> None:
+    content = "B" * (_FILE_WRITE_CHUNK_BYTES * 2 + 1)
+    writes, chmod = _file_write_commands("/tmp/x", content, mode=None, quote=True)
+    assert len(writes) == 3
+    assert chmod is None
+    assert _reconstruct(writes).decode() == content
+
+
+async def _run(exec_one, content, *, mode=None, path="/tmp/f") -> tuple[ExecResult, list[str]]:
+    calls: list[str] = []
+
+    async def wrapped(cmd: str) -> ExecResult:
+        calls.append(cmd)
+        return await exec_one(cmd, calls)
+
+    result = await SandboxFileOps._run_file_write(wrapped, path, content, mode=mode, quote=True)
+    return result, calls
+
+
+@pytest.mark.asyncio
+async def test_multichunk_partial_failure_removes_file() -> None:
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        # Fail on the first append, after the first command already truncated+wrote.
+        fail = ">>" in cmd and not any(">>" in c for c in calls[:-1])
+        return ExecResult(exit_code=1, output="boom") if fail else ExecResult(exit_code=0, output="")
+
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
+    assert result.exit_code == 1
+    assert any(c.startswith("rm -f /tmp/f") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_first_command_failure_leaves_existing_file() -> None:
+    # mkdir/truncate fails before any chunk is written — must not delete a pre-existing file.
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        return ExecResult(exit_code=1, output="denied")
+
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
+    assert result.exit_code == 1
+    assert not any(c.startswith("rm -f") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_chmod_failure_keeps_written_file() -> None:
+    # All data appended successfully; only the trailing chmod fails — keep the file.
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        if cmd.startswith("chmod"):
+            return ExecResult(exit_code=1, output="chmod denied")
+        return ExecResult(exit_code=0, output="")
+
+    result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2), mode=0o644)
+    assert result.exit_code == 1
+    assert any(c.startswith("chmod") for c in calls)
+    assert not any(c.startswith("rm -f") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_single_chunk_failure_does_not_remove_file() -> None:
+    async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
+        return ExecResult(exit_code=1, output="denied")
+
+    result, calls = await _run(exec_one, "small")
+    assert result.exit_code == 1
+    assert not any(c.startswith("rm -f") for c in calls)
