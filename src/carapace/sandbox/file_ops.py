@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import shlex
 from collections.abc import Awaitable, Callable
 from typing import Protocol
@@ -108,10 +109,19 @@ class SandboxFileOps:
         mode: int | None,
         quote: bool,
     ) -> ExecResult:
-        """Run the chunked write commands in order, stopping at the first failure."""
-        for cmd in _file_write_commands(path, content, mode=mode, quote=quote):
+        """Run the chunked write commands in order, stopping at the first failure.
+
+        A multi-chunk write truncates the file on the first command and appends on the
+        rest, so a mid-stream failure can leave a partial file — remove it (like
+        ``upload_tmp_file``). A single command either fully writes or fails atomically.
+        """
+        commands = _file_write_commands(path, content, mode=mode, quote=quote)
+        for cmd in commands:
             result = await exec_one(cmd)
             if result.exit_code != 0:
+                if len(commands) > 1:
+                    with contextlib.suppress(Exception):
+                        await exec_one(f"rm -f {_shell_path(path, quote=quote)}")
                 output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
                 return ExecResult(exit_code=result.exit_code, output=output)
         lines = _line_count(content)

@@ -5,7 +5,14 @@ from __future__ import annotations
 import base64
 import re
 
-from carapace.sandbox.file_ops import _FILE_WRITE_CHUNK_BYTES, _file_write_commands
+import pytest
+
+from carapace.sandbox.file_ops import (
+    _FILE_WRITE_CHUNK_BYTES,
+    SandboxFileOps,
+    _file_write_commands,
+)
+from carapace.sandbox.runtime import ExecResult
 
 # Linux caps a single argv string at MAX_ARG_STRLEN (128 KiB).
 MAX_ARG_STRLEN = 128 * 1024
@@ -59,3 +66,33 @@ def test_chunk_boundary_count() -> None:
     commands = _file_write_commands("/tmp/x", content, mode=None, quote=True)
     assert len(commands) == 3
     assert _reconstruct(commands).decode() == content
+
+
+@pytest.mark.asyncio
+async def test_multichunk_failure_removes_partial_file() -> None:
+    calls: list[str] = []
+
+    async def exec_one(cmd: str) -> ExecResult:
+        # Fail on the first append (file already truncated by the first command).
+        fail = ">>" in cmd and not any(">>" in c for c in calls)
+        calls.append(cmd)
+        return ExecResult(exit_code=1, output="boom") if fail else ExecResult(exit_code=0, output="")
+
+    result = await SandboxFileOps._run_file_write(
+        exec_one, "/tmp/big", "C" * (_FILE_WRITE_CHUNK_BYTES * 2), mode=None, quote=True
+    )
+    assert result.exit_code == 1
+    assert any(c.startswith("rm -f /tmp/big") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_single_chunk_failure_does_not_remove_file() -> None:
+    calls: list[str] = []
+
+    async def exec_one(cmd: str) -> ExecResult:
+        calls.append(cmd)
+        return ExecResult(exit_code=1, output="denied")
+
+    result = await SandboxFileOps._run_file_write(exec_one, "/tmp/x", "small", mode=None, quote=True)
+    assert result.exit_code == 1
+    assert not any(c.startswith("rm -f") for c in calls)
