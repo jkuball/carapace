@@ -3334,6 +3334,24 @@ def test_upload_sandbox_file_streams_to_tmp(client, auth_headers, monkeypatch):
     srv._engine.sandbox_mgr.upload_tmp_file.assert_awaited_once()
 
 
+def test_upload_sandbox_file_rejects_archived(client, auth_headers, monkeypatch):
+    sid = _make_session()
+    state = srv._engine.session_mgr.load_state(sid)
+    state.attributes.archived = True
+    srv._engine.session_mgr._save_state(state)
+    monkeypatch.setattr(
+        srv._engine.session_mgr,
+        "load_sandbox_snapshot",
+        lambda _sid: SessionSandboxSnapshot(exists=True, status="running"),
+    )
+    resp = client.post(
+        f"/api/sessions/{sid}/sandbox/files",
+        headers=auth_headers,
+        files={"file": ("abc.png", b"data", "image/png")},
+    )
+    assert resp.status_code == 409
+
+
 def test_upload_sandbox_file_rejected_for_other_user(client, admin_auth_headers, monkeypatch):
     sid = _make_session(user="thies")
     monkeypatch.setattr(

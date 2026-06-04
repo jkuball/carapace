@@ -1519,7 +1519,11 @@ export function ChatView({
     if (waiting) {
       queueRef.current = content;
       queuedAttachmentsRef.current = attachments;
-      setQueuedMessage(content);
+      // Surface the queued state even for attachment-only sends so the banner shows and
+      // the composer's submit guard blocks a second send from silently overwriting it.
+      setQueuedMessage(
+        content || attachments.map((a) => a.name).join(", "),
+      );
     } else {
       lastThinkingStartedAtRef.current = null;
       send({ type: "message", content, attachments });

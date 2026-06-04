@@ -76,7 +76,9 @@ async def upload_session_sandbox_file(
     user: Annotated[UserIdentity, Depends(verify_token)],
     file: Annotated[UploadFile, File()],
 ) -> UploadedFile:
-    _load_owned_session(session_id, user)
+    state = _load_owned_session(session_id, user)
+    if state.attributes.archived:
+        raise HTTPException(status_code=409, detail="Archived sessions must be unarchived before use")
     snapshot = server._engine.session_mgr.load_sandbox_snapshot(session_id)
     if snapshot is None or snapshot.status != "running":
         raise HTTPException(status_code=409, detail="Sandbox must be running to upload files")

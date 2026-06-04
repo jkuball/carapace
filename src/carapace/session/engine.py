@@ -521,8 +521,10 @@ class SessionEngine(
             return
 
         target = turns[-1]
+        user_event = events[target.start_event_index]
+        attachments = [Attachment.model_validate(a) for a in user_event.get("attachments", [])]
         self._rewrite_session_transcript(session_id, events[: target.start_event_index])
-        await self.submit_message(session_id, target.user_content, origin=origin)
+        await self.submit_message(session_id, target.user_content, origin=origin, attachments=attachments)
 
     async def reset_to_turn(self, session_id: str, event_index: int) -> bool:
         active = self._ensure_active(session_id)

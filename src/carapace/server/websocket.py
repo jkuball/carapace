@@ -421,7 +421,9 @@ async def chat_ws(
                 continue
 
             user_input = client_msg.content.strip()
-            attachments = client_msg.attachments
+            # Only trust attachment paths the upload endpoint could have produced (under /tmp);
+            # the client echoes these back, so drop anything pointing elsewhere.
+            attachments = [a for a in client_msg.attachments if a.path.startswith("/tmp/")]
             if not user_input and not attachments:
                 continue
 
