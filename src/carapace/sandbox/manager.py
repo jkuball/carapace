@@ -699,6 +699,8 @@ class SandboxManager:
                     break
                 fh.write(data)
                 offset += len(data)
+        if offset != size:
+            raise UploadError(f"Short read from sandbox: got {offset} of {size} bytes for {path}")
         return size
 
     async def activate_skill(self, session_id: str, skill_name: str) -> str:

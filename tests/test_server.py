@@ -3330,7 +3330,12 @@ def test_upload_sandbox_file_streams_to_tmp(client, auth_headers, monkeypatch):
         files={"file": ("abc.png", b"data", "image/png")},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"name": "abc.png", "path": "/tmp/abc-1a2b.png"}
+    body = resp.json()
+    assert body["name"] == "abc.png"
+    assert body["path"] == "/tmp/abc-1a2b.png"
+    assert body["mime"] == "image/png"
+    assert body["file_id"]
+    assert isinstance(body["size"], int)
     srv._engine.sandbox_mgr.upload_tmp_file.assert_awaited_once()
 
 

@@ -35,7 +35,9 @@ export function FilePreview({
   sessionId?: string;
   className?: string;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Keyed by fileId so a stale preview from a previous file is never shown while the
+  // new one loads (the render guard below ignores any url whose key != current fileId).
+  const [preview, setPreview] = useState<{ fileId: string; url: string } | null>(null);
   const isImage = (mime ?? "").startsWith("image/");
   const canFetch = server !== undefined && sessionId !== undefined;
 
@@ -47,7 +49,7 @@ export function FilePreview({
       .then((blob) => {
         if (cancelled) return;
         url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
+        setPreview({ fileId, url });
       })
       .catch(() => {
         /* fall back to the download chip below */
@@ -57,6 +59,8 @@ export function FilePreview({
       if (url) URL.revokeObjectURL(url);
     };
   }, [isImage, canFetch, server, sessionId, fileId]);
+
+  const previewUrl = preview?.fileId === fileId ? preview.url : null;
 
   const downloadHref = canFetch
     ? sentFileUrl(server, sessionId, fileId, { download: true })
