@@ -164,6 +164,8 @@
             "thinking": "Thinking",
             "thinkingBudgetTokens": "Thinking budget tokens",
             "baseUrl": "Base URL",
+            "vision": "Vision",
+            "visionHint": "Accepts image input",
             "apiKeySource": "API key source",
             "apiKey": "API key",
             "secretReference": "Secret reference"

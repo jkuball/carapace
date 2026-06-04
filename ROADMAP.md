@@ -6,8 +6,6 @@
 
 - [ ] subagents: bundle a skill for carapace itself - firing jobs, creating subsessions, ... (auth? via key?)
 - [ ] Compaction
-- [ ] image input ([plan](docs/plans/images.md))
-- [ ] image output — agent tools producing images (screenshots, charts, renders)
 - [ ] file upload into a temporary dir
 - [ ] file download from the sandbox for agent results
 

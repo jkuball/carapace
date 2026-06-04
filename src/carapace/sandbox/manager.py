@@ -45,6 +45,7 @@ FILE_READ_SCRIPT = file_ops.FILE_READ_SCRIPT
 MAX_READ_OUTPUT_CHARS = file_ops.MAX_READ_OUTPUT_CHARS
 SANDBOX_READ_BODY_SEPARATOR = file_ops.SANDBOX_READ_BODY_SEPARATOR
 READ_TOOL_MAX_LINE_WINDOW = file_ops.READ_TOOL_MAX_LINE_WINDOW
+READ_IMAGE_MAX_BYTES = file_ops.READ_IMAGE_MAX_BYTES
 
 _CONTEXT_TUNNEL_HELPER = r"""#!/usr/bin/env python3
 from __future__ import annotations
@@ -580,6 +581,11 @@ class SandboxManager:
 
     async def file_read(self, session_id: str, path: str, *, offset: int = 0, limit: int = 100) -> str:
         return await self._sandbox_file_ops.file_read(session_id, path, offset=offset, limit=limit)
+
+    async def file_read_bytes(
+        self, session_id: str, path: str, *, max_bytes: int = READ_IMAGE_MAX_BYTES
+    ) -> bytes | str:
+        return await self._sandbox_file_ops.file_read_bytes(session_id, path, max_bytes=max_bytes)
 
     async def file_write(
         self,
