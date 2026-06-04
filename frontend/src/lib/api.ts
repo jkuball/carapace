@@ -515,6 +515,9 @@ export async function wipeSandbox(
 export interface UploadedFile {
   name: string;
   path: string;
+  file_id: string;
+  size: number;
+  mime: string;
 }
 
 export function uploadSandboxFile(

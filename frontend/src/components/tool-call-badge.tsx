@@ -1,13 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ChevronRight,
-  Download,
   FileText,
   FilePen,
-  File as FileIcon,
   GitBranch,
   Globe,
   KeyRound,
@@ -25,12 +23,12 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { diffLines } from "diff";
 import { MarkdownContent } from "./markdown-content";
+import { FilePreview } from "./file-preview";
 import {
   fencedCodeBlock,
   languageFromFilePath,
   splitReadToolResult,
 } from "@/lib/sandbox-read";
-import { fetchSentFile, sentFileUrl } from "@/lib/api";
 import type { SentFile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -66,85 +64,6 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   git_push: GitBranch,
   send_file: Send,
 };
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
-
-function SentFilePreview({
-  file,
-  server,
-  sessionId,
-}: {
-  file: SentFile;
-  server?: string;
-  sessionId?: string;
-}) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const isImage = file.mime.startsWith("image/");
-  const canFetch = server !== undefined && sessionId !== undefined;
-
-  useEffect(() => {
-    if (!isImage || !canFetch) return;
-    let url: string | null = null;
-    let cancelled = false;
-    fetchSentFile(server, sessionId, file.file_id)
-      .then((blob) => {
-        if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
-      })
-      .catch(() => {
-        /* fall back to the download chip below */
-      });
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [isImage, canFetch, server, sessionId, file.file_id]);
-
-  const downloadHref = canFetch
-    ? sentFileUrl(server, sessionId, file.file_id, { download: true })
-    : undefined;
-
-  return (
-    <div className="rounded-md border border-border/40 bg-muted/25 p-2">
-      {isImage && previewUrl && (
-        <a href={previewUrl} target="_blank" rel="noreferrer" className="block">
-          {/* eslint-disable-next-line @next/next/no-img-element -- blob: object URL, next/image can't optimize it */}
-          <img
-            src={previewUrl}
-            alt={file.name}
-            className="max-h-80 w-auto max-w-full rounded"
-          />
-        </a>
-      )}
-      <div className="mt-1.5 flex items-center gap-2">
-        <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium text-foreground/85">{file.name}</span>
-        <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
-        {downloadHref && (
-          <a
-            href={downloadHref}
-            download={file.name}
-            className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-teal-600 hover:bg-teal-500/10 dark:text-teal-400"
-          >
-            <Download className="h-3 w-3" />
-            Download
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
 
 const SHORT_KEYS: Record<string, string> = {
   command: "cmd",
@@ -1077,9 +996,12 @@ export function ToolCallBadge({
               {files && files.length > 0 ? (
                 <div className="space-y-2">
                   {files.map((file) => (
-                    <SentFilePreview
+                    <FilePreview
                       key={file.file_id}
-                      file={file}
+                      fileId={file.file_id}
+                      name={file.name}
+                      mime={file.mime}
+                      size={file.size}
                       server={server}
                       sessionId={sessionId}
                     />

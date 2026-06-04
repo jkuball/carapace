@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatFileSize } from "./file-preview";
 import type { AvailableModelInfo, SlashCommand, UploadedFile } from "@/lib/api";
 import type {
   Attachment,
@@ -18,6 +19,9 @@ interface PendingAttachment {
   status: "uploading" | "done" | "error";
   progress: number;
   path?: string;
+  fileId?: string;
+  size?: number;
+  mime?: string;
   error?: string;
   controller: AbortController;
 }
@@ -160,7 +164,16 @@ export function ChatInput({
             setAttachments((prev) =>
               prev.map((a) =>
                 a.id === id
-                  ? { ...a, status: "done", progress: 1, path: res.path, name: res.name }
+                  ? {
+                      ...a,
+                      status: "done",
+                      progress: 1,
+                      path: res.path,
+                      name: res.name,
+                      fileId: res.file_id,
+                      size: res.size,
+                      mime: res.mime,
+                    }
                   : a,
               ),
             ),
@@ -401,7 +414,13 @@ export function ChatInput({
     () =>
       attachments
         .filter((a) => a.status === "done" && a.path)
-        .map((a): Attachment => ({ name: a.name, path: a.path as string })),
+        .map((a): Attachment => ({
+          name: a.name,
+          path: a.path as string,
+          file_id: a.fileId,
+          size: a.size,
+          mime: a.mime,
+        })),
     [attachments],
   );
 
@@ -1043,11 +1062,15 @@ function AttachmentChip({
         <Paperclip className="h-3 w-3 shrink-0" />
       )}
       <span className="max-w-40 truncate">{attachment.name}</span>
-      {attachment.status === "uploading" && (
+      {attachment.status === "uploading" ? (
         <span className="tabular-nums text-muted-foreground">
           {Math.round(attachment.progress * 100)}%
         </span>
-      )}
+      ) : attachment.size != null ? (
+        <span className="shrink-0 text-muted-foreground">
+          {formatFileSize(attachment.size)}
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={onRemove}

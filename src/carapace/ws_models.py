@@ -43,10 +43,17 @@ SLASH_COMMANDS: list[dict[str, str]] = [
 
 
 class Attachment(BaseModel):
-    """A file the user uploaded into the sandbox before sending a message."""
+    """A file the user uploaded into the sandbox before sending a message.
+
+    ``file_id``/``size``/``mime`` are populated once the upload is persisted
+    server-side (so it stays viewable/downloadable after the sandbox is gone).
+    """
 
     name: str
     path: str
+    file_id: str | None = None
+    size: int | None = None
+    mime: str | None = None
 
 
 class UserMessage(BaseModel):

@@ -160,6 +160,9 @@ export interface JobRunResult {
 export interface Attachment {
   name: string;
   path: string;
+  file_id?: string;
+  size?: number;
+  mime?: string;
 }
 
 export interface SentFile {

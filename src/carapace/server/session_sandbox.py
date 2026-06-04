@@ -70,6 +70,9 @@ async def stop_session_sandbox(
 class UploadedFile(BaseModel):
     name: str
     path: str
+    file_id: str
+    size: int
+    mime: str
 
 
 @router.post("/sessions/{session_id}/sandbox/files", response_model=UploadedFile)
@@ -85,18 +88,43 @@ async def upload_session_sandbox_file(
     if snapshot is None or snapshot.status != "running":
         raise HTTPException(status_code=409, detail="Sandbox must be running to upload files")
     filename = file.filename or "upload"
+
+    # Persist a server-side copy as the bytes stream into the sandbox, so the file stays
+    # downloadable after the sandbox is gone. The tee avoids a second base64 round-trip.
+    data_dir = server._engine.session_mgr.data_dir
+    file_id, dest = sent_files.reserve(data_dir, session_id, filename)
+    written = 0
+    handle = dest.open("wb")
+
+    async def tee_read(n: int) -> bytes:
+        nonlocal written
+        chunk = await file.read(n)
+        if chunk:
+            handle.write(chunk)
+            written += len(chunk)
+        return chunk
+
     try:
         path = await server._engine.sandbox_mgr.upload_tmp_file(
             session_id,
             filename,
-            file.read,
+            tee_read,
             max_bytes=MAX_UPLOAD_BYTES,
         )
     except UploadTooLargeError as exc:
+        handle.close()
+        dest.unlink(missing_ok=True)
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except UploadError as exc:
+        handle.close()
+        dest.unlink(missing_ok=True)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return UploadedFile(name=filename, path=path)
+    finally:
+        if not handle.closed:
+            handle.close()
+
+    info = sent_files.finalize(data_dir, session_id, file_id, filename, written)
+    return UploadedFile(name=filename, path=path, file_id=info.file_id, size=info.size, mime=info.mime)
 
 
 @router.get("/sessions/{session_id}/files/{file_id}")
