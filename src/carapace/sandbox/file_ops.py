@@ -41,13 +41,32 @@ def _shell_path(path: str, *, quote: bool) -> str:
     return shlex.quote(path) if quote else f'"{path}"'
 
 
-def _file_write_shell_command(path: str, content: str, *, mode: int | None, quote: bool) -> str:
+# Each chunk's base64 is inlined as a single shell argument (``printf %s <b64>``).
+# Linux caps one argv string at MAX_ARG_STRLEN (128 KiB), so keep the base64
+# (4/3 of the raw chunk) well under that or execve fails with "Argument list too
+# long". 64 KiB raw -> ~85 KiB base64.
+_FILE_WRITE_CHUNK_BYTES = 64 * 1024
+
+
+def _file_write_commands(path: str, content: str, *, mode: int | None, quote: bool) -> list[str]:
+    """Shell commands writing *content* in argv-safe base64 chunks (avoids "Argument list too long").
+
+    The first command creates the parent directory and truncates the file; later
+    commands append. An optional ``chmod`` runs last. Empty content truncates the file.
+    """
     shell_path = _shell_path(path, quote=quote)
-    content_b64 = base64.b64encode(content.encode()).decode()
-    cmd = f'mkdir -p "$(dirname {shell_path})" && printf %s {content_b64} | base64 -d > {shell_path}'
+    data = content.encode()
+    commands: list[str] = []
+    for start in range(0, len(data) or 1, _FILE_WRITE_CHUNK_BYTES):
+        b64 = base64.b64encode(data[start : start + _FILE_WRITE_CHUNK_BYTES]).decode()
+        if not commands:
+            commands.append(f'mkdir -p "$(dirname {shell_path})" && printf %s {b64} | base64 -d > {shell_path}')
+        else:
+            commands.append(f"printf %s {b64} | base64 -d >> {shell_path}")
     if mode is not None:
-        cmd += f" && chmod {mode:04o} {shell_path}"
-    return cmd
+        # Fold chmod into the last write so a single-chunk write stays one exec.
+        commands[-1] += f" && chmod {mode:04o} {shell_path}"
+    return commands
 
 
 def _line_count(content: str) -> int:
@@ -80,6 +99,24 @@ class SandboxFileOps:
             return f"Directory listing of {path}/:\n" + output[len("::DIR::\n") :]
         return output or "(empty file)"
 
+    @staticmethod
+    async def _run_file_write(
+        exec_one: Callable[[str], Awaitable[ExecResult]],
+        path: str,
+        content: str,
+        *,
+        mode: int | None,
+        quote: bool,
+    ) -> ExecResult:
+        """Run the chunked write commands in order, stopping at the first failure."""
+        for cmd in _file_write_commands(path, content, mode=mode, quote=quote):
+            result = await exec_one(cmd)
+            if result.exit_code != 0:
+                output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
+                return ExecResult(exit_code=result.exit_code, output=output)
+        lines = _line_count(content)
+        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+
     async def file_write(
         self,
         session_id: str,
@@ -91,13 +128,13 @@ class SandboxFileOps:
         quote: bool = True,
     ) -> ExecResult:
         """Write content to a file inside the sandbox."""
-        cmd = _file_write_shell_command(path, content, mode=mode, quote=quote)
-        result = await self._exec_in_session(session_id, cmd, timeout=10, workdir=workdir)
-        if result.exit_code != 0:
-            output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
-            return ExecResult(exit_code=result.exit_code, output=output)
-        lines = _line_count(content)
-        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+        return await self._run_file_write(
+            lambda cmd: self._exec_in_session(session_id, cmd, timeout=10, workdir=workdir),
+            path,
+            content,
+            mode=mode,
+            quote=quote,
+        )
 
     async def file_str_replace(
         self,
@@ -129,13 +166,13 @@ class SandboxFileOps:
         quote: bool = True,
     ) -> ExecResult:
         """Write a file using an existing container while the exec lock is already held."""
-        cmd = _file_write_shell_command(path, content, mode=mode, quote=quote)
-        result = await self._exec_in_container(sc, cmd, timeout=10, workdir=workdir)
-        if result.exit_code != 0:
-            output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
-            return ExecResult(exit_code=result.exit_code, output=output)
-        lines = _line_count(content)
-        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+        return await self._run_file_write(
+            lambda cmd: self._exec_in_container(sc, cmd, timeout=10, workdir=workdir),
+            path,
+            content,
+            mode=mode,
+            quote=quote,
+        )
 
     async def file_delete_in_container(
         self,
