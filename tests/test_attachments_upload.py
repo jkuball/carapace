@@ -82,6 +82,19 @@ async def test_upload_collision_inserts_hash() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upload_chunks_stay_within_single_arg_limit() -> None:
+    # Each chunk is inlined as one shell argument; Linux caps a single argv string at
+    # MAX_ARG_STRLEN (128 KiB). Larger chunks fail with "Argument list too long".
+    max_arg_strlen = 128 * 1024
+    fake = _fake_manager()
+    fake._UPLOAD_CHUNK_BYTES = SandboxManager._UPLOAD_CHUNK_BYTES
+    await SandboxManager.upload_tmp_file(fake, "s1", "big.jpg", _reader(b"\xff" * (300 * 1024)), max_bytes=10**9)
+    writes = [c.args[1] for c in fake.exec_command.call_args_list if "base64 -d" in c.args[1]]
+    assert writes
+    assert all(len(cmd) < max_arg_strlen for cmd in writes)
+
+
+@pytest.mark.asyncio
 async def test_upload_too_large_raises_and_cleans_up() -> None:
     fake = _fake_manager()
     with pytest.raises(UploadTooLargeError):
