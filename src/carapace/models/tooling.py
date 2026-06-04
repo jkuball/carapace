@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel
+
 from ..security.context import ApprovalSource, ApprovalVerdict
+
+
+class SentFileInfo(BaseModel):
+    """A file the agent exposed to the user via ``send_file``, persisted server-side."""
+
+    file_id: str
+    name: str
+    mime: str
+    size: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +26,7 @@ class ToolResult:
     output: str
     exit_code: int = 0
     tool_id: str | None = None
+    files: tuple[SentFileInfo, ...] = field(default_factory=tuple)
 
 
 type ToolCallCallback = Callable[

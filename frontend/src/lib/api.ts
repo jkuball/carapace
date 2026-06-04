@@ -573,6 +573,27 @@ export function uploadSandboxFile(
   });
 }
 
+export function sentFileUrl(
+  server: string,
+  sessionId: string,
+  fileId: string,
+  opts: { download?: boolean } = {},
+): string {
+  const query = opts.download ? "?download=1" : "";
+  return `${server}/api/sessions/${sessionId}/files/${fileId}${query}`;
+}
+
+export async function fetchSentFile(
+  server: string,
+  sessionId: string,
+  fileId: string,
+  opts: { download?: boolean } = {},
+): Promise<Blob> {
+  const res = await fetch(sentFileUrl(server, sessionId, fileId, opts));
+  if (!res.ok) throw new Error(`Failed to fetch file: ${res.status}`);
+  return res.blob();
+}
+
 export async function fetchHistory(
   server: string,
   token: string,

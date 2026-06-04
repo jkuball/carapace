@@ -527,7 +527,9 @@
             "listCredentials": "list credentials",
             "accessCredential": "access credential",
             "accessDomain": "access domain",
-            "replace": "replace"
+            "replace": "replace",
+            "sentFile": "sent file",
+            "sendFile": "send file"
         },
         "summaries": {
             "readFirstLines": "first {count} lines of {path}",

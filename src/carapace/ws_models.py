@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from .models.tooling import SentFileInfo
 from .security.context import ApprovalSource, ApprovalVerdict
 from .usage import BudgetGauge, LlmRequestPhase, LlmSource
 
@@ -148,6 +149,7 @@ class ToolResultInfo(BaseModel):
     result: str
     exit_code: int = 0
     tool_id: str | None = None
+    files: list[SentFileInfo] | None = None
 
 
 class ApprovalRequest(BaseModel):

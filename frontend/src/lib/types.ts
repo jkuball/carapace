@@ -162,6 +162,13 @@ export interface Attachment {
   path: string;
 }
 
+export interface SentFile {
+  file_id: string;
+  name: string;
+  mime: string;
+  size: number;
+}
+
 export interface HistoryMessage {
   role: string;
   content: string;
@@ -184,6 +191,7 @@ export interface HistoryMessage {
   approval_verdict?: "allow" | "deny" | "escalate";
   approval_explanation?: string;
   result?: string;
+  files?: SentFile[];
   exit_code?: number;
   command?: string;
   data?: unknown;
@@ -266,6 +274,7 @@ export interface ToolResultInfo {
   result: string;
   exit_code?: number;
   tool_id?: string;
+  files?: SentFile[];
 }
 
 export interface ApprovalRequest {
@@ -492,6 +501,7 @@ export type ChatMessage =
       approvalExplanation?: string;
       decisionMessage?: string;
       result?: string;
+      files?: SentFile[];
       exitCode?: number;
       loading?: boolean;
       toolId?: string;
@@ -513,6 +523,7 @@ export type ChatMessage =
         approvalExplanation?: string;
         decisionMessage?: string;
         result?: string;
+        files?: SentFile[];
         exitCode?: number;
         loading?: boolean;
         toolId?: string;

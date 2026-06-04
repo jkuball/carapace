@@ -291,6 +291,8 @@ function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
 
 interface MessageProps {
   message: ChatMessage;
+  server?: string;
+  sessionId?: string;
   activeLlmActivity?: LlmActivity | null;
   canFork?: boolean;
   canRetry?: boolean;
@@ -314,6 +316,8 @@ interface MessageProps {
 
 export function Message({
   message,
+  server,
+  sessionId,
   activeLlmActivity,
   canFork,
   canRetry,
@@ -421,8 +425,11 @@ export function Message({
           approvalExplanation={message.approvalExplanation}
           decisionMessage={message.decisionMessage}
           result={message.result}
+          files={message.files}
           exitCode={message.exitCode}
           loading={message.loading}
+          server={server}
+          sessionId={sessionId}
           childCalls={message.children?.map((c) => ({
             tool: c.tool,
             args: c.args,
@@ -433,6 +440,7 @@ export function Message({
             approvalExplanation: c.approvalExplanation,
             decisionMessage: c.decisionMessage,
             result: c.result,
+            files: c.files,
             exitCode: c.exitCode,
             loading: c.loading,
           }))}

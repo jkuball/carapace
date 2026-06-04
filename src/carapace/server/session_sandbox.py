@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..auth import UserIdentity
 from ..sandbox.manager import UploadError, UploadTooLargeError
 from ..sandbox.state import SessionSandboxSnapshot
+from ..session import sent_files
 from .auth import verify_token
 from .state import server_module
 
@@ -95,6 +97,27 @@ async def upload_session_sandbox_file(
     except UploadError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return UploadedFile(name=filename, path=path)
+
+
+@router.get("/sessions/{session_id}/files/{file_id}")
+async def download_sent_file(
+    session_id: str,
+    file_id: str,
+    user: Annotated[UserIdentity, Depends(verify_token)],
+    download: Annotated[bool, Query()] = False,
+) -> FileResponse:
+    _load_owned_session(session_id, user)
+    resolved = sent_files.resolve(server._engine.session_mgr.data_dir, session_id, file_id)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    blob, info = resolved
+    disposition = "attachment" if download else "inline"
+    return FileResponse(
+        blob,
+        media_type=info.mime,
+        filename=info.name,
+        content_disposition_type=disposition,
+    )
 
 
 @router.post("/sessions/{session_id}/sandbox/wipe", response_model=SessionSandboxSnapshot)
