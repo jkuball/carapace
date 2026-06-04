@@ -67,7 +67,14 @@ class MatrixSubscriber:
         if from_self:
             return  # Matrix client already shows the sender's own message
         # Cross-channel message (e.g. from web UI) — forward to the room
-        await self._channel._send_text(self._room_id, f"💬 {content}")
+        parts: list[str] = []
+        if content:
+            parts.append(content)
+        for att in attachments or []:
+            parts.append(f"📎 {att.name} (`{att.path}`)")
+        if not parts:
+            return
+        await self._channel._send_text(self._room_id, "💬 " + "\n".join(parts))
 
     async def on_tool_call(
         self,

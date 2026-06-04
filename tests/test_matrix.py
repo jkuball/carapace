@@ -808,3 +808,41 @@ async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pyte
     assert stored.device_id == "DEV_NEW"
     assert stored.user_id == "@carapace:example.com"
     assert stored.user == "thies"
+
+
+@pytest.mark.anyio
+async def test_subscriber_forwards_attachments(tmp_path: Path):
+    from types import SimpleNamespace
+
+    ch = _make_channel(tmp_path)
+    ch._send_text = AsyncMock()
+    sub = MatrixSubscriber(ch, "!room:example.com")
+
+    await sub.on_user_message(
+        "look",
+        from_self=False,
+        attachments=[SimpleNamespace(name="abc.png", path="/tmp/abc-1a2b.png")],
+    )
+
+    ch._send_text.assert_awaited_once()
+    body = ch._send_text.await_args.args[1]
+    assert "look" in body
+    assert "abc.png" in body and "/tmp/abc-1a2b.png" in body
+
+
+@pytest.mark.anyio
+async def test_subscriber_attachment_only_message_is_forwarded(tmp_path: Path):
+    from types import SimpleNamespace
+
+    ch = _make_channel(tmp_path)
+    ch._send_text = AsyncMock()
+    sub = MatrixSubscriber(ch, "!room:example.com")
+
+    await sub.on_user_message(
+        "",
+        from_self=False,
+        attachments=[SimpleNamespace(name="d.csv", path="/tmp/d.csv")],
+    )
+
+    ch._send_text.assert_awaited_once()
+    assert "d.csv" in ch._send_text.await_args.args[1]
