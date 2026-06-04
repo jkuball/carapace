@@ -1,6 +1,72 @@
 # CHANGELOG
 
 
+## v0.136.3 (2026-06-04)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`b025e9c`](https://github.com/thiesgerken/carapace/commit/b025e9c7a1fabf213b3c0cdf96f260ccaa8505ff))
+
+### Other
+
+
+- fix: only clean up genuinely partial chunked writes
+  ([`d418513`](https://github.com/thiesgerken/carapace/commit/d4185133f29cc014e356eff9edb2abdd09585bca))
+
+  Address review: the previous cleanup ran `rm -f` on any multi-command failure, which could delete a pre-existing file when the first mkdir/truncate fails, or a fully-written file when the trailing chmod fails. Now only remove the file when a write fails after an earlier chunk already wrote (real partial state); make chmod a separate trailing command for multi-chunk writes so its failure never triggers cleanup. Single-chunk/credential writes stay one exec.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ui: pill switch for vision toggle
+  ([`f3caacc`](https://github.com/thiesgerken/carapace/commit/f3caacc63355cc772e985c76712d60642dcb039c))
+
+  Replace the raw checkbox with a SwitchRow-style pill toggle to match the rest of the settings UX.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: vision toggle in platform model settings UI
+  ([`f2d7adc`](https://github.com/thiesgerken/carapace/commit/f2d7adc6bfe5f0d63c05fea1b5bfc76cbf229c08))
+
+  Surface the per-model `vision` flag through the admin platform settings: API (PublicPlatformModelEntry, PlatformModelEntryPatch, YAML round-trip) and the model editor UI (checkbox + summary badge, i18n en/de). Default stays false and is omitted from YAML when unset.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- docs: remove implemented image-input plan
+  ([`84c845b`](https://github.com/thiesgerken/carapace/commit/84c845b50810997688e5f1f78cff133bc9bd94ac))
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: inject images into vision-capable models via read tool
+  ([`09240a1`](https://github.com/thiesgerken/carapace/commit/09240a12446ca14e5bc86e160d929cd498018911))
+
+  Add per-model `vision` config flag. When the active model supports image input, a plain `read(path)` on a raster image (png/jpg/jpeg/gif/webp) returns the image itself as a multimodal tool result instead of the binary stub. Passing `offset`/`limit` forces a text read (SVG/source escape hatch); SVG and other text-based formats always read as text. Non-vision models keep the previous text-only behavior, and the tool description switches per model.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: remove partial file when a multi-chunk write fails
+  ([`5c65914`](https://github.com/thiesgerken/carapace/commit/5c659141a14d08c95c0bf1b05386762502ec7610))
+
+  A multi-chunk write truncates on the first command and appends on the rest, so a mid-stream failure could leave a truncated file. Clean it up like upload_tmp_file. Single-command writes (incl. folded-chmod credential writes) stay atomic and are left untouched.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: chunk file writes to avoid "Argument list too long"
+  ([`029b748`](https://github.com/thiesgerken/carapace/commit/029b7485cfdd698cc38f750b80da0c75928a911f))
+
+  file_write/file_write_in_container inlined the whole base64 payload as one shell argument, so a large agent `write` (or credential materialization) could exceed Linux MAX_ARG_STRLEN (128 KiB) and fail. Stream the content in 64 KiB base64 chunks (truncate-then-append), folding any chmod into the last command so single-chunk writes stay one exec (unchanged behavior for credentials).
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: shrink upload chunk to avoid "Argument list too long"
+  ([`553bb9e`](https://github.com/thiesgerken/carapace/commit/553bb9e073e6b524463f5cb41cfc49f3ba1933e2))
+
+  Uploads stream each chunk as base64 inlined in a single shell argument (`printf %s <b64> | base64 -d`). At 256 KiB per chunk the base64 (~341 KB) exceeds Linux MAX_ARG_STRLEN (128 KiB), so any upload over ~96 KiB — e.g. a typical JPEG — failed with "Argument list too long". Drop the chunk to 64 KiB (~85 KiB base64) and add a regression test bounding the inlined arg length.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.2 (2026-06-04)
 
 
