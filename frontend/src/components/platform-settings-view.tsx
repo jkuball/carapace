@@ -759,10 +759,19 @@ export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: Mo
         <TextInput label={t("fields.baseUrl")} value={model.baseUrl} disabled={openAIFieldsDisabled} onChange={(baseUrl) => onChange({ baseUrl })} />
         <div className="block space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("fields.vision")}</span>
-          <label className="flex h-9 items-center gap-2 text-sm">
-            <input type="checkbox" checked={model.vision} disabled={disabled} onChange={(event) => onChange({ vision: event.target.checked })} className="h-4 w-4 rounded border-border" />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={model.vision}
+            disabled={disabled}
+            onClick={() => onChange({ vision: !model.vision })}
+            className="flex h-9 items-center gap-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span aria-hidden="true" className={cn("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors", model.vision ? "border-[#236b86] bg-[#236b86]" : "border-border bg-muted")}>
+              <span className={cn("inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform", model.vision ? "translate-x-6" : "translate-x-1")} />
+            </span>
             <span className="text-muted-foreground">{t("fields.visionHint")}</span>
-          </label>
+          </button>
         </div>
         <Field label={t("fields.apiKeySource")}>
           <select value={model.apiKeySource} disabled={apiKeyFieldsDisabled} onChange={(event) => onChange(apiKeySourceChangePatch(model, event.target.value as SecretSource))} className={inputClassName}>
