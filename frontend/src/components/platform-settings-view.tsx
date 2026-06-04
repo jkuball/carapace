@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, BrainCircuit, Check, ChevronDown, Cloud, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
+import { Brain, BrainCircuit, Check, ChevronDown, Cloud, Eye, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ComponentType, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -29,6 +29,7 @@ interface ModelDraft {
   thinking: ThinkingDraft;
   thinkingBudgetTokens: string;
   baseUrl: string;
+  vision: boolean;
   apiKeySource: SecretSource;
   apiKeyValue: string;
   apiKeyConfigured: boolean;
@@ -234,6 +235,7 @@ function modelDraftFromSettings(model: PlatformModelEntryInfo): ModelDraft {
     thinking: model.thinking === true ? "true" : model.thinking === false ? "false" : model.thinking ?? "",
     thinkingBudgetTokens: model.thinking_budget_tokens?.toString() ?? "",
     baseUrl: model.base_url ?? "",
+    vision: model.vision ?? false,
     apiKeySource,
     apiKeyValue: apiKeySource === "raw" ? "" : model.api_key.value ?? "",
     apiKeyConfigured: model.api_key.configured,
@@ -324,6 +326,7 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
       id,
       max_input_tokens: numericLimit(model.maxInputTokens, t("fields.maxInputTokens"), t),
       thinking: thinkingFromDraft(model.thinking),
+      vision: model.vision,
     };
     if (openAICompatible) {
       entry.thinking_budget_tokens = nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t);
@@ -373,6 +376,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
       thinking: model.thinking,
       thinkingBudgetTokens: model.thinkingBudgetTokens,
       baseUrl: model.baseUrl,
+      vision: model.vision,
       apiKeySource: model.apiKeySource,
       apiKeyValue: model.apiKeyValue,
       apiKeyConfigured: model.apiKeyConfigured,
@@ -402,6 +406,7 @@ function newModelDraft(): ModelDraft {
     thinking: "",
     thinkingBudgetTokens: "",
     baseUrl: "",
+    vision: false,
     apiKeySource: "none",
     apiKeyValue: "",
     apiKeyConfigured: false,
@@ -698,6 +703,7 @@ export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: Mo
   if (model.name.trim()) summaryBadges.push({ label: model.name.trim(), className: modelNameBadgeClassName(model.name), icon: BrainCircuit });
   if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
   if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
+  if (model.vision) summaryBadges.push({ label: t("fields.vision"), className: neutralBadgeClassName, icon: Eye });
   const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
     <details
@@ -751,6 +757,13 @@ export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: Mo
         </Field>
         <TextInput label={t("fields.thinkingBudgetTokens")} value={model.thinkingBudgetTokens} disabled={openAIFieldsDisabled} onChange={(thinkingBudgetTokens) => onChange({ thinkingBudgetTokens })} />
         <TextInput label={t("fields.baseUrl")} value={model.baseUrl} disabled={openAIFieldsDisabled} onChange={(baseUrl) => onChange({ baseUrl })} />
+        <div className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">{t("fields.vision")}</span>
+          <label className="flex h-9 items-center gap-2 text-sm">
+            <input type="checkbox" checked={model.vision} disabled={disabled} onChange={(event) => onChange({ vision: event.target.checked })} className="h-4 w-4 rounded border-border" />
+            <span className="text-muted-foreground">{t("fields.visionHint")}</span>
+          </label>
+        </div>
         <Field label={t("fields.apiKeySource")}>
           <select value={model.apiKeySource} disabled={apiKeyFieldsDisabled} onChange={(event) => onChange(apiKeySourceChangePatch(model, event.target.value as SecretSource))} className={inputClassName}>
             <option value="none">{t("secretSources.none")}</option>
