@@ -354,6 +354,7 @@ export function Message({
                       key={att.file_id}
                       fileId={att.file_id}
                       name={att.name}
+                      path={att.path}
                       mime={att.mime}
                       size={att.size}
                       server={server}

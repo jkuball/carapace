@@ -9,6 +9,7 @@ import { cn, formatBytes } from "@/lib/utils";
 export function FilePreview({
   fileId,
   name,
+  path,
   mime,
   size,
   server,
@@ -17,6 +18,7 @@ export function FilePreview({
 }: {
   fileId: string;
   name: string;
+  path?: string;
   mime?: string;
   size?: number;
   server?: string;
@@ -68,7 +70,9 @@ export function FilePreview({
       )}
       <div className="mt-1.5 flex items-center gap-2 first:mt-0">
         <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium text-foreground/85">{name}</span>
+        <span className="truncate font-medium text-foreground/85" title={path}>
+          {name}
+        </span>
         {size != null && (
           <span className="shrink-0 text-muted-foreground">{formatBytes(size)}</span>
         )}
