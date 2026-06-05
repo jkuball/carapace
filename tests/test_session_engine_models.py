@@ -257,6 +257,87 @@ def test_generate_title_records_titler_request_log(tmp_path: Path):
         asyncio.run(_run())
 
 
+def _emit_titler_request() -> str:
+    """Drive the active llm-request sink as the titler would, returning a fixed title."""
+
+    async def _fake(*_args: Any, **_kwargs: Any) -> str:
+        observer = usage_mod._llm_request_sink.get()
+        assert observer is not None
+        started_at = datetime.now(tz=UTC)
+        await observer.on_request_started(
+            LlmRequestState(
+                request_id="req-title",
+                source="titler",
+                model_name="anthropic:claude-haiku-4-5",
+                started_at=started_at,
+            )
+        )
+        await observer.on_request_completed(
+            LlmRequestRecord(
+                ts=started_at + timedelta(seconds=1),
+                request_id="req-title",
+                source="titler",
+                model_name="anthropic:claude-haiku-4-5",
+                started_at=started_at,
+                completed_at=started_at + timedelta(seconds=1),
+            )
+        )
+        return "📌 hello"
+
+    return _fake  # type: ignore[return-value]
+
+
+def test_generate_title_untracked_is_invisible(tmp_path: Path):
+    """Background auto-title (track_activity=False) never broadcasts llm activity or sets state."""
+
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        sub = _FakeSubscriber()
+        engine.subscribe(sid, sub)
+
+        with patch("carapace.session.engine.generate_title", new=AsyncMock(side_effect=_emit_titler_request())):
+            title = await engine._generate_title(active, [{"role": "user", "content": "hello"}], track_activity=False)
+
+        assert title == "📌 hello"
+        # invisible: no busy signal, no lingering activity state
+        assert sub.llm_activity_updates == []
+        assert active.llm_request_state is None
+        assert engine.session_mgr.load_llm_request_state(sid) is None
+        # final title still reaches clients
+        assert sub.title_updates and sub.title_updates[0][0] == "📌 hello"
+        # audit record is still kept
+        assert active.llm_request_log.records[-1].source == "titler"
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
+def test_generate_title_tracked_emits_activity(tmp_path: Path):
+    """Visible path (slash commands, track_activity default) still broadcasts llm activity."""
+
+    async def _run() -> None:
+        engine = _make_engine(tmp_path)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        sub = _FakeSubscriber()
+        engine.subscribe(sid, sub)
+
+        with patch("carapace.session.engine.generate_title", new=AsyncMock(side_effect=_emit_titler_request())):
+            title = await engine._generate_title(active, [{"role": "user", "content": "hello"}])
+
+        assert title == "📌 hello"
+        # started -> state set, completed -> cleared to None
+        assert sub.llm_activity_updates
+        assert sub.llm_activity_updates[0] is not None
+        assert sub.llm_activity_updates[-1] is None
+        assert active.llm_request_state is None
+
+    with _patch_sentinel():
+        asyncio.run(_run())
+
+
 def test_handle_slash_command_inactive_session(tmp_path: Path):
     """handle_slash_command returns None for a session that isn't active."""
     engine = _make_engine(tmp_path)
