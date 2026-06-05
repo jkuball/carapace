@@ -1,6 +1,106 @@
 # CHANGELOG
 
 
+## v0.136.5 (2026-06-05)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`4228b9a`](https://github.com/thiesgerken/carapace/commit/4228b9a6f0c72bb05dcb8a473f36890536cf8871))
+
+### Other
+
+
+- fix: upload progress + send_file sandbox-startup UI
+  ([`31c68b2`](https://github.com/thiesgerken/carapace/commit/31c68b213e84e99c0fee977de72b0a3e021ead56))
+
+  - AttachmentChip shows the upload percentage as soon as bytes stream
+    (progress > 0), instead of staying on "Starting sandbox…" through a
+    long cold-start upload
+  - Add send_file to SANDBOX_STARTUP_TOOL_NAMES so the optimistic pending
+    sandbox snapshot is applied when it runs against a stopped sandbox
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: start sandbox on demand for file uploads
+  ([`bd5b6fb`](https://github.com/thiesgerken/carapace/commit/bd5b6fbf5ecfdc7245d6b4c4ff9bf8a5453d7885))
+
+  Drop the running-sandbox requirement for uploads now that a server-side blob is persisted. The upload endpoint calls ensure_session (warm-claim or cold-create, idempotent when running) instead of returning 409. Frontend enables the attach control regardless of sandbox state and shows a snapshot-driven "Starting sandbox…" label until the sandbox is running.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- refactor: simplify send_file function by removing title parameter
+  ([`982d3ad`](https://github.com/thiesgerken/carapace/commit/982d3ad4746e01cb1d8026ae63ffe57d4cd93c03))
+
+- show path as tooltip
+  ([`5e6a2e5`](https://github.com/thiesgerken/carapace/commit/5e6a2e5e9f32b9ab62d0ae0a7bffa6f0147d7096))
+
+- assign sandbox id lazily
+  ([`9149cbd`](https://github.com/thiesgerken/carapace/commit/9149cbd20aad44c571783b5315ed759cd9ba5d0e))
+
+- fix: gate send_file + dedupe size formatter
+  ([`b0b9351`](https://github.com/thiesgerken/carapace/commit/b0b935173bbcc0e09dfb08c4dcbca65f89ab0aa3))
+
+  - send_file now runs through the security gate and skill-activation
+    check like the read tool, and is added to SAFE_TOOLS so it's
+    auto-allowed by the safe list (returns ToolDenied on denial)
+  - Replace the duplicate formatFileSize with the existing formatBytes
+    util so file sizes render consistently across the UI
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: remove orphan blob when upload fails
+  ([`5d28c58`](https://github.com/thiesgerken/carapace/commit/5d28c58be70974435c508da154397930bc014af3))
+
+  Any upload failure (size limit, write error, stopped sandbox, I/O) now unlinks the reserved persistent blob before raising, so no sidecar-less file is left under sessions/{id}/files/.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: address CI failure + Bugbot review
+  ([`46f179e`](https://github.com/thiesgerken/carapace/commit/46f179e115e8f2782793f065618f4de082022d93))
+
+  - Update test_upload_sandbox_file_streams_to_tmp for the extended upload
+    response (file_id/size/mime)
+  - download_tmp_file raises UploadError on a short read instead of
+    returning the full stat size (would mislabel truncated blobs)
+  - FilePreview keys the blob URL by fileId so a stale preview is never
+    shown while the next image loads
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: persist uploads + inline image/size for both directions
+  ([`8304c35`](https://github.com/thiesgerken/carapace/commit/8304c35567be2759c4df2989be7c01e1e2678d12))
+
+  - Uploaded files are now copied into persistent per-session storage at
+    upload time (tee while streaming into the sandbox), so they stay
+    viewable/downloadable after the sandbox is gone. Upload response and
+    Attachment carry file_id/size/mime.
+  - Shared FilePreview component (extracted from the send_file row): inline
+    image preview for images, name + size + download chip otherwise.
+  - User message bubble renders FilePreview for uploaded attachments;
+    upload chips and both preview chips show file size after the name.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: file downloads via send_file tool
+  ([`fa216d4`](https://github.com/thiesgerken/carapace/commit/fa216d46840d7527d44617be58a887ee6584e75d))
+
+  Add the reverse of file uploads: a send_file agent tool that exposes a file or image to the user for view/download in the chat.
+
+  - send_file(path, title?) copies the file out of the ephemeral sandbox
+    into persistent per-session storage (data_dir/sessions/{id}/files), so
+    it survives sandbox scale-down and history replay
+  - SandboxManager.download_tmp_file streams bytes out via tail|base64
+  - GET /sessions/{id}/files/{file_id} serves persisted files (inline or
+    ?download=1), works with the sandbox stopped; file_id validated as hex
+  - SentFileInfo threaded through tool_result events, websocket, history
+  - Frontend: send_file row expanded by default, inline image preview +
+    download chip; new sentFile/sendFile labels (en/de)
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.4 (2026-06-05)
 
 
