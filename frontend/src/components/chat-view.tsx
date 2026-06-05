@@ -69,7 +69,7 @@ interface ChatViewProps {
   onDeleteSession?: () => Promise<void>;
 }
 
-const SANDBOX_STARTUP_TOOL_NAMES = new Set(["use_skill", "read", "write", "str_replace", "exec"]);
+const SANDBOX_STARTUP_TOOL_NAMES = new Set(["use_skill", "read", "write", "str_replace", "exec", "send_file"]);
 
 function sandboxStorageLabel(
   snapshot: SessionSandboxSnapshot | null,

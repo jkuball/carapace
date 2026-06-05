@@ -1049,8 +1049,10 @@ function AttachmentChip({
 }) {
   const t = useTranslations("chatInput");
   const isError = attachment.status === "error";
-  // Before bytes can stream the backend must bring the sandbox up; surface that phase.
-  const isStarting = attachment.status === "uploading" && !sandboxRunning;
+  // Before bytes can stream the backend must bring the sandbox up; surface that phase
+  // only while we are still waiting — once bytes flow (progress > 0) show the percentage.
+  const isStarting =
+    attachment.status === "uploading" && !sandboxRunning && attachment.progress === 0;
   return (
     <div
       title={isError ? attachment.error : attachment.path ?? attachment.name}
