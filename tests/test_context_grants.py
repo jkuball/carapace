@@ -249,7 +249,7 @@ class TestSandboxManagerCredentialCache:
         assert not workspace.exists()
 
     @pytest.mark.anyio
-    async def test_reset_session_reverts_claimed_sandbox_id_to_default(self, tmp_path: Path):
+    async def test_reset_session_clears_claimed_sandbox_id(self, tmp_path: Path):
         runtime = make_runtime_mock()
         mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
         mgr._sessions["sess-1"] = SessionContainer(
@@ -266,7 +266,7 @@ class TestSandboxManagerCredentialCache:
         runtime.destroy_sandbox.assert_awaited_once_with("sess-1", "carapace-sandbox-warm-1", "warm-pod-1")
         snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
         assert snapshot is not None
-        assert snapshot.sandbox_id == "sess-1"
+        assert snapshot.sandbox_id is None
 
     @pytest.mark.anyio
     async def test_cleanup_session_continues_when_snapshot_refresh_fails(self, tmp_path: Path):

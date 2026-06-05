@@ -375,7 +375,7 @@ class SandboxManager:
             exists=existing.exists if existing is not None else False,
             runtime=self._runtime.runtime_kind,
             status=status,
-            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+            sandbox_id=existing.sandbox_id if existing is not None and existing.exists else None,
             resource_id=existing.resource_id if existing is not None else None,
             resource_kind=existing.resource_kind if existing is not None else None,
             storage_present=existing.storage_present if existing is not None else False,
@@ -456,7 +456,7 @@ class SandboxManager:
             exists=inspection.exists,
             runtime=self._runtime.runtime_kind,
             status=inspection.status,
-            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id) if inspection.exists else None,
             resource_id=inspection.resource_id,
             resource_kind=inspection.resource_kind,
             storage_present=inspection.storage_present,
@@ -971,7 +971,6 @@ class SandboxManager:
             self._sandbox_snapshot_path(session_id),
             SessionSandboxSnapshot(
                 runtime=self._runtime.runtime_kind,
-                sandbox_id=self._session_lifecycle.default_sandbox_id(session_id),
                 updated_at=datetime.now(tz=UTC),
             ),
         )
