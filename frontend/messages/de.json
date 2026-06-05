@@ -410,6 +410,7 @@
         "stopVoiceInput": "Spracheingabe stoppen",
         "attachFile": "Datei anhängen",
         "attachFileUnavailable": "Sandbox starten, um Dateien hochzuladen",
+        "startingSandbox": "Sandbox wird gestartet…",
         "removeAttachment": "Entfernen",
         "placeholder": "Nachricht an carapace…",
         "usageBreakdown": {

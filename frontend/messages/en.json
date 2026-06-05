@@ -410,6 +410,7 @@
         "stopVoiceInput": "Stop voice input",
         "attachFile": "Attach file",
         "attachFileUnavailable": "Start the sandbox to upload files",
+        "startingSandbox": "Starting sandbox…",
         "removeAttachment": "Remove",
         "placeholder": "Message carapace…",
         "usageBreakdown": {

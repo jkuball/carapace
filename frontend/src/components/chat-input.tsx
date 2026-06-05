@@ -140,7 +140,8 @@ export function ChatInput({
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const canUpload = sandboxRunning && !!uploadFile && !disabled;
+  // Uploading no longer requires a running sandbox: the backend starts it on demand.
+  const canUpload = !!uploadFile && !disabled;
 
   const addFiles = useCallback(
     (files: FileList | File[]) => {
@@ -606,6 +607,7 @@ export function ChatInput({
               <AttachmentChip
                 key={att.id}
                 attachment={att}
+                sandboxRunning={sandboxRunning}
                 onRemove={() => removeAttachment(att.id)}
               />
             ))}
@@ -1038,13 +1040,17 @@ function BudgetGaugeRow({
 
 function AttachmentChip({
   attachment,
+  sandboxRunning,
   onRemove,
 }: {
   attachment: PendingAttachment;
+  sandboxRunning: boolean;
   onRemove: () => void;
 }) {
   const t = useTranslations("chatInput");
   const isError = attachment.status === "error";
+  // Before bytes can stream the backend must bring the sandbox up; surface that phase.
+  const isStarting = attachment.status === "uploading" && !sandboxRunning;
   return (
     <div
       title={isError ? attachment.error : attachment.path ?? attachment.name}
@@ -1063,7 +1069,9 @@ function AttachmentChip({
       <span className="max-w-40 truncate">{attachment.name}</span>
       {attachment.status === "uploading" ? (
         <span className="tabular-nums text-muted-foreground">
-          {Math.round(attachment.progress * 100)}%
+          {isStarting
+            ? t("startingSandbox")
+            : `${Math.round(attachment.progress * 100)}%`}
         </span>
       ) : attachment.size != null ? (
         <span className="shrink-0 text-muted-foreground">

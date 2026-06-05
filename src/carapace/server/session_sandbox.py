@@ -84,9 +84,9 @@ async def upload_session_sandbox_file(
     state = _load_owned_session(session_id, user)
     if state.attributes.archived:
         raise HTTPException(status_code=409, detail="Archived sessions must be unarchived before use")
-    snapshot = server._engine.session_mgr.load_sandbox_snapshot(session_id)
-    if snapshot is None or snapshot.status != "running":
-        raise HTTPException(status_code=409, detail="Sandbox must be running to upload files")
+    # Start (warm-claim or cold-create) the sandbox if it isn't running yet; the file is
+    # streamed straight into it, so it must be live. Idempotent when already running.
+    await server._engine.sandbox_mgr.ensure_session(session_id)
     filename = file.filename or "upload"
 
     # Persist a server-side copy as the bytes stream into the sandbox, so the file stays
