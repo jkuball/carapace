@@ -794,14 +794,13 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         return _emit_tool_result(ctx, "read", result, exit_code)
 
     @agent.tool
-    async def send_file(ctx: RunContext[Deps], path: str, title: str | None = None) -> str | ToolDenied:
+    async def send_file(ctx: RunContext[Deps], path: str) -> str | ToolDenied:
         """Expose a file or image to the user so they can view or download it in the chat.
 
         Use this for outputs you produce that the user should keep or look at: generated
         images/charts, reports, PDFs, archives, exported data. ``path`` is a file in your
-        sandbox. ``title`` is an optional display label (defaults to the file name). The
-        file is copied out of the sandbox and persists for the user even after the sandbox
-        shuts down. Max 50 MB.
+        sandbox; the user downloads it under its sandbox file name. The file is copied out
+        of the sandbox and persists for the user even after the sandbox shuts down. Max 50 MB.
         """
         from ..session import sent_files
 
@@ -815,7 +814,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             if ctx.deps.tool_call_callback:
                 ctx.deps.tool_call_callback(
                     "send_file",
-                    {"path": path, "title": title},
+                    {"path": path},
                     "[blocked: skill not activated]",
                     "skill",
                     "deny",
@@ -823,11 +822,11 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
                 )
             return _emit_tool_result(ctx, "send_file", denied_message, exit_code=1)
 
-        if not ctx.tool_call_approved and (denied := await _gate(ctx, "send_file", {"path": path, "title": title})):
+        if not ctx.tool_call_approved and (denied := await _gate(ctx, "send_file", {"path": path})):
             return denied
 
         session_id = ctx.deps.session_state.session_id
-        name = title or PurePosixPath(path).name or "file"
+        name = PurePosixPath(path).name or "file"
         file_id, dest = sent_files.reserve(ctx.deps.data_dir, session_id, name)
         try:
             size = await ctx.deps.sandbox.download_tmp_file(session_id, path, dest, max_bytes=SEND_FILE_MAX_BYTES)
