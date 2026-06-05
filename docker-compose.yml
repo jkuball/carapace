@@ -56,7 +56,7 @@ services:
     build: ./frontend
 
   proxy:
-    image: traefik:v3.6@sha256:317b5d7016fe727aa34aedb6ad63114b1968bfbe41ac793b919a18c4ecb6d8c9
+    image: traefik:v3.6@sha256:cc1799c50550f730f686df9b368e690f9199542787db8d1dd328a7c3779f6eea
     command:
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--entrypoints.web.address=:80"
