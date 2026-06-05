@@ -19,8 +19,8 @@ from ..credentials import CredentialBackendError
 from ..llm import model_settings_for_config, model_supports_vision
 from ..models.credentials import CredentialMetadata
 from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
-from ..models.tooling import ToolResult, normalize_tool_call_args
-from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW
+from ..models.tooling import SentFileInfo, ToolResult, normalize_tool_call_args
+from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW, UploadError, UploadTooLargeError
 from ..sandbox.runtime import SkillActivationError
 from ..sandbox.skill_activation import SKILL_COMMAND_SHIM_DIR
 from ..security.context import (
@@ -32,6 +32,8 @@ from ..security.context import (
 from ..skills import SkillRegistry
 from ..usage import LlmRequestLogCapability
 from .deps import Deps, TaskDone, TaskFailed
+
+SEND_FILE_MAX_BYTES = 50 * 1024 * 1024
 
 _WORKSPACE_ROOT = PurePosixPath("/workspace")
 _SKILLS_ROOT = PurePosixPath("skills")
@@ -283,7 +285,13 @@ def _notify_approved_start(ctx: RunContext[Deps], tool_name: str, args: dict[str
         )
 
 
-def _notify_result(ctx: RunContext[Deps], tool_name: str, result: str, exit_code: int = 0) -> None:
+def _notify_result(
+    ctx: RunContext[Deps],
+    tool_name: str,
+    result: str,
+    exit_code: int = 0,
+    files: tuple[SentFileInfo, ...] = (),
+) -> None:
     if ctx.deps.tool_result_callback:
         ctx.deps.tool_result_callback(
             ToolResult(
@@ -291,6 +299,7 @@ def _notify_result(ctx: RunContext[Deps], tool_name: str, result: str, exit_code
                 output=result,
                 exit_code=exit_code,
                 tool_id=ctx.deps.security.current_parent_tool_id,
+                files=files,
             )
         )
 
@@ -345,10 +354,11 @@ def _emit_tool_result(
     tool_name: str,
     result: str,
     exit_code: int = 0,
+    files: tuple[SentFileInfo, ...] = (),
 ) -> str:
     """Apply configured output limit, notify subscribers, and return the string passed to the model."""
     limited = truncate_tool_output(result, ctx.deps.config.agent.tool_output_max_chars)
-    _notify_result(ctx, tool_name, limited, exit_code)
+    _notify_result(ctx, tool_name, limited, exit_code, files)
     return limited
 
 
@@ -782,6 +792,59 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             result = f"Error: {exc}"
             exit_code = -1
         return _emit_tool_result(ctx, "read", result, exit_code)
+
+    @agent.tool
+    async def send_file(ctx: RunContext[Deps], path: str) -> str | ToolDenied:
+        """Expose a file or image to the user so they can view or download it in the chat.
+
+        Use this for outputs you produce that the user should keep or look at: generated
+        images/charts, reports, PDFs, archives, exported data. ``path`` is a file in your
+        sandbox; the user downloads it under its sandbox file name. The file is copied out
+        of the sandbox and persists for the user even after the sandbox shuts down. Max 50 MB.
+        """
+        from ..session import sent_files
+
+        # send_file reads the file out and publishes it, so it runs through the same
+        # safe-list / sentinel / skill-activation checks as the read tool.
+        if denied_message := _read_skill_access_denial(
+            path,
+            ctx.deps.knowledge_dir,
+            ctx.deps.session_state.activated_skills,
+        ):
+            if ctx.deps.tool_call_callback:
+                ctx.deps.tool_call_callback(
+                    "send_file",
+                    {"path": path},
+                    "[blocked: skill not activated]",
+                    "skill",
+                    "deny",
+                    "skill not activated",
+                )
+            return _emit_tool_result(ctx, "send_file", denied_message, exit_code=1)
+
+        if not ctx.tool_call_approved and (denied := await _gate(ctx, "send_file", {"path": path})):
+            return denied
+
+        session_id = ctx.deps.session_state.session_id
+        name = PurePosixPath(path).name or "file"
+        file_id, dest = sent_files.reserve(ctx.deps.data_dir, session_id, name)
+        try:
+            size = await ctx.deps.sandbox.download_tmp_file(session_id, path, dest, max_bytes=SEND_FILE_MAX_BYTES)
+        except UploadTooLargeError:
+            dest.unlink(missing_ok=True)
+            return _emit_tool_result(
+                ctx, "send_file", f"Error: {path} exceeds the {SEND_FILE_MAX_BYTES} byte limit.", exit_code=1
+            )
+        except UploadError as exc:
+            dest.unlink(missing_ok=True)
+            return _emit_tool_result(ctx, "send_file", f"Error: {exc}", exit_code=1)
+        except Exception as exc:
+            dest.unlink(missing_ok=True)
+            _log_sandbox_tool_exception("send_file", session_id)
+            return _emit_tool_result(ctx, "send_file", f"Error: {exc}", exit_code=1)
+
+        info = sent_files.finalize(ctx.deps.data_dir, session_id, file_id, name, size)
+        return _emit_tool_result(ctx, "send_file", f"Sent {info.name} to the user.", files=(info,))
 
     @agent.tool
     async def write(ctx: RunContext[Deps], path: str, content: str) -> str | ToolDenied:

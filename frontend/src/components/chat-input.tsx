@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import type { AvailableModelInfo, SlashCommand, UploadedFile } from "@/lib/api";
 import type {
   Attachment,
@@ -18,6 +18,9 @@ interface PendingAttachment {
   status: "uploading" | "done" | "error";
   progress: number;
   path?: string;
+  fileId?: string;
+  size?: number;
+  mime?: string;
   error?: string;
   controller: AbortController;
 }
@@ -137,7 +140,8 @@ export function ChatInput({
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const canUpload = sandboxRunning && !!uploadFile && !disabled;
+  // Uploading no longer requires a running sandbox: the backend starts it on demand.
+  const canUpload = !!uploadFile && !disabled;
 
   const addFiles = useCallback(
     (files: FileList | File[]) => {
@@ -160,7 +164,16 @@ export function ChatInput({
             setAttachments((prev) =>
               prev.map((a) =>
                 a.id === id
-                  ? { ...a, status: "done", progress: 1, path: res.path, name: res.name }
+                  ? {
+                      ...a,
+                      status: "done",
+                      progress: 1,
+                      path: res.path,
+                      name: res.name,
+                      fileId: res.file_id,
+                      size: res.size,
+                      mime: res.mime,
+                    }
                   : a,
               ),
             ),
@@ -401,7 +414,13 @@ export function ChatInput({
     () =>
       attachments
         .filter((a) => a.status === "done" && a.path)
-        .map((a): Attachment => ({ name: a.name, path: a.path as string })),
+        .map((a): Attachment => ({
+          name: a.name,
+          path: a.path as string,
+          file_id: a.fileId,
+          size: a.size,
+          mime: a.mime,
+        })),
     [attachments],
   );
 
@@ -588,6 +607,7 @@ export function ChatInput({
               <AttachmentChip
                 key={att.id}
                 attachment={att}
+                sandboxRunning={sandboxRunning}
                 onRemove={() => removeAttachment(att.id)}
               />
             ))}
@@ -1020,13 +1040,19 @@ function BudgetGaugeRow({
 
 function AttachmentChip({
   attachment,
+  sandboxRunning,
   onRemove,
 }: {
   attachment: PendingAttachment;
+  sandboxRunning: boolean;
   onRemove: () => void;
 }) {
   const t = useTranslations("chatInput");
   const isError = attachment.status === "error";
+  // Before bytes can stream the backend must bring the sandbox up; surface that phase
+  // only while we are still waiting — once bytes flow (progress > 0) show the percentage.
+  const isStarting =
+    attachment.status === "uploading" && !sandboxRunning && attachment.progress === 0;
   return (
     <div
       title={isError ? attachment.error : attachment.path ?? attachment.name}
@@ -1043,11 +1069,17 @@ function AttachmentChip({
         <Paperclip className="h-3 w-3 shrink-0" />
       )}
       <span className="max-w-40 truncate">{attachment.name}</span>
-      {attachment.status === "uploading" && (
+      {attachment.status === "uploading" ? (
         <span className="tabular-nums text-muted-foreground">
-          {Math.round(attachment.progress * 100)}%
+          {isStarting
+            ? t("startingSandbox")
+            : `${Math.round(attachment.progress * 100)}%`}
         </span>
-      )}
+      ) : attachment.size != null ? (
+        <span className="shrink-0 text-muted-foreground">
+          {formatBytes(attachment.size)}
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={onRemove}

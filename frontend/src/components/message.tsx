@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ChatMessage, EscalationDecision, LlmActivity } from "@/lib/types";
 import { useAppLocale } from "@/components/locale-provider";
 import { MarkdownContent } from "./markdown-content";
+import { FilePreview } from "./file-preview";
 import { ToolCallBadge } from "./tool-call-badge";
 import { ApprovalCard } from "./approval-card";
 import { CredentialApprovalCard } from "./credential-approval-card";
@@ -291,6 +292,8 @@ function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
 
 interface MessageProps {
   message: ChatMessage;
+  server?: string;
+  sessionId?: string;
   activeLlmActivity?: LlmActivity | null;
   canFork?: boolean;
   canRetry?: boolean;
@@ -314,6 +317,8 @@ interface MessageProps {
 
 export function Message({
   message,
+  server,
+  sessionId,
   activeLlmActivity,
   canFork,
   canRetry,
@@ -339,20 +344,34 @@ export function Message({
             {message.attachments && message.attachments.length > 0 ? (
               <div
                 className={cn(
-                  "flex flex-wrap justify-end gap-1.5",
+                  "flex flex-col items-end gap-1.5",
                   message.content ? "mt-2" : "",
                 )}
               >
-                {message.attachments.map((att) => (
-                  <span
-                    key={att.path}
-                    title={att.path}
-                    className="flex items-center gap-1.5 rounded-lg border border-border bg-background/50 px-2 py-1 text-xs"
-                  >
-                    <Paperclip className="h-3 w-3 shrink-0" />
-                    <span className="max-w-40 truncate">{att.name}</span>
-                  </span>
-                ))}
+                {message.attachments.map((att) =>
+                  att.file_id ? (
+                    <FilePreview
+                      key={att.file_id}
+                      fileId={att.file_id}
+                      name={att.name}
+                      path={att.path}
+                      mime={att.mime}
+                      size={att.size}
+                      server={server}
+                      sessionId={sessionId}
+                      className="w-full max-w-sm text-left"
+                    />
+                  ) : (
+                    <span
+                      key={att.path}
+                      title={att.path}
+                      className="flex items-center gap-1.5 rounded-lg border border-border bg-background/50 px-2 py-1 text-xs"
+                    >
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                      <span className="max-w-40 truncate">{att.name}</span>
+                    </span>
+                  ),
+                )}
               </div>
             ) : null}
           </div>
@@ -421,8 +440,11 @@ export function Message({
           approvalExplanation={message.approvalExplanation}
           decisionMessage={message.decisionMessage}
           result={message.result}
+          files={message.files}
           exitCode={message.exitCode}
           loading={message.loading}
+          server={server}
+          sessionId={sessionId}
           childCalls={message.children?.map((c) => ({
             tool: c.tool,
             args: c.args,
@@ -433,6 +455,7 @@ export function Message({
             approvalExplanation: c.approvalExplanation,
             decisionMessage: c.decisionMessage,
             result: c.result,
+            files: c.files,
             exitCode: c.exitCode,
             loading: c.loading,
           }))}

@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from .models.tooling import SentFileInfo
 from .security.context import ApprovalSource, ApprovalVerdict
 from .usage import BudgetGauge, LlmRequestPhase, LlmSource
 
@@ -42,10 +43,17 @@ SLASH_COMMANDS: list[dict[str, str]] = [
 
 
 class Attachment(BaseModel):
-    """A file the user uploaded into the sandbox before sending a message."""
+    """A file the user uploaded into the sandbox before sending a message.
+
+    ``file_id``/``size``/``mime`` are populated once the upload is persisted
+    server-side (so it stays viewable/downloadable after the sandbox is gone).
+    """
 
     name: str
     path: str
+    file_id: str | None = None
+    size: int | None = None
+    mime: str | None = None
 
 
 class UserMessage(BaseModel):
@@ -148,6 +156,7 @@ class ToolResultInfo(BaseModel):
     result: str
     exit_code: int = 0
     tool_id: str | None = None
+    files: list[SentFileInfo] | None = None
 
 
 class ApprovalRequest(BaseModel):

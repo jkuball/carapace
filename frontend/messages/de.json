@@ -410,6 +410,7 @@
         "stopVoiceInput": "Spracheingabe stoppen",
         "attachFile": "Datei anhängen",
         "attachFileUnavailable": "Sandbox starten, um Dateien hochzuladen",
+        "startingSandbox": "Sandbox wird gestartet…",
         "removeAttachment": "Entfernen",
         "placeholder": "Nachricht an carapace…",
         "usageBreakdown": {
@@ -529,7 +530,9 @@
             "listCredentials": "Liste Zugangsdaten auf",
             "accessCredential": "Zugangsdaten verwenden",
             "accessDomain": "Domain verwenden",
-            "replace": "Ersetze"
+            "replace": "Ersetze",
+            "sentFile": "Datei gesendet",
+            "sendFile": "Datei senden"
         },
         "summaries": {
             "readFirstLines": "erste {count} Zeilen von {path}",

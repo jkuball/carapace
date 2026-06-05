@@ -375,7 +375,7 @@ class SandboxManager:
             exists=existing.exists if existing is not None else False,
             runtime=self._runtime.runtime_kind,
             status=status,
-            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+            sandbox_id=existing.sandbox_id if existing is not None and existing.exists else None,
             resource_id=existing.resource_id if existing is not None else None,
             resource_kind=existing.resource_kind if existing is not None else None,
             storage_present=existing.storage_present if existing is not None else False,
@@ -456,7 +456,7 @@ class SandboxManager:
             exists=inspection.exists,
             runtime=self._runtime.runtime_kind,
             status=inspection.status,
-            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id),
+            sandbox_id=self._session_lifecycle.sandbox_id_for_session(session_id) if inspection.exists else None,
             resource_id=inspection.resource_id,
             resource_kind=inspection.resource_kind,
             storage_present=inspection.storage_present,
@@ -676,6 +676,42 @@ class SandboxManager:
         if not wrote_any:
             await self.exec_command(session_id, f": > {qpath}", timeout=10)
         return target
+
+    async def download_tmp_file(self, session_id: str, path: str, dest: Path, *, max_bytes: int) -> int:
+        """Stream a sandbox file out to *dest* on the server and return its byte size.
+
+        Reverse of :meth:`upload_tmp_file`: reads the file in chunks via
+        ``tail -c +N | head -c M | base64`` (portable, no exec stdin) and base64-decodes
+        each chunk server-side. Raises ``UploadError`` when the file is missing or a read
+        fails, and ``UploadTooLargeError`` past *max_bytes*.
+        """
+        qpath = shlex.quote(path)
+        probe = await self.exec_command(
+            session_id, f"test -f {qpath} && stat -c %s {qpath} || echo MISSING", timeout=10
+        )
+        out = probe.output.strip()
+        if probe.exit_code != 0 or not out.isdigit():
+            raise UploadError(f"File not found in sandbox: {path}")
+        size = int(out)
+        if size > max_bytes:
+            raise UploadTooLargeError(f"File exceeds {max_bytes} bytes")
+
+        chunk = self._UPLOAD_CHUNK_BYTES
+        offset = 0
+        with open(dest, "wb") as fh:
+            while offset < size:
+                cmd = f"tail -c +{offset + 1} {qpath} | head -c {chunk} | base64"
+                result = await self.exec_command(session_id, cmd, timeout=120)
+                if result.exit_code != 0 or "[stderr]" in result.output:
+                    raise UploadError(f"Failed to read file from sandbox: {result.output}")
+                data = base64.b64decode(result.output)
+                if not data:
+                    break
+                fh.write(data)
+                offset += len(data)
+        if offset != size:
+            raise UploadError(f"Short read from sandbox: got {offset} of {size} bytes for {path}")
+        return size
 
     async def activate_skill(self, session_id: str, skill_name: str) -> str:
         if err := _validate_skill_name(skill_name):
@@ -935,7 +971,6 @@ class SandboxManager:
             self._sandbox_snapshot_path(session_id),
             SessionSandboxSnapshot(
                 runtime=self._runtime.runtime_kind,
-                sandbox_id=self._session_lifecycle.default_sandbox_id(session_id),
                 updated_at=datetime.now(tz=UTC),
             ),
         )

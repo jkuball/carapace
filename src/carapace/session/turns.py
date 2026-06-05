@@ -251,6 +251,7 @@ class SessionTurnMixin(SessionTurnHost):
                         "result": tr.output,
                         "exit_code": tr.exit_code,
                         "tool_id": tr.tool_id,
+                        "files": [f.model_dump() for f in tr.files] if tr.files else None,
                     }
                 ],
             )

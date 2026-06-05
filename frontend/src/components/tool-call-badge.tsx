@@ -12,6 +12,7 @@ import {
   Loader2,
   Puzzle,
   Replace,
+  Send,
   ShieldAlert,
   ShieldCheck,
   SquareTerminal,
@@ -22,11 +23,13 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { diffLines } from "diff";
 import { MarkdownContent } from "./markdown-content";
+import { FilePreview } from "./file-preview";
 import {
   fencedCodeBlock,
   languageFromFilePath,
   splitReadToolResult,
 } from "@/lib/sandbox-read";
+import type { SentFile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ToolCallBadgeProps {
@@ -39,9 +42,12 @@ interface ToolCallBadgeProps {
   approvalExplanation?: string;
   decisionMessage?: string;
   result?: string;
+  files?: SentFile[];
   exitCode?: number;
   loading?: boolean;
   childCalls?: ToolCallBadgeProps[];
+  server?: string;
+  sessionId?: string;
 }
 
 type ApprovalSource = "safe-list" | "sentinel" | "user" | "skill" | "bypass" | "unknown";
@@ -56,6 +62,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   credential_access: KeyRound,
   proxy_domain: Globe,
   git_push: GitBranch,
+  send_file: Send,
 };
 
 const SHORT_KEYS: Record<string, string> = {
@@ -325,6 +332,7 @@ interface ToolLabelOptions {
   isCredentialList: boolean;
   isProxyDomainTool: boolean;
   isGitPushTool: boolean;
+  isSendFileTool: boolean;
   verdict?: ApprovalVerdict;
 }
 
@@ -344,10 +352,12 @@ function resolveToolLabel(
     isCredentialList,
     isProxyDomainTool,
     isGitPushTool,
+    isSendFileTool,
     verdict,
   } = options;
 
   if (isCompleted) {
+    if (isSendFileTool) return t("labels.sentFile");
     if (isReadTool) return t("labels.read");
     if (isWriteTool) return t("labels.wrote");
     if (isStrReplaceTool) return t("labels.replaced");
@@ -380,6 +390,7 @@ function resolveToolLabel(
   if (isProxyDomainTool) return t("labels.accessDomain");
   if (isGitPushTool) return t("labels.gitPush");
   if (isStrReplaceTool) return t("labels.replace");
+  if (isSendFileTool) return t("labels.sendFile");
   return tool;
 }
 
@@ -494,12 +505,16 @@ export function ToolCallBadge({
   approvalExplanation,
   decisionMessage,
   result,
+  files,
   exitCode,
   loading,
   childCalls,
+  server,
+  sessionId,
 }: ToolCallBadgeProps) {
   const t = useTranslations("toolCallBadge");
-  const [open, setOpen] = useState(false);
+  const isSendFileTool = tool === "send_file";
+  const [open, setOpen] = useState(isSendFileTool);
   const [skillInstructionsOpen, setSkillInstructionsOpen] = useState(false);
   void _detail;
   const source = approvalSource;
@@ -582,6 +597,7 @@ export function ToolCallBadge({
       isCredentialList,
       isProxyDomainTool,
       isGitPushTool,
+      isSendFileTool,
       verdict,
     },
     t,
@@ -975,6 +991,26 @@ export function ToolCallBadge({
                 </div>
               )}
             </>
+          ) : isSendFileTool ? (
+            <>
+              {files && files.length > 0 ? (
+                <div className="space-y-2">
+                  {files.map((file) => (
+                    <FilePreview
+                      key={file.file_id}
+                      fileId={file.file_id}
+                      name={file.name}
+                      mime={file.mime}
+                      size={file.size}
+                      server={server}
+                      sessionId={sessionId}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground">{result ?? ""}</div>
+              )}
+            </>
           ) : (
             <>
               <details open>
@@ -1009,7 +1045,12 @@ export function ToolCallBadge({
           {childCalls && childCalls.length > 0 && (
             <div className="space-y-1">
               {childCalls.map((child, i) => (
-                <ToolCallBadge key={child.tool + i} {...child} />
+                <ToolCallBadge
+                  key={child.tool + i}
+                  {...child}
+                  server={child.server ?? server}
+                  sessionId={child.sessionId ?? sessionId}
+                />
               ))}
             </div>
           )}

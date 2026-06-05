@@ -66,6 +66,7 @@ def _timestamped_event(event: dict[str, Any], *, now: datetime | None = None) ->
 
 class SessionManager:
     def __init__(self, data_dir: Path, on_change: Callable[[], None] | None = None):
+        self.data_dir = data_dir
         self.sessions_dir = data_dir / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self._events_lock = RLock()

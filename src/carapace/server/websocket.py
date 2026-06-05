@@ -153,6 +153,7 @@ class WebSocketSubscriber:
                 result=result.output,
                 exit_code=result.exit_code,
                 tool_id=result.tool_id,
+                files=list(result.files) or None,
             )
         )
 

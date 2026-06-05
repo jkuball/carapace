@@ -3333,28 +3333,23 @@ def _make_session(user: str = "thies") -> str:
     return state.session_id
 
 
-def test_upload_sandbox_file_requires_running(client, auth_headers, monkeypatch):
+def test_upload_sandbox_file_starts_sandbox_when_not_running(client, auth_headers):
     sid = _make_session()
-    monkeypatch.setattr(
-        srv._engine.session_mgr,
-        "load_sandbox_snapshot",
-        lambda _sid: SessionSandboxSnapshot(exists=True, status="stopped"),
-    )
+    ensure = AsyncMock(return_value=None)
+    srv._engine.sandbox_mgr.ensure_session = ensure
+    srv._engine.sandbox_mgr.upload_tmp_file = AsyncMock(return_value="/tmp/abc.png")
     resp = client.post(
         f"/api/sessions/{sid}/sandbox/files",
         headers=auth_headers,
         files={"file": ("abc.png", b"data", "image/png")},
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 200
+    ensure.assert_awaited_once_with(sid)
 
 
-def test_upload_sandbox_file_streams_to_tmp(client, auth_headers, monkeypatch):
+def test_upload_sandbox_file_streams_to_tmp(client, auth_headers):
     sid = _make_session()
-    monkeypatch.setattr(
-        srv._engine.session_mgr,
-        "load_sandbox_snapshot",
-        lambda _sid: SessionSandboxSnapshot(exists=True, status="running"),
-    )
+    srv._engine.sandbox_mgr.ensure_session = AsyncMock(return_value=None)
     srv._engine.sandbox_mgr.upload_tmp_file = AsyncMock(return_value="/tmp/abc-1a2b.png")
     resp = client.post(
         f"/api/sessions/{sid}/sandbox/files",
@@ -3362,7 +3357,12 @@ def test_upload_sandbox_file_streams_to_tmp(client, auth_headers, monkeypatch):
         files={"file": ("abc.png", b"data", "image/png")},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"name": "abc.png", "path": "/tmp/abc-1a2b.png"}
+    body = resp.json()
+    assert body["name"] == "abc.png"
+    assert body["path"] == "/tmp/abc-1a2b.png"
+    assert body["mime"] == "image/png"
+    assert body["file_id"]
+    assert isinstance(body["size"], int)
     srv._engine.sandbox_mgr.upload_tmp_file.assert_awaited_once()
 
 

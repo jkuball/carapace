@@ -35,6 +35,7 @@ import type {
   LlmActivity,
   SessionAttributesPatch,
   ServerMessage,
+  SentFile,
   SessionInfo,
   SessionSandboxSnapshot,
   TurnUsage,
@@ -68,7 +69,7 @@ interface ChatViewProps {
   onDeleteSession?: () => Promise<void>;
 }
 
-const SANDBOX_STARTUP_TOOL_NAMES = new Set(["use_skill", "read", "write", "str_replace", "exec"]);
+const SANDBOX_STARTUP_TOOL_NAMES = new Set(["use_skill", "read", "write", "str_replace", "exec", "send_file"]);
 
 function sandboxStorageLabel(
   snapshot: SessionSandboxSnapshot | null,
@@ -453,11 +454,12 @@ function updateToolCallMessageById(
 function updateToolResultById(
   messages: ChatMessage[],
   toolId: string,
-  result: { result: string; exitCode?: number },
+  result: { result: string; exitCode?: number; files?: SentFile[] },
 ): { messages: ChatMessage[]; found: boolean } {
   return updateToolCallMessageById(messages, toolId, (entry) => ({
     ...entry,
     result: result.result,
+    files: result.files,
     exitCode: result.exitCode,
     loading: false,
   }));
@@ -626,6 +628,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       if (toolResultId) {
         const updated = updateToolResultById(messages, toolResultId, {
           result: entry.result ?? "",
+          files: entry.files,
           exitCode: entry.exit_code,
         });
         if (updated.found) {
@@ -643,6 +646,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
         messages[toolIndex] = {
           ...toolCall,
           result: entry.result,
+          files: entry.files,
           exitCode: entry.exit_code,
           loading: false,
         };
@@ -1284,6 +1288,7 @@ export function ChatView({
             if (msg.tool_id) {
               const updatedById = updateToolResultById(prev, msg.tool_id, {
                 result: msg.result,
+                files: msg.files,
                 exitCode: msg.exit_code,
               });
               if (updatedById.found) return updatedById.messages;
@@ -1296,6 +1301,7 @@ export function ChatView({
                 updated[i] = {
                   ...m,
                   result: msg.result,
+                  files: msg.files,
                   exitCode: msg.exit_code,
                   loading: false,
                 };
@@ -2526,6 +2532,8 @@ export function ChatView({
                 <Message
                   key={i}
                   message={msg}
+                  server={server}
+                  sessionId={sessionId}
                   activeLlmActivity={llmActivity}
                   canFork={msg.kind === "assistant"}
                   canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
