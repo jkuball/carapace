@@ -32,7 +32,14 @@ from .. import get_version
 from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
-from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
+from ..config import (
+    _resolve_data_dir,
+    _resolve_knowledge_dir,
+    get_config_path,
+    get_data_dir,
+    load_config,
+    strip_db_managed_sections,
+)
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..database.engine import SessionFactory, create_engine_and_factory, run_migrations
 from ..git.http import GitHttpHandler
@@ -46,6 +53,7 @@ from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
 from ..notifications.store import NotificationStore
 from ..notifications.vapid import ensure_vapid_config
+from ..platform_store import PlatformSettingsStore
 from ..sandbox.manager import SandboxManager
 from ..sandbox.proxy import ProxyServer
 from ..sandbox.runtime import ContainerRuntime
@@ -94,6 +102,7 @@ _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 _auth_store: AuthStore
+_platform_store: PlatformSettingsStore
 
 
 def _enabled_user_git_configs(auth_store: AuthStore) -> dict[str, KnowledgeGitConfig]:
@@ -304,7 +313,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _notification_store, \
         _notification_presence, \
         _notification_router, \
-        _auth_store
+        _auth_store, \
+        _platform_store
 
     # 1. Load config
     config_path = get_config_path()
@@ -316,6 +326,21 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ensure_data_dir(_data_dir)
     _engine_db, _session_factory = create_engine_and_factory(_config.database, _data_dir)
     run_migrations(_engine_db)
+
+    # Runtime platform config (model catalog + scalar agent/sessions settings) lives in the DB.
+    # Seed once from config.yaml on first boot, then overlay so the in-memory Config reflects the DB.
+    _platform_store = PlatformSettingsStore(_session_factory)
+    if _platform_store.seed_from_config(_config):
+        logger.info("Seeded platform settings (models + agent/sessions) from config.yaml")
+    _config = _platform_store.overlay_config(_config)
+    # Once the DB is authoritative, strip the now DB-managed sections from config.yaml so editing
+    # them on disk can't silently no-op. Runs every boot (idempotent no-op when absent) so a strip
+    # that failed on the seeding boot is retried later; gated on the DB actually being seeded.
+    if _platform_store.is_seeded():
+        removed = strip_db_managed_sections(config_path)
+        if removed:
+            logger.info(f"Removed DB-managed sections {removed} from config.yaml (backup kept)")
+
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
