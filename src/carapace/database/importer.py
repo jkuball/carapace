@@ -87,6 +87,7 @@ def _load_multidoc(path: Path) -> list[dict[str, Any]]:
     return result
 
 
+# Children (FK to sessions) before parents, then the independent tables.
 _TRUNCATE_ORDER = [
     SessionAuditRow,
     SessionEventRow,
@@ -97,6 +98,8 @@ _TRUNCATE_ORDER = [
     SessionRow,
     JobRow,
     NotificationSubscriptionRow,
+    AuthSessionRow,
+    User,
 ]
 
 
@@ -110,15 +113,18 @@ def import_all(
     """Read existing YAML/file storage under *data_dir* and load it into the database.
 
     Idempotent: rows whose primary key already exists are skipped. With ``purge=True``
-    the target tables are emptied first. ``dry_run=True`` rolls back at the end.
+    the target tables are emptied first — within the same transaction as the import, so a
+    later failure rolls the purge back too. ``dry_run=True`` rolls back at the end.
     """
     counts = ImportCounts()
 
     with session_factory() as db:
-        if purge and not dry_run:
+        if purge:
+            # Part of the import transaction: if anything below fails (or dry_run), the
+            # rollback restores the purged rows instead of leaving the database emptied.
             for model in _TRUNCATE_ORDER:
                 db.query(model).delete()
-            db.commit()
+            db.flush()
 
         # --- users.yaml ---
         users_raw = _load_yaml(data_dir / "auth" / "users.yaml")

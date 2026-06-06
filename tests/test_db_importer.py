@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 from carapace.auth import AuthSession, AuthStore, AuthUser, SessionsFile, UsersFile
 from carapace.database.importer import import_all
@@ -118,6 +120,40 @@ def test_importer_idempotent(tmp_path, db_factory):
     assert second.sessions == 0
     assert second.jobs == 0
     assert second.skipped
+
+
+def test_importer_purge_clears_users_and_auth_sessions(tmp_path, db_factory):
+    _build_yaml_tree(tmp_path)
+    import_all(db_factory, tmp_path)
+
+    # Re-import with purge: counts reflect a clean reload (nothing skipped as "existing").
+    counts = import_all(db_factory, tmp_path, purge=True)
+    assert counts.users == 1
+    assert counts.auth_sessions == 1
+    assert counts.sessions == 1
+    assert counts.skipped == []
+
+    auth = AuthStore(db_factory, AuthConfig(), tmp_path)
+    assert auth.get_user("thies") is not None
+    assert auth.get_session("sid1") is not None
+
+
+def test_importer_purge_rolls_back_on_failure(tmp_path, db_factory):
+    _build_yaml_tree(tmp_path)
+    import_all(db_factory, tmp_path)
+
+    # An invalid session state (missing required created_at/last_active) makes the import
+    # raise after the purge deletes are staged.
+    bad = tmp_path / "sessions" / "bad-session"
+    bad.mkdir(parents=True)
+    (bad / "state.yaml").write_text(yaml.safe_dump({"session_id": "bad-session"}), encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        import_all(db_factory, tmp_path, purge=True)
+
+    # The purge must have rolled back — existing data is intact, not wiped.
+    assert AuthStore(db_factory, AuthConfig(), tmp_path).get_user("thies") is not None
+    assert JobsStore(db_factory).list_jobs() != []
 
 
 def test_importer_dry_run_writes_nothing(tmp_path, db_factory):
