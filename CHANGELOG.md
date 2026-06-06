@@ -1,6 +1,71 @@
 # CHANGELOG
 
 
+## v0.138.0 (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: harden platform seed against races + retry config strip
+  ([`1967cfc`](https://github.com/thiesgerken/carapace/commit/1967cfc337d6b2af5302da76f72b3d5db74e69ac))
+
+  Address Bugbot findings on #212:
+
+  - Concurrent seed: seed_from_config now catches IntegrityError from a
+    racing winner and returns False (DB is populated either way) instead of
+    aborting lifespan startup. Add is_seeded().
+  - config.yaml strip: run every boot when the DB is seeded (idempotent
+    no-op when the sections are absent) instead of only on the boot that
+    seeded, so a strip that failed once is retried. This also closes the
+    "empty catalog revives YAML" path — post-seed config.yaml has no agent
+    section, so the assemble fallback can only yield defaults.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- 🐛 fix: dedup duplicate model ids before persisting catalog
+  ([`46838d0`](https://github.com/thiesgerken/carapace/commit/46838d0aed0a36f6f073aba727d2ef59dc5ae2d4))
+
+  A config (or admin save) listing the same model_id twice was valid before (last wins via agent_available_model_entries) but the per-entry insert into the models table PK-conflicted on seed/save. Collapse by model_id first.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### ✨ Features
+
+
+- ✨ feat: make carapace.log_level / logfire_token env-configurable
+  ([`4b2513d`](https://github.com/thiesgerken/carapace/commit/4b2513d06213f71397aa8e60f0629afc80bc2bf7))
+
+  CarapaceConfig is now a BaseSettings (env_prefix CARAPACE_), so CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN actually take effect — the Helm chart already injected CARAPACE_LOG_LEVEL but the plain-model backend silently ignored it. env wins over any value still in config.yaml's `carapace:` section, so the section (and the whole file) can be dropped.
+
+  - docker-compose: pass CARAPACE_LOG_LEVEL through.
+  - docs: note the env path + that the section is optional.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ✨ feat: strip DB-managed sections from config.yaml after seeding
+  ([`6403e13`](https://github.com/thiesgerken/carapace/commit/6403e1348c6400e71f373d14123d469f6e5d611e))
+
+  After the one-time seed, remove the now DB-authoritative agent/sessions sections from config.yaml so an admin editing them on disk can't silently no-op. Keeps a single stable backup (config.yaml.pre-db-migration.bak) — fixed name, no timestamped-.bak pileup — and prepends a note explaining the move. Idempotent: never overwrites an existing backup, runs only when the seed actually seeds.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ✨ feat: move runtime platform config to the database
+  ([`36c4060`](https://github.com/thiesgerken/carapace/commit/36c4060a8bebdfbf927b55c3fe41e43f1fcb7d1e))
+
+  Model catalog and scalar agent/sessions settings now live in `models` + `platform_settings` tables instead of config.yaml. The admin Platform UI persists to the DB in a transaction; the config.yaml read-modify-write (and its .bak pileup) is gone. config_writable is always true.
+
+  - New PlatformSettingsStore: catalog CRUD, section upsert, idempotent
+    seed_from_config, agent/sessions assembly + Config overlay.
+  - Lifespan seeds once from config.yaml on first boot, then overlays so the
+    in-memory Config reflects the DB. agent/sessions YAML sections become
+    seed-only; operator/bootstrap config stays env/file.
+  - Alembic 0002 (models + platform_settings); JSONB on Postgres.
+  - Relocated secret_to_dict/model_entry_to_dict to models/config.py.
+  - Docs: chart README + kubernetes.md note the DB-backed seed-once behavior.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.137.1 (2026-06-06)
 
 
