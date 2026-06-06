@@ -541,16 +541,16 @@ async def get_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -
 @router.post("/git/pull", response_model=GitActionResult)
 async def pull_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
     try:
-        summary = await server._knowledge_git_runtime.pull_for_user(user.username)
+        ok, message = await server._knowledge_git_runtime.pull_for_user(user.username)
     except Exception as exc:
         return GitActionResult(ok=False, message=f"Pull failed: {exc}")
-    return GitActionResult(ok=True, message=summary)
+    return GitActionResult(ok=ok, message=message)
 
 
 @router.post("/git/push", response_model=GitActionResult)
 async def push_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
     try:
-        await server._knowledge_git_runtime.push_if_configured(user.username)
+        ok, message = await server._knowledge_git_runtime.push_for_user(user.username)
     except Exception as exc:
         return GitActionResult(ok=False, message=f"Push failed: {exc}")
-    return GitActionResult(ok=True, message="Pushed to external remote.")
+    return GitActionResult(ok=ok, message=message)

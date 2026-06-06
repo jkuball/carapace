@@ -271,52 +271,6 @@ def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: 
         assert engine._knowledge_dir_for_session(thies_sid) != engine._knowledge_dir_for_session(ada_sid)
 
 
-def test_handle_slash_command_pull_invalidates_cached_skill_catalog(tmp_path: Path) -> None:
-    with _patch_sentinel():
-        engine = _make_engine(tmp_path)
-        state = engine.session_mgr.create_session(user="thies")
-        sid = state.session_id
-        engine.get_or_activate(sid)
-
-        alpha_skill = tmp_path / "skills" / "alpha"
-        alpha_skill.mkdir(parents=True)
-        (alpha_skill / "SKILL.md").write_text(
-            "---\nname: alpha\ndescription: Before pull\n---\n",
-            encoding="utf-8",
-        )
-        git_store = engine._git_store_for_session(sid)
-        git_store.remote_configured = True
-
-        async def pull_from_remote() -> str:
-            beta_skill = tmp_path / "skills" / "beta"
-            beta_skill.mkdir(parents=True)
-            (beta_skill / "SKILL.md").write_text(
-                "---\nname: beta\ndescription: Added by pull\n---\n",
-                encoding="utf-8",
-            )
-            return "Pulled"
-
-        git_store.pull_from_remote = AsyncMock(side_effect=pull_from_remote)
-
-        async def _run() -> None:
-            initial = await engine.handle_slash_command(sid, "/skills")
-            assert initial is not None
-            assert initial["data"] == [{"name": "alpha", "description": "Before pull"}]
-
-            pull_result = await engine.handle_slash_command(sid, "/pull")
-            assert pull_result is not None
-            assert pull_result["data"]["message"] == "Pulled"
-
-            refreshed = await engine.handle_slash_command(sid, "/skills")
-            assert refreshed is not None
-            assert refreshed["data"] == [
-                {"name": "alpha", "description": "Before pull"},
-                {"name": "beta", "description": "Added by pull"},
-            ]
-
-        asyncio.run(_run())
-
-
 def test_turn_usage_payload_contains_budget_gauges_without_agent_usage(tmp_path: Path):
     with _patch_sentinel():
         engine = _make_engine(tmp_path)

@@ -57,6 +57,7 @@ function AheadBehind({
 function GitSyncControls({
   title,
   counts,
+  emptyLabel,
   loading,
   notice,
   busy,
@@ -69,6 +70,9 @@ function GitSyncControls({
 }: {
   title: string;
   counts: AheadBehindCounts | null;
+  // Shown when there are no counts to display (e.g. no remote). Null hides the
+  // line entirely — used on error, where the notice already explains the state.
+  emptyLabel: string | null;
   loading: boolean;
   notice: { tone: Tone; message: string } | null;
   busy: "pull" | "push" | null;
@@ -115,11 +119,13 @@ function GitSyncControls({
           </button>
         </div>
       </div>
-      <div className="text-xs">
-        {counts ? <AheadBehind counts={counts} upToDateLabel={t("upToDate")} /> : (
-          <span className="text-muted-foreground">{t("noRemote")}</span>
-        )}
-      </div>
+      {counts ? (
+        <div className="text-xs">
+          <AheadBehind counts={counts} upToDateLabel={t("upToDate")} />
+        </div>
+      ) : emptyLabel ? (
+        <div className="text-xs text-muted-foreground">{emptyLabel}</div>
+      ) : null}
       {notice ? (
         <div
           className={cn(
@@ -151,6 +157,7 @@ export function SandboxGitControls({
   const t = useTranslations("git");
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
   const [upstream, setUpstream] = useState(true);
+  const [errored, setErrored] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
   const [notice, setNotice] = useState<{ tone: Tone; message: string } | null>(null);
@@ -161,9 +168,11 @@ export function SandboxGitControls({
       setNotice(null);
       try {
         const status = await getSandboxGit(server, token, sessionId, { fetch });
+        setErrored(false);
         setUpstream(status.upstream);
         setCounts({ ahead: status.ahead, behind: status.behind });
       } catch {
+        setErrored(true);
         setCounts(null);
         setNotice({ tone: "error", message: t("errors.status") });
       } finally {
@@ -202,6 +211,7 @@ export function SandboxGitControls({
     <GitSyncControls
       title={t("sandbox.label")}
       counts={upstream ? counts : null}
+      emptyLabel={errored ? null : t("noRemote")}
       loading={loading}
       notice={notice}
       busy={busy}
@@ -276,6 +286,7 @@ export function GlobalGitControls({
       <GitSyncControls
         title={t("global.label")}
         counts={counts}
+        emptyLabel={null}
         loading={loading}
         notice={notice}
         busy={busy}

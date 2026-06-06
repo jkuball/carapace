@@ -232,6 +232,38 @@ async def test_knowledge_git_runtime_push_callback_checks_current_remote_state(t
 
 
 @pytest.mark.anyio
+async def test_pull_and_push_for_user_report_not_ok_without_remote(tmp_path: Path) -> None:
+    git_store = MagicMock(spec=GitStore)
+    git_store.remote_configured = False
+    git_store.remote_branch = "main"
+    git_store.author_template = "carapace <carapace@%h>"
+    git_store.pull_from_remote = AsyncMock(return_value="Pulled")
+    git_store.push_to_remote = AsyncMock()
+    sandbox_mgr = MagicMock(spec=SandboxManager)
+    runtime = KnowledgeGitRuntime(repo_registry=_repo_registry(tmp_path, git_store), sandbox_mgr=sandbox_mgr)
+
+    pull_ok, pull_msg = await runtime.pull_for_user("thies")
+    assert pull_ok is False
+    assert "No external remote" in pull_msg
+    git_store.pull_from_remote.assert_not_awaited()
+
+    push_ok, push_msg = await runtime.push_for_user("thies")
+    assert push_ok is False
+    assert "No external remote" in push_msg
+    git_store.push_to_remote.assert_not_awaited()
+
+    git_store.remote_configured = True
+    pull_ok, pull_msg = await runtime.pull_for_user("thies")
+    assert pull_ok is True
+    assert pull_msg == "Pulled"
+    git_store.pull_from_remote.assert_awaited_once()
+
+    push_ok, _ = await runtime.push_for_user("thies")
+    assert push_ok is True
+    git_store.push_to_remote.assert_awaited_once()
+
+
+@pytest.mark.anyio
 async def test_knowledge_git_runtime_keeps_other_user_repo_state_unchanged(tmp_path: Path) -> None:
     def make_git_store(branch: str, author: str) -> MagicMock:
         git_store = MagicMock(spec=GitStore)

@@ -200,14 +200,31 @@ class KnowledgeGitRuntime:
             ahead, behind = await handle.git_store.remote_status()
             return True, ahead, behind
 
-    async def pull_for_user(self, owner: str) -> str:
-        """Pull the backend repo from the external remote and invalidate skills."""
+    async def pull_for_user(self, owner: str) -> tuple[bool, str]:
+        """Pull the backend repo from the external remote and invalidate skills.
+
+        Returns ``(ok, message)``; ``ok`` is False when no remote is configured.
+        """
         normalized_owner = normalize_username(owner)
         async with self._lock:
             handle = self._repo_registry.ensure_user_repo(normalized_owner)
             self._apply_config_to_store(normalized_owner, handle)
             if not handle.git_store.remote_configured:
-                return "No external remote configured."
+                return False, "No external remote configured."
             summary = await handle.git_store.pull_from_remote()
             handle.skill_registry.invalidate()
-            return summary
+            return True, summary
+
+    async def push_for_user(self, owner: str) -> tuple[bool, str]:
+        """Push the backend repo to the external remote.
+
+        Returns ``(ok, message)``; ``ok`` is False when no remote is configured.
+        """
+        normalized_owner = normalize_username(owner)
+        async with self._lock:
+            handle = self._repo_registry.ensure_user_repo(normalized_owner)
+            self._apply_config_to_store(normalized_owner, handle)
+            if not handle.git_store.remote_configured:
+                return False, "No external remote configured."
+            await handle.git_store.push_to_remote()
+            return True, "Pushed to external remote."
