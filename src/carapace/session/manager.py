@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any
 
 import yaml
+from loguru import logger
 from pydantic import BaseModel, field_validator
 from pydantic_ai import ModelMessage
 from sqlalchemy import delete, func, select
@@ -211,15 +212,19 @@ class SessionManager:
     def delete_session(self, session_id: str) -> bool:
         with self._session_factory.begin() as db:
             row = db.get(SessionRow, session_id)
-            if row is None:
-                deleted = False
-            else:
+            deleted = row is not None
+            if row is not None:
                 db.delete(row)  # FK cascade drops history/events/usage/llm/audit/token rows
-                deleted = True
         session_dir = self.sessions_dir / session_id
         if session_dir.exists():
-            shutil.rmtree(session_dir)
             deleted = True
+            try:
+                shutil.rmtree(session_dir)
+            except OSError as exc:
+                # The DB row (source of truth) is already gone; a failed workspace
+                # removal only leaves orphan files, which the sandbox orphan cleanup
+                # sweeps. Don't fail the delete over it.
+                logger.warning(f"Failed to remove workspace dir for session {session_id}: {exc}")
         if deleted:
             self._notify_change()
         return deleted

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 
 from ..database.engine import SessionFactory
 from ..database.models import SandboxTokenRow
@@ -134,12 +135,20 @@ class SandboxSessionLifecycle:
             return token
 
         token = secrets.token_hex(16)
-        with self._session_factory.begin() as db:
-            existing = db.get(SandboxTokenRow, session_id)
-            if existing is not None:
-                token = existing.token
-            else:
-                db.add(SandboxTokenRow(session_id=session_id, token=token))
+        try:
+            with self._session_factory.begin() as db:
+                existing = db.get(SandboxTokenRow, session_id)
+                if existing is not None:
+                    token = existing.token
+                else:
+                    db.add(SandboxTokenRow(session_id=session_id, token=token))
+        except IntegrityError:
+            # Lost a race against a concurrent writer — reuse the token they persisted.
+            with self._session_factory() as db:
+                row = db.get(SandboxTokenRow, session_id)
+            if row is None:
+                raise
+            token = row.token
         self._state.session_tokens[session_id] = token
         self._state.token_to_session[token] = session_id
         return token

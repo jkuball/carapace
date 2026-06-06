@@ -156,6 +156,49 @@ def test_importer_purge_rolls_back_on_failure(tmp_path, db_factory):
     assert JobsStore(db_factory).list_jobs() != []
 
 
+def test_delete_session_survives_workspace_rmtree_failure(tmp_path, db_factory, monkeypatch):
+    import shutil
+
+    from carapace.session.manager import SessionManager
+
+    mgr = SessionManager(db_factory, tmp_path)
+    state = mgr.create_session(user="thies")
+    sid = state.session_id
+
+    def _boom(_path):
+        raise OSError("workspace busy")
+
+    monkeypatch.setattr(shutil, "rmtree", _boom)
+
+    # rmtree failure must not abort the delete; the DB row (source of truth) is gone.
+    assert mgr.delete_session(sid) is True
+    assert mgr.load_state(sid) is None
+    assert mgr.list_sessions() == []
+
+
+def test_get_or_create_token_reuses_on_insert_race(tmp_path, db_factory):
+    from carapace.database.models import SandboxTokenRow
+    from carapace.sandbox.session_lifecycle import SandboxSessionLifecycle
+    from carapace.session.manager import SessionManager
+
+    mgr = SessionManager(db_factory, tmp_path)
+    session_id = mgr.create_session(user="thies").session_id
+
+    # A concurrent winner has already persisted a token for this session.
+    with db_factory.begin() as db:
+        db.add(SandboxTokenRow(session_id=session_id, token="winner-token"))
+
+    from types import SimpleNamespace
+
+    lifecycle = SandboxSessionLifecycle.__new__(SandboxSessionLifecycle)
+    lifecycle._session_factory = db_factory
+    lifecycle._state = SimpleNamespace(session_tokens={}, token_to_session={})
+    # Force past the cache/persisted-token checks so the INSERT races and raises
+    # IntegrityError; the handler must reuse the winner's token rather than propagate.
+    lifecycle._load_persisted_token = lambda _sid: None
+    assert lifecycle.get_or_create_token(session_id) == "winner-token"
+
+
 def test_importer_dry_run_writes_nothing(tmp_path, db_factory):
     _build_yaml_tree(tmp_path)
     counts = import_all(db_factory, tmp_path, dry_run=True)
