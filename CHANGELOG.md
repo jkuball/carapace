@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.137.1 (2026-06-06)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Pin dependencies
+  ([`de8592e`](https://github.com/thiesgerken/carapace/commit/de8592e7495261d798948b06cf3ef97b9c5deb40))
+
+- ⬆️ chore: upgrade docker.io/library/postgres Docker tag to v18
+  ([`84c4d15`](https://github.com/thiesgerken/carapace/commit/84c4d1537071ae98af26cd4198106f0e1b4d1490))
+
 ## v0.137.0 (2026-06-06)
 
 
