@@ -10,7 +10,7 @@ import { NewSessionButton, type NewSessionOptions } from "@/components/new-sessi
 import { Sidebar } from "@/components/sidebar";
 import { ChatView } from "@/components/chat-view";
 import { VersionBadge } from "@/components/version-badge";
-import { AUTH_REQUIRED_EVENT, createSession, deleteSession, getCurrentUser, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
+import { AUTH_REQUIRED_EVENT, createSession, deleteSession, getCurrentUser, getSandboxGit, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
 import {
   clearConnection,
   getShowArchivedSessionsPreference,
@@ -457,7 +457,22 @@ function HomeContent() {
     }
   }
 
-  const handleDeleteSession = useCallback(async (id: string) => {
+  const handleDeleteSession = useCallback(async (id: string, options?: { skipUnpushedWarning?: boolean }) => {
+    // Warn about unpushed sandbox commits. The backend status check never boots
+    // a stopped sandbox (returns running=false / no counts), so we ask it
+    // directly rather than trusting the possibly-stale cached row snapshot.
+    // Shift+click (skipUnpushedWarning) skips this, matching the confirm skip.
+    if (!options?.skipUnpushedWarning) {
+      try {
+        const git = await getSandboxGit(server, token, id, { fetch: false });
+        const ahead = git.running && git.upstream ? (git.ahead ?? 0) : 0;
+        if (ahead > 0 && !window.confirm(t("sidebar.confirm.deleteUnpushed", { count: ahead }))) {
+          return;
+        }
+      } catch {
+        // status check failed — fall through and delete
+      }
+    }
     try {
       await deleteSession(server, token, id);
       pendingSandboxUpdatesRef.current.delete(id);
@@ -466,7 +481,7 @@ function HomeContent() {
     } catch {
       // deletion failed silently
     }
-  }, [server, token]);
+  }, [server, token, t]);
 
   const handleUpdateSessionAttributes = useCallback(async (
     id: string,
@@ -612,6 +627,8 @@ function HomeContent() {
         )}
       >
         <Sidebar
+          server={server}
+          token={token}
           sessions={sessions}
           showArchivedSessions={showArchivedSessions}
           activeSessionId={activeSessionId}

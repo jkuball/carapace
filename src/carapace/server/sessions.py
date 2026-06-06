@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError, field_validator, model_validato
 from pydantic_ai.messages import ModelMessage
 
 from ..auth import UserIdentity
+from ..models.git import GitActionResult, GlobalGitStatus, SandboxGitStatus
 from ..models.session import SessionAttributes, SessionJobRunContext, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
 from ..user_defaults import apply_user_model_defaults, effective_user_budget
@@ -489,3 +490,67 @@ async def delete_session(session_id: str, user: Annotated[UserIdentity, Depends(
             logger.warning(f"Session archive delete failed for {session_id}: {exc}")
     if not server._engine.session_mgr.delete_session(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+
+
+# ----------------------------------------------------------------------
+# Sandbox git (B1: /workspace clone ↔ backend repo)
+# ----------------------------------------------------------------------
+
+
+@router.get("/sessions/{session_id}/sandbox/git", response_model=SandboxGitStatus)
+async def get_sandbox_git(
+    session_id: str,
+    user: Annotated[UserIdentity, Depends(verify_token)],
+    fetch: Annotated[bool, Query()] = True,
+) -> SandboxGitStatus:
+    _load_owned_state(session_id, user)
+    try:
+        return await server._engine.sandbox_mgr.sandbox_git_status(session_id, fetch=fetch)
+    except Exception as exc:
+        logger.warning(f"Sandbox git status failed for {session_id}: {exc}")
+        raise HTTPException(status_code=502, detail="Could not read sandbox git status") from exc
+
+
+@router.post("/sessions/{session_id}/sandbox/git/pull", response_model=GitActionResult)
+async def pull_sandbox_git(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+    _load_owned_state(session_id, user)
+    return await server._engine.sandbox_mgr.sandbox_git_pull(session_id)
+
+
+@router.post("/sessions/{session_id}/sandbox/git/push", response_model=GitActionResult)
+async def push_sandbox_git(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+    _load_owned_state(session_id, user)
+    return await server._engine.sandbox_mgr.sandbox_git_push(session_id)
+
+
+# ----------------------------------------------------------------------
+# Global git (B2: backend per-user repo ↔ external remote)
+# ----------------------------------------------------------------------
+
+
+@router.get("/git/status", response_model=GlobalGitStatus)
+async def get_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GlobalGitStatus:
+    try:
+        configured, ahead, behind = await server._knowledge_git_runtime.status_for_user(user.username)
+    except Exception as exc:
+        logger.warning(f"Global git status failed for {user.username}: {exc}")
+        raise HTTPException(status_code=502, detail="Could not read global git status") from exc
+    return GlobalGitStatus(remote_configured=configured, ahead=ahead, behind=behind)
+
+
+@router.post("/git/pull", response_model=GitActionResult)
+async def pull_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+    try:
+        ok, message = await server._knowledge_git_runtime.pull_for_user(user.username)
+    except Exception as exc:
+        return GitActionResult(ok=False, message=f"Pull failed: {exc}")
+    return GitActionResult(ok=ok, message=message)
+
+
+@router.post("/git/push", response_model=GitActionResult)
+async def push_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+    try:
+        ok, message = await server._knowledge_git_runtime.push_for_user(user.username)
+    except Exception as exc:
+        return GitActionResult(ok=False, message=f"Push failed: {exc}")
+    return GitActionResult(ok=ok, message=message)

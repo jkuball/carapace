@@ -8,7 +8,7 @@ from typing import Protocol
 from loguru import logger
 
 from ..auth import normalize_username
-from ..knowledge import KnowledgeRepoRegistry
+from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoRegistry
 from ..models.user import DEFAULT_GIT_AUTHOR, DEFAULT_GIT_BRANCH, UserConfig, UserGitConfig
 from ..sandbox.manager import SandboxManager
 
@@ -182,3 +182,50 @@ class KnowledgeGitRuntime:
                 handle.git_store.author_template = config.author
             if handle.git_store.remote_configured:
                 await handle.git_store.push_to_remote()
+
+    def _apply_config_to_store(self, owner: str, handle: KnowledgeRepoHandle) -> None:
+        config = self._configs.get(owner)
+        if config is not None:
+            handle.git_store.remote_branch = config.branch
+            handle.git_store.author_template = config.author
+
+    async def status_for_user(self, owner: str) -> tuple[bool, int, int]:
+        """Return ``(remote_configured, ahead, behind)`` for the backend ↔ remote boundary."""
+        normalized_owner = normalize_username(owner)
+        async with self._lock:
+            handle = self._repo_registry.ensure_user_repo(normalized_owner)
+            self._apply_config_to_store(normalized_owner, handle)
+            if not handle.git_store.remote_configured:
+                return False, 0, 0
+            ahead, behind = await handle.git_store.remote_status()
+            return True, ahead, behind
+
+    async def pull_for_user(self, owner: str) -> tuple[bool, str]:
+        """Pull the backend repo from the external remote and invalidate skills.
+
+        Returns ``(ok, message)``; ``ok`` is False when no remote is configured.
+        """
+        normalized_owner = normalize_username(owner)
+        async with self._lock:
+            handle = self._repo_registry.ensure_user_repo(normalized_owner)
+            self._apply_config_to_store(normalized_owner, handle)
+            if not handle.git_store.remote_configured:
+                return False, "No external remote configured."
+            summary = await handle.git_store.pull_from_remote()
+            handle.skill_registry.invalidate()
+            return True, summary
+
+    async def push_for_user(self, owner: str) -> tuple[bool, str]:
+        """Push the backend repo to the external remote.
+
+        Returns ``(ok, message)``; ``ok`` is False when no remote is configured.
+        """
+        normalized_owner = normalize_username(owner)
+        async with self._lock:
+            handle = self._repo_registry.ensure_user_repo(normalized_owner)
+            self._apply_config_to_store(normalized_owner, handle)
+            if not handle.git_store.remote_configured:
+                return False, "No external remote configured."
+            if await handle.git_store.push_to_remote():
+                return True, "Pushed to external remote."
+            return False, "Push to the external remote failed."

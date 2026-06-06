@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
+import { GlobalGitIndicator, GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { VersionBadge } from "@/components/version-badge";
 import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -21,6 +22,8 @@ import {
 } from "@/lib/utils";
 
 interface SidebarProps {
+  server: string;
+  token: string;
   sessions: SessionInfo[];
   showArchivedSessions?: boolean;
   activeSessionId: string | null;
@@ -33,7 +36,7 @@ interface SidebarProps {
   onGoHome: () => void;
   onOpenSettings: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
-  onDelete: (sessionId: string) => void;
+  onDelete: (sessionId: string, options?: { skipUnpushedWarning?: boolean }) => void;
   onDisconnect: () => void;
   githubUrl: string;
   loading?: boolean;
@@ -91,6 +94,8 @@ function GitHubIcon({ className }: { className?: string }) {
 }
 
 export function Sidebar({
+  server,
+  token,
   sessions,
   showArchivedSessions = true,
   activeSessionId,
@@ -116,6 +121,7 @@ export function Sidebar({
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const globalGit = useGlobalGit(server, token);
   const [referenceTime, setReferenceTime] = useState<number>(() => Date.now());
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
@@ -560,7 +566,7 @@ export function Sidebar({
               if (!shouldConfirmSessionDeletion(session, event)) {
                 return;
               }
-              onDelete(session.session_id);
+              onDelete(session.session_id, { skipUnpushedWarning: event.shiftKey });
             }}
             title={session.message_count === 0
               ? tSidebar("actions.deleteEmpty")
@@ -630,6 +636,7 @@ export function Sidebar({
               </span>
               <span className="truncate">{accountName}</span>
             </button>
+            <GlobalGitIndicator git={globalGit} className="pointer-events-none absolute -right-0.5 -top-0.5" />
 
             {accountMenuOpen ? (
               <div
@@ -663,6 +670,9 @@ export function Sidebar({
                     </button>
                   </div>
                 </div>
+                {globalGit.configured !== false ? (
+                  <GlobalGitPanel git={globalGit} className="border-b border-border/80 px-3 py-2.5" />
+                ) : null}
                 <div className="p-1">
                   <button
                     type="button"

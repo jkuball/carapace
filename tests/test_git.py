@@ -278,6 +278,70 @@ class TestGitStoreRemote:
         assert second == "Already up to date."
 
 
+@needs_git
+class TestGitStoreRemoteStatus:
+    async def _seeded_bare(self, tmp_path: Path) -> Path:
+        """Create a bare remote with one commit on main and return its path."""
+        bare = tmp_path / "origin.git"
+        bare.mkdir()
+        subprocess.run(["git", "init", "--bare", "-b", "main"], cwd=bare, check=True)
+        seed = tmp_path / "seed"
+        seed.mkdir()
+        subprocess.run(["git", "init", "-b", "main"], cwd=seed, check=True)
+        subprocess.run(["git", "config", "user.email", "seed@test"], cwd=seed, check=True)
+        subprocess.run(["git", "config", "user.name", "seed"], cwd=seed, check=True)
+        (seed / "a.txt").write_text("x")
+        subprocess.run(["git", "add", "a.txt"], cwd=seed, check=True)
+        subprocess.run(["git", "commit", "-m", "seed commit"], cwd=seed, check=True)
+        subprocess.run(["git", "remote", "add", "origin", str(bare.resolve())], cwd=seed, check=True)
+        subprocess.run(["git", "push", "-u", "origin", "main"], cwd=seed, check=True)
+        return bare
+
+    async def test_no_remote_returns_zero(self, tmp_path: Path) -> None:
+        store = GitStore(tmp_path / "knowledge", remote_branch="main")
+        await store.ensure_repo()
+        assert await store.remote_status() == (0, 0)
+
+    async def test_in_sync_after_pull(self, tmp_path: Path) -> None:
+        bare = await self._seeded_bare(tmp_path)
+        store = GitStore(tmp_path / "knowledge", remote_branch="main")
+        await store.ensure_repo()
+        await store.add_remote(str(bare.resolve()))
+        await store.pull_from_remote()
+        assert await store.remote_status() == (0, 0)
+
+    async def test_ahead_after_local_commit(self, tmp_path: Path) -> None:
+        bare = await self._seeded_bare(tmp_path)
+        repo = tmp_path / "knowledge"
+        store = GitStore(repo, remote_branch="main")
+        await store.ensure_repo()
+        await store.add_remote(str(bare.resolve()))
+        await store.pull_from_remote()
+        (repo / "local.txt").write_text("y")
+        await store.commit(["local.txt"], "local change")
+        ahead, behind = await store.remote_status()
+        assert (ahead, behind) == (1, 0)
+
+    async def test_behind_after_remote_commit(self, tmp_path: Path) -> None:
+        bare = await self._seeded_bare(tmp_path)
+        repo = tmp_path / "knowledge"
+        store = GitStore(repo, remote_branch="main")
+        await store.ensure_repo()
+        await store.add_remote(str(bare.resolve()))
+        await store.pull_from_remote()
+        # Add a new commit to the remote via a separate clone.
+        worker = tmp_path / "worker"
+        subprocess.run(["git", "clone", str(bare.resolve()), str(worker)], check=True)
+        subprocess.run(["git", "config", "user.email", "w@test"], cwd=worker, check=True)
+        subprocess.run(["git", "config", "user.name", "w"], cwd=worker, check=True)
+        (worker / "b.txt").write_text("z")
+        subprocess.run(["git", "add", "b.txt"], cwd=worker, check=True)
+        subprocess.run(["git", "commit", "-m", "remote change"], cwd=worker, check=True)
+        subprocess.run(["git", "push", "origin", "main"], cwd=worker, check=True)
+        ahead, behind = await store.remote_status()
+        assert (ahead, behind) == (0, 1)
+
+
 # ── GitHttpHandler ───────────────────────────────────────────────────
 
 

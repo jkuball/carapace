@@ -16,6 +16,7 @@ from loguru import logger
 
 from ..database.engine import SessionFactory
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
+from ..models.git import GitActionResult, SandboxGitStatus
 from ..security.context import ApprovalSource, ApprovalVerdict
 from . import file_ops
 from .exec_flow import SandboxExecCoordinator, SandboxExecState
@@ -573,6 +574,110 @@ class SandboxManager:
             logger.debug(f"Command failed in session {session_id} (exit {result.exit_code}): {command}")
             output += f"\n[exit code: {result.exit_code}]"
         return ExecResult(exit_code=result.exit_code, output=output or "(no output)")
+
+    # ------------------------------------------------------------------
+    # Sandbox git status / sync (B1: /workspace clone ↔ backend repo).
+    # These run via _exec_in_container directly — NOT the agent exec path —
+    # so they never appear as agent tool calls ("without telling the agent").
+    # The cloned origin URL embeds credentials, so plain git commands work.
+    # ------------------------------------------------------------------
+
+    async def _git_in_workspace(self, sc: SessionContainer, args: str, *, timeout: int = 30) -> ExecResult:
+        return await self._exec_in_container(
+            sc,
+            f"git -C {self._KNOWLEDGE_WORKDIR} {args}",
+            timeout=timeout,
+            bypass_proxy=True,
+        )
+
+    async def _running_container(self, session_id: str) -> SessionContainer | None:
+        """Return the session's container only if it is already running — never boots it.
+
+        Reading git state must not resume a spun-down sandbox (mirrors the
+        delete flow, which avoids booting just to inspect git state). A running
+        container is adopted via ``ensure_session`` (which re-attaches without
+        booting), so this works even when ``_sessions`` is cold (e.g. after a
+        server restart) — matching how the sandbox snapshot detects "running".
+        """
+        sc = self._sessions.get(session_id)
+        if sc is not None and await self._runtime.is_running(sc.container_id):
+            return sc
+
+        existing_id = await self._runtime.sandbox_exists(self._sandbox_name(session_id))
+        if isinstance(existing_id, str) and existing_id and await self._runtime.is_running(existing_id):
+            # Re-attach through the lifecycle directly, not self.ensure_session:
+            # the latter writes a transient "pending" sandbox snapshot when the
+            # cache is cold, which would wrongly flip UI state for a read-only
+            # status check. The container is already running, so this re-attaches
+            # without booting and without touching the snapshot.
+            adopted, _ = await self._session_lifecycle.ensure_session(session_id)
+            return adopted
+        return None
+
+    async def sandbox_git_status(self, session_id: str, *, fetch: bool) -> SandboxGitStatus:
+        """Return ahead/behind of the sandbox clone vs the backend repo.
+
+        Does not boot a stopped sandbox — returns ``running=False`` instead.
+        """
+        sc = await self._running_container(session_id)
+        if sc is None:
+            return SandboxGitStatus(running=False)
+
+        fetched = False
+        if fetch:
+            fr = await self._git_in_workspace(sc, "fetch origin", timeout=60)
+            fetched = fr.exit_code == 0
+
+        branch_res = await self._git_in_workspace(sc, "rev-parse --abbrev-ref HEAD", timeout=10)
+        branch = branch_res.output.strip() if branch_res.exit_code == 0 else None
+
+        upstream = await self._git_in_workspace(sc, "rev-parse --abbrev-ref --symbolic-full-name @{u}", timeout=10)
+        if upstream.exit_code != 0:
+            return SandboxGitStatus(branch=branch, upstream=False, fetched=fetched)
+
+        counts = await self._git_in_workspace(sc, "rev-list --left-right --count @{u}...HEAD", timeout=10)
+        behind, ahead = self._parse_left_right(counts)
+        return SandboxGitStatus(branch=branch, upstream=True, ahead=ahead, behind=behind, fetched=fetched)
+
+    async def sandbox_unpushed_count(self, session_id: str) -> int:
+        """Local-only count of commits not yet pushed to the backend repo (no fetch).
+
+        Returns 0 when the sandbox isn't running — never boots it.
+        """
+        sc = await self._running_container(session_id)
+        if sc is None:
+            return 0
+        res = await self._git_in_workspace(sc, "rev-list --count @{u}..HEAD", timeout=10)
+        if res.exit_code != 0:
+            return 0
+        out = res.output.strip()
+        return int(out) if out.isdigit() else 0
+
+    async def sandbox_git_pull(self, session_id: str) -> GitActionResult:
+        """Pull the sandbox clone from the backend repo (fast-forward only)."""
+        sc, _ = await self.ensure_session(session_id)
+        res = await self._git_in_workspace(sc, "pull --ff-only", timeout=120)
+        ok = res.exit_code == 0
+        return GitActionResult(ok=ok, message=res.output.strip() or ("Pulled." if ok else "Pull failed."))
+
+    async def sandbox_git_push(self, session_id: str) -> GitActionResult:
+        """Push the sandbox clone to the backend repo (sentinel-gated via pre-receive)."""
+        sc, _ = await self.ensure_session(session_id)
+        res = await self._git_in_workspace(sc, "push origin HEAD", timeout=600)
+        ok = res.exit_code == 0
+        denied = not ok and "DENIED" in res.output
+        message = res.output.strip() or ("Pushed." if ok else "Push failed.")
+        return GitActionResult(ok=ok, message=message, denied=denied)
+
+    @staticmethod
+    def _parse_left_right(res: ExecResult) -> tuple[int, int]:
+        """Parse ``git rev-list --left-right --count`` output into ``(left, right)``."""
+        if res.exit_code != 0:
+            return 0, 0
+        parts = res.output.split()
+        if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            return 0, 0
+        return int(parts[0]), int(parts[1])
 
     # ------------------------------------------------------------------
     # File operations (executed inside the sandbox container via

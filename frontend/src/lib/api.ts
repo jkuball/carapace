@@ -512,6 +512,105 @@ export async function wipeSandbox(
   return res.json();
 }
 
+// Git status / sync -----------------------------------------------------
+
+export interface SandboxGitStatus {
+  running: boolean;
+  branch: string | null;
+  upstream: boolean;
+  ahead: number | null;
+  behind: number | null;
+  fetched: boolean;
+}
+
+export interface GlobalGitStatus {
+  remote_configured: boolean;
+  ahead: number;
+  behind: number;
+}
+
+export interface GitActionResult {
+  ok: boolean;
+  message: string;
+  denied: boolean;
+}
+
+// B1: sandbox /workspace clone ↔ backend repo
+export async function getSandboxGit(
+  server: string,
+  token: string,
+  sessionId: string,
+  options?: { fetch?: boolean },
+): Promise<SandboxGitStatus> {
+  const doFetch = options?.fetch ?? true;
+  const res = await fetch(
+    `${server}/api/sessions/${sessionId}/sandbox/git?fetch=${doFetch}`,
+    { headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(`Failed to fetch sandbox git status: ${res.status}`);
+  return res.json();
+}
+
+export async function sandboxGitPull(
+  server: string,
+  token: string,
+  sessionId: string,
+): Promise<GitActionResult> {
+  const res = await fetch(
+    `${server}/api/sessions/${sessionId}/sandbox/git/pull`,
+    { method: "POST", headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(`Failed to pull sandbox: ${res.status}`);
+  return res.json();
+}
+
+export async function sandboxGitPush(
+  server: string,
+  token: string,
+  sessionId: string,
+): Promise<GitActionResult> {
+  const res = await fetch(
+    `${server}/api/sessions/${sessionId}/sandbox/git/push`,
+    { method: "POST", headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(`Failed to push sandbox: ${res.status}`);
+  return res.json();
+}
+
+// B2: backend per-user repo ↔ external remote
+export async function getGlobalGit(
+  server: string,
+  token: string,
+): Promise<GlobalGitStatus> {
+  const res = await fetch(`${server}/api/git/status`, { headers: headers(token) });
+  if (!res.ok) throw new Error(`Failed to fetch global git status: ${res.status}`);
+  return res.json();
+}
+
+export async function globalGitPull(
+  server: string,
+  token: string,
+): Promise<GitActionResult> {
+  const res = await fetch(`${server}/api/git/pull`, {
+    method: "POST",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to pull global repo: ${res.status}`);
+  return res.json();
+}
+
+export async function globalGitPush(
+  server: string,
+  token: string,
+): Promise<GitActionResult> {
+  const res = await fetch(`${server}/api/git/push`, {
+    method: "POST",
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to push global repo: ${res.status}`);
+  return res.json();
+}
+
 export interface UploadedFile {
   name: string;
   path: string;

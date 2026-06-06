@@ -954,6 +954,7 @@
         },
         "confirm": {
             "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "deleteUnpushed": "This session has {count, plural, one {# commit} other {# commits}} not yet pushed to your knowledge repo. Deleting it will discard them. Delete anyway?",
             "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
         },
         "sections": {
@@ -966,5 +967,31 @@
         },
         "empty": "No sessions yet",
         "loadingMore": "Loading more sessions"
+    },
+    "git": {
+        "upToDate": "Up to date",
+        "noRemote": "No remote configured",
+        "sandbox": {
+            "label": "Workspace sync",
+            "help": "Sync between this session's sandbox workspace and your knowledge repository on the server. Counts show commits this workspace is ahead (↑) and behind (↓) the server repo.",
+            "notRunning": "Sandbox not running",
+            "refresh": "Re-check the workspace against the server repository (fetches first)",
+            "pull": "Pull commits from the server repository into this workspace",
+            "push": "Push this workspace's commits to the server repository (each push is reviewed by the sentinel)"
+        },
+        "global": {
+            "label": "Knowledge remote",
+            "help": "Sync between your knowledge repository on the server and its external git remote. Counts show commits the server repo is ahead (↑) and behind (↓) the remote.",
+            "indicatorBehind": "{count, plural, one {# commit} other {# commits}} to pull from the knowledge remote",
+            "refresh": "Re-check the server repository against the remote (fetches first)",
+            "pull": "Pull commits from the external remote into the server repository",
+            "push": "Push the server repository's commits to the external remote"
+        },
+        "denied": "Push denied",
+        "errors": {
+            "status": "Could not read git status",
+            "pull": "Pull failed",
+            "push": "Push failed"
+        }
     }
 }

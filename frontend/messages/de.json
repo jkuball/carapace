@@ -954,6 +954,7 @@
         },
         "confirm": {
             "deleteSession": "Diese Sitzung löschen? Chatverlauf und Sandbox-Status werden entfernt.",
+            "deleteUnpushed": "Diese Sitzung hat {count, plural, one {# Commit} other {# Commits}}, die noch nicht ins Wissens-Repository gepusht wurden. Beim Löschen gehen sie verloren. Trotzdem löschen?",
             "archiveSession": "Diese Sitzung archivieren? Sie verschwindet aus der Standardliste, setzt ihre Sandbox zurück und bleibt im Wissens-Repository erhalten."
         },
         "sections": {
@@ -966,5 +967,31 @@
         },
         "empty": "Noch keine Sitzungen",
         "loadingMore": "Weitere Sitzungen werden geladen"
+    },
+    "git": {
+        "upToDate": "Aktuell",
+        "noRemote": "Kein Remote konfiguriert",
+        "sandbox": {
+            "label": "Workspace-Sync",
+            "help": "Synchronisiert die Workspace-Sandbox dieser Sitzung mit deinem Wissens-Repository auf dem Server. Die Zähler zeigen, um wie viele Commits dieser Workspace dem Server-Repo voraus (↑) bzw. hinterher (↓) ist.",
+            "notRunning": "Sandbox läuft nicht",
+            "refresh": "Workspace erneut mit dem Server-Repository abgleichen (holt zuerst neue Commits)",
+            "pull": "Commits aus dem Server-Repository in diesen Workspace holen",
+            "push": "Commits dieses Workspace ins Server-Repository übertragen (jeder Push wird vom Sentinel geprüft)"
+        },
+        "global": {
+            "label": "Wissens-Remote",
+            "help": "Synchronisiert dein Wissens-Repository auf dem Server mit seinem externen Git-Remote. Die Zähler zeigen, um wie viele Commits das Server-Repo dem Remote voraus (↑) bzw. hinterher (↓) ist.",
+            "indicatorBehind": "{count, plural, one {# Commit} other {# Commits}} vom Wissens-Remote zu holen",
+            "refresh": "Server-Repository erneut mit dem Remote abgleichen (holt zuerst neue Commits)",
+            "pull": "Commits vom externen Remote ins Server-Repository holen",
+            "push": "Commits des Server-Repositorys ins externe Remote übertragen"
+        },
+        "denied": "Push abgelehnt",
+        "errors": {
+            "status": "Git-Status konnte nicht gelesen werden",
+            "pull": "Pull fehlgeschlagen",
+            "push": "Push fehlgeschlagen"
+        }
     }
 }
