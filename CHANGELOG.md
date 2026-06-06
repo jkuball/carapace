@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.138.1 (2026-06-06)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade to pg18
+  ([`f84b836`](https://github.com/thiesgerken/carapace/commit/f84b8365c42eb165eaf6ca6500dffeab89c25e2b))
+
 ## v0.138.0 (2026-06-06)
 
 
