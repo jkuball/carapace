@@ -211,3 +211,48 @@ redis:
       memory: 64Mi
     limits:
       memory: 128Mi
+
+# -- Database backend.
+# When postgres.enabled is true the in-cluster Postgres below is used and `database.url`
+# is ignored. For an EXTERNAL database, set postgres.enabled=false and provide
+# `database.url` (a SQLAlchemy URL, e.g. postgresql+psycopg://user:pass@host:5432/carapace).
+# postgres.enabled=false AND database.url empty falls back to a SQLite file on the data
+# PVC (fine for the single-replica server, no extra infra).
+database:
+  # -- External SQLAlchemy URL. Only used when postgres.enabled is false.
+  url: ""
+
+# -- Bundled in-cluster PostgreSQL (single instance, Recreate strategy, own PVC).
+postgres:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: library/postgres
+    tag: "17-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    database: carapace
+    username: carapace
+    # -- Password for the carapace DB user. Leave empty to auto-generate one and
+    # persist it in the {release}-postgres Secret (reused across upgrades via lookup).
+    password: ""
+    # -- Use an externally managed Secret instead of generating one. It must contain the
+    # password under passwordKey and a SQLAlchemy URL under urlKey. The URL may omit the
+    # password (it is injected separately as PGPASSWORD, so no URL-encoding is needed).
+    existingSecret: ""
+    passwordKey: postgres-password
+    urlKey: database-url
+  persistence:
+    size: 8Gi
+    # -- Leave empty to use the cluster default StorageClass
+    storageClassName: ""
+    finalizers: []
+  # -- fsGroup applied to the Postgres pod so it can write the data volume.
+  podSecurityContext:
+    fsGroup: 999
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

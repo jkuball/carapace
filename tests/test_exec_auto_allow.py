@@ -28,7 +28,7 @@ async def test_exec_auto_allow_skips_sentinel_for_read_only_commands(
     command: str,
     expected_label: str,
 ) -> None:
-    session = SessionSecurity("test-session", audit_dir=tmp_path)
+    session = SessionSecurity("test-session")
     sentinel = MagicMock(spec=Sentinel)
     sentinel.evaluate_tool_call = AsyncMock(
         return_value=SentinelVerdict(decision="deny", explanation="should not be used")
@@ -84,7 +84,7 @@ async def test_exec_auto_allow_falls_back_to_sentinel_for_non_matching_commands(
     command: str,
     args: dict[str, object],
 ) -> None:
-    session = SessionSecurity("test-session", audit_dir=tmp_path)
+    session = SessionSecurity("test-session")
     sentinel = MagicMock(spec=Sentinel)
     sentinel.evaluate_tool_call = AsyncMock(
         return_value=SentinelVerdict(decision="allow", explanation="allowed by sentinel")

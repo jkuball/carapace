@@ -41,6 +41,46 @@ Sandbox owner name. Nil means use the release default, empty string means Deploy
 {{- end }}
 
 {{/*
+Postgres image with tag.
+*/}}
+{{- define "carapace.postgresImage" -}}
+{{ .Values.postgres.image.registry }}/{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+{{- end }}
+
+{{/*
+Postgres Secret name (generated, or the user-provided existingSecret).
+*/}}
+{{- define "carapace.postgres.secretName" -}}
+{{- .Values.postgres.auth.existingSecret | default (printf "%s-postgres" .Release.Name) -}}
+{{- end }}
+
+{{/*
+CARAPACE_DATABASE_URL env entry for the server container.
+- postgres.enabled: pull the assembled SQLAlchemy URL from the Postgres Secret.
+- else database.url set: inline external URL.
+- else: nothing (server falls back to SQLite on the data PVC).
+*/}}
+{{- define "carapace.databaseUrlEnv" -}}
+{{- if .Values.postgres.enabled -}}
+- name: CARAPACE_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "carapace.postgres.secretName" . }}
+      key: {{ .Values.postgres.auth.urlKey }}
+# Password supplied out-of-band so special characters never need URL-encoding; libpq
+# (psycopg) reads PGPASSWORD when the URL omits the password.
+- name: PGPASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "carapace.postgres.secretName" . }}
+      key: {{ .Values.postgres.auth.passwordKey }}
+{{- else if .Values.database.url -}}
+- name: CARAPACE_DATABASE_URL
+  value: {{ .Values.database.url | quote }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Bitwarden CLI image with tag defaulting to appVersion
 */}}
 {{- define "carapace.bitwardenImage" -}}

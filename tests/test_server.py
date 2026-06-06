@@ -13,9 +13,9 @@ import yaml
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from sqlalchemy import select
 
 # We patch the server module globals directly for testing
-import carapace.sandbox.state as sandbox_state
 import carapace.server as srv
 import carapace.server.jobs as server_jobs
 import carapace.server.platform_settings as platform_settings
@@ -23,6 +23,7 @@ from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import load_config, resolve_user_knowledge_dir
 from carapace.credentials import CredentialBackendError, CredentialRegistry
+from carapace.database.models import SessionAuditRow
 from carapace.git.store import GitStore
 from carapace.jobs import JobsScheduler, JobsStore
 from carapace.knowledge import KnowledgeRepoRegistry
@@ -77,7 +78,7 @@ class _FakeSessionListCache:
 
 
 @pytest.fixture(autouse=True)
-def _setup_server(tmp_path, monkeypatch):
+def _setup_server(tmp_path, monkeypatch, db_factory):
     """Initialise server globals with a temp data dir so tests don't need lifespan."""
     # Bogus key — the sentinel Agent validates the env var at construction
     # time, but these tests never call the LLM.
@@ -86,8 +87,9 @@ def _setup_server(tmp_path, monkeypatch):
     monkeypatch.setenv("CARAPACE_CONFIG", str(tmp_path / "config.yaml"))
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
+    srv._session_factory = db_factory
     srv._session_list_cache = _FakeSessionListCache()
-    session_mgr = SessionManager(tmp_path, on_change=srv._session_list_cache.invalidate_sync)
+    session_mgr = SessionManager(db_factory, tmp_path, on_change=srv._session_list_cache.invalidate_sync)
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.get_domain_info.return_value = []
     sandbox_mgr.reset_session = AsyncMock()
@@ -138,12 +140,12 @@ def _setup_server(tmp_path, monkeypatch):
         config=config.sessions.commit,
         knowledge_repo_for_session=knowledge_repo_for_session,
     )
-    srv._jobs_store = JobsStore(tmp_path)
+    srv._jobs_store = JobsStore(db_factory)
     srv._jobs_scheduler = JobsScheduler(srv._jobs_store)
-    srv._auth_store = AuthStore(tmp_path, config.auth)
+    srv._auth_store = AuthStore(db_factory, config.auth, tmp_path)
     srv._auth_store.create_user(username="admin", password="admin-secret", display_name="Admin", roles=["admin"])
     srv._auth_store.create_user(username="thies", password="secret", display_name="Thies")
-    srv._notification_store = NotificationStore(tmp_path)
+    srv._notification_store = NotificationStore(db_factory)
     srv._notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
     )
@@ -154,8 +156,8 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_enabled_user_git_configs_returns_all_enabled_users(tmp_path) -> None:
-    store = AuthStore(tmp_path / "git-owner", srv._config.auth)
+def test_enabled_user_git_configs_returns_all_enabled_users(tmp_path, db_factory_secondary) -> None:
+    store = AuthStore(db_factory_secondary, srv._config.auth, tmp_path / "git-owner")
     store.create_user(
         username="thies",
         password="secret",
@@ -193,8 +195,8 @@ def test_enabled_user_git_configs_returns_all_enabled_users(tmp_path) -> None:
     assert selected["ada"].remote == "https://gitea.example.com/ada/knowledge.git"
 
 
-def test_enabled_user_git_configs_skips_disabled_users(tmp_path) -> None:
-    store = AuthStore(tmp_path / "git-owners", srv._config.auth)
+def test_enabled_user_git_configs_skips_disabled_users(tmp_path, db_factory_secondary) -> None:
+    store = AuthStore(db_factory_secondary, srv._config.auth, tmp_path / "git-owners")
     store.create_user(
         username="alice",
         password="secret",
@@ -2812,12 +2814,9 @@ def test_get_session_uses_in_process_sandbox_snapshot_cache(client, auth_headers
         ),
     )
 
-    monkeypatch.setattr(
-        sandbox_state.SessionSandboxSnapshot,
-        "model_validate",
-        MagicMock(side_effect=AssertionError("sandbox snapshot should be served from cache")),
-    )
-
+    # The SQL backend serves the snapshot from the `sessions` row on each read
+    # (the old file-mtime in-process cache no longer exists); both reads must
+    # return the persisted snapshot.
     first = client.get(f"/api/sessions/{sid}", headers=auth_headers)
     second = client.get(f"/api/sessions/{sid}", headers=auth_headers)
 
@@ -3001,11 +3000,13 @@ def test_sandbox_list_credentials_audit(client, auth_headers, monkeypatch):
     assert cred_entries[0].decision == "approved"
     assert "query='dev'" in cred_entries[0].explanation
 
-    audit_path = srv._data_dir / "sessions" / sid / "audit.yaml"
-    assert audit_path.is_file()
-    text = audit_path.read_text()
-    assert "credential_access" in text
-    assert "auto_allowed" in text
+    with srv._session_factory() as db:
+        audit_rows = db.scalars(
+            select(SessionAuditRow).where(SessionAuditRow.session_id == sid).order_by(SessionAuditRow.id)
+        ).all()
+    audit_entries = [row.data for row in audit_rows]
+    assert any(entry.get("kind") == "credential_access" for entry in audit_entries)
+    assert any(entry.get("final_decision") == "auto_allowed" for entry in audit_entries)
 
 
 def test_sandbox_list_credentials_backend_error_returns_503(client, auth_headers, monkeypatch):

@@ -277,6 +277,26 @@ class CacheConfig(BaseSettings):
         return self
 
 
+class DatabaseConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_DATABASE_", extra="forbid")
+
+    # SQLAlchemy URL. The default SQLite file is resolved under the data dir (see
+    # carapace.database.engine.resolve_database_url), so it lands beside the data tree.
+    # For Postgres use e.g. "postgresql+psycopg://carapace:carapace@postgres:5432/carapace".
+    url: str = "sqlite+pysqlite:///carapace.db"
+    # Connection pool sizing (ignored for SQLite).
+    pool_size: int = 5
+    max_overflow: int = 10
+    # Echo SQL statements to the logger.
+    echo: bool = False
+
+    @model_validator(mode="after")
+    def _validate(self) -> DatabaseConfig:
+        if not self.url.strip():
+            raise ValueError("database.url must not be empty")
+        return self
+
+
 class ServerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CARAPACE_SERVER_", extra="forbid")
 
@@ -302,6 +322,7 @@ class CarapaceConfig(ConfigModel):
 class Config(ConfigModel):
     carapace: CarapaceConfig = CarapaceConfig()
     cache: CacheConfig = CacheConfig()
+    database: DatabaseConfig = DatabaseConfig()
     server: ServerConfig = ServerConfig()
     auth: AuthConfig = AuthConfig()
     notifications: NotificationsConfig = NotificationsConfig()

@@ -6,15 +6,14 @@ from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.models.jobs import JobDefinition
 
 
-def test_jobs_store_roundtrip(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_store_roundtrip(db_factory):
+    store = JobsStore(db_factory)
     job = JobDefinition(user="thies", id="daily", name="Daily", prompt="Summarize.")
 
     store.create_job(job)
 
     loaded = store.load()
     assert [entry.id for entry in loaded.jobs] == ["daily"]
-    assert store.path.exists()
 
 
 def test_build_job_run_message_includes_trigger_context_and_payload():
@@ -72,8 +71,8 @@ def test_build_job_run_message_cron_trigger():
     assert "additional data" not in message
 
 
-def test_jobs_scheduler_skips_first_scan(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_skips_first_scan(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {
@@ -92,8 +91,8 @@ def test_jobs_scheduler_skips_first_scan(tmp_path):
     assert due_runs == []
 
 
-def test_jobs_scheduler_collects_due_runs_once_per_window(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_collects_due_runs_once_per_window(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {
@@ -119,8 +118,8 @@ def test_jobs_scheduler_collects_due_runs_once_per_window(tmp_path):
     assert scheduler.collect_due_runs(now=start + timedelta(minutes=1, seconds=30)) == []
 
 
-def test_jobs_scheduler_collects_due_run_on_exact_now_boundary(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_collects_due_run_on_exact_now_boundary(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {
@@ -144,8 +143,8 @@ def test_jobs_scheduler_collects_due_run_on_exact_now_boundary(tmp_path):
     assert due_runs[0].scheduled_at == datetime(2026, 5, 9, 10, 1, tzinfo=UTC)
 
 
-def test_jobs_scheduler_does_not_duplicate_run_near_exact_boundary(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_does_not_duplicate_run_near_exact_boundary(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {
@@ -168,8 +167,8 @@ def test_jobs_scheduler_does_not_duplicate_run_near_exact_boundary(tmp_path):
     assert due_runs[0].scheduled_at == datetime(2026, 5, 9, 10, 1, tzinfo=UTC)
 
 
-def test_jobs_scheduler_does_not_regress_checkpoint_when_clock_moves_backwards(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_does_not_regress_checkpoint_when_clock_moves_backwards(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {
@@ -205,8 +204,8 @@ def test_jobs_scheduler_does_not_regress_checkpoint_when_clock_moves_backwards(t
     ]
 
 
-def test_jobs_scheduler_honors_trigger_timezone(tmp_path):
-    store = JobsStore(tmp_path)
+def test_jobs_scheduler_honors_trigger_timezone(db_factory):
+    store = JobsStore(db_factory)
     store.create_job(
         JobDefinition.model_validate(
             {

@@ -35,7 +35,7 @@ async def _drain_background_tasks(active: Any) -> None:
 
 
 @pytest.mark.anyio
-async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
+async def test_skill_activation_inputs_use_context_grant(tmp_path: Path, db_factory):
     """Automatic skill setup reuses approved env/file credentials from the persisted context grant."""
     skill_name = "reinject-skill"
     skill_dir = tmp_path / "skills" / skill_name
@@ -57,7 +57,7 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     mock_reg.fetch = AsyncMock(return_value="secret-value")
 
     with _patch_sentinel():
-        engine = _make_engine(tmp_path, credential_registry=mock_reg)
+        engine = _make_engine(tmp_path, session_factory=db_factory, credential_registry=mock_reg)
 
     state = engine.session_mgr.create_session(user="thies")
     sid = state.session_id
@@ -106,9 +106,9 @@ async def test_skill_activation_inputs_use_context_grant(tmp_path: Path):
     assert [(cred.path, cred.value) for cred in result.file_credentials] == [(".secrets/key.txt", "from-disk")]
 
 
-def test_record_tool_call_event_reuses_sentinel_row_for_user_decision(tmp_path: Path) -> None:
+def test_record_tool_call_event_reuses_sentinel_row_for_user_decision(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     sid = engine.session_mgr.create_session(user="thies").session_id
 
@@ -145,9 +145,11 @@ def test_record_tool_call_event_reuses_sentinel_row_for_user_decision(tmp_path: 
     ]
 
 
-def test_record_tool_call_event_reuses_proxy_domain_row_for_queued_reviewing_and_final(tmp_path: Path) -> None:
+def test_record_tool_call_event_reuses_proxy_domain_row_for_queued_reviewing_and_final(
+    tmp_path: Path, db_factory
+) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     sid = engine.session_mgr.create_session(user="thies").session_id
 
@@ -196,9 +198,9 @@ def test_record_tool_call_event_reuses_proxy_domain_row_for_queued_reviewing_and
     ]
 
 
-def test_fork_session_copies_transcript_and_security_context(tmp_path: Path) -> None:
+def test_fork_session_copies_transcript_and_security_context(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     source = engine.session_mgr.create_session(
         user="thies",
@@ -283,9 +285,9 @@ def test_fork_session_copies_transcript_and_security_context(tmp_path: Path) -> 
     assert len(engine.session_mgr.load_events(sid)) == 5
 
 
-def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_path: Path) -> None:
+def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     source = engine.session_mgr.create_session(user="thies", unattended=True)
     sid = source.session_id
@@ -333,9 +335,9 @@ def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_p
     assert response_part.content == "completed"
 
 
-def test_fork_session_normalizes_unattended_history_with_thinking_parts(tmp_path: Path) -> None:
+def test_fork_session_normalizes_unattended_history_with_thinking_parts(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     source = engine.session_mgr.create_session(user="thies", unattended=True)
     sid = source.session_id
@@ -383,10 +385,10 @@ def test_fork_session_normalizes_unattended_history_with_thinking_parts(tmp_path
     assert response_part.content == "completed"
 
 
-def test_handle_token_chunk_promotes_activity_and_broadcasts(tmp_path: Path) -> None:
+def test_handle_token_chunk_promotes_activity_and_broadcasts(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
-            engine = _make_engine(tmp_path)
+            engine = _make_engine(tmp_path, session_factory=db_factory)
 
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
@@ -420,10 +422,10 @@ def test_handle_token_chunk_promotes_activity_and_broadcasts(tmp_path: Path) -> 
     asyncio.run(_run())
 
 
-def test_handle_thinking_token_chunk_updates_buffer_and_broadcasts(tmp_path: Path) -> None:
+def test_handle_thinking_token_chunk_updates_buffer_and_broadcasts(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
-            engine = _make_engine(tmp_path)
+            engine = _make_engine(tmp_path, session_factory=db_factory)
 
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
@@ -458,9 +460,9 @@ def test_handle_thinking_token_chunk_updates_buffer_and_broadcasts(tmp_path: Pat
     asyncio.run(_run())
 
 
-def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path: Path) -> None:
+def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     sid = engine.session_mgr.create_session(user="thies").session_id
 
@@ -539,7 +541,7 @@ def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path:
     ]
 
 
-def test_available_model_entries_override_default_with_metadata(tmp_path: Path):
+def test_available_model_entries_override_default_with_metadata(tmp_path: Path, db_factory):
     """``available_models`` lists every selectable model; duplicate id in YAML keeps last row metadata."""
     (tmp_path / "config.yaml").write_text(
         "agent:\n"
@@ -555,18 +557,18 @@ def test_available_model_entries_override_default_with_metadata(tmp_path: Path):
         "    - provider: anthropic\n"
         "      name: gamma\n"
     )
-    engine = _make_engine(tmp_path)
+    engine = _make_engine(tmp_path, session_factory=db_factory)
     by_id = {e.model_id: e for e in engine.available_model_entries}
     assert by_id["anthropic:alpha"].max_input_tokens == 424242
     ids = [e.model_id for e in engine.available_model_entries]
     assert ids == sorted(ids)
 
 
-def test_user_message_from_self(tmp_path: Path):
+def test_user_message_from_self(tmp_path: Path, db_factory):
     """Origin subscriber gets from_self=True, others get from_self=False."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -591,11 +593,11 @@ def test_user_message_from_self(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_user_message_no_origin(tmp_path: Path):
+def test_user_message_no_origin(tmp_path: Path, db_factory):
     """When origin is None, all subscribers get from_self=False."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -620,9 +622,9 @@ def test_user_message_no_origin(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_message_clears_pending_turn_notifications(tmp_path: Path):
+def test_submit_message_clears_pending_turn_notifications(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         engine._notification_router = AsyncMock()
         engine._notification_router.clear_notifications = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
@@ -651,9 +653,9 @@ def test_submit_message_clears_pending_turn_notifications(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
+def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         engine._notification_router = AsyncMock()
         engine._notification_router.dispatch_escalation = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
@@ -687,9 +689,9 @@ def test_escalation_callback_dispatches_and_clears_notification(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Path):
+def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         engine._notification_router = AsyncMock()
         engine._notification_router.dispatch_turn_outcome = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()
@@ -714,9 +716,9 @@ def test_finalize_successful_turn_dispatches_attended_notification(tmp_path: Pat
         asyncio.run(_run())
 
 
-def test_retry_latest_turn_preserves_attachments(tmp_path: Path):
+def test_retry_latest_turn_preserves_attachments(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         engine.get_or_activate(sid)
         engine.session_mgr.append_events(
@@ -743,9 +745,9 @@ def test_retry_latest_turn_preserves_attachments(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_finalize_failed_turn_dispatches_unattended_failure_notification(tmp_path: Path):
+def test_finalize_failed_turn_dispatches_unattended_failure_notification(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         engine._notification_router = AsyncMock()
         engine._notification_router.dispatch_turn_outcome = AsyncMock(
             return_value=type("Delivery", (), {"delivered_subscription_ids": {"sub-1"}})()

@@ -87,6 +87,44 @@ helm uninstall carapace -n carapace
 
 > PVCs are **not** deleted on uninstall to protect your data. Remove them manually with `kubectl delete pvc carapace-data -n carapace` if desired.
 
+## Database
+
+carapace stores users, sessions, jobs, auth sessions, sandbox tokens, and notification
+subscriptions in a SQL database. Schema migrations run automatically on server startup.
+Three options:
+
+- **Bundled PostgreSQL (default).** `postgres.enabled=true` deploys a single in-cluster
+  Postgres (its own `<release>-postgres` PVC, Recreate strategy) and wires the server to
+  it. The password is auto-generated into the `<release>-postgres` Secret and reused
+  across upgrades; set `postgres.auth.password` or `postgres.auth.existingSecret` to manage
+  it yourself.
+- **External database.** Set `postgres.enabled=false` and `database.url` to a SQLAlchemy
+  URL, e.g. `postgresql+psycopg://user:pass@my-pg:5432/carapace`.
+- **SQLite on the data PVC.** Set `postgres.enabled=false` and leave `database.url` empty.
+  The DB is a file (`carapace.db`) on the existing data PVC — fine for the single-replica
+  server, no extra infra.
+
+### Migrating existing YAML data
+
+Upgrading a deployment that predates the SQL backend? Its old YAML (`users.yaml`,
+`jobs.yaml`, `sessions/…`, …) still sits on the data PVC but the server now reads the
+database, which starts **empty**. Run the one-shot importer once after upgrading — it is
+idempotent (skips rows that already exist):
+
+```bash
+# Runs inside the already-running server pod, which has the data PVC mounted and the DB
+# env configured. Safe to re-run.
+kubectl exec -n carapace deploy/carapace-server -- carapace-migrate import-yaml
+```
+
+Tip: run this **immediately after the upgrade**, before relying on logins. If your YAML
+contains an `admin` user, set `CARAPACE_TOKEN` to that admin's intended password (the
+bootstrap admin created on first empty-DB boot otherwise shadows the imported one).
+
+The old YAML files are left in place as a rollback backup; delete them once you've
+verified the import. Add `--dry-run` to preview counts, or `--purge` to truncate the DB
+tables first (destructive — only for a clean re-import).
+
 ## Configuration
 
 All images default to the chart's `appVersion` tag. Release charts use the semantic-release project version, and PR preview charts use `pr<PR number>`.
@@ -241,6 +279,11 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `redis.enabled`                                        | `true`                           | Deploy the bundled Redis required for session-list cache            |
 | `redis.image.tag`                                      | `8-alpine`                       | Redis image tag                                                     |
 | `redis.resources`                                      | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
+| `postgres.enabled`                                     | `true`                           | Deploy the bundled in-cluster PostgreSQL                            |
+| `postgres.auth.password`                               | `""` (auto-generated)            | DB password; empty auto-generates into the `<release>-postgres` Secret |
+| `postgres.auth.existingSecret`                         | `""`                             | Externally managed Secret (needs `passwordKey` + `urlKey`)         |
+| `postgres.persistence.size`                            | `8Gi`                            | Postgres data PVC size                                              |
+| `database.url`                                         | `""`                             | External SQLAlchemy URL (used only when `postgres.enabled=false`)   |
 | `resources`                                            | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |
 | `frontend.resources`                                   | requests: 50m/64Mi, limit: 128Mi | Frontend resource requests/limits                                   |
 | `bitwarden.image.tag`                                  | `""` (appVersion)                | bitwarden-cli image tag                                             |

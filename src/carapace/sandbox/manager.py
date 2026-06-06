@@ -14,6 +14,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from ..database.engine import SessionFactory
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
 from ..security.context import ApprovalSource, ApprovalVerdict
 from . import file_ops
@@ -206,6 +207,7 @@ class SandboxManager:
         runtime: ContainerRuntime,
         data_dir: Path,
         knowledge_repo_for_session: KnowledgeRepoResolver,
+        session_factory: SessionFactory,
         base_image: str = "carapace-sandbox:latest",
         network_name: str = "carapace-sandbox",
         idle_timeout_minutes: int = 15,
@@ -215,6 +217,7 @@ class SandboxManager:
     ) -> None:
         self._runtime = runtime
         self._data_dir = data_dir
+        self._session_factory = session_factory
         self._knowledge_repo_for_session = knowledge_repo_for_session
         self._base_image = base_image
         self._network_name = network_name
@@ -264,6 +267,7 @@ class SandboxManager:
                 exec_notified_credentials=self._exec_notified_credentials,
             ),
             data_dir=data_dir,
+            session_factory=session_factory,
             base_image=base_image,
             network_name=network_name,
             idle_timeout=self._idle_timeout,
@@ -370,7 +374,7 @@ class SandboxManager:
         *,
         last_error: str | None = None,
     ) -> None:
-        existing = load_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        existing = load_sandbox_snapshot(self._session_factory, session_id)
         snapshot = SessionSandboxSnapshot(
             exists=existing.exists if existing is not None else False,
             runtime=self._runtime.runtime_kind,
@@ -385,7 +389,7 @@ class SandboxManager:
             updated_at=datetime.now(tz=UTC),
             last_error=last_error,
         )
-        save_sandbox_snapshot(self._sandbox_snapshot_path(session_id), snapshot)
+        save_sandbox_snapshot(self._session_factory, session_id, snapshot)
 
     async def ensure_session(self, session_id: str) -> tuple[SessionContainer, bool]:
         sc = self._sessions.get(session_id)
@@ -419,9 +423,6 @@ class SandboxManager:
     def _build_proxy_env(self, session_id: str, proxy_token: str, proxy_url: str) -> dict[str, str]:
         return self._session_lifecycle.build_proxy_env(session_id, proxy_token, proxy_url)
 
-    def _sandbox_snapshot_path(self, session_id: str) -> Path:
-        return self._data_dir / "sessions" / session_id / "sandbox.yaml"
-
     async def refresh_sandbox_snapshot(
         self,
         session_id: str,
@@ -440,7 +441,7 @@ class SandboxManager:
                 resolved_container_id = existing_id if isinstance(existing_id, str) and existing_id else None
 
         inspection = await self._runtime.inspect_sandbox(session_id, sandbox_name, resolved_container_id)
-        existing = load_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        existing = load_sandbox_snapshot(self._session_factory, session_id)
         measured_used_bytes = existing.last_measured_used_bytes if existing is not None else None
         measured_at = existing.last_measured_at if existing is not None else None
         if measure_usage:
@@ -465,7 +466,7 @@ class SandboxManager:
             last_measured_at=measured_at,
             updated_at=datetime.now(tz=UTC),
         )
-        save_sandbox_snapshot(self._sandbox_snapshot_path(session_id), snapshot)
+        save_sandbox_snapshot(self._session_factory, session_id, snapshot)
         return snapshot
 
     async def _exec_in_container(
@@ -963,12 +964,13 @@ class SandboxManager:
 
     async def destroy_session(self, session_id: str) -> None:
         await self._session_lifecycle.destroy_session(session_id)
-        clear_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        clear_sandbox_snapshot(self._session_factory, session_id)
 
     async def reset_session(self, session_id: str) -> None:
         await self._session_lifecycle.reset_session(session_id)
         save_sandbox_snapshot(
-            self._sandbox_snapshot_path(session_id),
+            self._session_factory,
+            session_id,
             SessionSandboxSnapshot(
                 runtime=self._runtime.runtime_kind,
                 updated_at=datetime.now(tz=UTC),

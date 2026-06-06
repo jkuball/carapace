@@ -219,10 +219,9 @@ class SessionEngine(
         if state is None:
             raise KeyError(f"Session {session_id} not found on disk")
 
-        audit_dir = self._data_dir / "sessions" / session_id
         security = SessionSecurity(
             session_id,
-            audit_dir=audit_dir,
+            session_factory=self._session_mgr.session_factory,
             max_sentinel_calls_per_tool_call=self._config.agent.max_sentinel_calls_per_tool_call,
             sentinel_domain_batch_window_ms=self._config.agent.sentinel_domain_batch_window_ms,
             unattended=state.attributes.unattended,
