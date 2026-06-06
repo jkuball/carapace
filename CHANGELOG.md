@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.138.3 (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: decrease chunk sizes for k8s
+  ([`1654bb1`](https://github.com/thiesgerken/carapace/commit/1654bb1ed83d9200ccd9404268711f64e5335d5c))
+
 ## v0.138.2 (2026-06-06)
 
 
