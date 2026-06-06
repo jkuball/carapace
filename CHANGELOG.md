@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.136.7 (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: back off websocket reconnects when connection flaps
+  ([`78c46b5`](https://github.com/thiesgerken/carapace/commit/78c46b5b6ce6c2b059ca95b752ebec361e7c8420))
+
+  Reset the reconnect backoff only after the socket stays open past STABLE_CONNECTION_MS instead of immediately on open. A backend that comes back half-ready (accepts the socket then drops it) no longer triggers a tight 500ms reconnect loop, which re-rendered chat-view repeatedly and looked like a rapid reload cycle.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.6 (2026-06-06)
 
 
