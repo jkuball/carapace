@@ -953,6 +953,7 @@
         },
         "confirm": {
             "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "deleteUnpushed": "This session has {count, plural, one {# commit} other {# commits}} not yet pushed to your knowledge repo. Deleting it will discard them. Delete anyway?",
             "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
         },
         "sections": {
@@ -965,5 +966,26 @@
         },
         "empty": "No sessions yet",
         "loadingMore": "Loading more sessions"
+    },
+    "git": {
+        "upToDate": "Up to date",
+        "noRemote": "No remote configured",
+        "sandbox": {
+            "label": "Workspace sync"
+        },
+        "global": {
+            "label": "Knowledge remote"
+        },
+        "actions": {
+            "refresh": "Refresh status",
+            "pull": "Pull",
+            "push": "Push"
+        },
+        "errors": {
+            "status": "Could not read git status.",
+            "pull": "Pull failed.",
+            "push": "Push failed.",
+            "denied": "Push denied: {reason}"
+        }
     }
 }

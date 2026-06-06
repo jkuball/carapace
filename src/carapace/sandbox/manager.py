@@ -15,6 +15,7 @@ from pathlib import Path
 from loguru import logger
 
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
+from ..models.git import GitActionResult, SandboxGitStatus
 from ..security.context import ApprovalSource, ApprovalVerdict
 from . import file_ops
 from .exec_flow import SandboxExecCoordinator, SandboxExecState
@@ -572,6 +573,73 @@ class SandboxManager:
             logger.debug(f"Command failed in session {session_id} (exit {result.exit_code}): {command}")
             output += f"\n[exit code: {result.exit_code}]"
         return ExecResult(exit_code=result.exit_code, output=output or "(no output)")
+
+    # ------------------------------------------------------------------
+    # Sandbox git status / sync (B1: /workspace clone ↔ backend repo).
+    # These run via _exec_in_container directly — NOT the agent exec path —
+    # so they never appear as agent tool calls ("without telling the agent").
+    # The cloned origin URL embeds credentials, so plain git commands work.
+    # ------------------------------------------------------------------
+
+    async def _git_in_workspace(self, sc: SessionContainer, args: str, *, timeout: int = 30) -> ExecResult:
+        return await self._exec_in_container(
+            sc,
+            f"git -C {self._KNOWLEDGE_WORKDIR} {args}",
+            timeout=timeout,
+            bypass_proxy=True,
+        )
+
+    async def sandbox_git_status(self, session_id: str, *, fetch: bool) -> SandboxGitStatus:
+        """Return ahead/behind of the sandbox clone vs the backend repo."""
+        sc, _ = await self.ensure_session(session_id)
+        if fetch:
+            await self._git_in_workspace(sc, "fetch origin", timeout=60)
+
+        branch_res = await self._git_in_workspace(sc, "rev-parse --abbrev-ref HEAD", timeout=10)
+        branch = branch_res.output.strip() if branch_res.exit_code == 0 else None
+
+        upstream = await self._git_in_workspace(sc, "rev-parse --abbrev-ref --symbolic-full-name @{u}", timeout=10)
+        if upstream.exit_code != 0:
+            return SandboxGitStatus(branch=branch, upstream=False, fetched=fetch)
+
+        counts = await self._git_in_workspace(sc, "rev-list --left-right --count @{u}...HEAD", timeout=10)
+        behind, ahead = self._parse_left_right(counts)
+        return SandboxGitStatus(branch=branch, upstream=True, ahead=ahead, behind=behind, fetched=fetch)
+
+    async def sandbox_unpushed_count(self, session_id: str) -> int:
+        """Local-only count of commits not yet pushed to the backend repo (no fetch)."""
+        sc, _ = await self.ensure_session(session_id)
+        res = await self._git_in_workspace(sc, "rev-list --count @{u}..HEAD", timeout=10)
+        if res.exit_code != 0:
+            return 0
+        out = res.output.strip()
+        return int(out) if out.isdigit() else 0
+
+    async def sandbox_git_pull(self, session_id: str) -> GitActionResult:
+        """Pull the sandbox clone from the backend repo (fast-forward only)."""
+        sc, _ = await self.ensure_session(session_id)
+        res = await self._git_in_workspace(sc, "pull --ff-only", timeout=120)
+        ok = res.exit_code == 0
+        return GitActionResult(ok=ok, message=res.output.strip() or ("Pulled." if ok else "Pull failed."))
+
+    async def sandbox_git_push(self, session_id: str) -> GitActionResult:
+        """Push the sandbox clone to the backend repo (sentinel-gated via pre-receive)."""
+        sc, _ = await self.ensure_session(session_id)
+        res = await self._git_in_workspace(sc, "push origin HEAD", timeout=600)
+        ok = res.exit_code == 0
+        denied = not ok and "DENIED" in res.output
+        message = res.output.strip() or ("Pushed." if ok else "Push failed.")
+        return GitActionResult(ok=ok, message=message, denied=denied)
+
+    @staticmethod
+    def _parse_left_right(res: ExecResult) -> tuple[int, int]:
+        """Parse ``git rev-list --left-right --count`` output into ``(left, right)``."""
+        if res.exit_code != 0:
+            return 0, 0
+        parts = res.output.split()
+        if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            return 0, 0
+        return int(parts[0]), int(parts[1])
 
     # ------------------------------------------------------------------
     # File operations (executed inside the sandbox container via

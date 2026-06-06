@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
+import { SandboxGitControls } from "@/components/git-sync";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SessionOptionTiles } from "@/components/session-option-tiles";
 import { useAppLocale } from "@/components/locale-provider";
@@ -2411,6 +2412,15 @@ export function ChatView({
               <span className="break-all font-mono text-foreground">{sandboxIdentifier(sandbox)}</span>
             </div>
           ) : null}
+        </div>
+        <div className="mt-3 border-t border-border/60 pt-3">
+          <SandboxGitControls
+            server={server}
+            token={token}
+            sessionId={sessionId}
+            disabled={waiting || !!sandboxPowerAction || wipingSandbox || deletingSession}
+            refreshKey={sandbox?.status}
+          />
         </div>
       </section>
 

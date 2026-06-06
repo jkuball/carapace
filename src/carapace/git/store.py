@@ -357,6 +357,47 @@ class GitStore:
         bullets = _log_subjects_as_bullets(subjects)
         return f"{lead} {tail}\n\nWhat changed:\n{bullets}"
 
+    async def remote_status(self) -> tuple[int, int]:
+        """Fetch the remote and return ``(ahead, behind)`` for local vs remote.
+
+        ``ahead`` = local commits not on the remote branch; ``behind`` = remote
+        commits not in the local branch. Returns ``(0, 0)`` when no remote is
+        configured, the remote branch is empty, or the local repo has no commits.
+        """
+        if not self._remote_configured:
+            return 0, 0
+
+        code, _ = await self._run("fetch", "origin", self.remote_branch)
+        if code != 0:
+            raise RuntimeError("git fetch from origin failed")
+
+        code, _ = await self._run("rev-parse", "--verify", f"origin/{self.remote_branch}")
+        if code != 0:
+            # Remote branch has no commits yet — everything local is "ahead".
+            if not await self.has_commits():
+                return 0, 0
+            code_a, a_out = await self._run("rev-list", "--count", "HEAD")
+            ahead = int(a_out.strip()) if code_a == 0 and a_out.strip().isdigit() else 0
+            return ahead, 0
+
+        if not await self.has_commits():
+            code_b, b_out = await self._run("rev-list", "--count", f"origin/{self.remote_branch}")
+            behind = int(b_out.strip()) if code_b == 0 and b_out.strip().isdigit() else 0
+            return 0, behind
+
+        code, out = await self._run(
+            "rev-list",
+            "--left-right",
+            "--count",
+            f"{self._LOCAL_BRANCH}...origin/{self.remote_branch}",
+        )
+        if code != 0:
+            raise RuntimeError(f"git rev-list failed: {out}")
+        parts = out.split()
+        if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            return 0, 0
+        return int(parts[0]), int(parts[1])
+
     async def has_remote(self) -> bool:
         """Check if an ``origin`` remote is configured."""
         code, _ = await self._run("remote", "get-url", "origin")

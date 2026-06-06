@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
+import { GlobalGitControls } from "@/components/git-sync";
 import { VersionBadge } from "@/components/version-badge";
 import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -21,6 +22,8 @@ import {
 } from "@/lib/utils";
 
 interface SidebarProps {
+  server: string;
+  token: string;
   sessions: SessionInfo[];
   showArchivedSessions?: boolean;
   activeSessionId: string | null;
@@ -91,6 +94,8 @@ function GitHubIcon({ className }: { className?: string }) {
 }
 
 export function Sidebar({
+  server,
+  token,
   sessions,
   showArchivedSessions = true,
   activeSessionId,
@@ -727,6 +732,14 @@ export function Sidebar({
           ) : null}
         </div>
       </div>
+
+      {server && token ? (
+        <GlobalGitControls
+          server={server}
+          token={token}
+          className="border-t border-border px-3 py-2.5"
+        />
+      ) : null}
     </div>
   );
 }
