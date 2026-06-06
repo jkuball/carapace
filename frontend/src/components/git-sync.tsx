@@ -15,11 +15,17 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type Tone = "info" | "success" | "error";
-
 interface AheadBehindCounts {
   ahead: number | null;
   behind: number | null;
+}
+
+// Outcome of the last action/refresh. `detail` holds the raw command output,
+// surfaced only as a tooltip; `errorLabel` is the short inline text on failure.
+interface ActionOutcome {
+  ok: boolean;
+  errorLabel: string;
+  detail: string;
 }
 
 function AheadBehind({
@@ -61,7 +67,7 @@ function GitSyncControls({
   counts,
   emptyLabel,
   loading,
-  notice,
+  outcome,
   busy,
   disabled,
   pullDisabled,
@@ -78,10 +84,10 @@ function GitSyncControls({
   description: string;
   counts: AheadBehindCounts | null;
   // Shown when there are no counts to display (e.g. no remote). Null hides the
-  // line entirely — used on error, where the notice already explains the state.
+  // line entirely — used on error, where the error label explains the state.
   emptyLabel: string | null;
   loading: boolean;
-  notice: { tone: Tone; message: string } | null;
+  outcome: ActionOutcome | null;
   busy: "pull" | "push" | null;
   disabled: boolean;
   pullDisabled: boolean;
@@ -95,6 +101,8 @@ function GitSyncControls({
 }) {
   const t = useTranslations("git");
   const anyBusy = busy !== null || loading;
+  // Raw command output (success or failure) lives only in the status tooltip.
+  const detail = outcome?.detail || undefined;
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -132,20 +140,17 @@ function GitSyncControls({
         </div>
       </div>
       {counts ? (
-        <div className="text-xs">
+        <div className="text-xs" title={detail}>
           <AheadBehind counts={counts} upToDateLabel={t("upToDate")} />
         </div>
       ) : emptyLabel ? (
-        <div className="text-xs text-muted-foreground">{emptyLabel}</div>
+        <div className="text-xs text-muted-foreground" title={detail}>
+          {emptyLabel}
+        </div>
       ) : null}
-      {notice ? (
-        <div
-          className={cn(
-            "break-words text-xs",
-            notice.tone === "error" ? "text-destructive" : notice.tone === "success" ? "text-emerald-700" : "text-muted-foreground",
-          )}
-        >
-          {notice.message}
+      {outcome && !outcome.ok ? (
+        <div className="truncate text-xs text-destructive" title={detail}>
+          {outcome.errorLabel}
         </div>
       ) : null}
     </div>
@@ -173,12 +178,11 @@ export function SandboxGitControls({
   const [errored, setErrored] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
-  const [notice, setNotice] = useState<{ tone: Tone; message: string } | null>(null);
+  const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
 
   const refresh = useCallback(
     async (fetch: boolean) => {
       setLoading(true);
-      setNotice(null);
       try {
         const status = await getSandboxGit(server, token, sessionId, { fetch });
         setErrored(false);
@@ -188,7 +192,7 @@ export function SandboxGitControls({
       } catch {
         setErrored(true);
         setCounts(null);
-        setNotice({ tone: "error", message: t("errors.status") });
+        setOutcome({ ok: false, errorLabel: t("errors.status"), detail: "" });
       } finally {
         setLoading(false);
       }
@@ -204,18 +208,17 @@ export function SandboxGitControls({
   const runAction = useCallback(
     async (action: "pull" | "push", fn: () => Promise<GitActionResult>) => {
       setBusy(action);
-      setNotice(null);
+      setOutcome(null);
       try {
         const result = await fn();
-        // Refresh first — it clears the notice on entry — then surface the
-        // action result so the confirmation/denial text survives.
         await refresh(true);
-        setNotice({
-          tone: result.ok ? "success" : "error",
-          message: result.denied ? t("errors.denied", { reason: result.message }) : result.message,
+        setOutcome({
+          ok: result.ok,
+          errorLabel: result.denied ? t("denied") : t(`errors.${action}`),
+          detail: result.message,
         });
       } catch {
-        setNotice({ tone: "error", message: t(`errors.${action}`) });
+        setOutcome({ ok: false, errorLabel: t(`errors.${action}`), detail: "" });
       } finally {
         setBusy(null);
       }
@@ -230,7 +233,7 @@ export function SandboxGitControls({
       counts={running && upstream ? counts : null}
       emptyLabel={errored ? null : !running ? t("sandbox.notRunning") : t("noRemote")}
       loading={loading}
-      notice={notice}
+      outcome={outcome}
       busy={busy}
       disabled={disabled || !running}
       pullDisabled={!upstream || (counts?.behind ?? 0) === 0}
@@ -253,7 +256,7 @@ export interface GlobalGit {
   counts: AheadBehindCounts | null;
   loading: boolean;
   busy: "pull" | "push" | null;
-  notice: { tone: Tone; message: string } | null;
+  outcome: ActionOutcome | null;
   refresh: () => void;
   pull: () => void;
   push: () => void;
@@ -265,18 +268,17 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
-  const [notice, setNotice] = useState<{ tone: Tone; message: string } | null>(null);
+  const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setNotice(null);
     try {
       const status = await getGlobalGit(server, token);
       setConfigured(status.remote_configured);
       setCounts(status.remote_configured ? { ahead: status.ahead, behind: status.behind } : null);
     } catch {
       setCounts(null);
-      setNotice({ tone: "error", message: t("errors.status") });
+      setOutcome({ ok: false, errorLabel: t("errors.status"), detail: "" });
     } finally {
       setLoading(false);
     }
@@ -290,14 +292,13 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   const runAction = useCallback(
     async (action: "pull" | "push", fn: () => Promise<GitActionResult>) => {
       setBusy(action);
-      setNotice(null);
+      setOutcome(null);
       try {
         const result = await fn();
-        // Refresh first — it clears the notice on entry — then surface the result.
         await refresh();
-        setNotice({ tone: result.ok ? "success" : "error", message: result.message });
+        setOutcome({ ok: result.ok, errorLabel: t(`errors.${action}`), detail: result.message });
       } catch {
-        setNotice({ tone: "error", message: t(`errors.${action}`) });
+        setOutcome({ ok: false, errorLabel: t(`errors.${action}`), detail: "" });
       } finally {
         setBusy(null);
       }
@@ -310,7 +311,7 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
     counts,
     loading,
     busy,
-    notice,
+    outcome,
     refresh: () => void refresh(),
     pull: () => void runAction("pull", () => globalGitPull(server, token)),
     push: () => void runAction("push", () => globalGitPush(server, token)),
@@ -342,7 +343,7 @@ export function GlobalGitPanel({ git, className }: { git: GlobalGit; className?:
         counts={git.counts}
         emptyLabel={null}
         loading={git.loading}
-        notice={git.notice}
+        outcome={git.outcome}
         busy={git.busy}
         disabled={false}
         pullDisabled={(git.counts?.behind ?? 0) === 0}

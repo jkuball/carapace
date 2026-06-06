@@ -987,11 +987,11 @@
             "pull": "Pull commits from the external remote into the server repository",
             "push": "Push the server repository's commits to the external remote"
         },
+        "denied": "Push denied",
         "errors": {
-            "status": "Could not read git status.",
-            "pull": "Pull failed.",
-            "push": "Push failed.",
-            "denied": "Push denied: {reason}"
+            "status": "Could not read git status",
+            "pull": "Pull failed",
+            "push": "Push failed"
         }
     }
 }

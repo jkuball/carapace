@@ -987,11 +987,11 @@
             "pull": "Commits vom externen Remote ins Server-Repository holen",
             "push": "Commits des Server-Repositorys ins externe Remote übertragen"
         },
+        "denied": "Push abgelehnt",
         "errors": {
-            "status": "Git-Status konnte nicht gelesen werden.",
-            "pull": "Pull fehlgeschlagen.",
-            "push": "Push fehlgeschlagen.",
-            "denied": "Push abgelehnt: {reason}"
+            "status": "Git-Status konnte nicht gelesen werden",
+            "pull": "Pull fehlgeschlagen",
+            "push": "Push fehlgeschlagen"
         }
     }
 }
