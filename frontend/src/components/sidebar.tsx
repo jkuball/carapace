@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
-import { GlobalGitControls } from "@/components/git-sync";
+import { GlobalGitIndicator, GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { VersionBadge } from "@/components/version-badge";
 import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -121,6 +121,7 @@ export function Sidebar({
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const globalGit = useGlobalGit(server, token);
   const [referenceTime, setReferenceTime] = useState<number>(() => Date.now());
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const activeSessions = sessions.filter((session) => !session.attributes.archived);
@@ -635,6 +636,7 @@ export function Sidebar({
               </span>
               <span className="truncate">{accountName}</span>
             </button>
+            <GlobalGitIndicator git={globalGit} className="pointer-events-none absolute -right-0.5 -top-0.5" />
 
             {accountMenuOpen ? (
               <div
@@ -668,6 +670,9 @@ export function Sidebar({
                     </button>
                   </div>
                 </div>
+                {globalGit.configured ? (
+                  <GlobalGitPanel git={globalGit} className="border-b border-border/80 px-3 py-2.5" />
+                ) : null}
                 <div className="p-1">
                   <button
                     type="button"
@@ -732,14 +737,6 @@ export function Sidebar({
           ) : null}
         </div>
       </div>
-
-      {server && token ? (
-        <GlobalGitControls
-          server={server}
-          token={token}
-          className="border-t border-border px-3 py-2.5"
-        />
-      ) : null}
     </div>
   );
 }

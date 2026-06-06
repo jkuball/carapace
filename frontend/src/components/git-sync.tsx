@@ -22,6 +22,10 @@ interface AheadBehindCounts {
   behind: number | null;
 }
 
+function hasPending(counts: AheadBehindCounts | null): boolean {
+  return (counts?.ahead ?? 0) > 0 || (counts?.behind ?? 0) > 0;
+}
+
 function AheadBehind({
   counts,
   upToDateLabel,
@@ -56,6 +60,7 @@ function AheadBehind({
 /** Shared presentational shell for both git-sync boundaries. */
 function GitSyncControls({
   title,
+  description,
   counts,
   emptyLabel,
   loading,
@@ -64,11 +69,16 @@ function GitSyncControls({
   disabled,
   pullDisabled,
   pushDisabled,
+  pullTitle,
+  pushTitle,
+  refreshTitle,
   onRefresh,
   onPull,
   onPush,
 }: {
   title: string;
+  // Explains what this boundary syncs; surfaced as a hover tooltip on the title.
+  description: string;
   counts: AheadBehindCounts | null;
   // Shown when there are no counts to display (e.g. no remote). Null hides the
   // line entirely — used on error, where the notice already explains the state.
@@ -79,6 +89,9 @@ function GitSyncControls({
   disabled: boolean;
   pullDisabled: boolean;
   pushDisabled: boolean;
+  pullTitle: string;
+  pushTitle: string;
+  refreshTitle: string;
   onRefresh: () => void;
   onPull: () => void;
   onPush: () => void;
@@ -88,13 +101,15 @@ function GitSyncControls({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">{title}</div>
+        <div className="cursor-help text-xs text-muted-foreground" title={description}>
+          {title}
+        </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={onRefresh}
             disabled={disabled || anyBusy}
-            title={t("actions.refresh")}
+            title={refreshTitle}
             className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
@@ -103,7 +118,7 @@ function GitSyncControls({
             type="button"
             onClick={onPull}
             disabled={disabled || anyBusy || pullDisabled}
-            title={t("actions.pull")}
+            title={pullTitle}
             className="rounded-md p-1 text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy === "pull" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -112,7 +127,7 @@ function GitSyncControls({
             type="button"
             onClick={onPush}
             disabled={disabled || anyBusy || pushDisabled}
-            title={t("actions.push")}
+            title={pushTitle}
             className="rounded-md p-1 text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy === "push" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
@@ -140,7 +155,7 @@ function GitSyncControls({
   );
 }
 
-/** B1: sandbox /workspace clone ↔ backend repo. */
+/** B1: sandbox /workspace clone ↔ backend repo. Lives in the chat inspector. */
 export function SandboxGitControls({
   server,
   token,
@@ -214,6 +229,7 @@ export function SandboxGitControls({
   return (
     <GitSyncControls
       title={t("sandbox.label")}
+      description={t("sandbox.help")}
       counts={running && upstream ? counts : null}
       emptyLabel={errored ? null : !running ? t("sandbox.notRunning") : t("noRemote")}
       loading={loading}
@@ -222,6 +238,9 @@ export function SandboxGitControls({
       disabled={disabled || !running}
       pullDisabled={!upstream || (counts?.behind ?? 0) === 0}
       pushDisabled={!upstream || (counts?.ahead ?? 0) === 0}
+      pullTitle={t("sandbox.pull")}
+      pushTitle={t("sandbox.push")}
+      refreshTitle={t("sandbox.refresh")}
       onRefresh={() => void refresh(true)}
       onPull={() => void runAction("pull", () => sandboxGitPull(server, token, sessionId))}
       onPush={() => void runAction("push", () => sandboxGitPush(server, token, sessionId))}
@@ -229,16 +248,21 @@ export function SandboxGitControls({
   );
 }
 
-/** B2: backend per-user repo ↔ external remote. Renders nothing when no remote is configured. */
-export function GlobalGitControls({
-  server,
-  token,
-  className,
-}: {
-  server: string;
-  token: string;
-  className?: string;
-}) {
+// B2: backend per-user repo ↔ external remote. Shared between the account-menu
+// indicator dot and the panel inside that menu, so status is fetched once.
+
+export interface GlobalGit {
+  configured: boolean | null;
+  counts: AheadBehindCounts | null;
+  loading: boolean;
+  busy: "pull" | "push" | null;
+  notice: { tone: Tone; message: string } | null;
+  refresh: () => void;
+  pull: () => void;
+  push: () => void;
+}
+
+export function useGlobalGit(server: string, token: string): GlobalGit {
   const t = useTranslations("git");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
@@ -284,24 +308,58 @@ export function GlobalGitControls({
     [refresh, t],
   );
 
-  // Hide entirely until we know a remote is configured.
-  if (configured === false) return null;
+  return {
+    configured,
+    counts,
+    loading,
+    busy,
+    notice,
+    refresh: () => void refresh(),
+    pull: () => void runAction("pull", () => globalGitPull(server, token)),
+    push: () => void runAction("push", () => globalGitPush(server, token)),
+  };
+}
 
+/** Small status dot for the account button — hidden unless a remote is configured. */
+export function GlobalGitIndicator({ git, className }: { git: GlobalGit; className?: string }) {
+  const t = useTranslations("git");
+  if (git.configured !== true) return null;
+  const pending = hasPending(git.counts);
+  return (
+    <span
+      title={pending ? t("global.indicatorPending") : t("global.indicatorSynced")}
+      className={cn(
+        "h-2.5 w-2.5 rounded-full border-2 border-background",
+        git.loading || git.busy ? "animate-pulse bg-amber-500" : pending ? "bg-amber-500" : "bg-emerald-500",
+        className,
+      )}
+    />
+  );
+}
+
+/** Full git panel for inside the account menu — hidden when no remote is configured. */
+export function GlobalGitPanel({ git, className }: { git: GlobalGit; className?: string }) {
+  const t = useTranslations("git");
+  if (git.configured === false) return null;
   return (
     <div className={className}>
       <GitSyncControls
         title={t("global.label")}
-        counts={counts}
+        description={t("global.help")}
+        counts={git.counts}
         emptyLabel={null}
-        loading={loading}
-        notice={notice}
-        busy={busy}
+        loading={git.loading}
+        notice={git.notice}
+        busy={git.busy}
         disabled={false}
-        pullDisabled={(counts?.behind ?? 0) === 0}
-        pushDisabled={(counts?.ahead ?? 0) === 0}
-        onRefresh={() => void refresh()}
-        onPull={() => void runAction("pull", () => globalGitPull(server, token))}
-        onPush={() => void runAction("push", () => globalGitPush(server, token))}
+        pullDisabled={(git.counts?.behind ?? 0) === 0}
+        pushDisabled={(git.counts?.ahead ?? 0) === 0}
+        pullTitle={t("global.pull")}
+        pushTitle={t("global.push")}
+        refreshTitle={t("global.refresh")}
+        onRefresh={git.refresh}
+        onPull={git.pull}
+        onPush={git.push}
       />
     </div>
   );

@@ -973,15 +973,20 @@
         "noRemote": "Kein Remote konfiguriert",
         "sandbox": {
             "label": "Workspace-Sync",
-            "notRunning": "Sandbox läuft nicht"
+            "help": "Synchronisiert die Workspace-Sandbox dieser Sitzung mit deinem Wissens-Repository auf dem Server. Die Zähler zeigen, um wie viele Commits dieser Workspace dem Server-Repo voraus (↑) bzw. hinterher (↓) ist.",
+            "notRunning": "Sandbox läuft nicht",
+            "refresh": "Workspace erneut mit dem Server-Repository abgleichen (holt zuerst neue Commits)",
+            "pull": "Commits aus dem Server-Repository in diesen Workspace holen",
+            "push": "Commits dieses Workspace ins Server-Repository übertragen (jeder Push wird vom Sentinel geprüft)"
         },
         "global": {
-            "label": "Wissens-Remote"
-        },
-        "actions": {
-            "refresh": "Status aktualisieren",
-            "pull": "Pull",
-            "push": "Push"
+            "label": "Wissens-Remote",
+            "help": "Synchronisiert dein Wissens-Repository auf dem Server mit seinem externen Git-Remote. Die Zähler zeigen, um wie viele Commits das Server-Repo dem Remote voraus (↑) bzw. hinterher (↓) ist.",
+            "indicatorSynced": "Wissens-Repository ist mit dem Remote synchron",
+            "indicatorPending": "Wissens-Repository ist nicht mit dem Remote synchron",
+            "refresh": "Server-Repository erneut mit dem Remote abgleichen (holt zuerst neue Commits)",
+            "pull": "Commits vom externen Remote ins Server-Repository holen",
+            "push": "Commits des Server-Repositorys ins externe Remote übertragen"
         },
         "errors": {
             "status": "Git-Status konnte nicht gelesen werden.",
