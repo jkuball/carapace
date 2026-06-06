@@ -160,7 +160,9 @@ class SessionTurnHost(Protocol):
 
     async def _clear_llm_request_state(self, active: ActiveSession) -> None: ...
 
-    async def _generate_title(self, active: ActiveSession, events: list[dict[str, Any]]) -> str: ...
+    async def _generate_title(
+        self, active: ActiveSession, events: list[dict[str, Any]], *, track_activity: bool = True
+    ) -> str: ...
 
 
 class SessionTurnMixin(SessionTurnHost):
@@ -532,7 +534,7 @@ class SessionTurnMixin(SessionTurnHost):
         if _non_slash_user_message_count(events) not in (1, 3):
             return
         task = asyncio.create_task(
-            self._generate_title(active, events),
+            self._generate_title(active, events, track_activity=False),
             name=f"title-{session_id}",
         )
         active._pending_sends.add(task)

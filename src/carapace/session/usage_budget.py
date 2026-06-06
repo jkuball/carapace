@@ -256,33 +256,44 @@ class SessionUsageBudgetMixin:
         return f"Set cost budget to ${budget.cost_usd:.4f}."
 
     @contextlib.contextmanager
-    def llm_request_recording(self, active: ActiveSession):
+    def llm_request_recording(self, active: ActiveSession, *, track_activity: bool = True):
+        """Record LLM requests for *active* into its request log.
+
+        When *track_activity* is False (e.g. background auto-titling), the recorder still appends
+        the audit record but does NOT mutate or broadcast ``active.llm_request_state`` — the
+        session never appears busy and a concurrent real turn's activity state is left untouched.
+        """
         engine = self
         session_id = active.state.session_id
 
         class Sink:
             async def on_request_started(self, state: LlmRequestState) -> None:
                 active.llm_request_thinking.pop(state.request_id, None)
-                await engine._set_llm_request_state(active, state)
+                if track_activity:
+                    await engine._set_llm_request_state(active, state)
 
             async def on_request_completed(self, record: LlmRequestRecord) -> None:
-                thinking_content = active.llm_request_thinking.pop(record.request_id or "", "")
-                if thinking_content:
-                    thinking_event: dict[str, Any] = {
-                        "role": "thinking",
-                        "content": thinking_content,
-                    }
-                    if record.request_id:
-                        thinking_event["request_id"] = record.request_id
-                    row = usage_last_request_row(record)
-                    if row is not None and row["reasoning_duration_ms"] is not None:
-                        thinking_event["reasoning_duration_ms"] = row["reasoning_duration_ms"]
-                    if row is not None and row["reasoning_tokens"] is not None:
-                        thinking_event["reasoning_tokens"] = row["reasoning_tokens"]
-                    engine._session_mgr.append_events(session_id, [thinking_event])
+                if track_activity:
+                    thinking_content = active.llm_request_thinking.pop(record.request_id or "", "")
+                    if thinking_content:
+                        thinking_event: dict[str, Any] = {
+                            "role": "thinking",
+                            "content": thinking_content,
+                        }
+                        if record.request_id:
+                            thinking_event["request_id"] = record.request_id
+                        row = usage_last_request_row(record)
+                        if row is not None and row["reasoning_duration_ms"] is not None:
+                            thinking_event["reasoning_duration_ms"] = row["reasoning_duration_ms"]
+                        if row is not None and row["reasoning_tokens"] is not None:
+                            thinking_event["reasoning_tokens"] = row["reasoning_tokens"]
+                        engine._session_mgr.append_events(session_id, [thinking_event])
+                else:
+                    active.llm_request_thinking.pop(record.request_id or "", None)
                 active.llm_request_log.records.append(record)
                 engine._session_mgr.save_llm_request_log(session_id, active.llm_request_log)
-                await engine._clear_llm_request_state(active)
+                if track_activity:
+                    await engine._clear_llm_request_state(active)
 
         with llm_request_sink_scope(Sink()):
             yield

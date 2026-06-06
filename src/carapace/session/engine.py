@@ -668,11 +668,13 @@ class SessionEngine(
             active.llm_request_state = None
             active.llm_request_thinking.clear()
 
-    async def _generate_title(self, active: ActiveSession, events: list[dict[str, Any]]) -> str:
+    async def _generate_title(
+        self, active: ActiveSession, events: list[dict[str, Any]], *, track_activity: bool = True
+    ) -> str:
         session_id = active.state.session_id
         try:
             async with self._llm_semaphore:
-                with self.llm_request_recording(active):
+                with self.llm_request_recording(active, track_activity=track_activity):
                     self._assert_llm_budget_available(active)
                     title = await generate_title(
                         events,
