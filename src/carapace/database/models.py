@@ -161,3 +161,22 @@ class SandboxTokenRow(Base):
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
     )
     token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+
+
+class ModelRow(Base):
+    __tablename__ = "models"
+
+    # PK is the model_id (id override or provider:name); provider/name are queryable projections.
+    id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(128), index=True)
+    name: Mapped[str] = mapped_column(Text)
+    # Full AvailableModelEntry as a plain dict (model_entry_to_dict — keeps the excluded api_key).
+    data: Mapped[dict[str, Any]] = mapped_column(JsonType)
+
+
+class PlatformSettingRow(Base):
+    __tablename__ = "platform_settings"
+
+    # Section key ('agent' scalar settings, 'sessions' SessionsConfig dump).
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JsonType)

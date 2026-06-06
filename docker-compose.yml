@@ -19,6 +19,7 @@ services:
       - CARAPACE_CONFIG=/var/lib/carapace/config.yaml
       - CARAPACE_HOST_DATA_DIR=${PWD}/data
       - CARAPACE_TOKEN=${CARAPACE_TOKEN}
+      - CARAPACE_LOG_LEVEL=${CARAPACE_LOG_LEVEL:-info}
       - CARAPACE_RESET_ASSETS=false
       - CARAPACE_MATRIX_PASSWORD=${CARAPACE_MATRIX_PASSWORD:-}
       - CARAPACE_GIT_TOKEN=${CARAPACE_GIT_TOKEN:-}
@@ -85,7 +86,7 @@ services:
       retries: 20
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:979c4379dd698aba0b890599a6104e082035f98ef31d9b9291ec22f2b13059ca
     restart: unless-stopped
     environment:
       POSTGRES_DB: carapace
