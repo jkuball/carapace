@@ -190,6 +190,47 @@ def agent_available_model_entries(agent: AgentConfig) -> list[AvailableModelEntr
     return sorted(by_id.values(), key=lambda e: e.model_id)
 
 
+def secret_to_dict(secret: Secret | None) -> dict[str, str] | None:
+    """Serialize a Secret to its single-source mapping (raw/env/file).
+
+    ``AvailableModelEntry.api_key`` is ``Field(exclude=True)``, so ``model_dump`` drops
+    it; persistence and the admin handler use this to round-trip the key explicitly.
+    """
+    if secret is None:
+        return None
+    if secret.raw is not None:
+        return {"raw": secret.raw}
+    if secret.env is not None:
+        return {"env": secret.env}
+    if secret.file is not None:
+        return {"file": secret.file}
+    return None
+
+
+def model_entry_to_dict(entry: AvailableModelEntry) -> dict[str, Any]:
+    """Serialize an AvailableModelEntry to a plain dict, including the api_key source."""
+    data: dict[str, Any] = {
+        "provider": entry.provider,
+        "name": entry.name,
+    }
+    if entry.id is not None:
+        data["id"] = entry.id
+    if entry.max_input_tokens is not None:
+        data["max_input_tokens"] = entry.max_input_tokens
+    if entry.thinking is not None:
+        data["thinking"] = entry.thinking
+    if entry.thinking_budget_tokens is not None:
+        data["thinking_budget_tokens"] = entry.thinking_budget_tokens
+    if entry.base_url is not None:
+        data["base_url"] = entry.base_url
+    if entry.vision:
+        data["vision"] = entry.vision
+    secret = secret_to_dict(entry.api_key)
+    if secret is not None:
+        data["api_key"] = secret
+    return data
+
+
 class SandboxConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CARAPACE_SANDBOX_", extra="forbid")
 

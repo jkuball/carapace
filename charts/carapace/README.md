@@ -168,7 +168,9 @@ The chart no longer accepts application `config.yaml` through Helm values and do
 - **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
 - **Settings** -> **Jobs** for saved jobs and schedules.
 
-The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. Treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
+The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. On the first startup after upgrading from a file-based deployment they are seeded once from the `agent` and `sessions` sections of an existing `config.yaml`; after that the admin UI is the source of truth and those sections are ignored on subsequent boots.
+
+The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. It holds operator/bootstrap settings only; treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
 
 The chart deploys Redis by default and wires the server to `<release>-redis` via `CARAPACE_CACHE_REDIS_URL`. If you disable the bundled Redis, provide an external URL with `extraEnv` or `envFrom`:
 

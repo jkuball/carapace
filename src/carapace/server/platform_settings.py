@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
-import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_ai.models import Model
@@ -134,26 +131,6 @@ def _config_path() -> Path:
     return get_config_path()
 
 
-def _read_config_document(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("{}\n", encoding="utf-8")
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise HTTPException(status_code=500, detail="Config file root must be a mapping")
-    return raw
-
-
-def _write_config_document(path: Path, document: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    backup = path.with_name(f"{path.name}.{datetime.now(tz=UTC).strftime('%Y%m%d%H%M%S')}.bak")
-    if path.exists():
-        backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
-    tmp.replace(path)
-
-
 def _public_secret(secret: Secret | None) -> PublicModelSecret:
     if secret is None:
         return PublicModelSecret()
@@ -181,10 +158,11 @@ def _public_model_entry(entry: AvailableModelEntry) -> PublicPlatformModelEntry:
 
 
 def _response() -> PlatformSettingsResponse:
-    path = _config_path()
+    # Platform settings are DB-backed now; the config file path is informational only and the
+    # catalog is always editable (no more config.yaml read-modify-write).
     return PlatformSettingsResponse(
-        config_path=str(path),
-        config_writable=_config_writable(path),
+        config_path=str(_config_path()),
+        config_writable=True,
         settings=PlatformSettingsPayload(
             default_models=PlatformDefaultModels(
                 agent=server._config.agent.model,
@@ -197,15 +175,6 @@ def _response() -> PlatformSettingsResponse:
             ],
         ),
     )
-
-
-def _config_writable(path: Path) -> bool:
-    if path.exists():
-        return path.is_file() and os.access(path, os.W_OK) and os.access(path.parent, os.W_OK)
-    parent = path.parent
-    while not parent.exists() and parent != parent.parent:
-        parent = parent.parent
-    return parent.is_dir() and os.access(parent, os.W_OK)
 
 
 def _secret_from_patch(patch: PlatformSecretPatch | None, existing: Secret | None) -> Secret | None:
@@ -272,65 +241,6 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
     )
 
 
-def _secret_to_yaml(secret: Secret | None) -> dict[str, str] | None:
-    if secret is None:
-        return None
-    if secret.raw is not None:
-        return {"raw": secret.raw}
-    if secret.env is not None:
-        return {"env": secret.env}
-    if secret.file is not None:
-        return {"file": secret.file}
-    return None
-
-
-def _model_entry_to_yaml(entry: AvailableModelEntry) -> dict[str, Any]:
-    data: dict[str, Any] = {
-        "provider": entry.provider,
-        "name": entry.name,
-    }
-    if entry.id is not None:
-        data["id"] = entry.id
-    if entry.max_input_tokens is not None:
-        data["max_input_tokens"] = entry.max_input_tokens
-    if entry.thinking is not None:
-        data["thinking"] = entry.thinking
-    if entry.thinking_budget_tokens is not None:
-        data["thinking_budget_tokens"] = entry.thinking_budget_tokens
-    if entry.base_url is not None:
-        data["base_url"] = entry.base_url
-    if entry.vision:
-        data["vision"] = entry.vision
-    secret = _secret_to_yaml(entry.api_key)
-    if secret is not None:
-        data["api_key"] = secret
-    return data
-
-
-def _agent_config_to_yaml(agent: AgentConfig) -> dict[str, Any]:
-    data: dict[str, Any] = {
-        "model": agent.model,
-        "sentinel_model": agent.sentinel_model,
-        "title_model": agent.title_model,
-        "default_session_budget": agent.default_session_budget.model_dump(mode="json", exclude_none=True),
-        "available_models": [_model_entry_to_yaml(entry) for entry in agent.available_models],
-        "max_parallel_llm": agent.max_parallel_llm,
-        "max_sentinel_calls_per_tool_call": agent.max_sentinel_calls_per_tool_call,
-        "sentinel_domain_batch_window_ms": agent.sentinel_domain_batch_window_ms,
-        "sentinel_timeout_seconds": agent.sentinel_timeout_seconds,
-        "tool_output_max_chars": agent.tool_output_max_chars,
-    }
-    if not data["default_session_budget"]:
-        data.pop("default_session_budget")
-    return data
-
-
-def _validated_config_with_agent(agent: AgentConfig, document: dict[str, Any]) -> Config:
-    candidate = dict(document)
-    candidate["agent"] = _agent_config_to_yaml(agent)
-    return Config.model_validate(candidate)
-
-
 def _runtime_models_for_config(config: Config) -> tuple[Callable[[str], Model], Model]:
     model_factory = make_model_factory(config)
     agent_model = model_factory(config.agent.model)
@@ -361,18 +271,12 @@ async def update_platform_settings(
     body: PlatformSettingsPatch,
     _admin: Annotated[object, Depends(verify_admin_user)],
 ) -> PlatformSettingsResponse:
-    path = _config_path()
-    if not _config_writable(path):
-        raise HTTPException(status_code=409, detail="Config file is not writable")
-    document = _read_config_document(path)
-    existing_config = Config.model_validate(document)
-    agent = _agent_config_from_patch(body, existing_config.agent)
-    config = _validated_config_with_agent(agent, document)
+    # Build + validate the new agent config (AgentConfig() re-runs the defaults∈catalog check),
+    # then a candidate Config so the runtime model factory can be built before we persist anything.
+    agent = _agent_config_from_patch(body, server._config.agent)
+    config = server._config.model_copy(update={"agent": agent})
     model_factory, agent_model = _runtime_models_for_config(config)
-    document["agent"] = _agent_config_to_yaml(config.agent)
-    try:
-        _write_config_document(path, document)
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to write config: {exc}") from exc
+    # Persist to the DB (model catalog + scalar agent row) in one transaction, then swap runtime.
+    server._platform_store.save_agent_config(agent)
     _apply_runtime_config(config, model_factory=model_factory, agent_model=agent_model)
     return _response()

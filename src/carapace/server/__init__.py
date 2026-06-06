@@ -46,6 +46,7 @@ from ..notifications.router import NotificationRouter
 from ..notifications.sender import WebPushSender
 from ..notifications.store import NotificationStore
 from ..notifications.vapid import ensure_vapid_config
+from ..platform_store import PlatformSettingsStore
 from ..sandbox.manager import SandboxManager
 from ..sandbox.proxy import ProxyServer
 from ..sandbox.runtime import ContainerRuntime
@@ -94,6 +95,7 @@ _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 _auth_store: AuthStore
+_platform_store: PlatformSettingsStore
 
 
 def _enabled_user_git_configs(auth_store: AuthStore) -> dict[str, KnowledgeGitConfig]:
@@ -304,7 +306,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _notification_store, \
         _notification_presence, \
         _notification_router, \
-        _auth_store
+        _auth_store, \
+        _platform_store
 
     # 1. Load config
     config_path = get_config_path()
@@ -316,6 +319,14 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ensure_data_dir(_data_dir)
     _engine_db, _session_factory = create_engine_and_factory(_config.database, _data_dir)
     run_migrations(_engine_db)
+
+    # Runtime platform config (model catalog + scalar agent/sessions settings) lives in the DB.
+    # Seed once from config.yaml on first boot, then overlay so the in-memory Config reflects the DB.
+    _platform_store = PlatformSettingsStore(_session_factory)
+    if _platform_store.seed_from_config(_config):
+        logger.info("Seeded platform settings (models + agent/sessions) from config.yaml")
+    _config = _platform_store.overlay_config(_config)
+
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
