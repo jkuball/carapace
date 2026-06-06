@@ -458,14 +458,14 @@ function HomeContent() {
   }
 
   const handleDeleteSession = useCallback(async (id: string, options?: { skipUnpushedWarning?: boolean }) => {
-    // Warn about unpushed sandbox commits — but only when the sandbox is
-    // already running, so we never boot a container just to check. Shift+click
-    // (skipUnpushedWarning) skips this, matching the standard confirm skip.
-    const target = sessions.find((s) => s.session_id === id);
-    if (!options?.skipUnpushedWarning && target?.sandbox?.status === "running") {
+    // Warn about unpushed sandbox commits. The backend status check never boots
+    // a stopped sandbox (returns running=false / no counts), so we ask it
+    // directly rather than trusting the possibly-stale cached row snapshot.
+    // Shift+click (skipUnpushedWarning) skips this, matching the confirm skip.
+    if (!options?.skipUnpushedWarning) {
       try {
         const git = await getSandboxGit(server, token, id, { fetch: false });
-        const ahead = git.upstream ? (git.ahead ?? 0) : 0;
+        const ahead = git.running && git.upstream ? (git.ahead ?? 0) : 0;
         if (ahead > 0 && !window.confirm(t("sidebar.confirm.deleteUnpushed", { count: ahead }))) {
           return;
         }
@@ -481,7 +481,7 @@ function HomeContent() {
     } catch {
       // deletion failed silently
     }
-  }, [server, token, sessions, t]);
+  }, [server, token, t]);
 
   const handleUpdateSessionAttributes = useCallback(async (
     id: string,
