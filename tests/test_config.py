@@ -3,16 +3,62 @@
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from carapace.config import (
+    CONFIG_MIGRATION_BACKUP_SUFFIX,
     _resolve_knowledge_dir,
     load_config,
     load_workspace_file,
     resolve_knowledge_repos_dir,
     resolve_user_knowledge_dir,
+    strip_db_managed_sections,
 )
 from carapace.models.config import Config
+
+
+def test_strip_db_managed_sections_removes_and_backs_up(tmp_path: Path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "database": {"url": "sqlite+pysqlite:///x.db"},
+                "agent": {"model": "anthropic:claude-haiku-4-5"},
+                "sessions": {"commit": {"path_prefix": "sessions"}},
+            },
+            sort_keys=False,
+        )
+    )
+
+    removed = strip_db_managed_sections(cfg)
+
+    assert set(removed) == {"agent", "sessions"}
+    remaining = yaml.safe_load(cfg.read_text())
+    assert remaining == {"database": {"url": "sqlite+pysqlite:///x.db"}}
+    backup = cfg.with_name(cfg.name + CONFIG_MIGRATION_BACKUP_SUFFIX)
+    assert backup.exists()
+    assert "agent" in yaml.safe_load(backup.read_text())
+
+
+def test_strip_db_managed_sections_noop_when_absent(tmp_path: Path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump({"database": {"url": "x"}}))
+
+    assert strip_db_managed_sections(cfg) == []
+    assert not cfg.with_name(cfg.name + CONFIG_MIGRATION_BACKUP_SUFFIX).exists()
+
+
+def test_strip_db_managed_sections_preserves_existing_backup(tmp_path: Path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump({"agent": {"model": "a"}}))
+    backup = cfg.with_name(cfg.name + CONFIG_MIGRATION_BACKUP_SUFFIX)
+    backup.write_text("original-backup\n")
+
+    strip_db_managed_sections(cfg)
+
+    # A pre-existing backup is never overwritten (idempotent re-runs keep the first snapshot).
+    assert backup.read_text() == "original-backup\n"
 
 
 def test_load_config_defaults(tmp_path: Path):

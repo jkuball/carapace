@@ -168,7 +168,7 @@ The chart no longer accepts application `config.yaml` through Helm values and do
 - **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
 - **Settings** -> **Jobs** for saved jobs and schedules.
 
-The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. On the first startup after upgrading from a file-based deployment they are seeded once from the `agent` and `sessions` sections of an existing `config.yaml`; after that the admin UI is the source of truth and those sections are ignored on subsequent boots.
+The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. On the first startup after upgrading from a file-based deployment they are seeded once from the `agent` and `sessions` sections of an existing `config.yaml`, then those sections are removed from the file (a one-time `config.yaml.pre-db-migration.bak` backup is kept) so on-disk edits cannot silently no-op. The admin UI is the source of truth thereafter.
 
 The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. It holds operator/bootstrap settings only; treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
 

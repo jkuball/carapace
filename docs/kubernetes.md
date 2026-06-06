@@ -231,9 +231,11 @@ when upgrading from a YAML-only deployment, the one-shot
 Runtime platform settings — the model catalog and scalar `agent`/`sessions` config edited in
 the admin UI — also live in the database (`models` + `platform_settings` tables). On the first
 startup after upgrade they are **seeded once** from the `agent` and `sessions` sections of
-`config.yaml`; thereafter those two sections are seed-only and the admin UI is the source of
-truth. Operator/bootstrap config (`database.url`, `log_level`, `server.*`, `sandbox.*`, …) stays
-in env vars / `config.yaml` — prefer env vars in Kubernetes.
+`config.yaml`, after which those two sections are **removed** from the file (a one-time copy is
+kept at `config.yaml.pre-db-migration.bak`) so editing them on disk can no longer silently
+no-op. The admin UI is then the source of truth. Operator/bootstrap config (`database.url`,
+`log_level`, `server.*`, `sandbox.*`, …) stays in env vars / `config.yaml` — prefer env vars in
+Kubernetes.
 
 ## Networking
 
