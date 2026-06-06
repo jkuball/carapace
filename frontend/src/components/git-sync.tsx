@@ -193,11 +193,13 @@ export function SandboxGitControls({
       setNotice(null);
       try {
         const result = await fn();
+        // Refresh first — it clears the notice on entry — then surface the
+        // action result so the confirmation/denial text survives.
+        await refresh(true);
         setNotice({
           tone: result.ok ? "success" : "error",
           message: result.denied ? t("errors.denied", { reason: result.message }) : result.message,
         });
-        await refresh(true);
       } catch {
         setNotice({ tone: "error", message: t(`errors.${action}`) });
       } finally {
@@ -268,8 +270,9 @@ export function GlobalGitControls({
       setNotice(null);
       try {
         const result = await fn();
-        setNotice({ tone: result.ok ? "success" : "error", message: result.message });
+        // Refresh first — it clears the notice on entry — then surface the result.
         await refresh();
+        setNotice({ tone: result.ok ? "success" : "error", message: result.message });
       } catch {
         setNotice({ tone: "error", message: t(`errors.${action}`) });
       } finally {
