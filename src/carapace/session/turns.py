@@ -160,7 +160,9 @@ class SessionTurnHost(Protocol):
 
     async def _clear_llm_request_state(self, active: ActiveSession) -> None: ...
 
-    async def _generate_title(self, active: ActiveSession, events: list[dict[str, Any]]) -> str: ...
+    async def _generate_title(
+        self, active: ActiveSession, events: list[dict[str, Any]], *, track_activity: bool = True
+    ) -> str: ...
 
 
 class SessionTurnMixin(SessionTurnHost):
