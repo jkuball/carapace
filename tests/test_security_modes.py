@@ -11,7 +11,7 @@ from carapace.security.sentinel import Sentinel
 
 @pytest.mark.anyio
 async def test_yolo_mode_bypasses_tool_sentinel_review(tmp_path) -> None:
-    session = SessionSecurity("test-session", audit_dir=tmp_path, yolo_mode=True)
+    session = SessionSecurity("test-session", yolo_mode=True)
     sentinel = MagicMock(spec=Sentinel)
     sentinel.evaluate_tool_call = AsyncMock()
 
@@ -26,7 +26,7 @@ async def test_yolo_mode_bypasses_tool_sentinel_review(tmp_path) -> None:
 
 @pytest.mark.anyio
 async def test_ask_mode_denies_git_push_without_sentinel_review(tmp_path) -> None:
-    session = SessionSecurity("test-session", audit_dir=tmp_path, ask_mode=True)
+    session = SessionSecurity("test-session", ask_mode=True)
     sentinel = MagicMock(spec=Sentinel)
     sentinel.evaluate_push = AsyncMock()
 

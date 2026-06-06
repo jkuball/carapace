@@ -158,9 +158,10 @@ def _auth_store() -> AuthStore:
         return store
     data_dir = getattr(server, "_data_dir", None)
     config = getattr(server, "_config", None)
-    if data_dir is None or config is None:
+    session_factory = getattr(server, "_session_factory", None)
+    if data_dir is None or config is None or session_factory is None:
         raise HTTPException(status_code=503, detail="Auth store is not initialized")
-    store = AuthStore(data_dir, config.auth)
+    store = AuthStore(session_factory, config.auth, data_dir)
     server._auth_store = store  # type: ignore[attr-defined]
     return store
 

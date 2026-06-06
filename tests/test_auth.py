@@ -93,8 +93,8 @@ def test_password_hashing_never_accepts_plaintext_hashes() -> None:
         hash_password("")
 
 
-def test_create_user_persists_and_verifies_password(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_create_user_persists_and_verifies_password(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     config = UserConfig(default_models={"agent": "anthropic:test"})
 
     user = store.create_user(
@@ -107,7 +107,6 @@ def test_create_user_persists_and_verifies_password(tmp_path) -> None:
     )
 
     assert user.password_hash != "secret"
-    assert store.users_path.exists()
     persisted = store.load_users().users
     assert list(persisted) == ["thies"]
     assert persisted["thies"].display_name == "Thies Gerken"
@@ -118,8 +117,8 @@ def test_create_user_persists_and_verifies_password(tmp_path) -> None:
     assert store.verify_password("thies", "wrong") is None
 
 
-def test_verify_password_rejects_invalid_username_format(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_verify_password_rejects_invalid_username_format(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="secret")
 
     with pytest.raises(ValueError, match="username must be lowercase"):
@@ -138,8 +137,8 @@ def test_user_git_config_rejects_secret_source_objects() -> None:
         )
 
 
-def test_create_user_rejects_invalid_and_duplicate_usernames(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_create_user_rejects_invalid_and_duplicate_usernames(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
 
     with pytest.raises(ValueError, match="username must not be empty"):
         store.create_user(username=" ", password="secret")
@@ -153,9 +152,9 @@ def test_create_user_rejects_invalid_and_duplicate_usernames(tmp_path) -> None:
         store.create_user(username="thies", password="secret")
 
 
-def test_ensure_bootstrap_admin_creates_admin_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ensure_bootstrap_admin_creates_admin_from_env(db_factory, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "bootstrap-secret-123")
-    store = AuthStore(tmp_path, AuthConfig())
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
 
     created = store.ensure_bootstrap_admin()
     repeated = store.ensure_bootstrap_admin()
@@ -169,11 +168,12 @@ def test_ensure_bootstrap_admin_creates_admin_from_env(tmp_path, monkeypatch: py
 
 
 def test_ensure_bootstrap_admin_skips_when_another_admin_exists(
+    db_factory,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CARAPACE_TOKEN", raising=False)
-    store = AuthStore(tmp_path, AuthConfig())
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="secret", roles=[ADMIN_ROLE])
 
     created = store.ensure_bootstrap_admin()
@@ -183,11 +183,12 @@ def test_ensure_bootstrap_admin_skips_when_another_admin_exists(
 
 
 def test_ensure_bootstrap_admin_repairs_disabled_admin_placeholder(
+    db_factory,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CARAPACE_TOKEN", "bootstrap-secret-123")
-    store = AuthStore(tmp_path, AuthConfig())
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username=ADMIN_USERNAME, password="temporary-secret")
     placeholder = store.update_user(ADMIN_USERNAME, {"enabled": False, "password_hash": ""})
 
@@ -200,8 +201,8 @@ def test_ensure_bootstrap_admin_repairs_disabled_admin_placeholder(
     assert store.verify_password(ADMIN_USERNAME, "bootstrap-secret-123") is not None
 
 
-def test_disabled_users_cannot_login_or_keep_existing_sessions(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_disabled_users_cannot_login_or_keep_existing_sessions(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="secret")
     auth_session = store.create_session(username="thies")
     token = store.issue_session_token(auth_session)
@@ -214,8 +215,8 @@ def test_disabled_users_cannot_login_or_keep_existing_sessions(tmp_path) -> None
     assert store.validate_session_token(token) is None
 
 
-def test_session_token_roundtrip_persists_session_and_identity(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
+def test_session_token_roundtrip_persists_session_and_identity(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)), tmp_path)
     store.create_user(username="thies", password="secret", display_name="Thies")
 
     auth_session = store.create_session(username="thies", user_agent="pytest")
@@ -223,7 +224,6 @@ def test_session_token_roundtrip_persists_session_and_identity(tmp_path) -> None
     identity = store.validate_session_token(token)
 
     assert auth_session.user == "thies"
-    assert store.sessions_path.exists()
     persisted_session = store.get_session(auth_session.id)
     assert persisted_session is not None
     assert persisted_session.user_agent == "pytest"
@@ -235,8 +235,8 @@ def test_session_token_roundtrip_persists_session_and_identity(tmp_path) -> None
     assert identity.display_name == "Thies"
 
 
-def test_revoke_token_invalidates_session(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_revoke_token_invalidates_session(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="secret")
     auth_session = store.create_session(username="thies")
     token = store.issue_session_token(auth_session)
@@ -249,8 +249,8 @@ def test_revoke_token_invalidates_session(tmp_path) -> None:
     assert store.revoke_token("not-a-token") is False
 
 
-def test_create_session_prunes_expired_sessions_and_keeps_revoked_audit_trail(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
+def test_create_session_prunes_expired_sessions_and_keeps_revoked_audit_trail(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)), tmp_path)
     store.create_user(username="thies", password="secret")
     now = datetime.now(tz=UTC)
     expired_session = AuthSession(
@@ -282,8 +282,8 @@ def test_create_session_prunes_expired_sessions_and_keeps_revoked_audit_trail(tm
     assert persisted_sessions[revoked_session.id].revoked_at == revoked_session.revoked_at
 
 
-def test_websocket_token_is_scoped_to_session_and_revocation(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)))
+def test_websocket_token_is_scoped_to_session_and_revocation(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(cookie=JwtCookieConfig(ttl_seconds=3600)), tmp_path)
     store.create_user(username="thies", password="secret")
     auth_session = store.create_session(username="thies")
     session_token = store.issue_session_token(auth_session)
@@ -299,8 +299,8 @@ def test_websocket_token_is_scoped_to_session_and_revocation(tmp_path) -> None:
     assert store.validate_websocket_token(websocket_token) is None
 
 
-def test_password_change_increments_token_version_and_invalidates_old_tokens(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_password_change_increments_token_version_and_invalidates_old_tokens(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="old-secret")
     old_session = store.create_session(username="thies")
     old_token = store.issue_session_token(old_session)
@@ -316,15 +316,15 @@ def test_password_change_increments_token_version_and_invalidates_old_tokens(tmp
     assert store.validate_session_token(new_token) is not None
 
 
-def test_set_password_raises_for_missing_user(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_set_password_raises_for_missing_user(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
 
     with pytest.raises(KeyError):
         store.set_password("missing", "new-secret")
 
 
-def test_expired_token_is_rejected(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_expired_token_is_rejected(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     store.create_user(username="thies", password="secret")
     now = datetime.now(tz=UTC)
     expired_session = AuthSession(
@@ -339,34 +339,36 @@ def test_expired_token_is_rejected(tmp_path) -> None:
     assert store.validate_session_token(token) is None
 
 
-def test_token_signed_for_different_auth_config_is_rejected(tmp_path) -> None:
+def test_token_signed_for_different_auth_config_is_rejected(db_factory, tmp_path) -> None:
     store = AuthStore(
-        tmp_path,
+        db_factory,
         AuthConfig(cookie=JwtCookieConfig(issuer="carapace-a", audience="web-a")),
+        tmp_path,
     )
     store.create_user(username="thies", password="secret")
     auth_session = store.create_session(username="thies")
     token = store.issue_session_token(auth_session)
 
     other_config_store = AuthStore(
-        tmp_path,
+        db_factory,
         AuthConfig(cookie=JwtCookieConfig(issuer="carapace-b", audience="web-b")),
+        tmp_path,
     )
 
     assert other_config_store.validate_session_token(token) is None
 
 
-def test_signing_secret_is_reused_across_store_instances(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_signing_secret_is_reused_across_store_instances(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     first_secret = store.signing_secret()
 
-    reloaded_store = AuthStore(tmp_path, AuthConfig())
+    reloaded_store = AuthStore(db_factory, AuthConfig(), tmp_path)
 
     assert reloaded_store.signing_secret() == first_secret
 
 
-def test_signing_secret_is_cached_per_store_instance(tmp_path) -> None:
-    store = AuthStore(tmp_path, AuthConfig())
+def test_signing_secret_is_cached_per_store_instance(db_factory, tmp_path) -> None:
+    store = AuthStore(db_factory, AuthConfig(), tmp_path)
     first_secret = store.signing_secret()
     store._secret_path.write_text("changed-on-disk", encoding="utf-8")
 

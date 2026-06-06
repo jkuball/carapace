@@ -521,6 +521,7 @@ function UsageView({ data }: { data: UsagePayload }) {
         <p className="mb-1 text-xs font-medium text-muted-foreground">
           {title}
         </p>
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -573,6 +574,7 @@ function UsageView({ data }: { data: UsagePayload }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }
@@ -618,6 +620,7 @@ function UsageView({ data }: { data: UsagePayload }) {
           <p className="mb-1 text-xs font-medium text-muted-foreground">
             {t("usage.context")}
           </p>
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -679,6 +682,7 @@ function UsageView({ data }: { data: UsagePayload }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ) : null}
     </div>

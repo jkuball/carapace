@@ -17,10 +17,10 @@ from carapace.usage import LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
 
-def test_subscribe_duplicate_prevention(tmp_path: Path):
+def test_subscribe_duplicate_prevention(tmp_path: Path, db_factory):
     """Subscribing the same subscriber twice does not duplicate it."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -33,17 +33,17 @@ def test_subscribe_duplicate_prevention(tmp_path: Path):
         assert active.subscribers.count(sub) == 1
 
 
-def test_get_active_returns_none_before_activation(tmp_path: Path):
+def test_get_active_returns_none_before_activation(tmp_path: Path, db_factory):
     """get_active returns None for a session that hasn't been activated."""
-    engine = _make_engine(tmp_path)
+    engine = _make_engine(tmp_path, session_factory=db_factory)
     state = engine.session_mgr.create_session(user="thies")
     assert engine.get_active(state.session_id) is None
 
 
-def test_get_or_activate_loads_session(tmp_path: Path):
+def test_get_or_activate_loads_session(tmp_path: Path, db_factory):
     """get_or_activate loads the session from disk and makes it active."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -54,17 +54,17 @@ def test_get_or_activate_loads_session(tmp_path: Path):
         assert engine.get_active(sid) is active
 
 
-def test_get_or_activate_unknown_session_raises(tmp_path: Path):
+def test_get_or_activate_unknown_session_raises(tmp_path: Path, db_factory):
     """get_or_activate raises KeyError for a nonexistent session."""
-    engine = _make_engine(tmp_path)
+    engine = _make_engine(tmp_path, session_factory=db_factory)
     with pytest.raises(KeyError):
         engine.get_or_activate("nonexistent")
 
 
-def test_deactivate_removes_session(tmp_path: Path):
+def test_deactivate_removes_session(tmp_path: Path, db_factory):
     """deactivate removes the session from active memory."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -75,16 +75,16 @@ def test_deactivate_removes_session(tmp_path: Path):
         assert engine.get_active(sid) is None
 
 
-def test_deactivate_idempotent(tmp_path: Path):
+def test_deactivate_idempotent(tmp_path: Path, db_factory):
     """Deactivating an already-deactivated session does not raise."""
-    engine = _make_engine(tmp_path)
+    engine = _make_engine(tmp_path, session_factory=db_factory)
     engine.deactivate("nonexistent")
 
 
-def test_unsubscribe_removes_subscriber(tmp_path: Path):
+def test_unsubscribe_removes_subscriber(tmp_path: Path, db_factory):
     """unsubscribe removes the subscriber from the list."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -98,10 +98,10 @@ def test_unsubscribe_removes_subscriber(tmp_path: Path):
         assert sub not in active.subscribers
 
 
-def test_unsubscribe_nonexistent_is_safe(tmp_path: Path):
+def test_unsubscribe_nonexistent_is_safe(tmp_path: Path, db_factory):
     """Unsubscribing a subscriber that was never added does not raise."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -109,10 +109,10 @@ def test_unsubscribe_nonexistent_is_safe(tmp_path: Path):
         engine.unsubscribe(sid, _FakeSubscriber())
 
 
-def test_unsubscribe_saves_usage_when_last(tmp_path: Path):
+def test_unsubscribe_saves_usage_when_last(tmp_path: Path, db_factory):
     """Usage is persisted to disk when the last subscriber disconnects."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -129,11 +129,11 @@ def test_unsubscribe_saves_usage_when_last(tmp_path: Path):
         assert reloaded.total_input == 42
 
 
-def test_submit_message_busy_broadcasts_error(tmp_path: Path):
+def test_submit_message_busy_broadcasts_error(tmp_path: Path, db_factory):
     """submit_message rejects with an error if agent is already running."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -156,11 +156,11 @@ def test_submit_message_busy_broadcasts_error(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_cancel_stops_task(tmp_path: Path):
+def test_submit_cancel_stops_task(tmp_path: Path, db_factory):
     """submit_cancel cancels the running agent task."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -177,11 +177,11 @@ def test_submit_cancel_stops_task(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_cancel_persists_interruption_marker(tmp_path: Path):
+def test_submit_cancel_persists_interruption_marker(tmp_path: Path, db_factory):
     """Cancelled turns are persisted with a terminal assistant message."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -219,11 +219,11 @@ def test_submit_cancel_persists_interruption_marker(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_cancel_persists_interrupted_llm_request_log(tmp_path: Path):
+def test_submit_cancel_persists_interrupted_llm_request_log(tmp_path: Path, db_factory):
     """Cancelled in-flight LLM requests are saved in the request log as interrupted."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -272,19 +272,19 @@ def test_submit_cancel_persists_interrupted_llm_request_log(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_cancel_noop_when_inactive(tmp_path: Path):
+def test_submit_cancel_noop_when_inactive(tmp_path: Path, db_factory):
     """submit_cancel is a no-op when session is not active."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         await engine.submit_cancel("nonexistent")
 
     asyncio.run(_run())
 
 
-def test_retry_latest_turn_rewinds_and_restarts(tmp_path: Path):
+def test_retry_latest_turn_rewinds_and_restarts(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 
@@ -354,9 +354,9 @@ def test_retry_latest_turn_rewinds_and_restarts(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_retry_latest_turn_after_failure_uses_terminal_marker_history(tmp_path: Path):
+def test_retry_latest_turn_after_failure_uses_terminal_marker_history(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
 
         engine.session_mgr.save_events(
@@ -408,9 +408,9 @@ def test_retry_latest_turn_after_failure_uses_terminal_marker_history(tmp_path: 
         asyncio.run(_run())
 
 
-def test_reset_to_turn_rewinds_later_turns(tmp_path: Path):
+def test_reset_to_turn_rewinds_later_turns(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
 
         engine.session_mgr.save_events(
@@ -451,9 +451,9 @@ def test_reset_to_turn_rewinds_later_turns(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_reset_to_turn_rejects_unknown_target(tmp_path: Path):
+def test_reset_to_turn_rejects_unknown_target(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         sub = _FakeSubscriber()
         engine.subscribe(sid, sub)
@@ -476,9 +476,9 @@ def test_reset_to_turn_rejects_unknown_target(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_history_for_completed_turn_count_excludes_trailing_incomplete_request(tmp_path: Path):
+def test_history_for_completed_turn_count_excludes_trailing_incomplete_request(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     history = [
         ModelRequest(parts=[UserPromptPart(content="first")]),

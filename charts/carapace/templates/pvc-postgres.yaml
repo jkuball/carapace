@@ -1,0 +1,22 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    {{- include "carapace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+  {{- with .Values.postgres.persistence.finalizers }}
+  finalizers:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.postgres.persistence.storageClassName }}
+  storageClassName: {{ .Values.postgres.persistence.storageClassName }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistence.size }}
+{{- end }}

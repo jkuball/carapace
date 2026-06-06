@@ -737,7 +737,7 @@ export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: Mo
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" disabled={disabled} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onRemove(); }} title={t("actions.removeModel")} aria-label={t("actions.removeModel")} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" disabled={disabled} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (incomplete || window.confirm(t("actions.confirmRemoveModel", { name: model.name.trim() }))) onRemove(); }} title={t("actions.removeModel")} aria-label={t("actions.removeModel")} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50">
             <Trash2 className="h-4 w-4" />
           </button>
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />

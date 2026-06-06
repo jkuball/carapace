@@ -180,7 +180,8 @@
             "save": "Save",
             "saving": "Saving",
             "addModel": "Add model",
-            "removeModel": "Remove model"
+            "removeModel": "Remove model",
+            "confirmRemoveModel": "Remove model \"{name}\"? This cannot be undone."
         },
         "secretSources": {
             "none": "None",

@@ -72,11 +72,11 @@ def _make_engine_mock() -> MagicMock:
     return engine
 
 
-def _make_channel(tmp_path: Path, *, owner_user: str = "thies", **config_kwargs: Any) -> Any:
+def _make_channel(tmp_path: Path, db_factory, *, owner_user: str = "thies", **config_kwargs: Any) -> Any:
     """Build a MatrixChannel with mocked internals."""
     ensure_data_dir(tmp_path)
     full_config = load_config(tmp_path)
-    session_mgr = SessionManager(tmp_path)
+    session_mgr = SessionManager(db_factory, tmp_path)
 
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.get_domain_info.return_value = []
@@ -125,19 +125,19 @@ def _make_reaction_event(reacts_to: str, key: str, sender: str = "@alice:example
 # ---------------------------------------------------------------------------
 
 
-def test_find_session_returns_none_when_empty(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_find_session_returns_none_when_empty(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     assert mgr.find_session("matrix", "!room:example.com") is None
 
 
-def test_find_session_returns_matching_session(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_find_session_returns_matching_session(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     s = mgr.create_session("matrix", "!room:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") == s.session_id
 
 
-def test_matrix_session_created_with_token_owner(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+def test_matrix_session_created_with_token_owner(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     token_file = tmp_path / "matrix_token.yaml"
     token_file.write_text(
         yaml.safe_dump(
@@ -162,8 +162,8 @@ def test_matrix_session_created_with_token_owner(tmp_path: Path):
     assert ch._session_mgr.load_meta(session_id).user == "thies"
 
 
-def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     existing = ch._session_mgr.create_session("matrix", "!room:example.com", user="thies")
     ch._owner_user = "thies"
 
@@ -173,20 +173,20 @@ def test_matrix_existing_session_gets_missing_token_owner(tmp_path: Path):
     assert ch._session_mgr.load_meta(session_id).user == "thies"
 
 
-def test_find_session_ignores_different_channel(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_find_session_ignores_different_channel(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     mgr.create_session("cli", "!room:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") is None
 
 
-def test_find_session_ignores_different_ref(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_find_session_ignores_different_ref(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     mgr.create_session("matrix", "!other:example.com", user="thies")
     assert mgr.find_session("matrix", "!room:example.com") is None
 
 
-def test_find_session_returns_most_recent(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_find_session_returns_most_recent(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     s1 = mgr.create_session("matrix", "!room:example.com", user="thies")
     s2 = mgr.create_session("matrix", "!room:example.com", user="thies")
     result = mgr.find_session("matrix", "!room:example.com")
@@ -199,26 +199,26 @@ def test_find_session_returns_most_recent(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_get_or_create_session_creates_new(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+def test_get_or_create_session_creates_new(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     sid = ch._get_or_create_session("!newroom:example.com")
     assert sid
     # Second call returns same session
     assert ch._get_or_create_session("!newroom:example.com") == sid
 
 
-def test_get_or_create_session_resumes_existing(tmp_path: Path):
-    mgr = SessionManager(tmp_path)
+def test_get_or_create_session_resumes_existing(tmp_path: Path, db_factory):
+    mgr = SessionManager(db_factory, tmp_path)
     existing = mgr.create_session("matrix", "!room:example.com", user="thies")
 
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     sid = ch._get_or_create_session("!room:example.com")
     assert sid == existing.session_id
 
 
 @pytest.mark.anyio
-async def test_on_message_updates_presence_registry(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_message_updates_presence_registry(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room = _make_room()
     event = _make_text_event("hello")
     event.server_timestamp = ch._started_at_ms + 1
@@ -235,32 +235,32 @@ async def test_on_message_updates_presence_registry(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_is_allowed_rejects_self(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+def test_is_allowed_rejects_self(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room = _make_room()
     assert not ch._is_allowed(room, "@carapace:example.com")
 
 
-def test_is_allowed_rejects_unknown_user_when_allowlist_set(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_users=["@alice:example.com"])
+def test_is_allowed_rejects_unknown_user_when_allowlist_set(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_users=["@alice:example.com"])
     room = _make_room()
     assert not ch._is_allowed(room, "@evil:example.com")
 
 
-def test_is_allowed_accepts_listed_user(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_users=["@alice:example.com"])
+def test_is_allowed_accepts_listed_user(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_users=["@alice:example.com"])
     room = _make_room()
     assert ch._is_allowed(room, "@alice:example.com")
 
 
-def test_is_allowed_accepts_any_user_when_no_allowlist(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_users=[])
+def test_is_allowed_accepts_any_user_when_no_allowlist(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_users=[])
     room = _make_room()
     assert ch._is_allowed(room, "@anyone:example.com")
 
 
-def test_is_allowed_rejects_unlisted_room(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_rooms=["!allowed:example.com"])
+def test_is_allowed_rejects_unlisted_room(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_rooms=["!allowed:example.com"])
     room = _make_room(room_id="!other:example.com")
     assert not ch._is_allowed(room, "@alice:example.com")
 
@@ -271,8 +271,8 @@ def test_is_allowed_rejects_unlisted_room(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_handle_reset_creates_new_session(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_handle_reset_creates_new_session(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
 
     old_sid = ch._get_or_create_session(room_id)
@@ -288,8 +288,8 @@ async def test_handle_reset_creates_new_session(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_handle_command_unknown_submits_agent_message(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_handle_command_unknown_submits_agent_message(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt1"))
@@ -304,8 +304,8 @@ async def test_handle_command_unknown_submits_agent_message(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_handle_command_help(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_handle_command_help(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -340,8 +340,8 @@ async def test_pending_approval_resolves_deny():
 
 
 @pytest.mark.anyio
-async def test_on_reaction_approves_pending(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_reaction_approves_pending(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     session_id = ch._get_or_create_session(room_id)
 
@@ -363,8 +363,8 @@ async def test_on_reaction_approves_pending(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_on_reaction_denies_pending(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_reaction_denies_pending(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     session_id = ch._get_or_create_session(room_id)
 
@@ -387,8 +387,8 @@ async def test_on_reaction_denies_pending(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_on_reaction_ignores_unrelated_event(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_reaction_ignores_unrelated_event(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
 
     pa = _PendingApproval("$approval_event", "call-1")
     ch._pending_approvals["$approval_event"] = pa
@@ -401,8 +401,8 @@ async def test_on_reaction_ignores_unrelated_event(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_on_reaction_rejects_unknown_user(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_users=["@alice:example.com"])
+async def test_on_reaction_rejects_unknown_user(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_users=["@alice:example.com"])
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
 
@@ -423,8 +423,8 @@ async def test_on_reaction_rejects_unknown_user(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_on_reaction_rejects_unlisted_room(tmp_path: Path):
-    ch = _make_channel(tmp_path, allowed_rooms=["!allowed:example.com"])
+async def test_on_reaction_rejects_unlisted_room(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory, allowed_rooms=["!allowed:example.com"])
     room_id = "!other:example.com"
     ch._get_or_create_session(room_id)
 
@@ -441,8 +441,8 @@ async def test_on_reaction_rejects_unlisted_room(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_approve_command_resolves_via_engine(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_approve_command_resolves_via_engine(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -460,8 +460,8 @@ async def test_approve_command_resolves_via_engine(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_deny_command_resolves_via_engine(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_deny_command_resolves_via_engine(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -480,8 +480,8 @@ async def test_deny_command_resolves_via_engine(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_deny_command_passes_optional_message(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_deny_command_passes_optional_message(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -500,8 +500,8 @@ async def test_deny_command_passes_optional_message(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_approve_when_no_pending_sends_message(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_approve_when_no_pending_sends_message(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -596,8 +596,8 @@ def test_format_command_result_usage_context_table_preceded_by_blank_line():
 
 
 @pytest.mark.anyio
-async def test_yes_alias_approves(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_yes_alias_approves(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -615,8 +615,8 @@ async def test_yes_alias_approves(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_no_alias_denies(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_no_alias_denies(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -647,8 +647,8 @@ async def test_pending_domain_approval_resolves():
 
 
 @pytest.mark.anyio
-async def test_on_reaction_approves_domain(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_reaction_approves_domain(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
 
@@ -669,8 +669,8 @@ async def test_on_reaction_approves_domain(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_on_reaction_denies_domain(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_on_reaction_denies_domain(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     ch._get_or_create_session(room_id)
 
@@ -691,8 +691,8 @@ async def test_on_reaction_denies_domain(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_approve_command_resolves_domain_pending(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_approve_command_resolves_domain_pending(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -710,8 +710,8 @@ async def test_approve_command_resolves_domain_pending(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_deny_command_resolves_domain_pending(tmp_path: Path):
-    ch = _make_channel(tmp_path)
+async def test_deny_command_resolves_domain_pending(tmp_path: Path, db_factory):
+    ch = _make_channel(tmp_path, db_factory)
     room_id = "!room:example.com"
     sid = ch._get_or_create_session(room_id)
     ch._client.room_send = AsyncMock(return_value=MagicMock(event_id="$evt"))
@@ -739,9 +739,9 @@ def test_format_domain_escalation():
 # ---------------------------------------------------------------------------
 
 
-def test_load_token_returns_persisted_yaml_token(tmp_path: Path):
+def test_load_token_returns_persisted_yaml_token(tmp_path: Path, db_factory):
     """Persisted token with matching user_id is accepted."""
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     token_file = tmp_path / "matrix_token.yaml"
     persisted = MatrixTokenFile(
         access_token="tok_good",
@@ -755,9 +755,9 @@ def test_load_token_returns_persisted_yaml_token(tmp_path: Path):
     assert device_id == "DEV1"
 
 
-def test_load_token_discards_stale_user_id(tmp_path: Path):
+def test_load_token_discards_stale_user_id(tmp_path: Path, db_factory):
     """Persisted token for a different user_id is ignored."""
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     token_file = tmp_path / "matrix_token.yaml"
     persisted = MatrixTokenFile(
         access_token="tok_old",
@@ -772,9 +772,9 @@ def test_load_token_discards_stale_user_id(tmp_path: Path):
     assert token_file.exists()
 
 
-def test_load_token_discards_stale_owner(tmp_path: Path):
+def test_load_token_discards_stale_owner(tmp_path: Path, db_factory):
     """Persisted token for a different carapace user is ignored."""
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     token_file = tmp_path / "matrix_token.yaml"
     persisted = MatrixTokenFile(
         access_token="tok_old",
@@ -790,10 +790,10 @@ def test_load_token_discards_stale_owner(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def test_password_login_persists_user_id(tmp_path: Path, db_factory, monkeypatch: pytest.MonkeyPatch):
     """After password login the persisted file includes the configured user_id."""
 
-    ch = _make_channel(tmp_path, password="secret")
+    ch = _make_channel(tmp_path, db_factory, password="secret")
     token_file = tmp_path / "matrix_token.yaml"
 
     login_resp = MagicMock()
@@ -811,10 +811,10 @@ async def test_password_login_persists_user_id(tmp_path: Path, monkeypatch: pyte
 
 
 @pytest.mark.anyio
-async def test_subscriber_forwards_attachments(tmp_path: Path):
+async def test_subscriber_forwards_attachments(tmp_path: Path, db_factory):
     from types import SimpleNamespace
 
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     ch._send_text = AsyncMock()
     sub = MatrixSubscriber(ch, "!room:example.com")
 
@@ -831,10 +831,10 @@ async def test_subscriber_forwards_attachments(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_subscriber_attachment_only_message_is_forwarded(tmp_path: Path):
+async def test_subscriber_attachment_only_message_is_forwarded(tmp_path: Path, db_factory):
     from types import SimpleNamespace
 
-    ch = _make_channel(tmp_path)
+    ch = _make_channel(tmp_path, db_factory)
     ch._send_text = AsyncMock()
     sub = MatrixSubscriber(ch, "!room:example.com")
 

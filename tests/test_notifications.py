@@ -38,8 +38,8 @@ def test_notification_subscription_defaults_last_heartbeat() -> None:
     assert subscription.last_heartbeat == subscribed_at
 
 
-def test_notification_store_upsert_and_list_by_user(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+def test_notification_store_upsert_and_list_by_user(db_factory) -> None:
+    store = NotificationStore(db_factory)
     now = datetime(2026, 5, 12, tzinfo=UTC)
     prefs = NotificationPreferences(attended_turn_completed=False)
 
@@ -72,8 +72,8 @@ def test_notification_store_upsert_and_list_by_user(tmp_path) -> None:
     assert [subscription.id for subscription in store.list_subscriptions(user="thies")] == [created.id]
 
 
-def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+def test_notification_store_find_by_endpoint_requires_owner_scope(db_factory) -> None:
+    store = NotificationStore(db_factory)
     now = datetime(2026, 5, 12, tzinfo=UTC)
     endpoint = "https://push.example.test/shared"
     created = store.upsert_subscription(
@@ -103,8 +103,8 @@ def test_notification_store_find_by_endpoint_requires_owner_scope(tmp_path) -> N
     assert other_user.id != created.id
 
 
-def test_notification_store_cleanup_expired(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+def test_notification_store_cleanup_expired(db_factory) -> None:
+    store = NotificationStore(db_factory)
     now = datetime(2026, 5, 12, tzinfo=UTC)
     subscription = store.upsert_subscription(
         user="thies",
@@ -170,8 +170,8 @@ def test_presence_registry_cli_entry_is_active_until_stale() -> None:
     assert registry.is_session_actively_handled("session-1", now=now + timedelta(seconds=70)) is False
 
 
-async def test_notification_router_dispatch_turn_outcome_filters_by_preference_and_presence(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_notification_router_dispatch_turn_outcome_filters_by_preference_and_presence(db_factory) -> None:
+    store = NotificationStore(db_factory)
     sender = AsyncMock()
     now = datetime.now(tz=UTC)
     matching_subscription = store.upsert_subscription(
@@ -240,8 +240,8 @@ async def test_notification_router_dispatch_turn_outcome_filters_by_preference_a
     sender.send_batch.assert_not_awaited()
 
 
-async def test_notification_router_filters_by_session_owner(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_notification_router_filters_by_session_owner(db_factory) -> None:
+    store = NotificationStore(db_factory)
     now = datetime.now(tz=UTC)
     store.upsert_subscription(
         user="alice",
@@ -284,8 +284,8 @@ async def test_notification_router_filters_by_session_owner(tmp_path) -> None:
     sender.send_batch.assert_awaited_once()
 
 
-async def test_notification_router_dispatch_test_targets_single_subscription(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_notification_router_dispatch_test_targets_single_subscription(db_factory) -> None:
+    store = NotificationStore(db_factory)
     sender = AsyncMock()
     now = datetime.now(tz=UTC)
     subscription = store.upsert_subscription(
@@ -322,8 +322,8 @@ async def test_notification_router_dispatch_test_targets_single_subscription(tmp
     assert payload.notif_id == f"test:{subscription.id}"
 
 
-async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_web_push_sender_deletes_expired_subscription(db_factory) -> None:
+    store = NotificationStore(db_factory)
     now = datetime.now(tz=UTC)
     subscription = store.upsert_subscription(
         user="thies",
@@ -368,8 +368,8 @@ async def test_web_push_sender_deletes_expired_subscription(tmp_path) -> None:
     assert store.get_subscription(subscription.id) is None
 
 
-async def test_web_push_sender_skips_oversized_payload(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_web_push_sender_skips_oversized_payload(db_factory) -> None:
+    store = NotificationStore(db_factory)
     subscription = store.upsert_subscription(
         user="thies",
         endpoint="https://push.example.test/sub-1",
@@ -446,8 +446,8 @@ def test_ensure_vapid_config_accepts_legacy_raw_private_key(tmp_path) -> None:
     assert derive_vapid_public_key(resolved.vapid_private_key) == derive_vapid_public_key(encoded_private_key)
 
 
-async def test_web_push_sender_passes_parsed_vapid_key_to_pywebpush(tmp_path) -> None:
-    store = NotificationStore(tmp_path)
+async def test_web_push_sender_passes_parsed_vapid_key_to_pywebpush(db_factory) -> None:
+    store = NotificationStore(db_factory)
     subscription = store.upsert_subscription(
         user="thies",
         endpoint="https://push.example.test/sub-1",

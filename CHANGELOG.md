@@ -1,6 +1,54 @@
 # CHANGELOG
 
 
+## v0.136.7 (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: back off websocket reconnects when connection flaps
+  ([`78c46b5`](https://github.com/thiesgerken/carapace/commit/78c46b5b6ce6c2b059ca95b752ebec361e7c8420))
+
+  Reset the reconnect backoff only after the socket stays open past STABLE_CONNECTION_MS instead of immediately on open. A backend that comes back half-ready (accepts the socket then drops it) no longer triggers a tight 500ms reconnect loop, which re-rendered chat-view repeatedly and looked like a rapid reload cycle.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+## v0.136.6 (2026-06-06)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: confirm for model deletion
+  ([`f0f8d4a`](https://github.com/thiesgerken/carapace/commit/f0f8d4a15cbbe4cf892ecc4c92250e683a8bd467))
+
+### Other
+
+
+- fix: confine /usage tables to horizontal scroll on mobile
+  ([`5659f81`](https://github.com/thiesgerken/carapace/commit/5659f816513891a6615fb17e401a0016f834f6c4))
+
+  Usage tables lacked an overflow wrapper, so wide content scrolled the whole app sideways. Wrap them in overflow-x-auto like the /models command.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: add track_activity to _generate_title protocol stub
+  ([`ac9f6a5`](https://github.com/thiesgerken/carapace/commit/ac9f6a566b2478150aa70fd96d63693b3b521a69))
+
+  pyrefly flagged the SessionTurnHost protocol stub missing the new keyword argument used by the auto-title scheduler.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: run auto-titling off the session busy path
+  ([`6c65d81`](https://github.com/thiesgerken/carapace/commit/6c65d8105ff358d3aafddbdc60bfc9bd2a0054e4))
+
+  Auto-title generation ran fire-and-forget but still wrapped its LLM call in llm_request_recording, which set active.llm_request_state and broadcast on_llm_activity -- making the session look busy (and clobbering a concurrent turn's activity state).
+
+  Add track_activity flag to llm_request_recording / _generate_title; the auto-title scheduler passes track_activity=False so the background title keeps usage + audit-log recording but never touches or broadcasts the busy state. /retitle and /model title stay visible/blocking.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.5 (2026-06-05)
 
 

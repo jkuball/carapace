@@ -4,12 +4,13 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any, Literal
 
-import yaml
 from loguru import logger
 from pydantic import BaseModel, Field
+
+from ..database.engine import SessionFactory
+from ..database.models import SessionAuditRow
 
 
 class SecurityDeniedError(Exception):
@@ -213,7 +214,7 @@ class SessionSecurity:
         self,
         session_id: str,
         *,
-        audit_dir: Path | None = None,
+        session_factory: SessionFactory | None = None,
         max_sentinel_calls_per_tool_call: int = 5,
         sentinel_domain_batch_window_ms: int = 100,
         unattended: bool = False,
@@ -240,7 +241,7 @@ class SessionSecurity:
         self.max_sentinel_calls_per_tool_call = max_sentinel_calls_per_tool_call
         self.sentinel_domain_batch_window_ms = sentinel_domain_batch_window_ms
         self._last_synced_idx: int = 0
-        self._audit_dir = audit_dir
+        self._session_factory = session_factory
         self._user_escalation_callback: (
             Callable[[str, str, dict[str, Any]], Awaitable[UserEscalationDecision]] | None
         ) = None
@@ -461,13 +462,11 @@ class SessionSecurity:
         return count
 
     def write_audit(self, entry: AuditEntry) -> None:
-        if self._audit_dir is None:
+        if self._session_factory is None:
             return
-        self._audit_dir.mkdir(parents=True, exist_ok=True)
-        audit_path = self._audit_dir / "audit.yaml"
-        with open(audit_path, "a") as f:
-            f.write("---\n")
-            yaml.dump(entry.model_dump(mode="json"), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        data = entry.model_dump(mode="json")
+        with self._session_factory.begin() as db:
+            db.add(SessionAuditRow(session_id=self.session_id, timestamp=entry.timestamp, data=data))
 
     def set_user_escalation_callback(
         self,

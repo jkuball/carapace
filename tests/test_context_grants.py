@@ -8,7 +8,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import select
 
+from carapace.database.models import SessionAuditRow
 from carapace.git.store import GitStore
 from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.session import SessionState
@@ -19,6 +21,7 @@ from carapace.sandbox.session_lifecycle import SessionContainer
 from carapace.sandbox.state import load_sandbox_snapshot
 from carapace.security.context import ApprovalSource, ContextGrantEntry, CredentialAccessEntry, SessionSecurity
 from carapace.security.sentinel import _format_entry
+from carapace.session.manager import SessionManager, SessionMeta
 from carapace.skills import SkillRegistry
 from tests.runtime_mocks import make_runtime_mock
 
@@ -27,6 +30,7 @@ def _sandbox_manager(
     *,
     runtime,
     data_dir: Path,
+    session_factory,
     knowledge_dir: Path | None = None,
     knowledge_repo_for_session=None,
     **kwargs,
@@ -48,8 +52,16 @@ def _sandbox_manager(
         runtime=runtime,
         data_dir=data_dir,
         knowledge_repo_for_session=knowledge_repo_for_session,
+        session_factory=session_factory,
         **kwargs,
     )
+
+
+def _seed_session_row(session_factory, data_dir: Path, *session_ids: str) -> None:
+    """Create minimal `sessions` rows so snapshot/token FK constraints are satisfied."""
+    mgr = SessionManager(session_factory, data_dir)
+    for session_id in session_ids:
+        mgr.save_meta(session_id, SessionMeta(user="thies"))
 
 
 async def _drain_warm_refill(mgr: SandboxManager) -> None:
@@ -196,38 +208,38 @@ class TestSessionStateContextGrants:
 
 
 class TestSandboxManagerCredentialCache:
-    def _make_manager(self, tmp_path: Path) -> SandboxManager:
+    def _make_manager(self, tmp_path: Path, db_factory) -> SandboxManager:
         runtime = make_runtime_mock()
-        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
-    def test_cache_and_retrieve(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_cache_and_retrieve(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr.cache_credential("sess-1", "dev/token", "secret-value")
         assert mgr.get_cached_credential("sess-1", "dev/token") == "secret-value"
 
-    def test_retrieve_missing_returns_none(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_retrieve_missing_returns_none(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr.get_cached_credential("sess-1", "dev/token") is None
 
-    def test_credential_cache_survives_cleanup_tracking(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_credential_cache_survives_cleanup_tracking(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr.cache_credential("sess-1", "dev/token", "secret-value")
         # ensure_session error path: container bookkeeping only, not skill cache
         mgr._cleanup_tracking("sess-1")
         assert mgr.get_cached_credential("sess-1", "dev/token") == "secret-value"
 
     @pytest.mark.anyio
-    async def test_credential_cache_cleared_on_destroy_session(self, tmp_path: Path):
+    async def test_credential_cache_cleared_on_destroy_session(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.destroy_sandbox = AsyncMock()
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
         mgr.cache_credential("sess-1", "dev/token", "secret-value")
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         await mgr.destroy_session("sess-1")
         assert mgr.get_cached_credential("sess-1", "dev/token") is None
 
     @pytest.mark.anyio
-    async def test_reset_session_preserves_token(self, tmp_path: Path):
+    async def test_reset_session_preserves_token(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         workspace = tmp_path / "sessions" / "sess-1" / "workspace"
 
@@ -236,7 +248,8 @@ class TestSandboxManagerCredentialCache:
                 shutil.rmtree(workspace)
 
         runtime.destroy_sandbox = AsyncMock(side_effect=destroy_sandbox)
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+        _seed_session_row(db_factory, tmp_path, "sess-1")
         token = mgr._session_lifecycle.get_or_create_token("sess-1")
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         workspace.mkdir(parents=True)
@@ -249,9 +262,10 @@ class TestSandboxManagerCredentialCache:
         assert not workspace.exists()
 
     @pytest.mark.anyio
-    async def test_reset_session_clears_claimed_sandbox_id(self, tmp_path: Path):
+    async def test_reset_session_clears_claimed_sandbox_id(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+        _seed_session_row(db_factory, tmp_path, "sess-1")
         mgr._sessions["sess-1"] = SessionContainer(
             container_id="warm-pod-1",
             session_id="sess-1",
@@ -264,14 +278,14 @@ class TestSandboxManagerCredentialCache:
         await mgr.reset_session("sess-1")
 
         runtime.destroy_sandbox.assert_awaited_once_with("sess-1", "carapace-sandbox-warm-1", "warm-pod-1")
-        snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
+        snapshot = load_sandbox_snapshot(db_factory, "sess-1")
         assert snapshot is not None
         assert snapshot.sandbox_id is None
 
     @pytest.mark.anyio
-    async def test_cleanup_session_continues_when_snapshot_refresh_fails(self, tmp_path: Path):
+    async def test_cleanup_session_continues_when_snapshot_refresh_fails(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
         mgr._sessions["sess-1"] = MagicMock(container_id="c1", session_env={})
         mgr.refresh_sandbox_snapshot = AsyncMock(side_effect=[RuntimeError("before"), RuntimeError("after")])
 
@@ -281,8 +295,8 @@ class TestSandboxManagerCredentialCache:
         assert "sess-1" not in mgr._sessions
 
     @pytest.mark.anyio
-    async def test_cleanup_idle_delegates_to_lifecycle(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    async def test_cleanup_idle_delegates_to_lifecycle(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._session_lifecycle.cleanup_idle = AsyncMock()
 
         await mgr.cleanup_idle()
@@ -293,8 +307,8 @@ class TestSandboxManagerCredentialCache:
         assert cleanup_fn.__func__ is SandboxManager.cleanup_session
 
     @pytest.mark.anyio
-    async def test_cleanup_all_delegates_to_lifecycle(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    async def test_cleanup_all_delegates_to_lifecycle(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._session_lifecycle.cleanup_all = AsyncMock()
 
         await mgr.cleanup_all()
@@ -305,11 +319,11 @@ class TestSandboxManagerCredentialCache:
         assert cleanup_fn.__func__ is SandboxManager.cleanup_session
 
     @pytest.mark.anyio
-    async def test_ensure_session_persists_pending_snapshot_during_startup(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    async def test_ensure_session_persists_pending_snapshot_during_startup(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
 
         async def fake_ensure(session_id: str) -> tuple[SessionContainer, bool]:
-            snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path(session_id))
+            snapshot = load_sandbox_snapshot(db_factory, session_id)
             assert snapshot is not None
             assert snapshot.status == "pending"
             return (
@@ -323,40 +337,42 @@ class TestSandboxManagerCredentialCache:
                 True,
             )
 
+        _seed_session_row(db_factory, tmp_path, "sess-1")
         mgr._session_lifecycle.ensure_session = AsyncMock(side_effect=fake_ensure)
 
         await mgr.ensure_session("sess-1")
 
-        snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
+        snapshot = load_sandbox_snapshot(db_factory, "sess-1")
         assert snapshot is not None
         assert snapshot.status == "running"
         assert snapshot.runtime == "docker"
 
     @pytest.mark.anyio
-    async def test_ensure_session_clears_pending_snapshot_when_startup_fails(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    async def test_ensure_session_clears_pending_snapshot_when_startup_fails(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
 
         async def fake_ensure(session_id: str) -> tuple[SessionContainer, bool]:
-            snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path(session_id))
+            snapshot = load_sandbox_snapshot(db_factory, session_id)
             assert snapshot is not None
             assert snapshot.status == "pending"
             raise RuntimeError("boom")
 
+        _seed_session_row(db_factory, tmp_path, "sess-1")
         mgr._session_lifecycle.ensure_session = AsyncMock(side_effect=fake_ensure)
 
         with pytest.raises(RuntimeError, match="boom"):
             await mgr.ensure_session("sess-1")
 
-        snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
+        snapshot = load_sandbox_snapshot(db_factory, "sess-1")
         assert snapshot is not None
         assert snapshot.status == "missing"
 
     @pytest.mark.anyio
-    async def test_ensure_session_flags_resumed_runtime_for_setup_rerun(self, tmp_path: Path):
+    async def test_ensure_session_flags_resumed_runtime_for_setup_rerun(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.is_running = AsyncMock(return_value=False)
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
         mgr._sessions["sess-1"] = SessionContainer(
             container_id="container-1",
             session_id="sess-1",
@@ -376,14 +392,14 @@ class TestSandboxManagerCredentialCache:
         assert "session_id=sess-1" in runtime.write_stdout_log.await_args.args[1]
 
     @pytest.mark.anyio
-    async def test_ensure_warm_pool_creates_unattached_sandboxes(self, tmp_path: Path):
+    async def test_ensure_warm_pool_creates_unattached_sandboxes(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.list_pool_sandboxes = AsyncMock(side_effect=[{}, {}, {}])
         runtime.sandbox_exists = AsyncMock(return_value=None)
         runtime.create_sandbox = AsyncMock(side_effect=["pool-container-1", "pool-container-2"])
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
         warmed = await mgr.ensure_warm_pool(2)
 
@@ -405,7 +421,7 @@ class TestSandboxManagerCredentialCache:
         assert second.sandbox_id != first.sandbox_id
 
     @pytest.mark.anyio
-    async def test_ensure_warm_pool_shrinks_extra_unattached_sandboxes(self, tmp_path: Path):
+    async def test_ensure_warm_pool_shrinks_extra_unattached_sandboxes(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.list_pool_sandboxes = AsyncMock(
@@ -414,7 +430,7 @@ class TestSandboxManagerCredentialCache:
                 {"warm-1": "warm-container-1", "warm-2": "warm-container-2"},
             ]
         )
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
         mgr._session_lifecycle.ensure_warm_sandbox = AsyncMock(side_effect=["warm-container-1", "warm-container-2"])
 
         warmed = await mgr.ensure_warm_pool(1)
@@ -423,7 +439,7 @@ class TestSandboxManagerCredentialCache:
         runtime.destroy_sandbox.assert_awaited_once_with("warm-2", "carapace-sandbox-warm-2", "warm-container-2")
 
     @pytest.mark.anyio
-    async def test_ensure_session_claims_k8s_warm_sandbox(self, tmp_path: Path):
+    async def test_ensure_session_claims_k8s_warm_sandbox(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.sandbox_exists = AsyncMock(return_value=None)
@@ -440,7 +456,10 @@ class TestSandboxManagerCredentialCache:
                 ExecResult(exit_code=0, output=""),
             ]
         )
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
+        _seed_session_row(db_factory, tmp_path, "sess-1")
         mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
@@ -461,12 +480,12 @@ class TestSandboxManagerCredentialCache:
         assert clone_call.kwargs["env"]["CARAPACE_SESSION_ID"] == "sess-1"
         assert clone_call.kwargs["env"]["GIT_REPO_URL"].endswith(f"/git/{tmp_path.name}")
 
-        snapshot = load_sandbox_snapshot(mgr._sandbox_snapshot_path("sess-1"))
+        snapshot = load_sandbox_snapshot(db_factory, "sess-1")
         assert snapshot is not None
         assert snapshot.sandbox_id == "warm-1"
 
     @pytest.mark.anyio
-    async def test_ensure_session_falls_back_to_cold_create_after_failed_warm_claim(self, tmp_path: Path):
+    async def test_ensure_session_falls_back_to_cold_create_after_failed_warm_claim(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.sandbox_exists = AsyncMock(return_value=None)
@@ -486,7 +505,14 @@ class TestSandboxManagerCredentialCache:
                 ExecResult(exit_code=0, output=""),
             ]
         )
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
+        _seed_session_row(db_factory, tmp_path, "sess-1")
+
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
         await _drain_warm_refill(mgr)
@@ -503,7 +529,7 @@ class TestSandboxManagerCredentialCache:
         assert refill_config.labels.get("carapace.pool") == "true"
 
     @pytest.mark.anyio
-    async def test_concurrent_warm_claims_do_not_share_same_sandbox(self, tmp_path: Path):
+    async def test_concurrent_warm_claims_do_not_share_same_sandbox(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.sandbox_exists = AsyncMock(return_value=None)
@@ -511,12 +537,15 @@ class TestSandboxManagerCredentialCache:
         runtime.claim_warm_sandbox = AsyncMock(return_value=True)
         runtime.get_ip = AsyncMock(side_effect=["10.1.1.4", "10.1.1.9"])
         runtime.create_sandbox = AsyncMock(return_value="cold-pod-2")
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
         mgr._session_lifecycle.wait_for_ready = AsyncMock()
         mgr._session_lifecycle.log_assignment = AsyncMock()
         mgr._session_lifecycle.setup_proxy = AsyncMock()
         mgr._session_lifecycle.clone_knowledge_repo = AsyncMock()
         mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
+        _seed_session_row(db_factory, tmp_path, "sess-1", "sess-2")
 
         first, second = await asyncio.gather(
             mgr.ensure_session("sess-1"),
@@ -534,10 +563,12 @@ class TestSandboxManagerCredentialCache:
         runtime.create_sandbox.assert_awaited_once()
 
     @pytest.mark.anyio
-    async def test_ensure_session_replenishes_warm_pool_after_claim(self, tmp_path: Path):
+    async def test_ensure_session_replenishes_warm_pool_after_claim(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
         claimed = SessionContainer(
             container_id="warm-pod-1",
             session_id="sess-1",
@@ -548,6 +579,7 @@ class TestSandboxManagerCredentialCache:
         )
         mgr._session_lifecycle.claim_warm_sandbox = AsyncMock(return_value=claimed)
         mgr._session_lifecycle.ensure_warm_pool = AsyncMock(return_value=1)
+        _seed_session_row(db_factory, tmp_path, "sess-1")
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
         await _drain_warm_refill(mgr)
@@ -557,14 +589,16 @@ class TestSandboxManagerCredentialCache:
         mgr._session_lifecycle.ensure_warm_pool.assert_awaited_once_with(1)
 
     @pytest.mark.anyio
-    async def test_ensure_session_reattaches_claimed_warm_sandbox_after_restart(self, tmp_path: Path):
+    async def test_ensure_session_reattaches_claimed_warm_sandbox_after_restart(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.sandbox_exists = AsyncMock(return_value=None)
         runtime.list_sandboxes = AsyncMock(return_value={"sess-1": "carapace-sandbox-warm-1-0"})
         runtime.is_running = AsyncMock(return_value=True)
         runtime.get_ip = AsyncMock(return_value="10.1.1.4")
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
 
         sc, needs_runtime_setup = await mgr.ensure_session("sess-1")
 
@@ -575,9 +609,11 @@ class TestSandboxManagerCredentialCache:
         runtime.create_sandbox.assert_not_awaited()
 
     @pytest.mark.anyio
-    async def test_ensure_warm_pool_is_noop_for_docker_runtime(self, tmp_path: Path):
+    async def test_ensure_warm_pool_is_noop_for_docker_runtime(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=2)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=2, session_factory=db_factory
+        )
 
         warmed = await mgr.ensure_warm_pool(2)
 
@@ -586,11 +622,11 @@ class TestSandboxManagerCredentialCache:
         runtime.create_sandbox.assert_not_awaited()
 
     @pytest.mark.anyio
-    async def test_cleanup_orphaned_sandboxes_uses_live_k8s_resource_name(self, tmp_path: Path):
+    async def test_cleanup_orphaned_sandboxes_uses_live_k8s_resource_name(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
         runtime.list_sandboxes = AsyncMock(return_value={"sess-1": "carapace-sandbox-warm-1-0"})
-        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
         removed = await mgr.cleanup_orphaned_sandboxes(set())
 
@@ -606,39 +642,39 @@ class TestSandboxManagerCredentialCache:
 
 
 class TestSandboxManagerContextTracking:
-    def _make_manager(self, tmp_path: Path) -> SandboxManager:
+    def _make_manager(self, tmp_path: Path, db_factory) -> SandboxManager:
         runtime = make_runtime_mock()
-        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
-    def test_no_contexts_by_default(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_no_contexts_by_default(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr.get_current_contexts("sess-1") == []
 
-    def test_set_and_read_contexts(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_set_and_read_contexts(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._session_current_contexts["sess-1"] = ["moneydb", "example"]
         assert mgr.get_current_contexts("sess-1") == ["moneydb", "example"]
 
-    def test_domain_skill_granted_false_by_default(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_domain_skill_granted_false_by_default(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr.is_domain_skill_granted("sess-1", "api.com") is False
 
-    def test_domain_skill_granted_with_entry(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_domain_skill_granted_with_entry(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._exec_context_skill_domains["sess-1"] = {"api.moneydb.io"}
         assert mgr.is_domain_skill_granted("sess-1", "api.moneydb.io") is True
         assert mgr.is_domain_skill_granted("sess-1", "evil.com") is False
 
-    def test_cleanup_clears_tracking(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_cleanup_clears_tracking(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         # _exec_context_skill_domains is cleared in _cleanup_tracking
         mgr._exec_context_skill_domains["sess-1"] = {"api.com"}
         mgr._cleanup_tracking("sess-1")
         assert mgr.is_domain_skill_granted("sess-1", "api.com") is False
 
-    def test_current_contexts_per_exec(self, tmp_path: Path):
+    def test_current_contexts_per_exec(self, tmp_path: Path, db_factory):
         """_session_current_contexts is per-exec, set/cleared in _exec's finally."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._session_current_contexts["sess-1"] = ["moneydb"]
         # Simulating exec finally cleanup
         mgr._session_current_contexts.pop("sess-1", None)
@@ -668,15 +704,15 @@ class TestApprovalSource:
 
 
 class TestExecNotificationDedupe:
-    def _make_manager(self, tmp_path: Path) -> SandboxManager:
+    def _make_manager(self, tmp_path: Path, db_factory) -> SandboxManager:
         runtime = make_runtime_mock()
-        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
     # -- domain dedupe --
 
-    def test_domain_dedupe_outside_exec(self, tmp_path: Path):
+    def test_domain_dedupe_outside_exec(self, tmp_path: Path, db_factory):
         """Without an active exec, domain notifications always fire."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         calls: list[tuple] = []
         mgr._domain_notify_cbs["s1"] = lambda *a: calls.append(a)
         mgr._proxy_bypass_sessions.add("s1")
@@ -685,9 +721,9 @@ class TestExecNotificationDedupe:
         # No exec → no notified set → both fire
         assert len(calls) == 2
 
-    def test_domain_dedupe_bypass_during_exec(self, tmp_path: Path):
+    def test_domain_dedupe_bypass_during_exec(self, tmp_path: Path, db_factory):
         """During an exec, repeated bypass domain notifications are deduped."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         calls: list[tuple] = []
         mgr._domain_notify_cbs["s1"] = lambda *a: calls.append(a)
         mgr._proxy_bypass_sessions.add("s1")
@@ -697,9 +733,9 @@ class TestExecNotificationDedupe:
         mgr.notify_domain_access("s1", "b.com", True)
         assert len(calls) == 2  # a.com once, b.com once
 
-    def test_domain_dedupe_skill_during_exec(self, tmp_path: Path):
+    def test_domain_dedupe_skill_during_exec(self, tmp_path: Path, db_factory):
         """During an exec, repeated skill-granted domain notifications are deduped."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         calls: list[tuple] = []
         mgr._domain_notify_cbs["s1"] = lambda *a: calls.append(a)
         mgr._exec_context_skill_domains["s1"] = {"api.example.com"}
@@ -708,9 +744,9 @@ class TestExecNotificationDedupe:
         mgr.notify_domain_access("s1", "api.example.com", True)
         assert len(calls) == 1
 
-    def test_domain_denied_not_deduped(self, tmp_path: Path):
+    def test_domain_denied_not_deduped(self, tmp_path: Path, db_factory):
         """Denied domain notifications are never deduped."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         calls: list[tuple] = []
         mgr._domain_notify_cbs["s1"] = lambda *a: calls.append(a)
         mgr._exec_notified_domains["s1"] = set()
@@ -720,26 +756,26 @@ class TestExecNotificationDedupe:
 
     # -- credential dedupe --
 
-    def test_mark_credential_notified_outside_exec(self, tmp_path: Path):
+    def test_mark_credential_notified_outside_exec(self, tmp_path: Path, db_factory):
         """Outside an exec, mark_credential_notified returns False (no-op)."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr.mark_credential_notified("s1", "dev/token") is False
         assert mgr.mark_credential_notified("s1", "dev/token") is False
 
-    def test_mark_credential_notified_during_exec(self, tmp_path: Path):
+    def test_mark_credential_notified_during_exec(self, tmp_path: Path, db_factory):
         """During an exec, first call returns False, subsequent True."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._exec_notified_credentials["s1"] = set()
         assert mgr.mark_credential_notified("s1", "dev/token") is False
         assert mgr.mark_credential_notified("s1", "dev/token") is True
         # Different path still works
         assert mgr.mark_credential_notified("s1", "dev/other") is False
 
-    def test_record_credential_access_dedupe_skips_action_audit_and_ui(self, tmp_path: Path):
+    def test_record_credential_access_dedupe_skips_action_audit_and_ui(self, tmp_path: Path, db_factory):
         """Second in-exec record for the same UI key must not touch action log, audit, or UI."""
-        mgr = self._make_manager(tmp_path)
-        audit_dir = tmp_path / "audit"
-        sec = SessionSecurity("s1", audit_dir=audit_dir)
+        mgr = self._make_manager(tmp_path, db_factory)
+        SessionManager(db_factory, tmp_path).save_meta("s1", SessionMeta(user="thies"))
+        sec = SessionSecurity("s1", session_factory=db_factory)
         mgr._exec_notified_credentials["s1"] = set()
         sec.set_credential_notify_suppress(lambda vp: mgr.mark_credential_notified("s1", vp))
         ui_calls: list[tuple] = []
@@ -761,12 +797,14 @@ class TestExecNotificationDedupe:
         assert len(sec.action_log) == 1
         assert isinstance(sec.action_log[0], CredentialAccessEntry)
         assert len(ui_calls) == 1
-        audit_file = audit_dir / "audit.yaml"
-        assert audit_file.is_file()
-        assert audit_file.read_text().count("---\n") == 1
+        with db_factory() as db:
+            audit_rows = db.scalars(
+                select(SessionAuditRow).where(SessionAuditRow.session_id == "s1").order_by(SessionAuditRow.id)
+            ).all()
+        assert len(audit_rows) == 1
 
-    def test_cleanup_clears_notified_sets(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_cleanup_clears_notified_sets(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._exec_notified_domains["s1"] = {"a.com"}
         mgr._exec_notified_credentials["s1"] = {"dev/token"}
         mgr._cleanup_tracking("s1")
@@ -774,9 +812,9 @@ class TestExecNotificationDedupe:
         assert "s1" not in mgr._exec_notified_credentials
 
     @pytest.mark.asyncio
-    async def test_after_exec_credential_notify_runs_before_notified_set_cleared(self, tmp_path: Path):
+    async def test_after_exec_credential_notify_runs_before_notified_set_cleared(self, tmp_path: Path, db_factory):
         """Skill injection UI notify must run while per-exec dedupe is still active."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         sc = MagicMock()
         sc.container_id = "c1"
         sc.session_id = "s1"
@@ -810,8 +848,8 @@ class TestExecNotificationDedupe:
         assert "s1" not in mgr._exec_notified_credentials
 
     @pytest.mark.asyncio
-    async def test_after_exec_credential_notify_fires_when_not_pre_notified(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    async def test_after_exec_credential_notify_fires_when_not_pre_notified(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         sc = MagicMock()
         sc.container_id = "c1"
         sc.session_id = "s1"

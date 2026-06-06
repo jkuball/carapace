@@ -33,9 +33,9 @@ from tests.session_helpers import (
 )
 
 
-def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
+def test_submit_message_budget_exceeded_persists_history(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=1_000))
         sid = state.session_id
         sub = _FakeSubscriber()
@@ -74,9 +74,9 @@ def test_submit_message_budget_exceeded_persists_history(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
+def test_handle_slash_command_models_returns_available_only(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         engine.get_or_activate(sid)
 
@@ -91,9 +91,9 @@ def test_handle_slash_command_models_returns_available_only(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path):
+def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         sub = _FakeSubscriber()
         engine.subscribe(sid, sub)
@@ -129,7 +129,7 @@ def test_submit_message_unexpected_output_marks_terminal_error(tmp_path: Path):
 
 def test_evaluate_with_usage_limit_exceeded_escalates_to_user(tmp_path: Path):
     async def _run() -> None:
-        session = SessionSecurity("test-session", audit_dir=tmp_path)
+        session = SessionSecurity("test-session")
         sentinel = MagicMock(spec=Sentinel)
         sentinel.evaluate_tool_call = AsyncMock(
             side_effect=UsageLimitExceeded("The next request would exceed the request_limit of 5")
@@ -162,9 +162,9 @@ def test_evaluate_with_usage_limit_exceeded_escalates_to_user(tmp_path: Path):
     asyncio.run(_run())
 
 
-def test_generate_title_skips_when_budget_exhausted(tmp_path: Path):
+def test_generate_title_skips_when_budget_exhausted(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=100))
         active = engine.get_or_activate(state.session_id)
         active.usage_tracker.models["test-model"] = ModelUsage(input_tokens=120)
@@ -179,9 +179,9 @@ def test_generate_title_skips_when_budget_exhausted(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_generate_title_persists_usage_and_broadcasts_usage(tmp_path: Path):
+def test_generate_title_persists_usage_and_broadcasts_usage(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(cost_usd=Decimal("5.00")))
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -211,9 +211,9 @@ def test_generate_title_persists_usage_and_broadcasts_usage(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_generate_title_records_titler_request_log(tmp_path: Path):
+def test_generate_title_records_titler_request_log(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -287,11 +287,11 @@ def _emit_titler_request() -> str:
     return _fake  # type: ignore[return-value]
 
 
-def test_generate_title_untracked_is_invisible(tmp_path: Path):
+def test_generate_title_untracked_is_invisible(tmp_path: Path, db_factory):
     """Background auto-title (track_activity=False) never broadcasts llm activity or sets state."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
         sub = _FakeSubscriber()
@@ -314,11 +314,11 @@ def test_generate_title_untracked_is_invisible(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_generate_title_tracked_emits_activity(tmp_path: Path):
+def test_generate_title_tracked_emits_activity(tmp_path: Path, db_factory):
     """Visible path (slash commands, track_activity default) still broadcasts llm activity."""
 
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
         sub = _FakeSubscriber()
@@ -338,9 +338,9 @@ def test_generate_title_tracked_emits_activity(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_inactive_session(tmp_path: Path):
+def test_handle_slash_command_inactive_session(tmp_path: Path, db_factory):
     """handle_slash_command returns None for a session that isn't active."""
-    engine = _make_engine(tmp_path)
+    engine = _make_engine(tmp_path, session_factory=db_factory)
     state = engine.session_mgr.create_session(user="thies")
 
     async def _run() -> None:
@@ -349,10 +349,10 @@ def test_handle_slash_command_inactive_session(tmp_path: Path):
     asyncio.run(_run())
 
 
-def test_handle_slash_command_reload(tmp_path: Path):
+def test_handle_slash_command_reload(tmp_path: Path, db_factory):
     """handle_slash_command /reload calls reset_session and returns success."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -367,10 +367,10 @@ def test_handle_slash_command_reload(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_sets_all_three(tmp_path: Path):
+def test_handle_slash_command_model_sets_all_three(tmp_path: Path, db_factory):
     """``/model NAME`` applies the same id to agent, sentinel, and title."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -389,10 +389,10 @@ def test_handle_slash_command_model_sets_all_three(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Path):
+def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Path, db_factory):
     """``/model sentinel NAME`` mirrors target-first slash commands like ``/budget``."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -409,10 +409,10 @@ def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Pa
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
+def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path, db_factory):
     """``/model all NAME`` explicitly targets the all-model path."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -430,10 +430,10 @@ def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Path):
+def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Path, db_factory):
     """Legacy ``/model-role`` aliases are no longer accepted."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -446,9 +446,9 @@ def test_handle_slash_command_model_role_fallback_is_not_supported(tmp_path: Pat
         asyncio.run(_run())
 
 
-def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
+def test_model_overrides_persist_across_restart(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -467,7 +467,7 @@ def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
     assert persisted.title_model_name == "openai:gpt-4o"
 
     with _patch_sentinel():
-        restarted = _make_engine(tmp_path)
+        restarted = _make_engine(tmp_path, session_factory=db_factory)
         active = restarted.get_or_activate(sid)
         deps = restarted._build_deps(active)
 
@@ -480,9 +480,9 @@ def test_model_overrides_persist_across_restart(tmp_path: Path) -> None:
     _sentinel_set_model_mock(active).assert_called_once_with("openai:gpt-4o")
 
 
-def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp_path: Path) -> None:
+def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         active = engine.get_or_activate(state.session_id)
         cached_model = TestModel()
@@ -499,8 +499,8 @@ def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp
     assert active.agent_model is None
 
 
-def test_apply_platform_model_config_refreshes_active_sentinel_factory(tmp_path: Path) -> None:
-    engine = _make_engine(tmp_path)
+def test_apply_platform_model_config_refreshes_active_sentinel_factory(tmp_path: Path, db_factory) -> None:
+    engine = _make_engine(tmp_path, session_factory=db_factory)
 
     def old_factory(name: str) -> TestModel:
         if name == "local:new-model":
@@ -538,9 +538,9 @@ def test_apply_platform_model_config_refreshes_active_sentinel_factory(tmp_path:
     assert active.sentinel_model_name == "local:new-model"
 
 
-def test_apply_platform_model_config_clears_stale_active_sentinel_override(tmp_path: Path) -> None:
+def test_apply_platform_model_config_clears_stale_active_sentinel_override(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel() as sentinel_cls, patch("carapace.session.engine.logger.warning") as warning_mock:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         active = engine.get_or_activate(state.session_id)
         assert active.sentinel is not None
@@ -576,9 +576,9 @@ def test_apply_platform_model_config_clears_stale_active_sentinel_override(tmp_p
     warning_mock.assert_called_once()
 
 
-def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
+def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
 
     state.agent_model_name = "openai:missing-agent"
@@ -595,7 +595,7 @@ def test_invalid_model_overrides_fall_back_on_restart(tmp_path: Path) -> None:
 
         sentinel_instance.set_model.side_effect = _set_model
 
-        restarted = _make_engine(tmp_path)
+        restarted = _make_engine(tmp_path, session_factory=db_factory)
         restarted._resolve_model = MagicMock(
             side_effect=lambda name: (
                 TestModel()
@@ -651,9 +651,9 @@ def test_non_slash_user_message_count_plain_users() -> None:
     assert _non_slash_user_message_count(events) == 3
 
 
-def test_truncate_incomplete_model_history_drops_dangling_tool_tail(tmp_path: Path) -> None:
+def test_truncate_incomplete_model_history_drops_dangling_tool_tail(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         messages = [
             ModelRequest(parts=[UserPromptPart(content="hello")]),
             ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
@@ -669,9 +669,9 @@ def test_truncate_incomplete_model_history_drops_dangling_tool_tail(tmp_path: Pa
         assert truncated[-1].parts[0].part_kind == "text"
 
 
-def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path) -> None:
+def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         messages = [
             ModelRequest(parts=[UserPromptPart(content="hello")]),
             ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
@@ -683,9 +683,9 @@ def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path) 
         assert truncated == messages
 
 
-def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path) -> None:
+def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         events: list[dict[str, Any]] = [
             {"role": "user", "content": "hello"},
             {"role": "tool_call", "tool": "shell", "args": {"command": "echo ok"}, "detail": "run"},
@@ -700,9 +700,9 @@ def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path) -> 
         assert truncated[-1]["role"] == "assistant"
 
 
-def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path) -> None:
+def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     sid = engine.session_mgr.create_session(user="thies").session_id
     latest_messages = [
@@ -747,9 +747,9 @@ def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tm
     )
 
 
-def test_save_user_message_on_failure_appends_cancelled_parallel_tool_results(tmp_path: Path) -> None:
+def test_save_user_message_on_failure_appends_cancelled_parallel_tool_results(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
 
     sid = engine.session_mgr.create_session(user="thies").session_id
     engine.session_mgr.save_events(

@@ -218,6 +218,16 @@ Sandbox pods have **no access** to the server's data PVC. The per-session PVC is
 
 The per-session PVC size is configurable via `sandbox.sessionPvc.size` in the Helm values (default: 1Gi).
 
+## Database
+
+Relational state (users, sessions, jobs, auth sessions, sandbox tokens, notification
+subscriptions) lives in a SQL database; schema migrations run automatically on server
+startup. The chart deploys a bundled in-cluster PostgreSQL by default (`postgres.enabled`),
+with an external-URL (`database.url`) or SQLite-on-the-data-PVC option. See the
+[chart README — Database](../charts/carapace/README.md#database) for backend selection and,
+when upgrading from a YAML-only deployment, the one-shot
+`kubectl exec deploy/<release>-server -- carapace-migrate import-yaml` step.
+
 ## Networking
 
 ### Proxy
