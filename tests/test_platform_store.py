@@ -65,6 +65,28 @@ def test_replace_models_is_wholesale(db_factory):
     assert {m.model_id for m in store.load_models()} == {"anthropic:b"}
 
 
+def test_duplicate_model_ids_are_deduplicated(db_factory):
+    # Same id listed twice was valid before (last wins); must not PK-conflict on seed/save.
+    store = PlatformSettingsStore(db_factory)
+    agent = _agent(
+        model="dup",
+        sentinel_model="dup",
+        title_model="dup",
+        available_models=[
+            AvailableModelEntry(provider="x", name="y", id="dup", max_input_tokens=1),
+            AvailableModelEntry(provider="x", name="y", id="dup", max_input_tokens=2),
+        ],
+    )
+
+    assert store.seed_from_config(Config(agent=agent)) is True
+    loaded = store.load_models()
+    assert len(loaded) == 1
+    assert loaded[0].max_input_tokens == 2  # last entry wins
+
+    store.save_agent_config(agent)  # must also not conflict
+    assert len(store.load_models()) == 1
+
+
 def test_assemble_agent_config_validates_defaults_in_catalog(db_factory):
     store = PlatformSettingsStore(db_factory)
     # Catalog lacks the configured default model -> AgentConfig validation must reject.

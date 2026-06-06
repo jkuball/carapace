@@ -36,6 +36,17 @@ def _model_to_row(entry: AvailableModelEntry) -> ModelRow:
     )
 
 
+def _dedup_models(entries: list[AvailableModelEntry]) -> list[AvailableModelEntry]:
+    """Collapse duplicate ``model_id`` rows (last wins) so they map to a unique PK in ``models``.
+
+    Mirrors ``agent_available_model_entries`` — a config listing the same id twice stays valid.
+    """
+    by_id: dict[str, AvailableModelEntry] = {}
+    for entry in entries:
+        by_id[entry.model_id] = entry
+    return list(by_id.values())
+
+
 def _agent_scalars(agent: AgentConfig) -> dict[str, object]:
     return agent.model_dump(mode="json", include=set(_AGENT_SCALAR_FIELDS))
 
@@ -61,13 +72,13 @@ class PlatformSettingsStore:
         """Wholesale replace the catalog (delete-all + insert) in one transaction."""
         with self._session_factory.begin() as db:
             db.execute(delete(ModelRow))
-            db.add_all(_model_to_row(entry) for entry in entries)
+            db.add_all(_model_to_row(entry) for entry in _dedup_models(entries))
 
     def save_agent_config(self, agent: AgentConfig) -> None:
         """Persist the full agent config: replace the model catalog + scalar 'agent' row in one txn."""
         with self._session_factory.begin() as db:
             db.execute(delete(ModelRow))
-            db.add_all(_model_to_row(entry) for entry in agent.available_models)
+            db.add_all(_model_to_row(entry) for entry in _dedup_models(agent.available_models))
             db.merge(PlatformSettingRow(key="agent", data=_agent_scalars(agent)))
 
     # --- platform_settings table ---
@@ -89,7 +100,7 @@ class PlatformSettingsStore:
             already = db.scalar(select(ModelRow.id).limit(1)) is not None or db.get(PlatformSettingRow, "agent")
             if already:
                 return False
-            db.add_all(_model_to_row(entry) for entry in config.agent.available_models)
+            db.add_all(_model_to_row(entry) for entry in _dedup_models(config.agent.available_models))
             db.add(PlatformSettingRow(key="agent", data=_agent_scalars(config.agent)))
             db.add(PlatformSettingRow(key="sessions", data=config.sessions.model_dump(mode="json")))
         return True
