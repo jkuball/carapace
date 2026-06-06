@@ -594,12 +594,20 @@ class SandboxManager:
         """Return the session's container only if it is already running — never boots it.
 
         Reading git state must not resume a spun-down sandbox (mirrors the
-        delete flow, which avoids booting just to inspect git state).
+        delete flow, which avoids booting just to inspect git state). A running
+        container is adopted via ``ensure_session`` (which re-attaches without
+        booting), so this works even when ``_sessions`` is cold (e.g. after a
+        server restart) — matching how the sandbox snapshot detects "running".
         """
         sc = self._sessions.get(session_id)
-        if sc is None or not await self._runtime.is_running(sc.container_id):
-            return None
-        return sc
+        if sc is not None and await self._runtime.is_running(sc.container_id):
+            return sc
+
+        existing_id = await self._runtime.sandbox_exists(self._sandbox_name(session_id))
+        if isinstance(existing_id, str) and existing_id and await self._runtime.is_running(existing_id):
+            adopted, _ = await self.ensure_session(session_id)
+            return adopted
+        return None
 
     async def sandbox_git_status(self, session_id: str, *, fetch: bool) -> SandboxGitStatus:
         """Return ahead/behind of the sandbox clone vs the backend repo.

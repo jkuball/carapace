@@ -22,10 +22,6 @@ interface AheadBehindCounts {
   behind: number | null;
 }
 
-function hasPending(counts: AheadBehindCounts | null): boolean {
-  return (counts?.ahead ?? 0) > 0 || (counts?.behind ?? 0) > 0;
-}
-
 function AheadBehind({
   counts,
   upToDateLabel,
@@ -318,23 +314,6 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
     pull: () => void runAction("pull", () => globalGitPull(server, token)),
     push: () => void runAction("push", () => globalGitPush(server, token)),
   };
-}
-
-/** Small status dot for the account button — hidden unless a remote is configured. */
-export function GlobalGitIndicator({ git, className }: { git: GlobalGit; className?: string }) {
-  const t = useTranslations("git");
-  if (git.configured !== true) return null;
-  const pending = hasPending(git.counts);
-  return (
-    <span
-      title={pending ? t("global.indicatorPending") : t("global.indicatorSynced")}
-      className={cn(
-        "h-2.5 w-2.5 rounded-full border-2 border-background",
-        git.loading || git.busy ? "animate-pulse bg-amber-500" : pending ? "bg-amber-500" : "bg-emerald-500",
-        className,
-      )}
-    />
-  );
 }
 
 /** Full git panel for inside the account menu — hidden when no remote is configured. */
