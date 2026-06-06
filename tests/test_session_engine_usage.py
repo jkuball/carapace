@@ -21,10 +21,10 @@ from tests.session_helpers import (
 )
 
 
-def test_handle_slash_command_session(tmp_path: Path):
+def test_handle_slash_command_session(tmp_path: Path, db_factory):
     """handle_slash_command /session returns session metadata."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -38,10 +38,10 @@ def test_handle_slash_command_session(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_session_for_web(tmp_path: Path):
+def test_handle_slash_command_session_for_web(tmp_path: Path, db_factory):
     """``/session`` also works for web sessions."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", channel_type="web")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -56,10 +56,10 @@ def test_handle_slash_command_session_for_web(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_unknown(tmp_path: Path):
+def test_handle_slash_command_unknown(tmp_path: Path, db_factory):
     """handle_slash_command returns None for unknown commands."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -70,10 +70,10 @@ def test_handle_slash_command_unknown(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_retitle_sets_title(tmp_path: Path):
+def test_handle_slash_command_retitle_sets_title(tmp_path: Path, db_factory):
     """``/retitle TEXT`` stores the title and returns a message."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -91,10 +91,10 @@ def test_handle_slash_command_retitle_sets_title(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_retitle_regenerates(tmp_path: Path):
+def test_handle_slash_command_retitle_regenerates(tmp_path: Path, db_factory):
     """``/retitle`` with no args runs title generation."""
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -114,9 +114,9 @@ def test_handle_slash_command_retitle_regenerates(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_budget_sets_and_clears(tmp_path: Path):
+def test_handle_slash_command_budget_sets_and_clears(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -146,9 +146,9 @@ def test_handle_slash_command_budget_sets_and_clears(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_budget_sets_tool_call_limit(tmp_path: Path):
+def test_handle_slash_command_budget_sets_tool_call_limit(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -168,9 +168,9 @@ def test_handle_slash_command_budget_sets_tool_call_limit(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_budget_accepts_k_and_m_suffixes(tmp_path: Path):
+def test_handle_slash_command_budget_accepts_k_and_m_suffixes(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -192,9 +192,9 @@ def test_handle_slash_command_budget_accepts_k_and_m_suffixes(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_help_lists_budget(tmp_path: Path):
+def test_handle_slash_command_help_lists_budget(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -208,9 +208,9 @@ def test_handle_slash_command_help_lists_budget(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_usage_includes_tool_call_total(tmp_path: Path):
+def test_handle_slash_command_usage_includes_tool_call_total(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         active = engine.get_or_activate(sid)
@@ -227,7 +227,7 @@ def test_handle_slash_command_usage_includes_tool_call_total(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: Path) -> None:
+def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
         registry = KnowledgeRepoRegistry(tmp_path)
         thies_skill = registry.ensure_user_repo("thies").knowledge_dir / "skills" / "alpha"
@@ -250,7 +250,9 @@ def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: 
             owner = engine.session_mgr.load_meta(session_id).user
             return registry.get_for_user(owner)
 
-        engine = _make_engine(tmp_path, knowledge_repo_for_session=knowledge_repo_for_session)
+        engine = _make_engine(
+            tmp_path, session_factory=db_factory, knowledge_repo_for_session=knowledge_repo_for_session
+        )
         thies_state = engine.session_mgr.create_session(user="thies")
         ada_state = engine.session_mgr.create_session(user="ada")
         thies_sid = thies_state.session_id
@@ -271,9 +273,9 @@ def test_handle_slash_command_skills_stays_owner_scoped_for_two_users(tmp_path: 
         assert engine._knowledge_dir_for_session(thies_sid) != engine._knowledge_dir_for_session(ada_sid)
 
 
-def test_handle_slash_command_pull_invalidates_cached_skill_catalog(tmp_path: Path) -> None:
+def test_handle_slash_command_pull_invalidates_cached_skill_catalog(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         engine.get_or_activate(sid)
@@ -317,9 +319,9 @@ def test_handle_slash_command_pull_invalidates_cached_skill_catalog(tmp_path: Pa
         asyncio.run(_run())
 
 
-def test_turn_usage_payload_contains_budget_gauges_without_agent_usage(tmp_path: Path):
+def test_turn_usage_payload_contains_budget_gauges_without_agent_usage(tmp_path: Path, db_factory):
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=1_000))
         active = engine.get_or_activate(state.session_id)
 
@@ -330,9 +332,9 @@ def test_turn_usage_payload_contains_budget_gauges_without_agent_usage(tmp_path:
         assert payload.budget_gauges[0].current_value == "0 tokens"
 
 
-def test_turn_usage_payload_includes_reasoning_metrics(tmp_path: Path) -> None:
+def test_turn_usage_payload_includes_reasoning_metrics(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         active = engine.get_or_activate(state.session_id)
         started_at = datetime.now(tz=UTC)
@@ -361,9 +363,9 @@ def test_turn_usage_payload_includes_reasoning_metrics(tmp_path: Path) -> None:
         assert payload.reasoning_tokens == 42
 
 
-def test_activate_clears_stale_llm_request_state(tmp_path: Path) -> None:
+def test_activate_clears_stale_llm_request_state(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         engine.session_mgr.save_llm_request_state(
             state.session_id,
@@ -382,10 +384,10 @@ def test_activate_clears_stale_llm_request_state(tmp_path: Path) -> None:
         assert engine.session_mgr.load_llm_request_state(state.session_id) is None
 
 
-def test_llm_request_recording_persists_request_level_thinking_event(tmp_path: Path) -> None:
+def test_llm_request_recording_persists_request_level_thinking_event(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
-            engine = _make_engine(tmp_path)
+            engine = _make_engine(tmp_path, session_factory=db_factory)
             state = engine.session_mgr.create_session(user="thies")
             active = engine.get_or_activate(state.session_id)
             started_at = datetime.now(tz=UTC)
@@ -429,10 +431,10 @@ def test_llm_request_recording_persists_request_level_thinking_event(tmp_path: P
     asyncio.run(_run())
 
 
-def test_llm_request_recording_persists_timing_for_tool_only_thinking_event(tmp_path: Path) -> None:
+def test_llm_request_recording_persists_timing_for_tool_only_thinking_event(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
-            engine = _make_engine(tmp_path)
+            engine = _make_engine(tmp_path, session_factory=db_factory)
             state = engine.session_mgr.create_session(user="thies")
             active = engine.get_or_activate(state.session_id)
             started_at = datetime.now(tz=UTC)
@@ -475,9 +477,9 @@ def test_llm_request_recording_persists_timing_for_tool_only_thinking_event(tmp_
     asyncio.run(_run())
 
 
-def test_submit_message_budget_exhausted_broadcasts_error(tmp_path: Path):
+def test_submit_message_budget_exhausted_broadcasts_error(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(input_tokens=100))
         sid = state.session_id
         sub = _FakeSubscriber()
@@ -497,9 +499,9 @@ def test_submit_message_budget_exhausted_broadcasts_error(tmp_path: Path):
         asyncio.run(_run())
 
 
-def test_submit_message_tool_call_budget_exhausted_broadcasts_error(tmp_path: Path):
+def test_submit_message_tool_call_budget_exhausted_broadcasts_error(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies", budget=SessionBudget(tool_calls=1))
         sid = state.session_id
         sub = _FakeSubscriber()
@@ -531,9 +533,9 @@ def test_submit_message_tool_call_budget_exhausted_broadcasts_error(tmp_path: Pa
         asyncio.run(_run())
 
 
-def test_submit_message_refreshes_sandbox_once_after_completed_turn(tmp_path: Path):
+def test_submit_message_refreshes_sandbox_once_after_completed_turn(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         sub = _FakeSubscriber()
@@ -552,9 +554,9 @@ def test_submit_message_refreshes_sandbox_once_after_completed_turn(tmp_path: Pa
         asyncio.run(_run())
 
 
-def test_submit_message_refresh_failure_does_not_block_completed_turn(tmp_path: Path):
+def test_submit_message_refresh_failure_does_not_block_completed_turn(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
         sub = _FakeSubscriber()
@@ -578,9 +580,9 @@ def test_submit_message_refresh_failure_does_not_block_completed_turn(tmp_path: 
         asyncio.run(_run())
 
 
-def test_submit_message_persists_final_status_in_events(tmp_path: Path):
+def test_submit_message_persists_final_status_in_events(tmp_path: Path, db_factory):
     async def _run() -> None:
-        engine = _make_engine(tmp_path)
+        engine = _make_engine(tmp_path, session_factory=db_factory)
         state = engine.session_mgr.create_session(user="thies")
         sid = state.session_id
 

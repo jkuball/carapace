@@ -8,18 +8,22 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-import yaml
-from loguru import logger
 from pydantic import BaseModel, field_validator
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
+from sqlalchemy import delete, func, select
 
-from ..models.session import SessionAttributes, SessionBudget, SessionState
-from ..sandbox.state import (
-    SessionSandboxSnapshot,
-    clear_sandbox_snapshot,
-    load_sandbox_snapshot,
-    save_sandbox_snapshot,
+from ..database.engine import SessionFactory
+from ..database.models import (
+    SandboxTokenRow,
+    SessionAuditRow,
+    SessionEventRow,
+    SessionHistoryRow,
+    SessionLlmRequestRow,
+    SessionRow,
+    SessionUsageRow,
 )
+from ..models.session import SessionAttributes, SessionBudget, SessionState
+from ..sandbox.state import SessionSandboxSnapshot
 from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
 from ..usernames import normalize_username
 
@@ -33,7 +37,7 @@ class SessionMeta(BaseModel):
         return normalize_username(value)
 
 
-def _to_yaml_safe(value: Any) -> Any:
+def _to_json_safe(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if isinstance(value, Path):
@@ -41,19 +45,12 @@ def _to_yaml_safe(value: Any) -> Any:
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, dict):
-        return {str(key): _to_yaml_safe(item) for key, item in value.items()}
+        return {str(key): _to_json_safe(item) for key, item in value.items()}
     if isinstance(value, list | tuple | set):
-        return [_to_yaml_safe(item) for item in value]
+        return [_to_json_safe(item) for item in value]
     if isinstance(value, str | int | float | bool) or value is None:
         return value
     return repr(value)
-
-
-def _append_loaded_event(doc: Any, result: list[dict[str, Any]]) -> None:
-    if isinstance(doc, list):
-        result.extend(item for item in doc if isinstance(item, dict))
-    elif isinstance(doc, dict):
-        result.append(doc)
 
 
 def _timestamped_event(event: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
@@ -64,19 +61,47 @@ def _timestamped_event(event: dict[str, Any], *, now: datetime | None = None) ->
     return stamped
 
 
+def _parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _state_columns(state: SessionState) -> dict[str, Any]:
+    return {
+        "channel_type": state.channel_type,
+        "channel_ref": state.channel_ref,
+        "title": state.title,
+        "created_at": state.created_at,
+        "last_active": state.last_active,
+        "archived": state.attributes.archived,
+        "pinned": state.attributes.pinned,
+        "favorite": state.attributes.favorite,
+        "state": state.model_dump(mode="json"),
+    }
+
+
 class SessionManager:
-    def __init__(self, data_dir: Path, on_change: Callable[[], None] | None = None):
+    def __init__(
+        self,
+        session_factory: SessionFactory,
+        data_dir: Path,
+        on_change: Callable[[], None] | None = None,
+    ):
+        self._session_factory = session_factory
         self.data_dir = data_dir
+        # Per-session workspace dirs (used by the sandbox/git layer) still live on disk.
         self.sessions_dir = data_dir / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self._events_lock = RLock()
         self._on_change = on_change
 
-    def _log_disk_read(self, kind: str, path: Path, *, session_id: str | None = None) -> None:
-        if session_id is None:
-            logger.debug(f"Reading {kind} from disk: {path}")
-            return
-        logger.debug(f"Reading {kind} from disk for session {session_id}: {path}")
+    @property
+    def session_factory(self) -> SessionFactory:
+        return self._session_factory
 
     def create_session(
         self,
@@ -109,40 +134,52 @@ class SessionManager:
             created_at=now,
             last_active=now,
         )
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        self.save_meta(session_id, SessionMeta(user=user))
-        self._save_state(state)
+        (self.sessions_dir / session_id).mkdir(parents=True, exist_ok=True)
+        with self._session_factory.begin() as db:
+            db.add(SessionRow(session_id=session_id, user=normalize_username(user), **_state_columns(state)))
         return state
 
     def load_meta(self, session_id: str) -> SessionMeta:
-        meta_path = self.sessions_dir / session_id / "meta.yaml"
-        if not meta_path.exists():
-            raise FileNotFoundError(f"Session {session_id} has no owner metadata")
-        self._log_disk_read("session metadata", meta_path, session_id=session_id)
-        with open(meta_path) as f:
-            raw = yaml.safe_load(f) or {}
-        return SessionMeta.model_validate(raw)
+        with self._session_factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None or not row.user:
+                raise FileNotFoundError(f"Session {session_id} has no owner metadata")
+            return SessionMeta(user=row.user)
 
     def save_meta(self, session_id: str, meta: SessionMeta) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        meta_path = session_dir / "meta.yaml"
-        with open(meta_path, "w") as f:
-            yaml.dump(meta.model_dump(mode="json", exclude_none=True), f, default_flow_style=False)
+        (self.sessions_dir / session_id).mkdir(parents=True, exist_ok=True)
+        now = datetime.now(tz=UTC)
+        with self._session_factory.begin() as db:
+            row = db.get(SessionRow, session_id)
+            if row is not None:
+                row.user = meta.user
+                return
+            # No state persisted yet — create a placeholder row carrying just the owner.
+            db.add(
+                SessionRow(
+                    session_id=session_id,
+                    user=meta.user,
+                    channel_type="cli",
+                    channel_ref=None,
+                    title=None,
+                    created_at=now,
+                    last_active=now,
+                    archived=False,
+                    pinned=False,
+                    favorite=False,
+                    state={},
+                )
+            )
 
     def is_owned_by(self, session_id: str, user: str) -> bool:
         return self.load_meta(session_id).user == user
 
     def load_state(self, session_id: str) -> SessionState | None:
-        """Load session state without mutating last_active."""
-        state_path = self.sessions_dir / session_id / "state.yaml"
-        if not state_path.exists():
-            return None
-        self._log_disk_read("session state", state_path, session_id=session_id)
-        with open(state_path) as f:
-            raw = yaml.safe_load(f)
-        return SessionState.model_validate(raw)
+        with self._session_factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None or not row.state:
+                return None
+            return SessionState.model_validate(row.state)
 
     def resume_session(self, session_id: str) -> SessionState | None:
         state = self.load_state(session_id)
@@ -151,58 +188,55 @@ class SessionManager:
         return state
 
     def list_sessions(self, *, user: str | None = None) -> list[str]:
-        if not self.sessions_dir.exists():
-            return []
-        self._log_disk_read("session directory listing", self.sessions_dir)
-        candidates: list[tuple[float, str]] = []
-        for session_dir in self.sessions_dir.iterdir():
-            if not session_dir.is_dir():
-                continue
-            session_id = session_dir.name
-            if user is not None:
-                try:
-                    if self.load_meta(session_id).user != user:
-                        continue
-                except FileNotFoundError as exc:
-                    logger.warning(f"Skipping session without owner metadata: {exc}")
-                    continue
-            candidates.append((self._get_mtime(session_id), session_id))
-        return [session_id for _, session_id in sorted(candidates, reverse=True)]
+        stmt = select(SessionRow.session_id).order_by(SessionRow.last_active.desc())
+        if user is not None:
+            stmt = stmt.where(SessionRow.user == user)
+        with self._session_factory() as db:
+            return list(db.scalars(stmt).all())
 
     def find_session(self, channel_type: str, channel_ref: str) -> str | None:
-        """Return the most recently active session ID for the given channel, or None."""
-        candidates: list[tuple[float, str]] = []
-        for session_id in self.list_sessions():
-            state = self.load_state(session_id)
-            if state and state.channel_type == channel_type and state.channel_ref == channel_ref:
-                candidates.append((self._get_mtime(session_id), session_id))
-        if not candidates:
-            return None
-        return max(candidates, key=lambda t: t[0])[1]
-
-    def _get_mtime(self, session_id: str) -> float:
-        state_path = self.sessions_dir / session_id / "state.yaml"
-        if state_path.exists():
-            return state_path.stat().st_mtime
-        return 0.0
+        stmt = (
+            select(SessionRow.session_id)
+            .where(
+                SessionRow.channel_type == channel_type,
+                SessionRow.channel_ref == channel_ref,
+            )
+            .order_by(SessionRow.last_active.desc())
+            .limit(1)
+        )
+        with self._session_factory() as db:
+            return db.scalars(stmt).first()
 
     def delete_session(self, session_id: str) -> bool:
+        with self._session_factory.begin() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None:
+                deleted = False
+            else:
+                db.delete(row)  # FK cascade drops history/events/usage/llm/audit/token rows
+                deleted = True
         session_dir = self.sessions_dir / session_id
         if session_dir.exists():
             shutil.rmtree(session_dir)
+            deleted = True
+        if deleted:
             self._notify_change()
-            return True
-        return False
+        return deleted
 
     def save_state(self, state: SessionState) -> None:
         self._save_state(state)
 
     def _save_state(self, state: SessionState) -> None:
-        session_dir = self.sessions_dir / state.session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        state_path = session_dir / "state.yaml"
-        with open(state_path, "w") as f:
-            yaml.dump(state.model_dump(mode="json"), f, default_flow_style=False)
+        (self.sessions_dir / state.session_id).mkdir(parents=True, exist_ok=True)
+        with self._session_factory.begin() as db:
+            row = db.get(SessionRow, state.session_id)
+            columns = _state_columns(state)
+            if row is None:
+                # Owner is set separately via save_meta (fork saves state first).
+                db.add(SessionRow(session_id=state.session_id, user="", **columns))
+            else:
+                for key, value in columns.items():
+                    setattr(row, key, value)
         self._notify_change()
 
     def _notify_change(self) -> None:
@@ -210,66 +244,61 @@ class SessionManager:
             self._on_change()
 
     def load_history(self, session_id: str) -> list[ModelMessage]:
-        history_path = self.sessions_dir / session_id / "history.yaml"
-        if not history_path.exists():
-            return []
-        self._log_disk_read("session history", history_path, session_id=session_id)
-        with open(history_path) as f:
-            raw = yaml.safe_load(f)
+        with self._session_factory() as db:
+            row = db.get(SessionHistoryRow, session_id)
+            raw = row.messages if row is not None else []
         return ModelMessagesTypeAdapter.validate_python(raw or [])
 
     def save_history(self, session_id: str, messages: list[ModelMessage]) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        history_path = session_dir / "history.yaml"
         data = ModelMessagesTypeAdapter.dump_python(messages, mode="json")
-        with open(history_path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        with self._session_factory.begin() as db:
+            row = db.get(SessionHistoryRow, session_id)
+            if row is None:
+                db.add(SessionHistoryRow(session_id=session_id, messages=data))
+            else:
+                row.messages = data
         self._notify_change()
 
     # --- Usage tracking persistence ---
 
     def load_usage(self, session_id: str) -> UsageTracker:
-        usage_path = self.sessions_dir / session_id / "usage.yaml"
-        if not usage_path.exists():
-            return UsageTracker()
-        self._log_disk_read("session usage", usage_path, session_id=session_id)
-        with open(usage_path) as f:
-            raw = yaml.safe_load(f)
-        return UsageTracker.model_validate(raw or {})
+        with self._session_factory() as db:
+            row = db.get(SessionUsageRow, session_id)
+            return UsageTracker.model_validate(row.tracker) if row is not None else UsageTracker()
 
     def save_usage(self, session_id: str, tracker: UsageTracker) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        usage_path = session_dir / "usage.yaml"
-        with open(usage_path, "w") as f:
-            yaml.dump(tracker.model_dump(mode="json"), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        data = tracker.model_dump(mode="json")
+        with self._session_factory.begin() as db:
+            row = db.get(SessionUsageRow, session_id)
+            if row is None:
+                db.add(SessionUsageRow(session_id=session_id, tracker=data))
+            else:
+                row.tracker = data
 
     # --- Per-LLM-request log (API tokens + input-shape ratios) ---
 
     def load_llm_request_log(self, session_id: str) -> LlmRequestLog:
-        path = self.sessions_dir / session_id / "llm_requests.yaml"
-        if not path.exists():
-            return LlmRequestLog()
-        self._log_disk_read("llm request log", path, session_id=session_id)
-        with open(path) as f:
-            raw = yaml.safe_load(f)
-        return LlmRequestLog.model_validate(raw or {})
+        with self._session_factory() as db:
+            row = db.get(SessionLlmRequestRow, session_id)
+            return LlmRequestLog.model_validate(row.log) if row is not None else LlmRequestLog()
 
     def save_llm_request_log(self, session_id: str, log: LlmRequestLog) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        path = session_dir / "llm_requests.yaml"
-        with open(path, "w") as f:
-            yaml.dump(log.model_dump(mode="json"), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        data = log.model_dump(mode="json")
+        with self._session_factory.begin() as db:
+            row = db.get(SessionLlmRequestRow, session_id)
+            if row is None:
+                db.add(SessionLlmRequestRow(session_id=session_id, log=data))
+            else:
+                row.log = data
 
-    # --- In-flight LLM request activity ---
+    # --- In-flight LLM request activity (transient — stays on disk) ---
 
     def load_llm_request_state(self, session_id: str) -> LlmRequestState | None:
         path = self.sessions_dir / session_id / "llm_activity.yaml"
         if not path.exists():
             return None
-        self._log_disk_read("llm activity", path, session_id=session_id)
+        import yaml
+
         with open(path) as f:
             raw = yaml.safe_load(f)
         if not raw:
@@ -277,6 +306,8 @@ class SessionManager:
         return LlmRequestState.model_validate(raw)
 
     def save_llm_request_state(self, session_id: str, state: LlmRequestState) -> None:
+        import yaml
+
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         path = session_dir / "llm_activity.yaml"
@@ -287,92 +318,75 @@ class SessionManager:
         path = self.sessions_dir / session_id / "llm_activity.yaml"
         path.unlink(missing_ok=True)
 
-    # --- Sandbox snapshot persistence ---
-
-    def _sandbox_snapshot_path(self, session_id: str) -> Path:
-        return self.sessions_dir / session_id / "sandbox.yaml"
+    # --- Sandbox snapshot persistence (column on the session row) ---
 
     def load_sandbox_snapshot(self, session_id: str) -> SessionSandboxSnapshot | None:
-        path = self._sandbox_snapshot_path(session_id)
-        if path.exists():
-            self._log_disk_read("sandbox snapshot", path, session_id=session_id)
-        return load_sandbox_snapshot(path)
+        with self._session_factory() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None or not row.sandbox_snapshot:
+                return None
+            return SessionSandboxSnapshot.model_validate(row.sandbox_snapshot)
 
     def save_sandbox_snapshot(self, session_id: str, snapshot: SessionSandboxSnapshot) -> None:
-        save_sandbox_snapshot(self._sandbox_snapshot_path(session_id), snapshot)
+        data = snapshot.model_dump(mode="json")
+        with self._session_factory.begin() as db:
+            row = db.get(SessionRow, session_id)
+            if row is None:
+                raise FileNotFoundError(f"Session {session_id} not found")
+            row.sandbox_snapshot = data
         self._notify_change()
 
     def clear_sandbox_snapshot(self, session_id: str) -> None:
-        clear_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        with self._session_factory.begin() as db:
+            row = db.get(SessionRow, session_id)
+            if row is not None:
+                row.sandbox_snapshot = None
         self._notify_change()
 
     # --- Event log (ordered display history including slash commands) ---
 
     def _load_events_unlocked(self, session_id: str) -> list[dict[str, Any]]:
-        events_path = self.sessions_dir / session_id / "events.yaml"
-        if not events_path.exists():
-            return []
-        result: list[dict[str, Any]] = []
-        self._log_disk_read("session events", events_path, session_id=session_id)
-        with open(events_path) as f:
-            try:
-                for doc in yaml.safe_load_all(f):
-                    _append_loaded_event(doc, result)
-            except yaml.YAMLError as exc:
-                logger.warning(f"Failed to parse events.yaml safely for session {session_id}: {exc}")
-                f.seek(0)
-                docs = f.read().split("---\n")
-                skipped_docs = 0
-                for raw_doc in docs:
-                    if not raw_doc.strip():
-                        continue
-                    try:
-                        doc = yaml.safe_load(raw_doc)
-                    except yaml.YAMLError:
-                        skipped_docs += 1
-                        continue
-                    _append_loaded_event(doc, result)
-                if skipped_docs:
-                    logger.warning(f"Skipped {skipped_docs} invalid event document(s) in session {session_id}")
-        return result
+        with self._session_factory() as db:
+            rows = db.scalars(
+                select(SessionEventRow).where(SessionEventRow.session_id == session_id).order_by(SessionEventRow.seq)
+            ).all()
+        return [dict(row.data) for row in rows]
 
     def load_events(self, session_id: str) -> list[dict[str, Any]]:
         with self._events_lock:
             return self._load_events_unlocked(session_id)
 
-    def _append_events_unlocked(self, session_id: str, events: list[dict[str, Any]]) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        events_path = session_dir / "events.yaml"
-        ts = datetime.now(tz=UTC)
-        with open(events_path, "a") as f:
-            for event in events:
-                f.write("---\n")
-                yaml.dump(
-                    _to_yaml_safe(_timestamped_event(event, now=ts)),
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                    sort_keys=False,
-                )
+    def _next_seq(self, db: Any, session_id: str) -> int:
+        current = db.scalar(select(func.max(SessionEventRow.seq)).where(SessionEventRow.session_id == session_id))
+        return (current + 1) if current is not None else 0
+
+    def _event_row(self, session_id: str, seq: int, event: dict[str, Any]) -> SessionEventRow:
+        data = _to_json_safe(event)
+        return SessionEventRow(
+            session_id=session_id,
+            seq=seq,
+            timestamp=_parse_timestamp(data.get("timestamp")),
+            data=data,
+        )
 
     def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
-        with self._events_lock:
-            self._append_events_unlocked(session_id, events)
+        ts = datetime.now(tz=UTC)
+        with self._events_lock, self._session_factory.begin() as db:
+            seq = self._next_seq(db, session_id)
+            for event in events:
+                db.add(self._event_row(session_id, seq, _timestamped_event(event, now=ts)))
+                seq += 1
         self._notify_change()
 
-    def _save_events_unlocked(self, session_id: str, events: list[dict[str, Any]]) -> None:
-        session_dir = self.sessions_dir / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        events_path = session_dir / "events.yaml"
-        with open(events_path, "w") as f:
-            for event in events:
-                f.write("---\n")
-                yaml.dump(_to_yaml_safe(event), f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    def _rewrite_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
+        with self._session_factory.begin() as db:
+            db.execute(delete(SessionEventRow).where(SessionEventRow.session_id == session_id))
+            for seq, event in enumerate(events):
+                db.add(self._event_row(session_id, seq, event))
 
     def save_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
         with self._events_lock:
-            self._save_events_unlocked(session_id, events)
+            self._rewrite_events(session_id, events)
         self._notify_change()
 
     def update_events(
@@ -389,6 +403,46 @@ class SessionManager:
                 ts = datetime.now(tz=UTC)
                 for index in new_event_indexes:
                     events[index] = _timestamped_event(events[index], now=ts)
-            self._save_events_unlocked(session_id, events)
+            self._rewrite_events(session_id, events)
             self._notify_change()
             return result
+
+    # --- Audit log (append-only) ---
+
+    def append_audit(self, session_id: str, entry: dict[str, Any]) -> None:
+        data = _to_json_safe(entry)
+        with self._session_factory.begin() as db:
+            db.add(
+                SessionAuditRow(
+                    session_id=session_id,
+                    timestamp=_parse_timestamp(data.get("timestamp")),
+                    data=data,
+                )
+            )
+
+    def load_audit(self, session_id: str) -> list[dict[str, Any]]:
+        with self._session_factory() as db:
+            rows = db.scalars(
+                select(SessionAuditRow).where(SessionAuditRow.session_id == session_id).order_by(SessionAuditRow.id)
+            ).all()
+        return [dict(row.data) for row in rows]
+
+    # --- Sandbox token persistence ---
+
+    def get_sandbox_token(self, session_id: str) -> str | None:
+        with self._session_factory() as db:
+            row = db.get(SandboxTokenRow, session_id)
+            return row.token if row is not None else None
+
+    def session_id_for_sandbox_token(self, token: str) -> str | None:
+        with self._session_factory() as db:
+            row = db.scalars(select(SandboxTokenRow).where(SandboxTokenRow.token == token)).first()
+            return row.session_id if row is not None else None
+
+    def put_sandbox_token(self, session_id: str, token: str) -> None:
+        with self._session_factory.begin() as db:
+            row = db.get(SandboxTokenRow, session_id)
+            if row is None:
+                db.add(SandboxTokenRow(session_id=session_id, token=token))
+            else:
+                row.token = token

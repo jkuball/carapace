@@ -183,12 +183,14 @@ def _sentinel_set_model_mock(active: ActiveSession) -> MagicMock:
 
 def _make_engine(
     tmp_path: Path,
+    *,
+    session_factory,
     credential_registry: CredentialRegistryProtocol | None = None,
     knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
 ) -> SessionEngine:
     ensure_data_dir(tmp_path)
     config = load_config(tmp_path)
-    session_mgr = SessionManager(tmp_path)
+    session_mgr = SessionManager(session_factory, tmp_path)
     registry = SkillRegistry(tmp_path / "skills")
     sandbox_mgr = MagicMock(spec=SandboxManager)
     sandbox_mgr.refresh_sandbox_snapshot = AsyncMock()

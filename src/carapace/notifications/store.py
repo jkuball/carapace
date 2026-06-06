@@ -2,79 +2,81 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from threading import RLock
 
-import yaml
+from sqlalchemy import delete, select
 
+from ..database.engine import SessionFactory
+from ..database.models import NotificationSubscriptionRow
 from .models import NotificationPreferences, NotificationSubscription
 
 
+def _to_row(subscription: NotificationSubscription) -> NotificationSubscriptionRow:
+    return NotificationSubscriptionRow(
+        id=subscription.id,
+        user=subscription.user,
+        endpoint=subscription.endpoint,
+        expires_at=subscription.expires_at,
+        data=subscription.model_dump(mode="json"),
+    )
+
+
+def _to_model(row: NotificationSubscriptionRow) -> NotificationSubscription:
+    return NotificationSubscription.model_validate(row.data)
+
+
 class NotificationStore:
-    def __init__(self, data_dir: Path):
-        self._dir = data_dir / "notifications" / "subscriptions"
-        self._dir.mkdir(parents=True, exist_ok=True)
-        self._lock = RLock()
-
-    @property
-    def path(self) -> Path:
-        return self._dir
-
-    def _subscription_path(self, subscription_id: str) -> Path:
-        return self._dir / f"{subscription_id}.yaml"
+    def __init__(self, session_factory: SessionFactory):
+        self._session_factory = session_factory
 
     def get_subscription(self, subscription_id: str) -> NotificationSubscription | None:
-        path = self._subscription_path(subscription_id)
-        if not path.exists():
-            return None
-        with self._lock, open(path) as f:
-            raw = yaml.safe_load(f) or {}
-        return NotificationSubscription.model_validate(raw)
+        with self._session_factory() as db:
+            row = db.get(NotificationSubscriptionRow, subscription_id)
+            return _to_model(row) if row is not None else None
 
     def list_subscriptions(
         self,
         *,
         user: str | None = None,
     ) -> list[NotificationSubscription]:
-        with self._lock:
-            subscriptions = [
-                NotificationSubscription.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
-                for path in sorted(self._dir.glob("*.yaml"))
-            ]
-        if user is None:
-            return subscriptions
-        return [subscription for subscription in subscriptions if subscription.user == user]
+        stmt = select(NotificationSubscriptionRow).order_by(NotificationSubscriptionRow.id)
+        if user is not None:
+            stmt = stmt.where(NotificationSubscriptionRow.user == user)
+        with self._session_factory() as db:
+            rows = db.scalars(stmt).all()
+        return [_to_model(row) for row in rows]
 
     def find_by_endpoint(self, *, user: str, endpoint: str) -> NotificationSubscription | None:
         normalized_endpoint = endpoint.strip()
-        for subscription in self.list_subscriptions(user=user):
-            if subscription.endpoint == normalized_endpoint:
-                return subscription
-        return None
+        with self._session_factory() as db:
+            row = db.scalars(
+                select(NotificationSubscriptionRow).where(
+                    NotificationSubscriptionRow.user == user,
+                    NotificationSubscriptionRow.endpoint == normalized_endpoint,
+                )
+            ).first()
+        return _to_model(row) if row is not None else None
 
     def save_subscription(self, subscription: NotificationSubscription) -> NotificationSubscription:
-        path = self._subscription_path(subscription.id)
-        payload = subscription.model_dump(mode="json", exclude_none=True)
-        with self._lock, open(path, "w") as f:
-            yaml.safe_dump(payload, f, sort_keys=False)
+        with self._session_factory.begin() as db:
+            db.merge(_to_row(subscription))
         return subscription
 
     def delete_subscription(self, subscription_id: str) -> bool:
-        path = self._subscription_path(subscription_id)
-        if not path.exists():
-            return False
-        with self._lock:
-            path.unlink(missing_ok=True)
-        return True
+        with self._session_factory.begin() as db:
+            result = db.execute(
+                delete(NotificationSubscriptionRow).where(NotificationSubscriptionRow.id == subscription_id)
+            )
+            return result.rowcount > 0  # type: ignore[missing-attribute]
 
     def cleanup_expired(self, *, now: datetime | None = None) -> list[str]:
         current = now or datetime.now(tz=UTC)
-        deleted: list[str] = []
-        for subscription in self.list_subscriptions():
-            if subscription.expires_at > current:
-                continue
-            if self.delete_subscription(subscription.id):
-                deleted.append(subscription.id)
+        with self._session_factory.begin() as db:
+            rows = db.scalars(
+                select(NotificationSubscriptionRow).where(NotificationSubscriptionRow.expires_at <= current)
+            ).all()
+            deleted = [row.id for row in rows]
+            for row in rows:
+                db.delete(row)
         return deleted
 
     def upsert_subscription(

@@ -8,13 +8,15 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-import yaml
 from joserfc import jwt
 from joserfc.errors import JoseError
 from joserfc.jwk import OctKey
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import delete, select, update
 
+from .database.engine import SessionFactory
+from .database.models import AuthSessionRow, User
 from .models.config import AuthConfig
 from .models.user import UserConfig
 from .usernames import normalize_username
@@ -122,11 +124,67 @@ class SessionTokenClaims(BaseModel):
     ver: int
 
 
+def _user_to_row(username: str, user: AuthUser) -> User:
+    return User(
+        username=username,
+        password_hash=user.password_hash,
+        enabled=user.enabled,
+        token_version=user.token_version,
+        display_name=user.display_name,
+        email=user.email,
+        roles=list(user.roles),
+        config=user.config.model_dump(mode="json"),
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        password_changed_at=user.password_changed_at,
+        last_login_at=user.last_login_at,
+    )
+
+
+def _row_to_user(row: User) -> AuthUser:
+    return AuthUser.model_validate(
+        {
+            "password_hash": row.password_hash,
+            "enabled": row.enabled,
+            "token_version": row.token_version,
+            "display_name": row.display_name,
+            "email": row.email,
+            "roles": list(row.roles),
+            "config": row.config,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "password_changed_at": row.password_changed_at,
+            "last_login_at": row.last_login_at,
+        }
+    )
+
+
+def _session_to_row(session: AuthSession) -> AuthSessionRow:
+    return AuthSessionRow(
+        id=session.id,
+        user=session.user,
+        created_at=session.created_at,
+        expires_at=session.expires_at,
+        revoked_at=session.revoked_at,
+        user_agent=session.user_agent,
+    )
+
+
+def _row_to_session(row: AuthSessionRow) -> AuthSession:
+    return AuthSession(
+        id=row.id,
+        user=row.user,
+        created_at=row.created_at,
+        expires_at=row.expires_at,
+        revoked_at=row.revoked_at,
+        user_agent=row.user_agent,
+    )
+
+
 class AuthStore:
-    def __init__(self, data_dir: Path, config: AuthConfig):
+    def __init__(self, session_factory: SessionFactory, config: AuthConfig, data_dir: Path):
+        self._session_factory = session_factory
         self._dir = data_dir / "auth"
-        self._users_path = self._dir / "users.yaml"
-        self._sessions_path = self._dir / "sessions.yaml"
         self._secret_path = self._dir / "session_secret"
         self._config = config
         self._lock = RLock()
@@ -134,39 +192,32 @@ class AuthStore:
         self._cached_signing_key: OctKey | None = None
         self._dir.mkdir(parents=True, exist_ok=True)
 
-    @property
-    def users_path(self) -> Path:
-        return self._users_path
-
-    @property
-    def sessions_path(self) -> Path:
-        return self._sessions_path
-
     def load_users(self) -> UsersFile:
-        with self._lock:
-            if not self._users_path.exists():
-                return UsersFile()
-            raw = yaml.safe_load(self._users_path.read_text(encoding="utf-8")) or {}
-        return UsersFile.model_validate(raw)
+        with self._session_factory() as db:
+            rows = db.scalars(select(User)).all()
+        return UsersFile(users={row.username: _row_to_user(row) for row in rows})
 
     def save_users(self, users_file: UsersFile) -> UsersFile:
-        payload = users_file.model_dump(mode="json", exclude_none=True)
-        with self._lock:
-            self._write_yaml(self._users_path, payload)
+        """Replace the full user set (importer / bulk operations)."""
+        with self._session_factory.begin() as db:
+            db.execute(delete(User))
+            db.add_all(_user_to_row(username, user) for username, user in users_file.users.items())
         return users_file
 
     def get_user(self, username: str) -> AuthUser | None:
-        return self.load_users().users.get(normalize_username(username))
+        with self._session_factory() as db:
+            row = db.get(User, normalize_username(username))
+            return _row_to_user(row) if row is not None else None
 
     def ensure_bootstrap_admin(self) -> AuthUser | None:
         now = datetime.now(tz=UTC)
-        with self._lock:
-            users_file = self.load_users()
-            if any(user.enabled and has_admin_role(user.roles) for user in users_file.users.values()):
+        with self._lock, self._session_factory.begin() as db:
+            rows = db.scalars(select(User)).all()
+            if any(row.enabled and has_admin_role(list(row.roles)) for row in rows):
                 return None
 
             password = validate_bootstrap_admin_password()
-            existing = users_file.users.get(ADMIN_USERNAME)
+            existing = db.get(User, ADMIN_USERNAME)
             if existing is None:
                 user = AuthUser(
                     password_hash=hash_password(password),
@@ -177,7 +228,7 @@ class AuthStore:
                     password_changed_at=now,
                 )
             else:
-                payload = existing.model_dump(mode="python")
+                payload = _row_to_user(existing).model_dump(mode="python")
                 payload.update(
                     {
                         "password_hash": hash_password(password),
@@ -190,8 +241,7 @@ class AuthStore:
                     }
                 )
                 user = AuthUser.model_validate(payload)
-            users_file.users[ADMIN_USERNAME] = user
-            self.save_users(users_file)
+            db.merge(_user_to_row(ADMIN_USERNAME, user))
             return user
 
     def create_user(
@@ -208,70 +258,69 @@ class AuthStore:
         if not key:
             raise ValueError("username must not be empty")
         now = datetime.now(tz=UTC)
-        with self._lock:
-            users_file = self.load_users()
-            if key in users_file.users:
+        user = AuthUser(
+            password_hash=hash_password(password),
+            display_name=display_name or key,
+            email=email,
+            roles=roles or [],
+            created_at=now,
+            updated_at=now,
+            password_changed_at=now,
+            config=config or UserConfig(),
+        )
+        with self._session_factory.begin() as db:
+            if db.get(User, key) is not None:
                 raise ValueError(f"User {key!r} already exists")
-            user = AuthUser(
-                password_hash=hash_password(password),
-                display_name=display_name or key,
-                email=email,
-                roles=roles or [],
-                created_at=now,
-                updated_at=now,
-                password_changed_at=now,
-                config=config or UserConfig(),
-            )
-            users_file.users[key] = user
-            self.save_users(users_file)
-            return user
+            db.add(_user_to_row(key, user))
+        return user
 
     def update_user(self, username: str, updates: dict[str, Any]) -> AuthUser:
         key = normalize_username(username)
-        with self._lock:
-            users_file = self.load_users()
-            existing = users_file.users.get(key)
+        with self._session_factory.begin() as db:
+            existing = db.get(User, key)
             if existing is None:
                 raise KeyError(key)
-            payload = existing.model_dump(mode="python")
+            payload = _row_to_user(existing).model_dump(mode="python")
             payload.update(updates)
             payload["updated_at"] = datetime.now(tz=UTC)
             updated = AuthUser.model_validate(payload)
-            users_file.users[key] = updated
-            self.save_users(users_file)
-            return updated
+            _apply_user_to_row(existing, updated)
+        return updated
 
     def delete_user(self, username: str) -> None:
         key = normalize_username(username)
-        with self._lock:
-            users_file = self.load_users()
-            if key not in users_file.users:
+        now = datetime.now(tz=UTC)
+        with self._session_factory.begin() as db:
+            existing = db.get(User, key)
+            if existing is None:
                 raise KeyError(key)
-            del users_file.users[key]
-            self.save_users(users_file)
-            self.revoke_user_sessions(key)
+            db.delete(existing)
+            db.execute(
+                update(AuthSessionRow)
+                .where(AuthSessionRow.user == key, AuthSessionRow.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
 
     def set_password(self, username: str, password: str) -> AuthUser:
         key = normalize_username(username)
         password_hash = hash_password(password)
-        with self._lock:
-            users_file = self.load_users()
-            existing = users_file.users.get(key)
+        now = datetime.now(tz=UTC)
+        with self._session_factory.begin() as db:
+            existing = db.get(User, key)
             if existing is None:
                 raise KeyError(key)
-            payload = existing.model_dump(mode="python")
+            payload = _row_to_user(existing).model_dump(mode="python")
             payload.update(
                 {
                     "password_hash": password_hash,
-                    "password_changed_at": datetime.now(tz=UTC),
+                    "password_changed_at": now,
                     "token_version": existing.token_version + 1,
-                    "updated_at": datetime.now(tz=UTC),
+                    "updated_at": now,
                 }
             )
             updated = AuthUser.model_validate(payload)
-            users_file.users[key] = updated
-            self.save_users(users_file)
-            return updated
+            _apply_user_to_row(existing, updated)
+        return updated
 
     def verify_password(self, username: str, password: str) -> AuthUser | None:
         user = self.get_user(username)
@@ -282,74 +331,65 @@ class AuthStore:
         return user
 
     def load_sessions(self) -> SessionsFile:
-        with self._lock:
-            if not self._sessions_path.exists():
-                return SessionsFile()
-            raw = yaml.safe_load(self._sessions_path.read_text(encoding="utf-8")) or {}
-        return SessionsFile.model_validate(raw)
+        with self._session_factory() as db:
+            rows = db.scalars(select(AuthSessionRow)).all()
+        return SessionsFile(sessions={row.id: _row_to_session(row) for row in rows})
 
     def save_sessions(self, sessions_file: SessionsFile) -> SessionsFile:
-        payload = sessions_file.model_dump(mode="json", exclude_none=True)
-        with self._lock:
-            self._write_yaml(self._sessions_path, payload)
+        """Replace the full session set (importer / bulk operations)."""
+        with self._session_factory.begin() as db:
+            db.execute(delete(AuthSessionRow))
+            db.add_all(_session_to_row(session) for session in sessions_file.sessions.values())
         return sessions_file
 
     def create_session(self, *, username: str, user_agent: str = "") -> AuthSession:
-        user = self.get_user(username)
-        if user is None or not user.enabled:
-            raise ValueError("User not found or disabled")
+        key = normalize_username(username)
         now = datetime.now(tz=UTC)
         session = AuthSession(
             id=secrets.token_urlsafe(32),
-            user=normalize_username(username),
+            user=key,
             created_at=now,
             expires_at=now + timedelta(seconds=self._config.cookie.ttl_seconds),
             user_agent=user_agent,
         )
-        with self._lock:
-            sessions_file = self.load_sessions()
-            self._prune_sessions_file(sessions_file, now=now)
-            sessions_file.sessions[session.id] = session
-            self.save_sessions(sessions_file)
-            self.update_user(username, {"last_login_at": now})
+        with self._session_factory.begin() as db:
+            user = db.get(User, key)
+            if user is None or not user.enabled:
+                raise ValueError("User not found or disabled")
+            db.execute(delete(AuthSessionRow).where(AuthSessionRow.expires_at <= now))
+            db.add(_session_to_row(session))
+            user.last_login_at = now
+            user.updated_at = now
         return session
 
     def get_session(self, session_id: str) -> AuthSession | None:
-        return self.load_sessions().sessions.get(session_id)
+        with self._session_factory() as db:
+            row = db.get(AuthSessionRow, session_id)
+            return _row_to_session(row) if row is not None else None
 
     def revoke_session(self, session_id: str) -> bool:
-        with self._lock:
-            sessions_file = self.load_sessions()
-            session = sessions_file.sessions.get(session_id)
-            if session is None:
-                return False
-            sessions_file.sessions[session_id] = session.model_copy(update={"revoked_at": datetime.now(tz=UTC)})
-            self.save_sessions(sessions_file)
-            return True
+        with self._session_factory.begin() as db:
+            result = db.execute(
+                update(AuthSessionRow).where(AuthSessionRow.id == session_id).values(revoked_at=datetime.now(tz=UTC))
+            )
+            return result.rowcount > 0  # type: ignore[missing-attribute]
 
     def revoke_user_sessions(self, username: str) -> int:
         key = normalize_username(username)
         now = datetime.now(tz=UTC)
-        revoked = 0
-        with self._lock:
-            sessions_file = self.load_sessions()
-            for session_id, session in sessions_file.sessions.items():
-                if session.user != key or session.revoked_at is not None:
-                    continue
-                sessions_file.sessions[session_id] = session.model_copy(update={"revoked_at": now})
-                revoked += 1
-            if revoked:
-                self.save_sessions(sessions_file)
-        return revoked
+        with self._session_factory.begin() as db:
+            result = db.execute(
+                update(AuthSessionRow)
+                .where(AuthSessionRow.user == key, AuthSessionRow.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            return result.rowcount  # type: ignore[missing-attribute]
 
     def prune_sessions(self, *, now: datetime | None = None) -> int:
         current = now or datetime.now(tz=UTC)
-        with self._lock:
-            sessions_file = self.load_sessions()
-            removed = self._prune_sessions_file(sessions_file, now=current)
-            if removed:
-                self.save_sessions(sessions_file)
-            return removed
+        with self._session_factory.begin() as db:
+            result = db.execute(delete(AuthSessionRow).where(AuthSessionRow.expires_at <= current))
+            return result.rowcount  # type: ignore[missing-attribute]
 
     def signing_secret(self) -> str:
         with self._lock:
@@ -463,18 +503,19 @@ class AuthStore:
                 self._cached_signing_key = OctKey.import_key(self.signing_secret())
             return self._cached_signing_key
 
-    def _prune_sessions_file(self, sessions_file: SessionsFile, *, now: datetime) -> int:
-        before = len(sessions_file.sessions)
-        sessions_file.sessions = {
-            session_id: session for session_id, session in sessions_file.sessions.items() if session.expires_at > now
-        }
-        return before - len(sessions_file.sessions)
 
-    def _write_yaml(self, path: Path, payload: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_suffix(f"{path.suffix}.tmp")
-        tmp_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-        tmp_path.replace(path)
+def _apply_user_to_row(row: User, user: AuthUser) -> None:
+    row.password_hash = user.password_hash
+    row.enabled = user.enabled
+    row.token_version = user.token_version
+    row.display_name = user.display_name
+    row.email = user.email
+    row.roles = list(user.roles)
+    row.config = user.config.model_dump(mode="json")
+    row.created_at = user.created_at
+    row.updated_at = user.updated_at
+    row.password_changed_at = user.password_changed_at
+    row.last_login_at = user.last_login_at
 
 
 def normalize_roles(roles: list[str]) -> list[str]:

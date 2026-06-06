@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-import yaml
 from croniter import croniter
+from sqlalchemy import delete, select, update
 
+from .database.engine import SessionFactory
+from .database.models import JobRow
 from .models.jobs import JobCronTrigger, JobDefinition, JobsFile
 
 JobTriggerKind = Literal["api", "cron", "manual"]
@@ -60,34 +61,49 @@ def build_job_run_message(
     return "\n".join(sections).strip()
 
 
-class JobsStore:
-    def __init__(self, data_dir: Path):
-        self._path = data_dir / "jobs.yaml"
+def _job_to_row(job: JobDefinition) -> JobRow:
+    return JobRow(
+        id=job.id,
+        user=job.user,
+        enabled=job.enabled,
+        name=job.name,
+        prompt=job.prompt,
+        data=job.model_dump(mode="json"),
+    )
 
-    @property
-    def path(self) -> Path:
-        return self._path
+
+def _row_to_job(row: JobRow) -> JobDefinition:
+    return JobDefinition.model_validate(row.data)
+
+
+class JobsStore:
+    def __init__(self, session_factory: SessionFactory):
+        self._session_factory = session_factory
 
     def load(self) -> JobsFile:
-        if not self._path.exists():
-            return JobsFile(jobs=[])
-        raw = yaml.safe_load(self._path.read_text(encoding="utf-8")) or {}
-        return JobsFile.model_validate(raw)
+        return JobsFile(jobs=self.list_jobs())
 
     def save(self, jobs_file: JobsFile) -> JobsFile:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        payload = jobs_file.model_dump(mode="json", exclude_none=True)
-        self._path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+        """Replace the full job set (used by the importer and bulk operations)."""
+        with self._session_factory.begin() as db:
+            db.execute(delete(JobRow))
+            db.add_all(_job_to_row(job) for job in jobs_file.jobs)
         return jobs_file
 
     def list_jobs(self) -> list[JobDefinition]:
-        return self.load().jobs
+        with self._session_factory() as db:
+            rows = db.scalars(select(JobRow).order_by(JobRow.id)).all()
+        return [_row_to_job(row) for row in rows]
 
     def list_jobs_for_user(self, user: str) -> list[JobDefinition]:
-        return [job for job in self.load().jobs if job.user == user]
+        with self._session_factory() as db:
+            rows = db.scalars(select(JobRow).where(JobRow.user == user).order_by(JobRow.id)).all()
+        return [_row_to_job(row) for row in rows]
 
     def get_job(self, job_id: str) -> JobDefinition | None:
-        return next((job for job in self.load().jobs if job.id == job_id), None)
+        with self._session_factory() as db:
+            row = db.get(JobRow, job_id)
+            return _row_to_job(row) if row is not None else None
 
     def get_job_for_user(self, job_id: str, user: str) -> JobDefinition | None:
         job = self.get_job(job_id)
@@ -96,31 +112,34 @@ class JobsStore:
         return job
 
     def create_job(self, job: JobDefinition) -> JobDefinition:
-        jobs_file = self.load()
-        if any(existing.id == job.id for existing in jobs_file.jobs):
-            raise ValueError(f"Job {job.id!r} already exists")
-        jobs_file.jobs.append(job)
-        self.save(jobs_file)
+        with self._session_factory.begin() as db:
+            if db.get(JobRow, job.id) is not None:
+                raise ValueError(f"Job {job.id!r} already exists")
+            db.add(_job_to_row(job))
         return job
 
     def update_job(self, job_id: str, job: JobDefinition) -> JobDefinition:
-        jobs_file = self.load()
-        for index, existing in enumerate(jobs_file.jobs):
-            if existing.id != job_id:
-                continue
-            jobs_file.jobs[index] = job
-            self.save(jobs_file)
-            return job
-        raise KeyError(job_id)
+        with self._session_factory.begin() as db:
+            result = db.execute(
+                update(JobRow)
+                .where(JobRow.id == job_id)
+                .values(
+                    id=job.id,
+                    user=job.user,
+                    enabled=job.enabled,
+                    name=job.name,
+                    prompt=job.prompt,
+                    data=job.model_dump(mode="json"),
+                )
+            )
+            if result.rowcount == 0:  # type: ignore[missing-attribute]
+                raise KeyError(job_id)
+        return job
 
     def delete_job(self, job_id: str) -> bool:
-        jobs_file = self.load()
-        filtered = [job for job in jobs_file.jobs if job.id != job_id]
-        if len(filtered) == len(jobs_file.jobs):
-            return False
-        jobs_file.jobs = filtered
-        self.save(jobs_file)
-        return True
+        with self._session_factory.begin() as db:
+            result = db.execute(delete(JobRow).where(JobRow.id == job_id))
+            return result.rowcount > 0  # type: ignore[missing-attribute]
 
 
 class JobsScheduler:

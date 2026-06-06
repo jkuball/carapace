@@ -11,6 +11,8 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel
 
+from ..database.engine import SessionFactory
+from ..database.models import SandboxTokenRow
 from ..security.context import ApprovalSource, ApprovalVerdict
 from .runtime import ContainerRuntime, SandboxConfig
 from .state import load_sandbox_snapshot
@@ -61,6 +63,7 @@ class SandboxSessionLifecycle:
         runtime: ContainerRuntime,
         state: SandboxSessionLifecycleState,
         data_dir: Path,
+        session_factory: SessionFactory,
         base_image: str,
         network_name: str,
         idle_timeout: int,
@@ -73,6 +76,7 @@ class SandboxSessionLifecycle:
         self._runtime = runtime
         self._state = state
         self._data_dir = data_dir
+        self._session_factory = session_factory
         self._base_image = base_image
         self._network_name = network_name
         self._idle_timeout = idle_timeout
@@ -105,23 +109,18 @@ class SandboxSessionLifecycle:
     def _author_for_session(self, session_id: str) -> str:
         return self._git_author_for_session(session_id)
 
-    def _token_path(self, session_id: str) -> Path:
-        return self._data_dir / "sessions" / session_id / "token"
-
-    def _sandbox_snapshot_path(self, session_id: str) -> Path:
-        return self._data_dir / "sessions" / session_id / "sandbox.yaml"
-
     def _load_persisted_token(self, session_id: str) -> str | None:
-        token_path = self._token_path(session_id)
-        if not token_path.exists():
+        with self._session_factory() as db:
+            row = db.get(SandboxTokenRow, session_id)
+        if row is None:
             return None
-        token = token_path.read_text().strip()
+        token = row.token.strip()
         if not token:
             logger.warning(f"Ignoring empty persisted token for session {session_id}")
             return None
         self._state.session_tokens[session_id] = token
         self._state.token_to_session[token] = session_id
-        logger.debug(f"Restored token for session {session_id} from disk")
+        logger.debug(f"Restored token for session {session_id} from database")
         return token
 
     def get_or_create_token(self, session_id: str) -> str:
@@ -135,9 +134,12 @@ class SandboxSessionLifecycle:
             return token
 
         token = secrets.token_hex(16)
-        token_path = self._token_path(session_id)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(token)
+        with self._session_factory.begin() as db:
+            existing = db.get(SandboxTokenRow, session_id)
+            if existing is not None:
+                token = existing.token
+            else:
+                db.add(SandboxTokenRow(session_id=session_id, token=token))
         self._state.session_tokens[session_id] = token
         self._state.token_to_session[token] = session_id
         return token
@@ -151,7 +153,7 @@ class SandboxSessionLifecycle:
         sc = self._state.sessions.get(session_id)
         if sc is not None and sc.sandbox_id:
             return sc.sandbox_id
-        snapshot = load_sandbox_snapshot(self._sandbox_snapshot_path(session_id))
+        snapshot = load_sandbox_snapshot(self._session_factory, session_id)
         if snapshot is not None and snapshot.sandbox_id:
             return snapshot.sandbox_id
         return self.default_sandbox_id(session_id)

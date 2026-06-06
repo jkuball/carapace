@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from carapace.database.models import SandboxTokenRow
 from carapace.git.store import GitStore
 from carapace.knowledge import KnowledgeRepoHandle
 from carapace.models.skills import SkillCarapaceConfig
@@ -25,14 +26,23 @@ from carapace.sandbox.runtime import (
 )
 from carapace.sandbox.session_lifecycle import SessionContainer
 from carapace.sandbox.skill_activation import SKILL_ACTIVATION_PROVIDERS, SkillActivationRunner
+from carapace.session.manager import SessionManager, SessionMeta
 from carapace.skills import SkillRegistry
 from tests.runtime_mocks import make_runtime_mock
+
+
+def _seed_session_row(session_factory, data_dir: Path, *session_ids: str) -> None:
+    """Create minimal `sessions` rows so snapshot/token FK constraints are satisfied."""
+    mgr = SessionManager(session_factory, data_dir)
+    for session_id in session_ids:
+        mgr.save_meta(session_id, SessionMeta(user="thies"))
 
 
 def _sandbox_manager(
     *,
     runtime: Any,
     data_dir: Path,
+    session_factory,
     knowledge_dir: Path | None = None,
     knowledge_repo_for_session=None,
     **kwargs: Any,
@@ -54,6 +64,7 @@ def _sandbox_manager(
         runtime=runtime,
         data_dir=data_dir,
         knowledge_repo_for_session=knowledge_repo_for_session,
+        session_factory=session_factory,
         **kwargs,
     )
 
@@ -237,49 +248,50 @@ async def test_handle_http_supports_absolute_https_urls(monkeypatch: pytest.Monk
 
 
 class TestSandboxManagerAllowlists:
-    def _make_manager(self, tmp_path: Path):
+    def _make_manager(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
-        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+        return _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
 
-    def test_empty_by_default(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_empty_by_default(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr.get_allowed_domains("sess-1") == set()
 
-    def test_allow_domains(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_allow_domains(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr.allow_domains("sess-1", {"a.com", "b.com"})
         assert mgr.get_allowed_domains("sess-1") == {"a.com", "b.com"}
 
-    def test_allow_domains_accumulates(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_allow_domains_accumulates(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr.allow_domains("sess-1", {"a.com"})
         mgr.allow_domains("sess-1", {"b.com"})
         assert mgr.get_allowed_domains("sess-1") == {"a.com", "b.com"}
 
-    def test_cleanup_clears_domains(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_cleanup_clears_domains(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr.allow_domains("sess-1", {"a.com"})
         mgr._cleanup_tracking("sess-1")
         assert mgr.get_allowed_domains("sess-1") == set()
 
-    def test_proxy_env_includes_token(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_proxy_env_includes_token(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         env = mgr._build_proxy_env("sess-1", "my-secret-token", "http://172.18.0.2:3128")
         assert env["HTTP_PROXY"] == "http://sess-1:my-secret-token@172.18.0.2:3128"
         assert env["HTTPS_PROXY"] == "http://sess-1:my-secret-token@172.18.0.2:3128"
         assert "172.18.0.2" in env["NO_PROXY"]
         assert "GIT_REPO_URL" in env
 
-    def test_proxy_env_includes_session_id(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_proxy_env_includes_session_id(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         env = mgr._build_proxy_env("sess-1", "tok", "http://172.18.0.2:3128")
         assert env["CARAPACE_SESSION_ID"] == "sess-1"
 
-    def test_proxy_env_uses_owner_repo_name(self, tmp_path: Path):
+    def test_proxy_env_uses_owner_repo_name(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         mgr = _sandbox_manager(
             runtime=runtime,
             data_dir=tmp_path,
+            session_factory=db_factory,
             knowledge_dir=tmp_path,
             knowledge_repo_for_session=lambda _session_id: KnowledgeRepoHandle(
                 owner="ada",
@@ -293,7 +305,7 @@ class TestSandboxManagerAllowlists:
 
         assert env["GIT_REPO_URL"].endswith("/git/ada")
 
-    def test_proxy_env_keeps_two_session_repos_isolated(self, tmp_path: Path):
+    def test_proxy_env_keeps_two_session_repos_isolated(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         handles = {
             "sess-thies": KnowledgeRepoHandle(
@@ -316,6 +328,7 @@ class TestSandboxManagerAllowlists:
         mgr = _sandbox_manager(
             runtime=runtime,
             data_dir=tmp_path,
+            session_factory=db_factory,
             knowledge_repo_for_session=knowledge_repo_for_session,
         )
 
@@ -325,38 +338,38 @@ class TestSandboxManagerAllowlists:
         assert thies_env["GIT_REPO_URL"].endswith("/git/thies")
         assert ada_env["GIT_REPO_URL"].endswith("/git/ada")
 
-    def test_proxy_env_no_git_identity_vars(self, tmp_path: Path):
+    def test_proxy_env_no_git_identity_vars(self, tmp_path: Path, db_factory):
         """Git identity is configured via git config inside the container, not env vars."""
-        mgr = self._make_manager(tmp_path)
+        mgr = self._make_manager(tmp_path, db_factory)
         env = mgr._build_proxy_env("sess-1", "tok", "http://172.18.0.2:3128")
         assert "GIT_AUTHOR_NAME" not in env
         assert "GIT_COMMITTER_NAME" not in env
         assert "GIT_AUTHOR_EMAIL" not in env
         assert "GIT_COMMITTER_EMAIL" not in env
 
-    def test_no_proxy_env_when_empty(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_no_proxy_env_when_empty(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         assert mgr._build_proxy_env("sess-1", "tok", "") == {}
 
-    def test_token_lookup(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_token_lookup(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._token_to_session["abc123"] = "sess-1"
         assert mgr.verify_session_token("sess-1", "abc123") is True
         assert mgr.verify_session_token("sess-1", "wrong") is False
         assert mgr.verify_session_token("wrong-session", "abc123") is False
 
-    def test_token_lookup_restores_persisted_token(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
-        token_path = tmp_path / "sessions" / "sess-1" / "token"
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text("persisted-token")
+    def test_token_lookup_restores_persisted_token(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
+        _seed_session_row(db_factory, tmp_path, "sess-1")
+        with db_factory.begin() as db:
+            db.add(SandboxTokenRow(session_id="sess-1", token="persisted-token"))
 
         assert mgr.verify_session_token("sess-1", "persisted-token") is True
         assert mgr._session_tokens["sess-1"] == "persisted-token"
         assert mgr._token_to_session["persisted-token"] == "sess-1"
 
-    def test_cleanup_clears_tokens(self, tmp_path: Path):
-        mgr = self._make_manager(tmp_path)
+    def test_cleanup_clears_tokens(self, tmp_path: Path, db_factory):
+        mgr = self._make_manager(tmp_path, db_factory)
         mgr._token_to_session["tok"] = "sess-1"
         mgr._session_tokens["sess-1"] = "tok"
         mgr._cleanup_tracking("sess-1")
@@ -379,7 +392,7 @@ def test_skill_activation_trusted_files_include_skill_md() -> None:
 
 
 @pytest.mark.anyio
-async def test_exec_recreate_preserves_domains(tmp_path: Path):
+async def test_exec_recreate_preserves_domains(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(side_effect=["container-1", "container-2"])
@@ -395,7 +408,8 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path):
         ]
     )
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
     session_id = "sess-1"
     await mgr.ensure_session(session_id)
     mgr.allow_domains(session_id, {"api.example.com"})
@@ -406,7 +420,7 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
+async def test_exec_recreate_reinjects_credential_files(tmp_path: Path, db_factory):
     """After container recreation, activation providers re-materialize file credentials."""
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
@@ -435,7 +449,8 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
     (skill_dir / "SKILL.md").write_text("---\nname: moneydb\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
     session_id = "sess-1"
 
     # Register callbacks — the activated-skills callback returns "moneydb",
@@ -470,7 +485,7 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_path: Path):
+async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -492,7 +507,8 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
     (skill_dir / "SKILL.md").write_text("---\nname: cred-setup\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
     mgr.set_skill_activation_inputs_callback(
         AsyncMock(
             return_value=SkillActivationInputs(
@@ -515,7 +531,7 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
 
 
 @pytest.mark.anyio
-async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tmp_path: Path):
+async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(side_effect=["container-1", "container-2"])
@@ -537,7 +553,8 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
     (skill_dir / "SKILL.md").write_text("---\nname: restore-retry\n---\nBody.\n")
     (skill_dir / "setup.sh").write_text("#!/bin/sh\n")
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.activate_skill("sess-1", "restore-retry")
     assert "setup.sh completed." in result
@@ -548,7 +565,7 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
 
 
 @pytest.mark.anyio
-async def test_activate_skill_prefers_pnpm_when_package_and_pnpm_lockfiles_exist(tmp_path: Path):
+async def test_activate_skill_prefers_pnpm_when_package_and_pnpm_lockfiles_exist(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -563,7 +580,8 @@ async def test_activate_skill_prefers_pnpm_when_package_and_pnpm_lockfiles_exist
     (skill_dir / "package-lock.json").write_text("{}\n")
     (skill_dir / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.activate_skill("sess-1", "multi-node-lock")
     commands = [call.args[1] for call in runtime.exec.call_args_list]
@@ -580,7 +598,7 @@ async def test_activate_skill_prefers_pnpm_when_package_and_pnpm_lockfiles_exist
 
 
 @pytest.mark.anyio
-async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_path: Path):
+async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -598,7 +616,8 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("---\nname: web\n---\nBody.\n")
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
     mgr.set_skill_command_aliases_callback(
         lambda _session_id, skill_name: (
             [("web", "uv run --directory /workspace/skills/web web-search")] if skill_name == "web" else []
@@ -923,7 +942,7 @@ class TestSkillMetadataParsing:
 
 
 @pytest.mark.anyio
-async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path):
+async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -931,7 +950,8 @@ async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path):
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.exec_command(
         "sess-1",
@@ -956,7 +976,7 @@ async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Path):
+async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -964,7 +984,8 @@ async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Pat
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     with pytest.raises(ValueError, match=r"Conflicting network\.tunnels declarations"):
         await mgr.exec_command(
@@ -978,7 +999,7 @@ async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Pat
 
 
 @pytest.mark.anyio
-async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(tmp_path: Path):
+async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -986,7 +1007,8 @@ async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.exec_command(
         "sess-1",
@@ -1014,7 +1036,7 @@ async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(
 
 
 @pytest.mark.anyio
-async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path):
+async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.sandbox_exists = AsyncMock(return_value=None)
@@ -1041,7 +1063,8 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path):
         ]
     )
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.exec_command(
         "sess-1",
@@ -1058,7 +1081,7 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Path):
+async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Path, db_factory):
     runtime = make_runtime_mock()
     runtime.get_host_ip = AsyncMock(return_value="172.18.0.1")
     runtime.create_sandbox = AsyncMock(return_value="container-1")
@@ -1076,7 +1099,8 @@ async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Pa
         ]
     )
 
-    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path)
+    mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+    _seed_session_row(db_factory, tmp_path, "sess-1")
 
     result = await mgr.exec_command(
         "sess-1",

@@ -26,6 +26,7 @@ from genai_prices import UpdatePrices
 from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai.exceptions import UsageLimitExceeded
+from sqlalchemy import Engine
 
 from .. import get_version
 from ..auth import AuthStore
@@ -33,6 +34,7 @@ from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
 from ..config import _resolve_data_dir, _resolve_knowledge_dir, get_config_path, get_data_dir, load_config
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
+from ..database.engine import SessionFactory, create_engine_and_factory, run_migrations
 from ..git.http import GitHttpHandler
 from ..jobs import JobsScheduler, JobsStore
 from ..knowledge import KnowledgeRepoRegistry
@@ -76,6 +78,8 @@ load_dotenv()
 _data_dir: Path
 _config_path: Path
 _config: Config
+_engine_db: Engine
+_session_factory: SessionFactory
 _engine: SessionEngine
 _git_handler: GitHttpHandler
 _knowledge_repo_registry: KnowledgeRepoRegistry
@@ -285,6 +289,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _data_dir, \
         _config_path, \
         _config, \
+        _engine_db, \
+        _session_factory, \
         _engine, \
         _git_handler, \
         _knowledge_repo_registry, \
@@ -306,9 +312,11 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _config = load_config()
     _data_dir = _resolve_data_dir(config_path, _config)
 
-    # 2. Bootstrap directories
+    # 2. Bootstrap directories + database
     ensure_data_dir(_data_dir)
-    _auth_store = AuthStore(_data_dir, _config.auth)
+    _engine_db, _session_factory = create_engine_and_factory(_config.database)
+    run_migrations(_engine_db)
+    _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
     _knowledge_repo_registry = KnowledgeRepoRegistry(
@@ -324,7 +332,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logfire.instrument_pydantic_ai()
 
     _session_list_cache = SessionListCache(_config.cache)
-    session_mgr = SessionManager(_data_dir, on_change=_session_list_cache.invalidate_sync)
+    session_mgr = SessionManager(_session_factory, _data_dir, on_change=_session_list_cache.invalidate_sync)
     model_factory = make_model_factory(_config)
     agent_model = model_factory(_config.agent.model)
 
@@ -371,6 +379,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _sandbox_mgr = SandboxManager(
         runtime=runtime,
         data_dir=_data_dir,
+        session_factory=_session_factory,
         base_image=base_image,
         network_name=sandbox_network,
         idle_timeout_minutes=_config.sandbox.idle_timeout_minutes,
@@ -400,7 +409,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     _config.notifications = ensure_vapid_config(_config.notifications, _data_dir)
 
-    _notification_store = NotificationStore(_data_dir)
+    _notification_store = NotificationStore(_session_factory)
     _notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=_config.notifications.presence_ttl_seconds)
     )
@@ -436,7 +445,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         config=_config.sessions.commit,
         knowledge_repo_for_session=knowledge_repo_for_session,
     )
-    _jobs_store = JobsStore(_data_dir)
+    _jobs_store = JobsStore(_session_factory)
     _jobs_scheduler = JobsScheduler(_jobs_store)
 
     # Git HTTP handler — serves the knowledge repo on the sandbox API
@@ -549,6 +558,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await registry.close()
     await _sandbox_mgr.cleanup_all()
     await _session_list_cache.close()
+    _engine_db.dispose()
     price_updater.stop()
     logger.info("Shutdown complete")
 

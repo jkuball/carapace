@@ -40,8 +40,8 @@ def _archive_service(
     )
 
 
-def test_append_events_stamps_timestamp(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+def test_append_events_stamps_timestamp(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies")
 
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
@@ -52,8 +52,8 @@ def test_append_events_stamps_timestamp(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_archive_service_commits_snapshot(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_commits_snapshot(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(
         state.session_id,
@@ -84,8 +84,8 @@ async def test_archive_service_commits_snapshot(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="ada", private=False)
     mgr.append_events(
         state.session_id,
@@ -124,8 +124,8 @@ async def test_archive_service_routes_snapshot_to_owner_specific_repo(tmp_path) 
 
 
 @pytest.mark.asyncio
-async def test_archive_service_skips_private_sessions(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_skips_private_sessions(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=True)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
@@ -139,8 +139,8 @@ async def test_archive_service_skips_private_sessions(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_archive_service_empty_history_returns_no_archive_path(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_empty_history_returns_no_archive_path(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     git_store = MagicMock(spec=GitStore)
     git_store.commit = AsyncMock(return_value=True)
@@ -154,8 +154,8 @@ async def test_archive_service_empty_history_returns_no_archive_path(tmp_path) -
 
 
 @pytest.mark.asyncio
-async def test_archive_service_skips_unchanged_snapshot_for_different_trigger(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_skips_unchanged_snapshot_for_different_trigger(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(
         state.session_id,
@@ -178,8 +178,8 @@ async def test_archive_service_skips_unchanged_snapshot_for_different_trigger(tm
 
 
 @pytest.mark.asyncio
-async def test_archive_service_preserves_concurrent_privacy_update(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_preserves_concurrent_privacy_update(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
@@ -204,8 +204,8 @@ async def test_archive_service_preserves_concurrent_privacy_update(tmp_path) -> 
 
 
 @pytest.mark.asyncio
-async def test_archive_service_serializes_same_session_commits(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_serializes_same_session_commits(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(
         state.session_id,
@@ -240,8 +240,8 @@ async def test_archive_service_serializes_same_session_commits(tmp_path) -> None
 
 
 @pytest.mark.asyncio
-async def test_archive_service_does_not_persist_export_hash_on_commit_failure(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_does_not_persist_export_hash_on_commit_failure(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
@@ -261,8 +261,8 @@ async def test_archive_service_does_not_persist_export_hash_on_commit_failure(tm
 
 
 @pytest.mark.asyncio
-async def test_archive_service_removes_written_file_after_commit_failure(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_removes_written_file_after_commit_failure(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
@@ -278,8 +278,8 @@ async def test_archive_service_removes_written_file_after_commit_failure(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_archive_service_cleans_up_lock_after_archive_delete(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_cleans_up_lock_after_archive_delete(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
@@ -297,8 +297,8 @@ async def test_archive_service_cleans_up_lock_after_archive_delete(tmp_path) -> 
 
 
 @pytest.mark.asyncio
-async def test_archive_service_uses_update_title_after_first_commit(tmp_path) -> None:
-    mgr = SessionManager(tmp_path)
+async def test_archive_service_uses_update_title_after_first_commit(tmp_path, db_factory) -> None:
+    mgr = SessionManager(db_factory, tmp_path)
     state = mgr.create_session(user="thies", private=False)
     mgr.append_events(state.session_id, [{"role": "user", "content": "hello"}])
     git_store = MagicMock(spec=GitStore)
