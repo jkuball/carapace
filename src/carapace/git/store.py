@@ -270,15 +270,16 @@ class GitStore:
             logger.info("Git remote origin removed")
         self._remote_configured = False
 
-    async def push_to_remote(self) -> None:
-        """Push the local branch to the configured remote branch."""
+    async def push_to_remote(self) -> bool:
+        """Push the local branch to the configured remote branch. Returns success."""
         refspec = f"{self._LOCAL_BRANCH}:{self.remote_branch}"
         logger.info(f"Pushing {refspec} to origin")
         code, out = await self._run("push", "origin", refspec)
         if code != 0:
             logger.warning(f"git push to remote failed: {out}")
-        else:
-            logger.info("Pushed to external remote")
+            return False
+        logger.info("Pushed to external remote")
+        return True
 
     async def pull_from_remote(self) -> str:
         """Fetch + fast-forward merge from external remote.

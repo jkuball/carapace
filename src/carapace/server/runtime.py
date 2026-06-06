@@ -226,5 +226,6 @@ class KnowledgeGitRuntime:
             self._apply_config_to_store(normalized_owner, handle)
             if not handle.git_store.remote_configured:
                 return False, "No external remote configured."
-            await handle.git_store.push_to_remote()
-            return True, "Pushed to external remote."
+            if await handle.git_store.push_to_remote():
+                return True, "Pushed to external remote."
+            return False, "Push to the external remote failed."

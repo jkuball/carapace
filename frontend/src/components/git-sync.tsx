@@ -189,6 +189,7 @@ export function SandboxGitControls({
         setRunning(status.running);
         setUpstream(status.upstream);
         setCounts(status.running ? { ahead: status.ahead, behind: status.behind } : null);
+        setOutcome((prev) => (prev && !prev.ok ? null : prev));
       } catch {
         setErrored(true);
         setCounts(null);
@@ -276,6 +277,7 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
       const status = await getGlobalGit(server, token);
       setConfigured(status.remote_configured);
       setCounts(status.remote_configured ? { ahead: status.ahead, behind: status.behind } : null);
+      setOutcome((prev) => (prev && !prev.ok ? null : prev));
     } catch {
       setCounts(null);
       setOutcome({ ok: false, errorLabel: t("errors.status"), detail: "" });

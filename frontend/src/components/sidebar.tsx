@@ -670,7 +670,7 @@ export function Sidebar({
                     </button>
                   </div>
                 </div>
-                {globalGit.configured ? (
+                {globalGit.configured !== false ? (
                   <GlobalGitPanel git={globalGit} className="border-b border-border/80 px-3 py-2.5" />
                 ) : null}
                 <div className="p-1">

@@ -605,7 +605,12 @@ class SandboxManager:
 
         existing_id = await self._runtime.sandbox_exists(self._sandbox_name(session_id))
         if isinstance(existing_id, str) and existing_id and await self._runtime.is_running(existing_id):
-            adopted, _ = await self.ensure_session(session_id)
+            # Re-attach through the lifecycle directly, not self.ensure_session:
+            # the latter writes a transient "pending" sandbox snapshot when the
+            # cache is cold, which would wrongly flip UI state for a read-only
+            # status check. The container is already running, so this re-attaches
+            # without booting and without touching the snapshot.
+            adopted, _ = await self._session_lifecycle.ensure_session(session_id)
             return adopted
         return None
 
