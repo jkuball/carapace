@@ -180,7 +180,8 @@
             "save": "Speichern",
             "saving": "Speichert",
             "addModel": "Modell hinzufügen",
-            "removeModel": "Modell entfernen"
+            "removeModel": "Modell entfernen",
+            "confirmRemoveModel": "Modell \"{name}\" entfernen? Dies kann nicht rückgängig gemacht werden."
         },
         "secretSources": {
             "none": "Keine",
