@@ -1,6 +1,149 @@
 # CHANGELOG
 
 
+## v0.138.2 (2026-06-06)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ fix: force release
+  ([`c5c4d43`](https://github.com/thiesgerken/carapace/commit/c5c4d433d0ca4239b734b6ea667ef2b4598797b2))
+
+### Other
+
+
+- fix: delete warning no longer trusts stale cached sandbox status
+  ([`c213f20`](https://github.com/thiesgerken/carapace/commit/c213f20cd0eeb87273b83ebbcdc5553fa45c85c0))
+
+  The unpushed-commit delete guard only ran when the cached session-row snapshot showed running, but non-active rows can be stale (stopped in the list while actually running), skipping the warning. The backend status check is boot-safe (returns running=false / no counts when stopped), so query it directly for every delete instead of gating on the cached row.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: address bugbot review (snapshot, push result, stale error, hidden panel)
+  ([`79c4e9f`](https://github.com/thiesgerken/carapace/commit/79c4e9fa53563c7589c83829ea9fbe72c265fb48))
+
+  - _running_container re-attaches via the lifecycle directly instead of
+    self.ensure_session, which wrote a transient "pending" sandbox snapshot
+    on a cold cache — a read-only git status no longer flips UI state or
+    skips the delete unpushed-commit warning.
+  - push_to_remote now returns success; push_for_user reports ok=false when
+    the external push fails (it previously only logged), so the UI no longer
+    shows a green confirmation for a failed push.
+  - Clear a stale error outcome on the next successful status refresh.
+  - Render the global git panel unless the remote is known-unconfigured, so a
+    failed initial status fetch still shows the error and a refresh control.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: move git command output into status tooltip
+  ([`9bf4486`](https://github.com/thiesgerken/carapace/commit/9bf4486890b0d50e5de9d4af50325680fd630c20))
+
+  The raw pull/push/git output was dumped inline in the small panel, unformatted and cramped. Show only a short error label on failure; the full command output is now the tooltip on the status line ("Up to date" / ahead-behind counts), on success and failure alike.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: align ahead/behind counts and pull/push buttons
+  ([`8d13ea9`](https://github.com/thiesgerken/carapace/commit/8d13ea969772d5694f023bab2de0a86b0b9b10da))
+
+  The counts read ↑ahead ↓behind while the buttons read pull, push, so pull/push sat under the wrong counts. Reorder the counts to ↓behind ↑ahead (pull↔behind, push↔ahead) and color push amber to match the ahead count (pull already matches behind in sky).
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: show account dot only when knowledge remote has changes to pull
+  ([`98513ed`](https://github.com/thiesgerken/carapace/commit/98513edf4f5fded95857d134de1949317afb5442))
+
+  Re-add the global git status dot on the account avatar, but render it only when the server repo is behind the remote (behind > 0), with a tooltip stating how many commits there are to pull.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: detect running sandbox for git status; drop account-menu dot
+  ([`c25a786`](https://github.com/thiesgerken/carapace/commit/c25a786269e21a6f3e10ad9e526581b17fb38ffb))
+
+  - sandbox_git_status reported "not running" for a running sandbox whose
+    container wasn't in the in-memory _sessions cache (e.g. after a server
+    restart). _running_container now also checks the runtime for an existing
+    running sandbox and adopts it via ensure_session, which re-attaches
+    without booting — matching how the snapshot detects "running".
+  - Remove the status dot from the account avatar per request; the global
+    git info + controls live solely in the account-menu popup.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- refactor: move global git into account menu + add tooltips
+  ([`ff42259`](https://github.com/thiesgerken/carapace/commit/ff42259f2108bb27008e048c9ac8e06069f199b9))
+
+  - Replace the always-visible global git panel in the sidebar footer with a
+    small status dot on the account avatar (in sync / out of sync / busy) and
+    the full pull/push panel inside the account menu popup. Keeps the sidebar
+    uncluttered. Status is fetched once via a shared useGlobalGit hook.
+  - Add explanatory tooltips to both the session (B1) and global (B2)
+    controls: a hover description on the section label and per-button titles
+    spelling out what pull/push do and to/from where.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: address bugbot review (sandbox boot, stale fetch, shift-skip)
+  ([`ea8ed0c`](https://github.com/thiesgerken/carapace/commit/ea8ed0c246f8972a2ca62f3ffc5b4009744e7d82))
+
+  - sandbox_git_status/unpushed_count no longer boot a stopped sandbox:
+    add _running_container (checks is_running without ensure_session) and
+    return running=False instead. Mirrors the delete flow. UI shows a
+    "Sandbox not running" label and disables actions.
+  - sandbox_git_status now reports fetched=False when git fetch fails, so a
+    failed fetch can't masquerade as up-to-date with stale local behind.
+  - Shift+click delete now skips the unpushed-commits warning too, matching
+    the documented confirm-skip behavior (skipUnpushedWarning threaded from
+    the sidebar through onDelete).
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: keep pull/push result notice after refresh
+  ([`99b0eb2`](https://github.com/thiesgerken/carapace/commit/99b0eb220535927589578e25f072759cb4870961))
+
+  runAction set a success/denial notice then called refresh, which clears the notice on entry, so users never saw confirmation or denial text. Set the notice after refresh completes instead.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: clear global git counts on status fetch error
+  ([`e072d7c`](https://github.com/thiesgerken/carapace/commit/e072d7c1cf7e9f624768dec38e69047a932f1c35))
+
+  GlobalGitControls left stale ahead/behind counts visible after a failed status fetch, misstating sync state and keeping pull/push enabled. Clear counts in the catch block so only the error notice shows.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: address bugbot review on git-sync PR
+  ([`49330bb`](https://github.com/thiesgerken/carapace/commit/49330bb5403ff289acd9e6efc34c581428d55f7c))
+
+  - Remove obsolete /pull slash-command test (command no longer exists);
+    skill-cache invalidation now lives in KnowledgeGitRuntime.pull_for_user.
+  - Global pull/push endpoints now report ok=false when no remote is
+    configured (pull_for_user/push_for_user return (ok, message)); add
+    push_for_user and a regression test.
+  - git-sync UI: distinguish a status-fetch error from "no remote" via an
+    explicit emptyLabel, so a failed fetch no longer shows the no-remote
+    label alongside the error notice.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: surface sandbox/knowledge git state in UI
+  ([`35d90bc`](https://github.com/thiesgerken/carapace/commit/35d90bc009f01c35a64cd39068d4e97f5e157e0d))
+
+  Replace the per-session /pull and /push slash commands with visible UI controls across the two git boundaries:
+
+  - B1 (sandbox /workspace <-> backend repo): ahead/behind indicator plus
+    pull/push in the chat inspector, run via _exec_in_container so they
+    never appear as agent tool calls. Push stays sentinel-gated.
+  - B2 (backend per-user repo <-> external remote): global ahead/behind
+    indicator with pull/push in the sidebar footer, hidden when no remote
+    is configured. Replaces the removed /pull /push slash commands.
+  - Warn before deleting a session whose sandbox has unpushed commits
+    (checked only when the sandbox is already running).
+
+  Adds GitStore.remote_status, KnowledgeGitRuntime status/pull helpers, SandboxManager git methods, REST endpoints, and the git-sync frontend component with en/de strings.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.138.1 (2026-06-06)
 
 
