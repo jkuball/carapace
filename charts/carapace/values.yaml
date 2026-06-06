@@ -236,8 +236,9 @@ postgres:
     # -- Password for the carapace DB user. Leave empty to auto-generate one and
     # persist it in the {release}-postgres Secret (reused across upgrades via lookup).
     password: ""
-    # -- Use an externally managed Secret instead of generating one. It must contain
-    # the password under passwordKey and a ready-to-use SQLAlchemy URL under urlKey.
+    # -- Use an externally managed Secret instead of generating one. It must contain the
+    # password under passwordKey and a SQLAlchemy URL under urlKey. The URL may omit the
+    # password (it is injected separately as PGPASSWORD, so no URL-encoding is needed).
     existingSecret: ""
     passwordKey: postgres-password
     urlKey: database-url

@@ -67,6 +67,13 @@ CARAPACE_DATABASE_URL env entry for the server container.
     secretKeyRef:
       name: {{ include "carapace.postgres.secretName" . }}
       key: {{ .Values.postgres.auth.urlKey }}
+# Password supplied out-of-band so special characters never need URL-encoding; libpq
+# (psycopg) reads PGPASSWORD when the URL omits the password.
+- name: PGPASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "carapace.postgres.secretName" . }}
+      key: {{ .Values.postgres.auth.passwordKey }}
 {{- else if .Values.database.url -}}
 - name: CARAPACE_DATABASE_URL
   value: {{ .Values.database.url | quote }}
