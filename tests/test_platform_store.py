@@ -87,6 +87,20 @@ def test_duplicate_model_ids_are_deduplicated(db_factory):
     assert len(store.load_models()) == 1
 
 
+def test_seed_race_loser_does_not_raise(db_factory):
+    # Simulate a concurrent winner having already seeded between our empty-check and commit:
+    # a second seed of a populated DB must return False, never propagate IntegrityError.
+    store = PlatformSettingsStore(db_factory)
+    config = Config(agent=_agent())
+    assert store.seed_from_config(config) is True
+    assert store.is_seeded() is True
+    assert store.seed_from_config(config) is False
+
+
+def test_is_seeded_false_on_empty_db(db_factory):
+    assert PlatformSettingsStore(db_factory).is_seeded() is False
+
+
 def test_assemble_agent_config_validates_defaults_in_catalog(db_factory):
     store = PlatformSettingsStore(db_factory)
     # Catalog lacks the configured default model -> AgentConfig validation must reject.

@@ -332,12 +332,14 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _platform_store = PlatformSettingsStore(_session_factory)
     if _platform_store.seed_from_config(_config):
         logger.info("Seeded platform settings (models + agent/sessions) from config.yaml")
-        # Strip the now DB-managed sections from config.yaml so editing them on disk can't
-        # silently no-op (one-time, single stable backup).
+    _config = _platform_store.overlay_config(_config)
+    # Once the DB is authoritative, strip the now DB-managed sections from config.yaml so editing
+    # them on disk can't silently no-op. Runs every boot (idempotent no-op when absent) so a strip
+    # that failed on the seeding boot is retried later; gated on the DB actually being seeded.
+    if _platform_store.is_seeded():
         removed = strip_db_managed_sections(config_path)
         if removed:
             logger.info(f"Removed DB-managed sections {removed} from config.yaml (backup kept)")
-    _config = _platform_store.overlay_config(_config)
 
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:
