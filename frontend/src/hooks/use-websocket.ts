@@ -6,6 +6,10 @@ import type { ClientMessage, ServerMessage } from "@/lib/types";
 type Status = "disconnected" | "connecting" | "connected";
 
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000];
+// A connection must stay open at least this long before it counts as "stable"
+// and the backoff resets. Prevents a tight reconnect loop when the backend
+// accepts the socket then immediately drops it (half-ready after a restart).
+const STABLE_CONNECTION_MS = 5000;
 
 export function useWebSocket(
   url: string | null,
@@ -26,6 +30,7 @@ export function useWebSocket(
   const connect = useCallback(() => {
     if (!url || unmountedRef.current) return;
     let opened = false;
+    let openedAt = 0;
 
     // Close any existing connection before opening a new one
     if (wsRef.current) {
@@ -47,8 +52,11 @@ export function useWebSocket(
     ws.onopen = () => {
       if (wsRef.current !== ws) return; // stale
       opened = true;
+      openedAt = Date.now();
       setStatus("connected");
-      retriesRef.current = 0;
+      // Do NOT reset retries here: a connection that opens then immediately
+      // drops must keep backing off. Reset happens in onclose once the socket
+      // has stayed open past STABLE_CONNECTION_MS.
     };
 
     ws.onclose = () => {
@@ -57,6 +65,9 @@ export function useWebSocket(
       wsRef.current = null;
       if (opened) {
         onDisconnectRef.current?.();
+        if (Date.now() - openedAt >= STABLE_CONNECTION_MS) {
+          retriesRef.current = 0;
+        }
       }
 
       if (unmountedRef.current) return;

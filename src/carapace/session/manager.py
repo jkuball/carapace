@@ -339,6 +339,14 @@ class SessionManager:
         self._notify_change()
 
     # --- Event log (ordered display history including slash commands) ---
+    #
+    # Single-process assumption: all event writes are serialized by the in-process
+    # ``_events_lock``. ``append_events`` allocates seq via ``MAX(seq)+1`` and
+    # ``_rewrite_events`` does delete-all + reinsert; neither is safe across
+    # processes. The deployment runs a single uvicorn process (chart replicas: 1,
+    # no workers), so this holds. If we ever scale past one process/replica sharing
+    # the DB, this breaks: add a UniqueConstraint(session_id, seq) + insert-on-
+    # conflict retry, and replace the rewrite with a targeted update.
 
     def _load_events_unlocked(self, session_id: str) -> list[dict[str, Any]]:
         with self._session_factory() as db:

@@ -1,6 +1,169 @@
 # CHANGELOG
 
 
+## v0.137.0 (2026-06-06)
+
+
+### Other
+
+
+- add comment regarding locking inter-process
+  ([`d88ab72`](https://github.com/thiesgerken/carapace/commit/d88ab722b694874fea6bc83df47f8369c8e72bba))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(helm): inject Postgres password via PGPASSWORD, not the URL
+  ([`d255462`](https://github.com/thiesgerken/carapace/commit/d255462b6143c28757495d17dd35525b0e81a330))
+
+  Address Bugbot: the generated CARAPACE_DATABASE_URL interpolated the password without URL-encoding, so a user-supplied postgres.auth.password (or existingSecret value) containing @ : / % could break parsing/auth.
+
+  Drop the password from the SQLAlchemy URL and inject it as PGPASSWORD from the same Secret; libpq (psycopg) applies it when the URL omits the password — no URL-encoding needed for any password.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- 🐛 fix: handle sandbox-token insert race and delete_session rmtree failure
+  ([`4bf8117`](https://github.com/thiesgerken/carapace/commit/4bf8117179bf055aef0fbd32916642bd4adf2edb))
+
+  Address Bugbot review on #209:
+  - get_or_create_token: a concurrent writer could insert the same
+    sandbox_tokens PK between the existence check and our INSERT, raising
+    IntegrityError. Catch it and reuse the persisted token.
+  - delete_session: the DB row (source of truth) is deleted first; a failing
+    workspace rmtree now only logs a warning instead of propagating, leaving
+    harmless orphan files for the sandbox orphan cleanup rather than a
+    half-completed delete.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- 🐛 fix: make importer --purge atomic and clear all tables
+  ([`c0ce7a2`](https://github.com/thiesgerken/carapace/commit/c0ce7a2e20bb49f2fe351bcfa0f294ddcc87ea79))
+
+  Address Bugbot review on #209:
+  - Purge ran in a separate committed transaction before import; a later
+    validation/IO error left the DB emptied with no rollback. Move the
+    truncate into the same transaction (flush, not commit) so any failure
+    — or dry_run — rolls the purge back too.
+  - Purge skipped `users` and `auth_sessions`, so a purge-and-reimport
+    wiped sessions but kept stale auth rows and re-skipped YAML users as
+    "already existing". Add both tables to the truncate set.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### ✨ Features
+
+
+- ✨ feat(helm): bundled Postgres + DB backend options + migration docs
+  ([`3f1221d`](https://github.com/thiesgerken/carapace/commit/3f1221d61703faa18af5ae3f85f9b15e7b207c73))
+
+  The chart had no database resources after the SQL-backend switch. Add:
+  - Bundled in-cluster PostgreSQL (Deployment + Service + PVC + Secret),
+    enabled by default. Password auto-generates into the <release>-postgres
+    Secret and is reused across upgrades via lookup; overridable via
+    postgres.auth.password / existingSecret.
+  - database.url for an external DB; SQLite-on-data-PVC fallback when
+    postgres is disabled and no url is set. Server wires CARAPACE_DATABASE_URL
+    via carapace.databaseUrlEnv helper.
+  - chart README "Database" section + docs/kubernetes.md pointer covering
+    backend selection and the one-shot YAML import
+    (kubectl exec deploy/<release>-server -- carapace-migrate import-yaml).
+  - docker-compose: comment documenting the same import command.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- ✨ feat: SQL backend (SQLAlchemy 2.0 + Alembic)
+  ([`6ee74ee`](https://github.com/thiesgerken/carapace/commit/6ee74ee47691aa91cec4e6bf59f1390ef7528262))
+
+  Move the six file/YAML storage targets into a relational database (PostgreSQL primary, SQLite for dev/test) behind the existing store classes. Sync SQLAlchemy keeps every store method signature unchanged, so call sites are untouched.
+
+  Migrated: per-session data (state, history, events, usage, llm_requests, audit, sandbox snapshot, sandbox token), users.yaml, jobs.yaml, auth sessions, notification subscriptions. Config, secrets, knowledge git repos and session workspace/ dirs stay on disk.
+
+  - New carapace.database package: base (portable JSON + tz-aware
+    datetime), models (11 tables), engine (sync factory, SQLite WAL+FK
+    PRAGMA, run_migrations), Alembic + 0001 initial migration.
+  - Stores swap YAML I/O for ORM; load-modify-write becomes single
+    UPDATE/DELETE (kills the jobs lost-update race, drops the auth RLock).
+  - Events/audit are append rows; history/usage/llm_log are JSON blobs.
+  - One-shot importer + `carapace-migrate import-yaml` (idempotent,
+    --dry-run, --purge); migrations auto-run on server startup.
+  - docker-compose gains a postgres service.
+
+  BigInteger PKs use an Integer variant on SQLite (autoincrement); BIGSERIAL on Postgres. Verified on both backends; 903 tests pass.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### ♻️ Refactoring
+
+
+- ♻️ refactor: typed Pydantic JSON columns + address review
+  ([`79d9239`](https://github.com/thiesgerken/carapace/commit/79d9239a6848193ac101b4211ea1cbb321a4514f))
+
+  Address PR #209 review comments:
+  - Typed JSON columns: add PydanticJson / ModelMessagesJson TypeDecorators
+    so columns read as Mapped[SessionState], Mapped[UsageTracker],
+    Mapped[JobDefinition], Mapped[UserConfig], Mapped[NotificationSubscription],
+    Mapped[SessionSandboxSnapshot], Mapped[list[ModelMessage]]. Stores now
+    store/read the models directly — the scattered model_dump/model_validate
+    calls are gone. Free-form event/audit payloads and roles stay JSON with a
+    comment. (state/sandbox_snapshot columns are self-documenting now.)
+  - Move SessionSandboxSnapshot to sandbox/snapshot.py (db-free) to break the
+    models <-> sandbox.state import cycle; state.py re-exports it.
+  - sessions.state is now nullable (the rare owner-before-state placeholder
+    stores NULL instead of {}).
+  - Default SQLite path is resolved under data_dir (resolve_database_url), so
+    it lands beside the data tree instead of the process CWD.
+  - Drop the lazy `import yaml` in session/manager.py.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+## v0.136.7 (2026-06-06)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: back off websocket reconnects when connection flaps
+  ([`78c46b5`](https://github.com/thiesgerken/carapace/commit/78c46b5b6ce6c2b059ca95b752ebec361e7c8420))
+
+  Reset the reconnect backoff only after the socket stays open past STABLE_CONNECTION_MS instead of immediately on open. A backend that comes back half-ready (accepts the socket then drops it) no longer triggers a tight 500ms reconnect loop, which re-rendered chat-view repeatedly and looked like a rapid reload cycle.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+## v0.136.6 (2026-06-06)
+
+
+### 💄 UI/UX
+
+
+- 💄 ui: confirm for model deletion
+  ([`f0f8d4a`](https://github.com/thiesgerken/carapace/commit/f0f8d4a15cbbe4cf892ecc4c92250e683a8bd467))
+
+### Other
+
+
+- fix: confine /usage tables to horizontal scroll on mobile
+  ([`5659f81`](https://github.com/thiesgerken/carapace/commit/5659f816513891a6615fb17e401a0016f834f6c4))
+
+  Usage tables lacked an overflow wrapper, so wide content scrolled the whole app sideways. Wrap them in overflow-x-auto like the /models command.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: add track_activity to _generate_title protocol stub
+  ([`ac9f6a5`](https://github.com/thiesgerken/carapace/commit/ac9f6a566b2478150aa70fd96d63693b3b521a69))
+
+  pyrefly flagged the SessionTurnHost protocol stub missing the new keyword argument used by the auto-title scheduler.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- feat: run auto-titling off the session busy path
+  ([`6c65d81`](https://github.com/thiesgerken/carapace/commit/6c65d8105ff358d3aafddbdc60bfc9bd2a0054e4))
+
+  Auto-title generation ran fire-and-forget but still wrapped its LLM call in llm_request_recording, which set active.llm_request_state and broadcast on_llm_activity -- making the session look busy (and clobbering a concurrent turn's activity state).
+
+  Add track_activity flag to llm_request_recording / _generate_title; the auto-title scheduler passes track_activity=False so the background title keeps usage + audit-log recording but never touches or broadcasts the busy state. /retitle and /model title stay visible/blocking.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.136.5 (2026-06-05)
 
 
