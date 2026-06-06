@@ -355,7 +355,11 @@ class ServerConfig(BaseSettings):
     ]
 
 
-class CarapaceConfig(ConfigModel):
+class CarapaceConfig(BaseSettings):
+    # Operator/bootstrap config: read from CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN env vars
+    # (env wins over any value still present in config.yaml's `carapace:` section).
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_", extra="forbid")
+
     log_level: str = "info"
     logfire_token: str = ""
 

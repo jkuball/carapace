@@ -426,6 +426,8 @@ agent:
 Additional configuration sections:
 
 ```yaml
+# carapace.log_level / logfire_token are also settable via CARAPACE_LOG_LEVEL /
+# CARAPACE_LOGFIRE_TOKEN (env wins over file), so this section can be omitted entirely.
 carapace:
   log_level: info
 
