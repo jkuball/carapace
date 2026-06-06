@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class SandboxGitStatus(BaseModel):
     """Ahead/behind of the sandbox ``/workspace`` clone vs the backend repo (B1)."""
 
+    running: bool = True
     branch: str | None = None
     upstream: bool = False
     ahead: int | None = None

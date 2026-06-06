@@ -157,6 +157,7 @@ export function SandboxGitControls({
   const t = useTranslations("git");
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
   const [upstream, setUpstream] = useState(true);
+  const [running, setRunning] = useState(true);
   const [errored, setErrored] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
@@ -169,8 +170,9 @@ export function SandboxGitControls({
       try {
         const status = await getSandboxGit(server, token, sessionId, { fetch });
         setErrored(false);
+        setRunning(status.running);
         setUpstream(status.upstream);
-        setCounts({ ahead: status.ahead, behind: status.behind });
+        setCounts(status.running ? { ahead: status.ahead, behind: status.behind } : null);
       } catch {
         setErrored(true);
         setCounts(null);
@@ -212,12 +214,12 @@ export function SandboxGitControls({
   return (
     <GitSyncControls
       title={t("sandbox.label")}
-      counts={upstream ? counts : null}
-      emptyLabel={errored ? null : t("noRemote")}
+      counts={running && upstream ? counts : null}
+      emptyLabel={errored ? null : !running ? t("sandbox.notRunning") : t("noRemote")}
       loading={loading}
       notice={notice}
       busy={busy}
-      disabled={disabled}
+      disabled={disabled || !running}
       pullDisabled={!upstream || (counts?.behind ?? 0) === 0}
       pushDisabled={!upstream || (counts?.ahead ?? 0) === 0}
       onRefresh={() => void refresh(true)}

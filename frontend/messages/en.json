@@ -972,7 +972,8 @@
         "upToDate": "Up to date",
         "noRemote": "No remote configured",
         "sandbox": {
-            "label": "Workspace sync"
+            "label": "Workspace sync",
+            "notRunning": "Sandbox not running"
         },
         "global": {
             "label": "Knowledge remote"

@@ -515,6 +515,7 @@ export async function wipeSandbox(
 // Git status / sync -----------------------------------------------------
 
 export interface SandboxGitStatus {
+  running: boolean;
   branch: string | null;
   upstream: boolean;
   ahead: number | null;

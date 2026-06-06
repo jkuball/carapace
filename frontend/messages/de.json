@@ -972,7 +972,8 @@
         "upToDate": "Aktuell",
         "noRemote": "Kein Remote konfiguriert",
         "sandbox": {
-            "label": "Workspace-Sync"
+            "label": "Workspace-Sync",
+            "notRunning": "Sandbox läuft nicht"
         },
         "global": {
             "label": "Wissens-Remote"

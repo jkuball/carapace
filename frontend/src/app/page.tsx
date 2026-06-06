@@ -457,11 +457,12 @@ function HomeContent() {
     }
   }
 
-  const handleDeleteSession = useCallback(async (id: string) => {
+  const handleDeleteSession = useCallback(async (id: string, options?: { skipUnpushedWarning?: boolean }) => {
     // Warn about unpushed sandbox commits — but only when the sandbox is
-    // already running, so we never boot a container just to check.
+    // already running, so we never boot a container just to check. Shift+click
+    // (skipUnpushedWarning) skips this, matching the standard confirm skip.
     const target = sessions.find((s) => s.session_id === id);
-    if (target?.sandbox?.status === "running") {
+    if (!options?.skipUnpushedWarning && target?.sandbox?.status === "running") {
       try {
         const git = await getSandboxGit(server, token, id, { fetch: false });
         const ahead = git.upstream ? (git.ahead ?? 0) : 0;

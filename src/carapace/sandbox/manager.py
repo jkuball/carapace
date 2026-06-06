@@ -590,26 +590,50 @@ class SandboxManager:
             bypass_proxy=True,
         )
 
+    async def _running_container(self, session_id: str) -> SessionContainer | None:
+        """Return the session's container only if it is already running — never boots it.
+
+        Reading git state must not resume a spun-down sandbox (mirrors the
+        delete flow, which avoids booting just to inspect git state).
+        """
+        sc = self._sessions.get(session_id)
+        if sc is None or not await self._runtime.is_running(sc.container_id):
+            return None
+        return sc
+
     async def sandbox_git_status(self, session_id: str, *, fetch: bool) -> SandboxGitStatus:
-        """Return ahead/behind of the sandbox clone vs the backend repo."""
-        sc, _ = await self.ensure_session(session_id)
+        """Return ahead/behind of the sandbox clone vs the backend repo.
+
+        Does not boot a stopped sandbox — returns ``running=False`` instead.
+        """
+        sc = await self._running_container(session_id)
+        if sc is None:
+            return SandboxGitStatus(running=False)
+
+        fetched = False
         if fetch:
-            await self._git_in_workspace(sc, "fetch origin", timeout=60)
+            fr = await self._git_in_workspace(sc, "fetch origin", timeout=60)
+            fetched = fr.exit_code == 0
 
         branch_res = await self._git_in_workspace(sc, "rev-parse --abbrev-ref HEAD", timeout=10)
         branch = branch_res.output.strip() if branch_res.exit_code == 0 else None
 
         upstream = await self._git_in_workspace(sc, "rev-parse --abbrev-ref --symbolic-full-name @{u}", timeout=10)
         if upstream.exit_code != 0:
-            return SandboxGitStatus(branch=branch, upstream=False, fetched=fetch)
+            return SandboxGitStatus(branch=branch, upstream=False, fetched=fetched)
 
         counts = await self._git_in_workspace(sc, "rev-list --left-right --count @{u}...HEAD", timeout=10)
         behind, ahead = self._parse_left_right(counts)
-        return SandboxGitStatus(branch=branch, upstream=True, ahead=ahead, behind=behind, fetched=fetch)
+        return SandboxGitStatus(branch=branch, upstream=True, ahead=ahead, behind=behind, fetched=fetched)
 
     async def sandbox_unpushed_count(self, session_id: str) -> int:
-        """Local-only count of commits not yet pushed to the backend repo (no fetch)."""
-        sc, _ = await self.ensure_session(session_id)
+        """Local-only count of commits not yet pushed to the backend repo (no fetch).
+
+        Returns 0 when the sandbox isn't running — never boots it.
+        """
+        sc = await self._running_container(session_id)
+        if sc is None:
+            return 0
         res = await self._git_in_workspace(sc, "rev-list --count @{u}..HEAD", timeout=10)
         if res.exit_code != 0:
             return 0

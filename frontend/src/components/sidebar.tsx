@@ -36,7 +36,7 @@ interface SidebarProps {
   onGoHome: () => void;
   onOpenSettings: () => void;
   onUpdateAttributes: (sessionId: string, attributes: SessionAttributesPatch) => Promise<SessionInfo>;
-  onDelete: (sessionId: string) => void;
+  onDelete: (sessionId: string, options?: { skipUnpushedWarning?: boolean }) => void;
   onDisconnect: () => void;
   githubUrl: string;
   loading?: boolean;
@@ -565,7 +565,7 @@ export function Sidebar({
               if (!shouldConfirmSessionDeletion(session, event)) {
                 return;
               }
-              onDelete(session.session_id);
+              onDelete(session.session_id, { skipUnpushedWarning: event.shiftKey });
             }}
             title={session.message_count === 0
               ? tSidebar("actions.deleteEmpty")
