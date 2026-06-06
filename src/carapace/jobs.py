@@ -68,12 +68,12 @@ def _job_to_row(job: JobDefinition) -> JobRow:
         enabled=job.enabled,
         name=job.name,
         prompt=job.prompt,
-        data=job.model_dump(mode="json"),
+        data=job,
     )
 
 
 def _row_to_job(row: JobRow) -> JobDefinition:
-    return JobDefinition.model_validate(row.data)
+    return row.data
 
 
 class JobsStore:
@@ -129,7 +129,7 @@ class JobsStore:
                     enabled=job.enabled,
                     name=job.name,
                     prompt=job.prompt,
-                    data=job.model_dump(mode="json"),
+                    data=job,
                 )
             )
             if result.rowcount == 0:  # type: ignore[missing-attribute]

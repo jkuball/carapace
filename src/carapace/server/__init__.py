@@ -314,7 +314,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # 2. Bootstrap directories + database
     ensure_data_dir(_data_dir)
-    _engine_db, _session_factory = create_engine_and_factory(_config.database)
+    _engine_db, _session_factory = create_engine_and_factory(_config.database, _data_dir)
     run_migrations(_engine_db)
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:

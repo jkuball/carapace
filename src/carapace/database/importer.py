@@ -163,7 +163,7 @@ def import_all(
                         enabled=job.enabled,
                         name=job.name,
                         prompt=job.prompt,
-                        data=job.model_dump(mode="json"),
+                        data=job,
                     )
                 )
                 counts.jobs += 1
@@ -185,7 +185,7 @@ def import_all(
                         user=sub.user,
                         endpoint=sub.endpoint,
                         expires_at=sub.expires_at,
-                        data=sub.model_dump(mode="json"),
+                        data=sub,
                     )
                 )
                 counts.subscriptions += 1
@@ -224,9 +224,7 @@ def _import_session(db: Any, session_dir: Path, counts: ImportCounts) -> None:
 
     state = SessionState.model_validate(state_raw)
     snapshot_raw = _load_yaml(session_dir / "sandbox.yaml")
-    sandbox_snapshot = (
-        SessionSandboxSnapshot.model_validate(snapshot_raw).model_dump(mode="json") if snapshot_raw else None
-    )
+    sandbox_snapshot = SessionSandboxSnapshot.model_validate(snapshot_raw) if snapshot_raw else None
     db.add(
         SessionRow(
             session_id=session_id,
@@ -241,11 +239,10 @@ def _import_session(db: Any, session_dir: Path, counts: ImportCounts) -> None:
     # history
     history_raw = _load_yaml(session_dir / "history.yaml")
     if history_raw:
-        messages = ModelMessagesTypeAdapter.validate_python(history_raw)
         db.add(
             SessionHistoryRow(
                 session_id=session_id,
-                messages=ModelMessagesTypeAdapter.dump_python(messages, mode="json"),
+                messages=ModelMessagesTypeAdapter.validate_python(history_raw),
             )
         )
         counts.history += 1
@@ -253,23 +250,13 @@ def _import_session(db: Any, session_dir: Path, counts: ImportCounts) -> None:
     # usage
     usage_raw = _load_yaml(session_dir / "usage.yaml")
     if usage_raw:
-        db.add(
-            SessionUsageRow(
-                session_id=session_id,
-                tracker=UsageTracker.model_validate(usage_raw).model_dump(mode="json"),
-            )
-        )
+        db.add(SessionUsageRow(session_id=session_id, tracker=UsageTracker.model_validate(usage_raw)))
         counts.usage += 1
 
     # llm request log
     llm_raw = _load_yaml(session_dir / "llm_requests.yaml")
     if llm_raw:
-        db.add(
-            SessionLlmRequestRow(
-                session_id=session_id,
-                log=LlmRequestLog.model_validate(llm_raw).model_dump(mode="json"),
-            )
-        )
+        db.add(SessionLlmRequestRow(session_id=session_id, log=LlmRequestLog.model_validate(llm_raw)))
         counts.llm_requests += 1
 
     # events (append-only multi-doc)

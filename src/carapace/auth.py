@@ -133,7 +133,7 @@ def _user_to_row(username: str, user: AuthUser) -> User:
         display_name=user.display_name,
         email=user.email,
         roles=list(user.roles),
-        config=user.config.model_dump(mode="json"),
+        config=user.config,
         created_at=user.created_at,
         updated_at=user.updated_at,
         password_changed_at=user.password_changed_at,
@@ -511,7 +511,7 @@ def _apply_user_to_row(row: User, user: AuthUser) -> None:
     row.display_name = user.display_name
     row.email = user.email
     row.roles = list(user.roles)
-    row.config = user.config.model_dump(mode="json")
+    row.config = user.config
     row.created_at = user.created_at
     row.updated_at = user.updated_at
     row.password_changed_at = user.password_changed_at

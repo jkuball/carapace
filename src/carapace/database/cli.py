@@ -17,15 +17,17 @@ def _load_factory_and_data_dir():
     config_path = get_config_path()
     config = load_config()
     data_dir = _resolve_data_dir(config_path, config)
-    engine, factory = create_engine_and_factory(config.database)
+    engine, factory = create_engine_and_factory(config.database, data_dir)
     return engine, factory, data_dir
 
 
 @app.command()
 def upgrade() -> None:
     """Apply Alembic migrations up to the latest revision."""
+    config_path = get_config_path()
     config = load_config()
-    engine, _ = create_engine_and_factory(config.database)
+    data_dir = _resolve_data_dir(config_path, config)
+    engine, _ = create_engine_and_factory(config.database, data_dir)
     run_migrations(engine)
     engine.dispose()
     console.print("[green]Database upgraded to head.[/green]")

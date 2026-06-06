@@ -8,8 +8,9 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+import yaml
 from pydantic import BaseModel, field_validator
-from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
+from pydantic_ai import ModelMessage
 from sqlalchemy import delete, func, select
 
 from ..database.engine import SessionFactory
@@ -80,7 +81,7 @@ def _state_columns(state: SessionState) -> dict[str, Any]:
         "archived": state.attributes.archived,
         "pinned": state.attributes.pinned,
         "favorite": state.attributes.favorite,
-        "state": state.model_dump(mode="json"),
+        "state": state,
     }
 
 
@@ -167,7 +168,7 @@ class SessionManager:
                     archived=False,
                     pinned=False,
                     favorite=False,
-                    state={},
+                    state=None,
                 )
             )
 
@@ -177,9 +178,9 @@ class SessionManager:
     def load_state(self, session_id: str) -> SessionState | None:
         with self._session_factory() as db:
             row = db.get(SessionRow, session_id)
-            if row is None or not row.state:
+            if row is None or row.state is None:
                 return None
-            return SessionState.model_validate(row.state)
+            return row.state
 
     def resume_session(self, session_id: str) -> SessionState | None:
         state = self.load_state(session_id)
@@ -246,17 +247,15 @@ class SessionManager:
     def load_history(self, session_id: str) -> list[ModelMessage]:
         with self._session_factory() as db:
             row = db.get(SessionHistoryRow, session_id)
-            raw = row.messages if row is not None else []
-        return ModelMessagesTypeAdapter.validate_python(raw or [])
+            return list(row.messages) if row is not None else []
 
     def save_history(self, session_id: str, messages: list[ModelMessage]) -> None:
-        data = ModelMessagesTypeAdapter.dump_python(messages, mode="json")
         with self._session_factory.begin() as db:
             row = db.get(SessionHistoryRow, session_id)
             if row is None:
-                db.add(SessionHistoryRow(session_id=session_id, messages=data))
+                db.add(SessionHistoryRow(session_id=session_id, messages=messages))
             else:
-                row.messages = data
+                row.messages = messages
         self._notify_change()
 
     # --- Usage tracking persistence ---
@@ -264,32 +263,30 @@ class SessionManager:
     def load_usage(self, session_id: str) -> UsageTracker:
         with self._session_factory() as db:
             row = db.get(SessionUsageRow, session_id)
-            return UsageTracker.model_validate(row.tracker) if row is not None else UsageTracker()
+            return row.tracker if row is not None else UsageTracker()
 
     def save_usage(self, session_id: str, tracker: UsageTracker) -> None:
-        data = tracker.model_dump(mode="json")
         with self._session_factory.begin() as db:
             row = db.get(SessionUsageRow, session_id)
             if row is None:
-                db.add(SessionUsageRow(session_id=session_id, tracker=data))
+                db.add(SessionUsageRow(session_id=session_id, tracker=tracker))
             else:
-                row.tracker = data
+                row.tracker = tracker
 
     # --- Per-LLM-request log (API tokens + input-shape ratios) ---
 
     def load_llm_request_log(self, session_id: str) -> LlmRequestLog:
         with self._session_factory() as db:
             row = db.get(SessionLlmRequestRow, session_id)
-            return LlmRequestLog.model_validate(row.log) if row is not None else LlmRequestLog()
+            return row.log if row is not None else LlmRequestLog()
 
     def save_llm_request_log(self, session_id: str, log: LlmRequestLog) -> None:
-        data = log.model_dump(mode="json")
         with self._session_factory.begin() as db:
             row = db.get(SessionLlmRequestRow, session_id)
             if row is None:
-                db.add(SessionLlmRequestRow(session_id=session_id, log=data))
+                db.add(SessionLlmRequestRow(session_id=session_id, log=log))
             else:
-                row.log = data
+                row.log = log
 
     # --- In-flight LLM request activity (transient — stays on disk) ---
 
@@ -297,8 +294,6 @@ class SessionManager:
         path = self.sessions_dir / session_id / "llm_activity.yaml"
         if not path.exists():
             return None
-        import yaml
-
         with open(path) as f:
             raw = yaml.safe_load(f)
         if not raw:
@@ -306,8 +301,6 @@ class SessionManager:
         return LlmRequestState.model_validate(raw)
 
     def save_llm_request_state(self, session_id: str, state: LlmRequestState) -> None:
-        import yaml
-
         session_dir = self.sessions_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         path = session_dir / "llm_activity.yaml"
@@ -323,17 +316,14 @@ class SessionManager:
     def load_sandbox_snapshot(self, session_id: str) -> SessionSandboxSnapshot | None:
         with self._session_factory() as db:
             row = db.get(SessionRow, session_id)
-            if row is None or not row.sandbox_snapshot:
-                return None
-            return SessionSandboxSnapshot.model_validate(row.sandbox_snapshot)
+            return row.sandbox_snapshot if row is not None else None
 
     def save_sandbox_snapshot(self, session_id: str, snapshot: SessionSandboxSnapshot) -> None:
-        data = snapshot.model_dump(mode="json")
         with self._session_factory.begin() as db:
             row = db.get(SessionRow, session_id)
             if row is None:
                 raise FileNotFoundError(f"Session {session_id} not found")
-            row.sandbox_snapshot = data
+            row.sandbox_snapshot = snapshot
         self._notify_change()
 
     def clear_sandbox_snapshot(self, session_id: str) -> None:

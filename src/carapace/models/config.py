@@ -280,9 +280,10 @@ class CacheConfig(BaseSettings):
 class DatabaseConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CARAPACE_DATABASE_", extra="forbid")
 
-    # SQLAlchemy URL. Defaults to a SQLite file next to the data dir for local dev.
+    # SQLAlchemy URL. The default SQLite file is resolved under the data dir (see
+    # carapace.database.engine.resolve_database_url), so it lands beside the data tree.
     # For Postgres use e.g. "postgresql+psycopg://carapace:carapace@postgres:5432/carapace".
-    url: str = "sqlite+pysqlite:///./data/carapace.db"
+    url: str = "sqlite+pysqlite:///carapace.db"
     # Connection pool sizing (ignored for SQLite).
     pool_size: int = 5
     max_overflow: int = 10

@@ -6,7 +6,13 @@ from typing import Any
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base, JsonType, UtcDateTime
+from ..models.jobs import JobDefinition
+from ..models.session import SessionState
+from ..models.user import UserConfig
+from ..notifications.models import NotificationSubscription
+from ..sandbox.snapshot import SessionSandboxSnapshot
+from ..usage import LlmRequestLog, UsageTracker
+from .base import Base, JsonType, ModelMessagesJson, PydanticJson, UtcDateTime
 
 # SQLite only autoincrements an "INTEGER PRIMARY KEY" rowid alias; a BIGINT primary key
 # does not autoincrement there. Use a 64-bit type on real databases, plain INTEGER on SQLite.
@@ -23,7 +29,8 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(Text, default="")
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
     roles: Mapped[list[str]] = mapped_column(JsonType, default=list)
-    config: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
+    # Full per-user settings (credentials, channels, git, default models, budgets).
+    config: Mapped[UserConfig] = mapped_column(PydanticJson(UserConfig))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
     password_changed_at: Mapped[datetime] = mapped_column(UtcDateTime)
@@ -49,7 +56,9 @@ class JobRow(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     name: Mapped[str] = mapped_column(Text)
     prompt: Mapped[str] = mapped_column(Text)
-    data: Mapped[dict[str, Any]] = mapped_column(JsonType)
+    # Full job definition (triggers, modes, model overrides); id/user/enabled/name/prompt
+    # above are queryable projections kept in sync on write.
+    data: Mapped[JobDefinition] = mapped_column(PydanticJson(JobDefinition))
 
 
 class NotificationSubscriptionRow(Base):
@@ -59,7 +68,8 @@ class NotificationSubscriptionRow(Base):
     user: Mapped[str] = mapped_column(String(256), index=True)
     endpoint: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime, index=True)
-    data: Mapped[dict[str, Any]] = mapped_column(JsonType)
+    # Full subscription (keys, prefs, device, timestamps); columns above are the index.
+    data: Mapped[NotificationSubscription] = mapped_column(PydanticJson(NotificationSubscription))
 
     __table_args__ = (UniqueConstraint("user", "endpoint", name="uq_subscription_user_endpoint"),)
 
@@ -77,8 +87,14 @@ class SessionRow(Base):
     archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     favorite: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    state: Mapped[dict[str, Any]] = mapped_column(JsonType)
-    sandbox_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JsonType, nullable=True)
+    # Full session state (attributes, budget, model names, context grants, knowledge
+    # bookkeeping); the scalar columns above are queryable projections kept in sync on write.
+    # Nullable only for the rare owner-before-state placeholder (see SessionManager.save_meta).
+    state: Mapped[SessionState | None] = mapped_column(PydanticJson(SessionState), nullable=True)
+    # Latest sandbox/container status snapshot for this session (UI display).
+    sandbox_snapshot: Mapped[SessionSandboxSnapshot | None] = mapped_column(
+        PydanticJson(SessionSandboxSnapshot), nullable=True
+    )
 
     __table_args__ = (Index("ix_sessions_channel", "channel_type", "channel_ref"),)
 
@@ -89,7 +105,8 @@ class SessionHistoryRow(Base):
     session_id: Mapped[str] = mapped_column(
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
     )
-    messages: Mapped[list[Any]] = mapped_column(JsonType, default=list)
+    # pydantic-ai conversation history, read/written as a whole.
+    messages: Mapped[list[Any]] = mapped_column(ModelMessagesJson, default=list)
 
 
 class SessionEventRow(Base):
@@ -101,6 +118,7 @@ class SessionEventRow(Base):
     )
     seq: Mapped[int] = mapped_column(Integer)
     timestamp: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    # Heterogeneous UI/display event payload (slash commands, tool calls, approvals, ...).
     data: Mapped[dict[str, Any]] = mapped_column(JsonType)
 
     __table_args__ = (Index("ix_session_events_session_seq", "session_id", "seq"),)
@@ -112,7 +130,7 @@ class SessionUsageRow(Base):
     session_id: Mapped[str] = mapped_column(
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
     )
-    tracker: Mapped[dict[str, Any]] = mapped_column(JsonType)
+    tracker: Mapped[UsageTracker] = mapped_column(PydanticJson(UsageTracker))
 
 
 class SessionLlmRequestRow(Base):
@@ -121,7 +139,7 @@ class SessionLlmRequestRow(Base):
     session_id: Mapped[str] = mapped_column(
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
     )
-    log: Mapped[dict[str, Any]] = mapped_column(JsonType)
+    log: Mapped[LlmRequestLog] = mapped_column(PydanticJson(LlmRequestLog))
 
 
 class SessionAuditRow(Base):
@@ -132,6 +150,7 @@ class SessionAuditRow(Base):
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), index=True
     )
     timestamp: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    # Security audit entry payload (AuditEntry dump; stored loosely for append-only logging).
     data: Mapped[dict[str, Any]] = mapped_column(JsonType)
 
 

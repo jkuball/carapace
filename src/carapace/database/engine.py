@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..models.config import DatabaseConfig
@@ -17,9 +18,28 @@ def _is_sqlite(url: str) -> bool:
     return url.startswith("sqlite")
 
 
-def create_engine_and_factory(db_config: DatabaseConfig) -> tuple[Engine, SessionFactory]:
-    """Build a sync SQLAlchemy engine + session factory for the configured URL."""
-    url = db_config.url
+def resolve_database_url(url: str, data_dir: Path | None) -> str:
+    """Rebase a relative SQLite file path under *data_dir*.
+
+    Without this, the default ``sqlite:///carapace.db`` would land in the process
+    working directory instead of beside the configured data tree. Absolute paths,
+    ``:memory:``, and non-SQLite URLs are returned unchanged.
+    """
+    if data_dir is None or not _is_sqlite(url):
+        return url
+    parsed = make_url(url)
+    database = parsed.database
+    if not database or database == ":memory:" or Path(database).is_absolute():
+        return url
+    return str(parsed.set(database=str((data_dir / database).resolve())))
+
+
+def create_engine_and_factory(db_config: DatabaseConfig, data_dir: Path | None = None) -> tuple[Engine, SessionFactory]:
+    """Build a sync SQLAlchemy engine + session factory for the configured URL.
+
+    A relative SQLite path is resolved under *data_dir* when given.
+    """
+    url = resolve_database_url(db_config.url, data_dir)
     kwargs: dict[str, Any] = {"echo": db_config.echo, "future": True}
 
     if _is_sqlite(url):

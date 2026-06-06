@@ -16,12 +16,12 @@ def _to_row(subscription: NotificationSubscription) -> NotificationSubscriptionR
         user=subscription.user,
         endpoint=subscription.endpoint,
         expires_at=subscription.expires_at,
-        data=subscription.model_dump(mode="json"),
+        data=subscription,
     )
 
 
 def _to_model(row: NotificationSubscriptionRow) -> NotificationSubscription:
-    return NotificationSubscription.model_validate(row.data)
+    return row.data
 
 
 class NotificationStore:

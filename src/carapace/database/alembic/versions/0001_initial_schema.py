@@ -84,7 +84,7 @@ def upgrade() -> None:
         sa.Column("pinned", sa.Boolean(), nullable=False),
         sa.Column("favorite", sa.Boolean(), nullable=False),
         sa.Column(
-            "state", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=False
+            "state", sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql"), nullable=True
         ),
         sa.Column(
             "sandbox_snapshot",
