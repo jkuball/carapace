@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { EmojiText } from "@/components/emoji-text";
 import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
-import { GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
+import { GlobalGitIndicator, GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { VersionBadge } from "@/components/version-badge";
 import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
@@ -636,6 +636,7 @@ export function Sidebar({
               </span>
               <span className="truncate">{accountName}</span>
             </button>
+            <GlobalGitIndicator git={globalGit} className="pointer-events-none absolute -right-0.5 -top-0.5" />
 
             {accountMenuOpen ? (
               <div

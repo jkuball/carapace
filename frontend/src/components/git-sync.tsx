@@ -316,6 +316,19 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   };
 }
 
+/** Status dot for the account button — shown only when there are upstream changes to pull. */
+export function GlobalGitIndicator({ git, className }: { git: GlobalGit; className?: string }) {
+  const t = useTranslations("git");
+  const behind = git.counts?.behind ?? 0;
+  if (git.configured !== true || behind <= 0) return null;
+  return (
+    <span
+      title={t("global.indicatorBehind", { count: behind })}
+      className={cn("h-2.5 w-2.5 rounded-full border-2 border-background bg-sky-500", className)}
+    />
+  );
+}
+
 /** Full git panel for inside the account menu — hidden when no remote is configured. */
 export function GlobalGitPanel({ git, className }: { git: GlobalGit; className?: string }) {
   const t = useTranslations("git");
