@@ -39,15 +39,16 @@ function AheadBehind({
       </span>
     );
   }
+  // Order matches the button row (pull ↓behind, then push ↑ahead).
   return (
     <span className="inline-flex items-center gap-2 font-mono text-foreground">
-      <span className={cn("inline-flex items-center gap-0.5", ahead > 0 ? "text-amber-700" : "text-muted-foreground")}>
-        <ArrowUp className="h-3 w-3 shrink-0" />
-        {ahead}
-      </span>
       <span className={cn("inline-flex items-center gap-0.5", behind > 0 ? "text-sky-700" : "text-muted-foreground")}>
         <ArrowDown className="h-3 w-3 shrink-0" />
         {behind}
+      </span>
+      <span className={cn("inline-flex items-center gap-0.5", ahead > 0 ? "text-amber-700" : "text-muted-foreground")}>
+        <ArrowUp className="h-3 w-3 shrink-0" />
+        {ahead}
       </span>
     </span>
   );
@@ -124,7 +125,7 @@ function GitSyncControls({
             onClick={onPush}
             disabled={disabled || anyBusy || pushDisabled}
             title={pushTitle}
-            className="rounded-md p-1 text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md p-1 text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy === "push" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           </button>
