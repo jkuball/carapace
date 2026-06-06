@@ -250,6 +250,7 @@ export function GlobalGitControls({
       setConfigured(status.remote_configured);
       setCounts(status.remote_configured ? { ahead: status.ahead, behind: status.behind } : null);
     } catch {
+      setCounts(null);
       setNotice({ tone: "error", message: t("errors.status") });
     } finally {
       setLoading(false);
