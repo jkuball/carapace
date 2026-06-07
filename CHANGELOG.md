@@ -1,6 +1,79 @@
 # CHANGELOG
 
 
+## v0.139.0 (2026-06-07)
+
+
+### ✨ Features
+
+
+- ✨ feat: env-only operator config (drop config.yaml)
+  ([`06a51df`](https://github.com/thiesgerken/carapace/commit/06a51df251d908a32b11e11d039f86fe09aab815))
+
+  Release marker for the config.yaml removal (PRs #216 + #219). The feature commits used Conventional-Commit text without a gitmoji, so the emoji-based semantic-release parser saw nothing releasable. This ✨ commit cuts the minor.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+### Other
+
+
+- fix: load .env in carapace-migrate so it matches the server
+  ([`123c0e2`](https://github.com/thiesgerken/carapace/commit/123c0e24967a2fe8aae2985a0f1c003a4d704e8b))
+
+  carapace-migrate upgrade builds config from env only (no config.yaml), but never called load_dotenv() — so a local .env with CARAPACE_DATABASE_URL worked for the server yet migrate fell back to the default SQLite under ./data and could touch the wrong DB. Load dotenv in the Typer callback.
+
+  Caught by Bugbot on #218.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- chore: drop configurable knowledge_dir, always <data_dir>/knowledges
+  ([`bc27b73`](https://github.com/thiesgerken/carapace/commit/bc27b7359bb1454e1fecb72b2965b17588fb8fc2))
+
+  The knowledge_dir knob had no users (neither k3s nor docker-compose set it) and a relative CARAPACE_KNOWLEDGE_DIR resolved against CWD, not the data root — a footgun Bugbot flagged on #218. Remove the field/env var and always derive <data_dir>/knowledges via the existing resolve_knowledge_repos_dir.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- fix: read subsection env at build_config() time, not import
+  ([`8d33e14`](https://github.com/thiesgerken/carapace/commit/8d33e14da21f50934d5b6b4f4f641c7cc33cfed0))
+
+  Config's BaseSettings sections were single instances created at class-definition (import) time, so any CARAPACE_* env loaded afterward — including via load_dotenv() in the server module — was ignored. Use default_factory so each section re-reads its env prefix when a Config is built (after load_dotenv, at build_config() call).
+
+  Caught by Bugbot on #218.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- postgres secrets
+  ([`cc281a1`](https://github.com/thiesgerken/carapace/commit/cc281a1d7553b101d0a59d04e7ccd1a8ccdb2bad))
+
+- chore: remove config.yaml; operator config is env-only
+  ([`3cc44ba`](https://github.com/thiesgerken/carapace/commit/3cc44ba7898601d082a9a988d013b25105a48a59))
+
+  config.yaml was nearly vestigial after agent/sessions moved to the DB. The one real coupling was that data_dir/knowledge_dir resolved relative to the config file's *location*. Replace that with explicit env vars and drop the file.
+
+  - CARAPACE_DATA_DIR (abs, default ./data) is the data root; knowledge_dir
+    derives as <data_dir>/knowledges (CARAPACE_KNOWLEDGE_DIR overrides)
+  - env-back the last file-only sections: AuthConfig + NotificationsConfig become
+    BaseSettings (CARAPACE_AUTH_*, CARAPACE_NOTIFICATIONS_*, nested via __), so
+    cookie.secure / vapid_subject etc. stay settable
+  - replace load_config/get_config_path/get_data_dir with build_config(); no file
+    read, no empty-{} file creation
+  - swap CARAPACE_CONFIG -> CARAPACE_DATA_DIR in compose + helm; update docs/tests
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- chore: remove YAML→SQL migration cruft
+  ([`6662604`](https://github.com/thiesgerken/carapace/commit/6662604dacd643ace9815ee4566c039265ae23da))
+
+  All deployments have migrated to the SQL backend, so the one-time migration scaffolding is now dead weight (and a footgun: an importer that can --purge live tables; a boot-time config.yaml rewrite).
+
+  - delete the carapace-migrate import-yaml importer + its tests; keep upgrade
+  - drop boot-time seed_from_config/is_seeded and the config.yaml strip machinery
+  - a fresh DB now starts empty and boots on AgentConfig code defaults until an
+    admin configures the catalog via the Platform UI
+  - config.yaml stays as a thin optional operator file
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.138.3 (2026-06-06)
 
 
