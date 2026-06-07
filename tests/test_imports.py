@@ -19,7 +19,6 @@ def test_import_config():
     from carapace.config import (  # noqa: F401
         build_config,
         load_workspace_file,
-        resolve_knowledge_dir,
         resolve_knowledge_repos_dir,
         resolve_user_knowledge_dir,
     )

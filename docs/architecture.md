@@ -427,7 +427,7 @@ Operator/bootstrap configuration comes entirely from **environment variables** (
 
 | Section | Env prefix | Examples |
 | --- | --- | --- |
-| data root | `CARAPACE_DATA_DIR`, `CARAPACE_KNOWLEDGE_DIR` | `CARAPACE_DATA_DIR=/var/lib/carapace` |
+| data root | `CARAPACE_DATA_DIR` | `CARAPACE_DATA_DIR=/var/lib/carapace` (knowledge repos live at `<data_dir>/knowledges`) |
 | logging | `CARAPACE_` | `CARAPACE_LOG_LEVEL`, `CARAPACE_LOGFIRE_TOKEN` |
 | database | `CARAPACE_DATABASE_` | `CARAPACE_DATABASE_URL` |
 | cache | `CARAPACE_CACHE_` | `CARAPACE_CACHE_REDIS_URL` |

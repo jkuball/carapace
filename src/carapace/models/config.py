@@ -378,9 +378,6 @@ class Config(ConfigModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     sessions: SessionsConfig = Field(default_factory=SessionsConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
-    # Absolute data root (sessions, auth secrets, sqlite, vapid keys). Sourced from
-    # CARAPACE_DATA_DIR via config.build_config; default "./data".
+    # Absolute data root (sessions, auth secrets, sqlite, vapid keys, knowledges/). Sourced
+    # from CARAPACE_DATA_DIR via config.build_config; default "./data".
     data_dir: str = "./data"
-    # Parent dir for per-user knowledge repos. Empty = derive <data_dir>/knowledges;
-    # override with CARAPACE_KNOWLEDGE_DIR.
-    knowledge_dir: str = ""

@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from carapace.config import (
     build_config,
     load_workspace_file,
-    resolve_knowledge_dir,
     resolve_knowledge_repos_dir,
     resolve_user_knowledge_dir,
 )
@@ -25,18 +24,11 @@ def test_build_config_defaults(tmp_path: Path):
     assert cfg.agent.model == "anthropic:claude-sonnet-4-6"
     assert cfg.sessions.commit.enabled is True
     assert cfg.sandbox.k8s_session_pvc_size == "1Gi"
-    assert cfg.knowledge_dir == ""  # empty -> derived as <data_dir>/knowledges
 
 
 def test_build_config_reads_data_dir_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("CARAPACE_DATA_DIR", str(tmp_path))
     assert build_config().data_dir == str(tmp_path.resolve())
-
-
-def test_build_config_reads_knowledge_dir_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("CARAPACE_KNOWLEDGE_DIR", str(tmp_path / "kn"))
-    cfg = build_config(tmp_path)
-    assert resolve_knowledge_dir(cfg) == (tmp_path / "kn").resolve()
 
 
 def test_auth_cookie_secure_from_env(monkeypatch: pytest.MonkeyPatch):
@@ -106,8 +98,3 @@ def test_resolve_user_knowledge_dir_uses_explicit_root(tmp_path: Path) -> None:
 def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="username must be lowercase"):
         resolve_user_knowledge_dir(tmp_path, "Thies")
-
-
-def test_resolve_knowledge_dir_derives_from_data_dir_when_empty(tmp_path: Path) -> None:
-    config = build_config(tmp_path)
-    assert resolve_knowledge_dir(config) == (tmp_path / "knowledges").resolve()

@@ -477,7 +477,6 @@ async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_pat
 
     monkeypatch.delattr(srv, "_knowledge_repo_registry", raising=False)
     monkeypatch.setattr(srv, "build_config", lambda *args, **kwargs: config)
-    monkeypatch.setattr(srv, "resolve_knowledge_dir", lambda _config: tmp_path / "knowledges")
     monkeypatch.setattr(srv, "make_model_factory", lambda _config: lambda _model_name: None)
     monkeypatch.setattr(srv, "_create_sandbox_runtime", lambda _config, _data_dir: _FakeRuntime())
     monkeypatch.setattr(srv, "SessionListCache", lambda _cache_config: _FakeSessionListCache())
