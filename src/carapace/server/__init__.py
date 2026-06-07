@@ -32,13 +32,7 @@ from .. import get_version
 from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
-from ..config import (
-    _resolve_data_dir,
-    _resolve_knowledge_dir,
-    get_config_path,
-    get_data_dir,
-    load_config,
-)
+from ..config import build_config
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..database.engine import SessionFactory, create_engine_and_factory, run_migrations
 from ..git.http import GitHttpHandler
@@ -83,7 +77,6 @@ load_dotenv()
 # --- Shared state populated in lifespan ---
 
 _data_dir: Path
-_config_path: Path
 _config: Config
 _engine_db: Engine
 _session_factory: SessionFactory
@@ -295,7 +288,6 @@ async def _autosave_inactive_sessions() -> None:
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     global \
         _data_dir, \
-        _config_path, \
         _config, \
         _engine_db, \
         _session_factory, \
@@ -315,11 +307,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _auth_store, \
         _platform_store
 
-    # 1. Load config
-    config_path = get_config_path()
-    _config_path = config_path
-    _config = load_config()
-    _data_dir = _resolve_data_dir(config_path, _config)
+    # 1. Build config from env (CARAPACE_DATA_DIR + CARAPACE_* subsections; no config file)
+    _config = build_config()
+    _data_dir = Path(_config.data_dir).resolve()
 
     # 2. Bootstrap directories + database
     ensure_data_dir(_data_dir)
@@ -335,10 +325,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
-    _knowledge_repo_registry = KnowledgeRepoRegistry(
-        _data_dir,
-        knowledge_repos_dir=_resolve_knowledge_dir(config_path, _config),
-    )
+    _knowledge_repo_registry = KnowledgeRepoRegistry(_data_dir)
     user_git_configs = _enabled_user_git_configs(_auth_store)
     for username, git_config in user_git_configs.items():
         await _bootstrap_user_knowledge_repo(_knowledge_repo_registry, username, git_config)
@@ -584,8 +571,8 @@ app = FastAPI(title="carapace", version=_APP_VERSION, lifespan=_lifespan)
 router = APIRouter(prefix="/api")
 
 # CORS must be added before the app starts (Starlette forbids it in lifespan).
-# Load config early so we know the allowed origins.
-_cors_config = load_config(get_data_dir())
+# Read the allowed origins from env early (no config file).
+_cors_config = build_config()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_config.server.cors_origins,
@@ -674,9 +661,8 @@ def main() -> None:
     """Entry point for `python -m carapace` / `carapace-server`."""
     load_dotenv()
 
-    data_dir = get_data_dir()
-    ensure_data_dir(data_dir)
-    config = load_config(data_dir)
+    config = build_config()
+    ensure_data_dir(Path(config.data_dir).resolve())
     _setup_logging(config.carapace.log_level)
     logger.info(f"Starting carapace server on {config.server.host}:{config.server.port}")
     logger.info(f"Sandbox API on 0.0.0.0:{config.server.sandbox_port}")

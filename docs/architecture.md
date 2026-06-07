@@ -36,7 +36,7 @@ flowchart TB
     end
 
     subgraph datadir ["$CARAPACE_DATA_DIR"]
-        Config[config.yaml]
+        DBFile["carapace.db (SQLite mode)"]
         Sessions[sessions/]
     end
 
@@ -392,11 +392,11 @@ services:
 
 For Kubernetes deployments, the Docker socket is replaced by in-cluster Kubernetes API access — see [kubernetes.md](kubernetes.md).
 
-The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state such as `config.yaml`, auth files, session files, notification state, and `jobs.yaml` lives there. Git-backed knowledge state lives under a per-user root at `data/knowledges/<normalized-user>/` in the default setup. Session owner determines which repo, skills tree, archive path, and sandbox clone URL are used.
+The `$CARAPACE_DATA_DIR` environment variable (defaults to `./data`) points to the runtime data directory. Runtime state — the SQL database (when using SQLite), auth secret, session files, notification state — lives there. There is no `config.yaml`: operator config comes from env vars and platform config from the database. Git-backed knowledge state lives under a per-user root at `data/knowledges/<normalized-user>/` in the default setup. Session owner determines which repo, skills tree, archive path, and sandbox clone URL are used.
 
 ## Configuration
 
-Platform configuration is stored in `$CARAPACE_DATA_DIR/config.yaml` and is editable from **Settings** -> **Admin** -> **Platform**. The default configuration sets only the LLM models:
+Platform configuration (model catalog, agent/sentinel/title defaults, session budget, session-commit settings) is stored in the **database** (`models` + `platform_settings` tables) and edited from **Settings** -> **Admin** -> **Platform**. The built-in default model shape:
 
 ```yaml
 agent:
@@ -423,54 +423,20 @@ agent:
         env: OPENROUTER_API_KEY
 ```
 
-Additional configuration sections:
+Operator/bootstrap configuration comes entirely from **environment variables** (no config file). Each section maps to a prefix; nested fields use `__`:
 
-```yaml
-# carapace.log_level / logfire_token are also settable via CARAPACE_LOG_LEVEL /
-# CARAPACE_LOGFIRE_TOKEN (env wins over file), so this section can be omitted entirely.
-carapace:
-  log_level: info
+| Section | Env prefix | Examples |
+| --- | --- | --- |
+| data root | `CARAPACE_DATA_DIR` | `CARAPACE_DATA_DIR=/var/lib/carapace` (knowledge repos live at `<data_dir>/knowledges`) |
+| logging | `CARAPACE_` | `CARAPACE_LOG_LEVEL`, `CARAPACE_LOGFIRE_TOKEN` |
+| database | `CARAPACE_DATABASE_` | `CARAPACE_DATABASE_URL` |
+| cache | `CARAPACE_CACHE_` | `CARAPACE_CACHE_REDIS_URL` |
+| server | `CARAPACE_SERVER_` | `CARAPACE_SERVER_PORT`, `CARAPACE_SERVER_CORS_ORIGINS` |
+| auth cookie | `CARAPACE_AUTH_` | `CARAPACE_AUTH_COOKIE__SECURE=true`, `CARAPACE_AUTH_COOKIE__SAME_SITE` |
+| notifications | `CARAPACE_NOTIFICATIONS_` | `CARAPACE_NOTIFICATIONS_VAPID_SUBJECT` |
+| sandbox | `CARAPACE_SANDBOX_` | `CARAPACE_SANDBOX_RUNTIME`, `CARAPACE_SANDBOX_K8S_NAMESPACE` |
 
-server:
-  host: "0.0.0.0"
-  port: 8321 # public API (REST + WebSocket)
-  sandbox_port: 8322 # sandbox-facing API (Basic Auth, Git HTTP)
-  internal_port: 8320 # internal API (loopback only, sentinel callbacks)
-  cors_origins: []
-
-sessions:
-  commit:
-    enabled: true
-    path_prefix: sessions
-    autosave_enabled: true
-    autosave_inactivity_hours: 4
-    delete_from_knowledge_on_session_delete: true
-
-notifications:
-  enabled: true
-  presence_ttl_seconds: 60
-
-auth:
-  cookie:
-    name: carapace_session
-    ttl_seconds: 1209600
-    secure: false
-    same_site: lax
-
-knowledge_dir: ./knowledge
-
-sandbox:
-  runtime: docker # "docker" or "kubernetes"
-  base_image: carapace-sandbox:latest
-  idle_timeout_minutes: 15
-  proxy_port: 3128
-  # Kubernetes-only settings (also available as CARAPACE_SANDBOX_* env vars):
-  # k8s_namespace: carapace
-  # k8s_session_pvc_size: 1Gi
-  # k8s_session_pvc_storage_class: ""
-```
-
-Session commit settings control how conversation histories are copied into the knowledge repo:
+Session commit settings (DB-backed, edited via the Platform UI) control how conversation histories are copied into the knowledge repo:
 
 - `sessions.commit.enabled`: master switch for the feature
 - `sessions.commit.path_prefix`: subtree inside the knowledge repo where `conversation.json` files are written

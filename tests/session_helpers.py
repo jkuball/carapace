@@ -10,10 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic_ai.models.test import TestModel
 
 from carapace.bootstrap import ensure_data_dir
-from carapace.config import load_config
+from carapace.config import build_config
 from carapace.credentials import CredentialRegistry
 from carapace.git.store import GitStore
 from carapace.knowledge import KnowledgeRepoHandle
+from carapace.models.config import Config
 from carapace.models.credentials import CredentialRegistryProtocol
 from carapace.models.tooling import ToolResult
 from carapace.sandbox.manager import SandboxManager
@@ -185,11 +186,13 @@ def _make_engine(
     tmp_path: Path,
     *,
     session_factory,
+    config: Config | None = None,
     credential_registry: CredentialRegistryProtocol | None = None,
     knowledge_repo_for_session: Callable[[str], KnowledgeRepoHandle] | None = None,
 ) -> SessionEngine:
     ensure_data_dir(tmp_path)
-    config = load_config(tmp_path)
+    if config is None:
+        config = build_config(tmp_path)
     session_mgr = SessionManager(session_factory, tmp_path)
     registry = SkillRegistry(tmp_path / "skills")
     sandbox_mgr = MagicMock(spec=SandboxManager)

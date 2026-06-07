@@ -67,7 +67,9 @@ class JwtCookieConfig(ConfigModel):
     same_site: Literal["lax", "strict", "none"] = "lax"
 
 
-class AuthConfig(ConfigModel):
+class AuthConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_AUTH_", env_nested_delimiter="__", extra="forbid")
+
     cookie: JwtCookieConfig = JwtCookieConfig()
 
 
@@ -356,8 +358,7 @@ class ServerConfig(BaseSettings):
 
 
 class CarapaceConfig(BaseSettings):
-    # Operator/bootstrap config: read from CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN env vars
-    # (env wins over any value still present in config.yaml's `carapace:` section).
+    # Operator/bootstrap config: read from CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN env vars.
     model_config = SettingsConfigDict(env_prefix="CARAPACE_", extra="forbid")
 
     log_level: str = "info"
@@ -365,14 +366,18 @@ class CarapaceConfig(BaseSettings):
 
 
 class Config(ConfigModel):
-    carapace: CarapaceConfig = CarapaceConfig()
-    cache: CacheConfig = CacheConfig()
-    database: DatabaseConfig = DatabaseConfig()
-    server: ServerConfig = ServerConfig()
-    auth: AuthConfig = AuthConfig()
-    notifications: NotificationsConfig = NotificationsConfig()
-    agent: AgentConfig = AgentConfig()
-    sessions: SessionsConfig = SessionsConfig()
-    sandbox: SandboxConfig = SandboxConfig()
-    data_dir: str = "."  # resolved relative to config file location
-    knowledge_dir: str = "./knowledges"  # parent directory for per-user repos, resolved relative to config file
+    # default_factory (not a shared instance) so the BaseSettings sections re-read their
+    # CARAPACE_* env vars every time a Config is built — i.e. at build_config() call time,
+    # after load_dotenv() — rather than once at import.
+    carapace: CarapaceConfig = Field(default_factory=CarapaceConfig)
+    cache: CacheConfig = Field(default_factory=CacheConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
+    sessions: SessionsConfig = Field(default_factory=SessionsConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    # Absolute data root (sessions, auth secrets, sqlite, vapid keys, knowledges/). Sourced
+    # from CARAPACE_DATA_DIR via config.build_config; default "./data".
+    data_dir: str = "./data"

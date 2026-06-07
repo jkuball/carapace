@@ -23,7 +23,7 @@ from carapace.channels.matrix import (
     _PendingDomainApproval,
 )
 from carapace.channels.matrix.subscriber import MatrixSubscriber
-from carapace.config import load_config
+from carapace.config import build_config
 from carapace.models.matrix import MatrixChannelConfig, MatrixTokenFile, MatrixTokensFile
 from carapace.models.session import SessionBudget
 from carapace.notifications.presence import NotificationPresenceRegistry
@@ -75,7 +75,7 @@ def _make_engine_mock() -> MagicMock:
 def _make_channel(tmp_path: Path, db_factory, *, owner_user: str = "thies", **config_kwargs: Any) -> Any:
     """Build a MatrixChannel with mocked internals."""
     ensure_data_dir(tmp_path)
-    full_config = load_config(tmp_path)
+    full_config = build_config(tmp_path)
     session_mgr = SessionManager(db_factory, tmp_path)
 
     sandbox_mgr = MagicMock(spec=SandboxManager)
