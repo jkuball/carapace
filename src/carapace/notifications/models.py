@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..usernames import normalize_username
 
@@ -55,8 +56,8 @@ class NotificationSubscription(BaseModel):
         return self
 
 
-class NotificationsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class NotificationsConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_NOTIFICATIONS_", env_nested_delimiter="__", extra="forbid")
 
     enabled: bool = True
     presence_ttl_seconds: int = 60

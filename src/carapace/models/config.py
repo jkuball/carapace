@@ -67,7 +67,9 @@ class JwtCookieConfig(ConfigModel):
     same_site: Literal["lax", "strict", "none"] = "lax"
 
 
-class AuthConfig(ConfigModel):
+class AuthConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CARAPACE_AUTH_", env_nested_delimiter="__", extra="forbid")
+
     cookie: JwtCookieConfig = JwtCookieConfig()
 
 
@@ -356,8 +358,7 @@ class ServerConfig(BaseSettings):
 
 
 class CarapaceConfig(BaseSettings):
-    # Operator/bootstrap config: read from CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN env vars
-    # (env wins over any value still present in config.yaml's `carapace:` section).
+    # Operator/bootstrap config: read from CARAPACE_LOG_LEVEL / CARAPACE_LOGFIRE_TOKEN env vars.
     model_config = SettingsConfigDict(env_prefix="CARAPACE_", extra="forbid")
 
     log_level: str = "info"
@@ -374,5 +375,9 @@ class Config(ConfigModel):
     agent: AgentConfig = AgentConfig()
     sessions: SessionsConfig = SessionsConfig()
     sandbox: SandboxConfig = SandboxConfig()
-    data_dir: str = "."  # resolved relative to config file location
-    knowledge_dir: str = "./knowledges"  # parent directory for per-user repos, resolved relative to config file
+    # Absolute data root (sessions, auth secrets, sqlite, vapid keys). Sourced from
+    # CARAPACE_DATA_DIR via config.build_config; default "./data".
+    data_dir: str = "./data"
+    # Parent dir for per-user knowledge repos. Empty = derive <data_dir>/knowledges;
+    # override with CARAPACE_KNOWLEDGE_DIR.
+    knowledge_dir: str = ""

@@ -16,7 +16,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src/carapace:/app/.venv/lib/python3.14/site-packages/carapace
     environment:
-      - CARAPACE_CONFIG=/var/lib/carapace/config.yaml
+      - CARAPACE_DATA_DIR=/var/lib/carapace
       - CARAPACE_HOST_DATA_DIR=${PWD}/data
       - CARAPACE_TOKEN=${CARAPACE_TOKEN}
       - CARAPACE_LOG_LEVEL=${CARAPACE_LOG_LEVEL:-info}

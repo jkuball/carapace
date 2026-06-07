@@ -73,7 +73,7 @@ Most first-run configuration now lives in the web UI:
 - **Settings** -> **Account** manages each user's default models and budget, Matrix channel, Git remote, and credential backends.
 - **Settings** -> **Jobs** manages saved jobs and schedules.
 
-The old mental model was “edit `data/config.yaml`, then restart”. That file still exists as the backing store for platform settings and as an escape hatch for automation, but day-to-day setup should happen through Settings. The UI writes the relevant backing files and keeps write-only secrets out of API responses.
+The old mental model was “edit `data/config.yaml`, then restart”. There is no `config.yaml` anymore: operator/bootstrap config comes from environment variables (`CARAPACE_DATA_DIR`, `CARAPACE_DATABASE_URL`, `CARAPACE_AUTH_COOKIE__SECURE`, …) and platform settings live in the database, edited through Settings. The UI keeps write-only secrets out of API responses.
 
 On first start, carapace seeds runtime files under `data/` and bootstraps one Git-backed knowledge repo per enabled user under `data/knowledges/<normalized-user>/`. The equivalent backing-file shape for platform defaults is:
 

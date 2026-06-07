@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 
-from ..config import _resolve_data_dir, get_config_path, load_config
+from ..config import build_config
 from .engine import create_engine_and_factory, run_migrations
 
 app = typer.Typer(help="Carapace database migration utilities", no_args_is_help=True)
@@ -18,9 +20,8 @@ def _main() -> None:
 @app.command()
 def upgrade() -> None:
     """Apply Alembic migrations up to the latest revision."""
-    config_path = get_config_path()
-    config = load_config()
-    data_dir = _resolve_data_dir(config_path, config)
+    config = build_config()
+    data_dir = Path(config.data_dir).resolve()
     engine, _ = create_engine_and_factory(config.database, data_dir)
     run_migrations(engine)
     engine.dispose()

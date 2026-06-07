@@ -1,4 +1,4 @@
-"""Tests for config loading (no LLM tokens needed)."""
+"""Tests for config building (env-only, no config file; no LLM tokens needed)."""
 
 from pathlib import Path
 
@@ -6,95 +6,61 @@ import pytest
 from pydantic import ValidationError
 
 from carapace.config import (
-    _resolve_knowledge_dir,
-    load_config,
+    build_config,
     load_workspace_file,
+    resolve_knowledge_dir,
     resolve_knowledge_repos_dir,
     resolve_user_knowledge_dir,
 )
-from carapace.models.config import Config
+from carapace.models.config import AuthConfig, Config
+from carapace.notifications.models import NotificationsConfig
 
 
-def test_load_config_defaults(tmp_path: Path):
-    cfg = load_config(tmp_path)
+def test_build_config_defaults(tmp_path: Path):
+    cfg = build_config(tmp_path)
+    assert cfg.data_dir == str(tmp_path)
     assert cfg.carapace.log_level == "info"
     assert cfg.cache.ttl_seconds == 1800
     assert cfg.cache.redis_url == "redis://localhost:6379/0"
     assert cfg.agent.model == "anthropic:claude-sonnet-4-6"
     assert cfg.sessions.commit.enabled is True
-    assert cfg.sessions.commit.autosave_inactivity_hours == 4
     assert cfg.sandbox.k8s_session_pvc_size == "1Gi"
-    assert cfg.sandbox.k8s_session_pvc_storage_class == ""
-    assert cfg.knowledge_dir == "./knowledges"
+    assert cfg.knowledge_dir == ""  # empty -> derived as <data_dir>/knowledges
 
 
-def test_load_config_creates_missing_file(tmp_path: Path):
-    config_path = tmp_path / "config.yaml"
-
-    cfg = load_config(tmp_path)
-
-    assert cfg.carapace.log_level == "info"
-    assert config_path.read_text() == "{}\n"
+def test_build_config_reads_data_dir_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CARAPACE_DATA_DIR", str(tmp_path))
+    assert build_config().data_dir == str(tmp_path.resolve())
 
 
-def test_load_config_from_yaml(tmp_path: Path):
-    (tmp_path / "config.yaml").write_text(
-        "cache:\n  ttl_seconds: 120\n  redis_url: redis://redis:6379/0\n"
-        "agent:\n  model: anthropic:claude-sonnet-4-6\n  sentinel_model: anthropic:claude-haiku-4-5\n"
-        "  sentinel_timeout_seconds: 15\n"
-        "  tool_output_max_chars: 5000\n"
-    )
-    cfg = load_config(tmp_path)
-    assert cfg.cache.ttl_seconds == 120
-    assert cfg.cache.redis_url == "redis://redis:6379/0"
-    assert cfg.agent.model == "anthropic:claude-sonnet-4-6"
-    assert cfg.agent.sentinel_model == "anthropic:claude-haiku-4-5"
-    assert cfg.agent.sentinel_timeout_seconds == 15
-    assert cfg.agent.tool_output_max_chars == 5000
+def test_build_config_reads_knowledge_dir_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CARAPACE_KNOWLEDGE_DIR", str(tmp_path / "kn"))
+    cfg = build_config(tmp_path)
+    assert resolve_knowledge_dir(cfg) == (tmp_path / "kn").resolve()
 
 
-def test_load_config_rejects_global_channels_config(tmp_path: Path):
-    (tmp_path / "config.yaml").write_text(
-        "channels:\n"
-        "  matrix:\n"
-        "    enabled: true\n"
-        "    homeserver: https://matrix.example.com\n"
-        "    user_id: '@carapace:example.com'\n"
-    )
+def test_auth_cookie_secure_from_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CARAPACE_AUTH_COOKIE__SECURE", "true")
+    assert AuthConfig().cookie.secure is True
 
+
+def test_notifications_vapid_subject_from_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("CARAPACE_NOTIFICATIONS_VAPID_SUBJECT", "mailto:ops@example.com")
+    assert NotificationsConfig().vapid_subject == "mailto:ops@example.com"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"channels": {"matrix": {"enabled": True}}},
+        {"git": {"remote": "https://gitea.example.com/team/knowledge.git"}},
+        {"credentials": {"backends": {"vault": {"type": "bitwarden"}}}},
+        {"agent": {"unexpected_key": True}},
+    ],
+)
+def test_config_rejects_unknown_keys(raw: dict):
     with pytest.raises(ValidationError):
-        load_config(tmp_path)
-
-
-def test_load_config_rejects_unknown_nested_config_key(tmp_path: Path):
-    (tmp_path / "config.yaml").write_text(
-        "agent:\n"
-        "  model: anthropic:claude-sonnet-4-6\n"
-        "  sentinel_model: anthropic:claude-haiku-4-5\n"
-        "  title_model: anthropic:claude-haiku-4-5\n"
-        "  unexpected_key: true\n"
-    )
-
-    with pytest.raises(ValidationError):
-        load_config(tmp_path)
-
-
-def test_load_config_rejects_global_git_config(tmp_path: Path):
-    (tmp_path / "config.yaml").write_text(
-        "git:\n  remote: https://gitea.example.com/team/knowledge.git\n  token:\n    env: CARAPACE_GIT_TOKEN\n"
-    )
-
-    with pytest.raises(ValidationError):
-        load_config(tmp_path)
-
-
-def test_load_config_rejects_global_credentials_config(tmp_path: Path):
-    (tmp_path / "config.yaml").write_text(
-        "credentials:\n  backends:\n    vault:\n      type: bitwarden\n      url: http://127.0.0.1:8087\n"
-    )
-
-    with pytest.raises(ValidationError):
-        load_config(tmp_path)
+        Config.model_validate(raw)
 
 
 def test_load_workspace_file_missing(tmp_path: Path):
@@ -131,8 +97,6 @@ def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path
         resolve_user_knowledge_dir(tmp_path, "Thies")
 
 
-def test_resolve_knowledge_dir_uses_knowledges_when_config_value_is_empty(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.yaml"
-    config = Config(knowledge_dir="")
-
-    assert _resolve_knowledge_dir(config_path, config) == (tmp_path / "knowledges").resolve()
+def test_resolve_knowledge_dir_derives_from_data_dir_when_empty(tmp_path: Path) -> None:
+    config = build_config(tmp_path)
+    assert resolve_knowledge_dir(config) == (tmp_path / "knowledges").resolve()

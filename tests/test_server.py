@@ -21,7 +21,7 @@ import carapace.server.jobs as server_jobs
 import carapace.server.platform_settings as platform_settings
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
-from carapace.config import load_config, resolve_user_knowledge_dir
+from carapace.config import build_config, resolve_user_knowledge_dir
 from carapace.credentials import CredentialBackendError, CredentialRegistry
 from carapace.database.models import SessionAuditRow
 from carapace.git.store import GitStore
@@ -85,9 +85,9 @@ def _setup_server(tmp_path, monkeypatch, db_factory):
     # time, but these tests never call the LLM.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-fake-for-tests")
     monkeypatch.setenv("CARAPACE_TOKEN", _TEST_TOKEN)
-    monkeypatch.setenv("CARAPACE_CONFIG", str(tmp_path / "config.yaml"))
+    monkeypatch.setenv("CARAPACE_DATA_DIR", str(tmp_path))
     ensure_data_dir(tmp_path)
-    config = load_config(tmp_path)
+    config = build_config(tmp_path)
     srv._session_factory = db_factory
     srv._session_list_cache = _FakeSessionListCache()
     session_mgr = SessionManager(db_factory, tmp_path, on_change=srv._session_list_cache.invalidate_sync)
@@ -115,7 +115,6 @@ def _setup_server(tmp_path, monkeypatch, db_factory):
     git_store.get_remote_url = AsyncMock(return_value=None)
     git_store.restore_remote = AsyncMock()
     srv._data_dir = tmp_path
-    srv._config_path = tmp_path / "config.yaml"
     srv._config = config
     srv._user_credential_registries = {}
     srv._knowledge_repo_registry = KnowledgeRepoRegistry(tmp_path, git_store_factory=lambda _path: git_store)
@@ -400,7 +399,7 @@ def test_admin_user_enable_bootstraps_user_repo(client, admin_auth_headers, monk
 
 @pytest.mark.anyio
 async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_path, monkeypatch):
-    config = srv._config.model_copy(deep=True)
+    config = srv._config.model_copy(deep=True, update={"data_dir": str(tmp_path)})
     config.sandbox.cleanup_orphans_on_startup = False
 
     class _FakeRuntime:
@@ -477,10 +476,8 @@ async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_pat
     sandbox_mgr.cleanup_all = AsyncMock()
 
     monkeypatch.delattr(srv, "_knowledge_repo_registry", raising=False)
-    monkeypatch.setattr(srv, "get_config_path", lambda: tmp_path / "config.yaml")
-    monkeypatch.setattr(srv, "load_config", lambda *args, **kwargs: config)
-    monkeypatch.setattr(srv, "_resolve_data_dir", lambda _config_path, _config: tmp_path)
-    monkeypatch.setattr(srv, "_resolve_knowledge_dir", lambda _config_path, _config: tmp_path / "knowledges")
+    monkeypatch.setattr(srv, "build_config", lambda *args, **kwargs: config)
+    monkeypatch.setattr(srv, "resolve_knowledge_dir", lambda _config: tmp_path / "knowledges")
     monkeypatch.setattr(srv, "make_model_factory", lambda _config: lambda _model_name: None)
     monkeypatch.setattr(srv, "_create_sandbox_runtime", lambda _config, _data_dir: _FakeRuntime())
     monkeypatch.setattr(srv, "SessionListCache", lambda _cache_config: _FakeSessionListCache())
@@ -648,12 +645,6 @@ def test_admin_platform_settings_always_writable(client, admin_auth_headers):
     assert resp.json()["config_writable"] is True
 
 
-def _no_config_yaml_written() -> bool:
-    # PATCH must not rewrite config.yaml — the old read-modify-write left timestamped .bak files.
-    cfg = srv._config_path
-    return not list(cfg.parent.glob(f"{cfg.name}.*.bak"))
-
-
 def test_admin_platform_settings_updates_db_and_runtime(client, admin_auth_headers):
     resp = client.patch(
         "/api/admin/platform/settings",
@@ -689,7 +680,6 @@ def test_admin_platform_settings_updates_db_and_runtime(client, admin_auth_heade
     persisted = {m.model_id: m for m in srv._platform_store.load_models()}
     assert persisted["local:test"].api_key == Secret(env="ANTHROPIC_API_KEY")
     assert srv._platform_store.load_section("agent")["model"] == "local:test"
-    assert _no_config_yaml_written()
 
 
 def test_admin_platform_settings_roundtrips_vision_flag(client, admin_auth_headers):
@@ -761,7 +751,6 @@ def test_admin_platform_settings_preserves_existing_agent_scalars(client, admin_
     assert scalars["sentinel_timeout_seconds"] == 42
     assert scalars["tool_output_max_chars"] == 12345
     assert srv._config.agent.max_parallel_llm == 7
-    assert _no_config_yaml_written()
 
 
 def test_admin_platform_settings_preserves_raw_secret_when_value_omitted(client, admin_auth_headers):

@@ -18,15 +18,27 @@ kubectl create secret generic carapace-secrets -n carapace \
   --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
   --from-literal=CARAPACE_TOKEN=my-bootstrap-admin-password
 
-# 2. Install from OCI registry, referencing the secret
+# 2. Create the Postgres credentials Secret (recommended; required under GitOps — see Database below)
+kubectl create secret generic carapace-postgres -n carapace \
+  --from-literal=postgres-password="$(openssl rand -base64 24)" \
+  --from-literal=database-url='postgresql+psycopg://carapace@carapace-postgres:5432/carapace'
+
+# 3. Install from OCI registry, referencing the secrets
 helm install carapace oci://ghcr.io/thiesgerken/charts/carapace \
   --namespace carapace \
   --set ingress.hostname=carapace.example.com \
-  --set 'envFrom[0].secretRef.name=carapace-secrets'
+  --set 'envFrom[0].secretRef.name=carapace-secrets' \
+  --set postgres.auth.existingSecret=carapace-postgres
 
-# 3. Upgrade to a new version
+# 4. Upgrade to a new version
 helm upgrade carapace oci://ghcr.io/thiesgerken/charts/carapace -n carapace
 ```
+
+> The `database-url` host (`carapace-postgres`) is `<release>-postgres`; the username
+> (`carapace`) must match `postgres.auth.username`. The URL omits the password — it is
+> injected separately as `PGPASSWORD` from `postgres-password`, so no URL-encoding is
+> needed. With plain Helm you can skip step 2 and let the chart auto-generate the
+> password, but do **not** do that under GitOps (see Database).
 
 Inject additional environment variables via `extraEnv` (inline values) or `envFrom` (external Secrets / ConfigMaps). Platform and user settings are managed from the web UI after install; the server data PVC uses the cluster's default StorageClass unless overridden with `persistence.data.storageClassName`.
 
@@ -87,7 +99,7 @@ When a session is permanently deleted (or the user runs `/reload`), the entire S
 
 ## Configuration
 
-Sandbox settings are configured via environment variables (prefix `CARAPACE_SANDBOX_`), not through Helm-rendered `config.yaml`. This keeps deployment-specific settings separate from UI-managed runtime data on the server PVC.
+All operator settings are configured via environment variables (there is no `config.yaml`); sandbox settings use the `CARAPACE_SANDBOX_` prefix. This keeps deployment-specific settings separate from UI-managed runtime data on the server PVC.
 
 Set the following env vars on the server pod:
 
@@ -229,9 +241,9 @@ with an external-URL (`database.url`) or SQLite-on-the-data-PVC option. See the
 Runtime platform settings — the model catalog and scalar `agent`/`sessions` config edited in
 the admin UI — also live in the database (`models` + `platform_settings` tables). A fresh DB
 starts **empty**; until an admin configures the catalog, the server runs on the built-in
-default models. The admin UI is the source of truth. Operator/bootstrap config (`database.url`,
-`log_level`, `server.*`, `sandbox.*`, …) stays in env vars / `config.yaml` — prefer env vars in
-Kubernetes.
+default models. The admin UI is the source of truth. Operator/bootstrap config
+(`CARAPACE_DATA_DIR`, `CARAPACE_DATABASE_URL`, `CARAPACE_LOG_LEVEL`, `CARAPACE_SERVER_*`,
+`CARAPACE_AUTH_*`, `CARAPACE_SANDBOX_*`, …) comes from env vars — there is no config file.
 
 ## Networking
 
