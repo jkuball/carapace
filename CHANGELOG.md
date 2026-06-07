@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.140.1 (2026-06-07)
+
+
+### Other
+
+
+- Merge pull request #217 from thiesgerken/renovate/traefik-3.x
+  ([`eab3eb6`](https://github.com/thiesgerken/carapace/commit/eab3eb60ad5ec99f8d9caf6f22c7211bbb90dff7))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade traefik Docker tag to v3.7
+  ([`eab3eb6`](https://github.com/thiesgerken/carapace/commit/eab3eb60ad5ec99f8d9caf6f22c7211bbb90dff7))
+
+- ⬆️ chore: upgrade traefik Docker tag to v3.7
+  ([`92fe7cd`](https://github.com/thiesgerken/carapace/commit/92fe7cd1d886af3d63c2d210e19e539857e6c831))
+
 ## v0.140.0 (2026-06-07)
 
 
