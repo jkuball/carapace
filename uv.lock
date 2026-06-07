@@ -381,7 +381,7 @@ wheels = [
 
 [[package]]
 name = "carapace"
-version = "0.138.3"
+version = "0.139.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
