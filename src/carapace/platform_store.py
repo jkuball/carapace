@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
 
 from .database.engine import SessionFactory
 from .database.models import ModelRow, PlatformSettingRow
@@ -92,33 +91,6 @@ class PlatformSettingsStore:
     def save_section(self, key: str, data: dict[str, object]) -> None:
         with self._session_factory.begin() as db:
             db.merge(PlatformSettingRow(key=key, data=data))
-
-    # --- seeding ---
-
-    def seed_from_config(self, config: Config) -> bool:
-        """Populate the catalog + sections from *config* when empty. Idempotent; returns whether it seeded.
-
-        Returning normally means the tables are populated either way — this call seeded them
-        (``True``) or found them already seeded / lost a concurrent seed race (``False``).
-        """
-        try:
-            with self._session_factory.begin() as db:
-                already = db.scalar(select(ModelRow.id).limit(1)) is not None or db.get(PlatformSettingRow, "agent")
-                if already:
-                    return False
-                db.add_all(_model_to_row(entry) for entry in _dedup_models(config.agent.available_models))
-                db.add(PlatformSettingRow(key="agent", data=_agent_scalars(config.agent)))
-                db.add(PlatformSettingRow(key="sessions", data=config.sessions.model_dump(mode="json")))
-        except IntegrityError:
-            # Another process seeded concurrently between the empty-check and our commit; the
-            # winner populated the tables, so treat this as already-seeded rather than aborting.
-            return False
-        return True
-
-    def is_seeded(self) -> bool:
-        with self._session_factory() as db:
-            has_model = db.scalar(select(ModelRow.id).limit(1)) is not None
-            return has_model or db.get(PlatformSettingRow, "agent") is not None
 
     # --- assembly / overlay ---
 

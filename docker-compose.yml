@@ -24,9 +24,7 @@ services:
       - CARAPACE_MATRIX_PASSWORD=${CARAPACE_MATRIX_PASSWORD:-}
       - CARAPACE_GIT_TOKEN=${CARAPACE_GIT_TOKEN:-}
       - CARAPACE_CACHE_REDIS_URL=redis://redis:6379/0
-      # SQL backend. Migrations run automatically on startup. Upgrading from a YAML-only
-      # deployment? Import the existing ./data YAML once (idempotent):
-      #   docker compose run --rm carapace carapace-migrate import-yaml
+      # SQL backend. Migrations run automatically on startup.
       - CARAPACE_DATABASE_URL=postgresql+psycopg://carapace:carapace@postgres:5432/carapace
       # Enables credentials.backends.<name>.type=file for this local Compose example.
       # Only keep this enabled when users who can change backend config are trustworthy;
