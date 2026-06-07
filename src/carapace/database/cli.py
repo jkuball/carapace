@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 
 from ..config import build_config
@@ -14,7 +15,11 @@ console = Console()
 
 @app.callback()
 def _main() -> None:
-    """Keep ``upgrade`` a named subcommand (Typer otherwise collapses a lone command)."""
+    """Load .env so CARAPACE_* (e.g. CARAPACE_DATABASE_URL) match the server entrypoint.
+
+    Also keeps ``upgrade`` a named subcommand (Typer otherwise collapses a lone command).
+    """
+    load_dotenv()
 
 
 @app.command()
