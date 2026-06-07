@@ -100,9 +100,6 @@ patch_tags = [
     "👷",
     ":construction_worker:",
 ]
-# Parse merge commits too: every PR is merged as "✨Merge pull request …", so the gitmoji on
-# the merge commit should drive the release (without it, PRs whose commits lack a gitmoji never
-# release). Note: this makes every PR merge at least a minor bump.
 ignore_merge_commits = false
 
 [tool.semantic_release.changelog]
