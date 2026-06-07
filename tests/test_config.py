@@ -44,6 +44,17 @@ def test_auth_cookie_secure_from_env(monkeypatch: pytest.MonkeyPatch):
     assert AuthConfig().cookie.secure is True
 
 
+def test_build_config_applies_subsection_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Regression: env set after import must reach the subsections (default_factory, not a
+    # shared import-time instance). load_dotenv() in the server module runs before any
+    # build_config() call, so .env values must apply too.
+    monkeypatch.setenv("CARAPACE_AUTH_COOKIE__SECURE", "true")
+    monkeypatch.setenv("CARAPACE_NOTIFICATIONS_VAPID_SUBJECT", "mailto:ops@example.com")
+    cfg = build_config(tmp_path)
+    assert cfg.auth.cookie.secure is True
+    assert cfg.notifications.vapid_subject == "mailto:ops@example.com"
+
+
 def test_notifications_vapid_subject_from_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("CARAPACE_NOTIFICATIONS_VAPID_SUBJECT", "mailto:ops@example.com")
     assert NotificationsConfig().vapid_subject == "mailto:ops@example.com"
