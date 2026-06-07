@@ -95,9 +95,18 @@ Three options:
 
 - **Bundled PostgreSQL (default).** `postgres.enabled=true` deploys a single in-cluster
   Postgres (its own `<release>-postgres` PVC, Recreate strategy) and wires the server to
-  it. The password is auto-generated into the `<release>-postgres` Secret and reused
-  across upgrades; set `postgres.auth.password` or `postgres.auth.existingSecret` to manage
-  it yourself.
+  it. With plain Helm the password is auto-generated into the `<release>-postgres` Secret
+  and reused across upgrades via a `lookup`.
+
+  > **GitOps (Argo CD / Flux): use `postgres.auth.existingSecret`.** The auto-generate
+  > path relies on Helm `lookup`, which returns nothing when manifests are rendered with
+  > `helm template`. Argo CD/Flux then regenerate a fresh random password on every sync,
+  > but Postgres only applies the password at initdb — so the running DB keeps the old one
+  > and the server crashes with `password authentication failed for user "carapace"`.
+  > Point `postgres.auth.existingSecret` at a Secret you manage (SealedSecret, External
+  > Secrets, …) containing `postgres-password` and `database-url`
+  > (`postgresql+psycopg://carapace@<release>-postgres:5432/carapace`, password omitted).
+  > Alternatively set an explicit `postgres.auth.password`.
 - **External database.** Set `postgres.enabled=false` and `database.url` to a SQLAlchemy
   URL, e.g. `postgresql+psycopg://user:pass@my-pg:5432/carapace`.
 - **SQLite on the data PVC.** Set `postgres.enabled=false` and leave `database.url` empty.
@@ -147,9 +156,13 @@ The chart no longer accepts application `config.yaml` through Helm values and do
 - **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
 - **Settings** -> **Jobs** for saved jobs and schedules.
 
-The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. A fresh database starts **empty**; until an admin configures the catalog the server runs on the built-in default models. The admin UI is the source of truth.
+The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables). A fresh database starts **empty**; until an admin configures the catalog the server runs on the built-in default models. The admin UI is the source of truth.
 
-The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. It holds operator/bootstrap settings only; treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
+There is no `config.yaml`. The server reads its data root from `CARAPACE_DATA_DIR`
+(the chart sets `/var/lib/carapace`, the data PVC) and all other operator/bootstrap settings
+from env vars: `CARAPACE_DATABASE_URL`, `CARAPACE_LOG_LEVEL`, `CARAPACE_SERVER_*`,
+`CARAPACE_AUTH_*` (e.g. `CARAPACE_AUTH_COOKIE__SECURE=true`), `CARAPACE_NOTIFICATIONS_*`,
+`CARAPACE_SANDBOX_*`. Set them through `envFrom`/`extraEnv`.
 
 The chart deploys Redis by default and wires the server to `<release>-redis` via `CARAPACE_CACHE_REDIS_URL`. If you disable the bundled Redis, provide an external URL with `extraEnv` or `envFrom`:
 
@@ -159,7 +172,7 @@ extraEnv:
     value: redis://redis.example.internal:6379/0
 ```
 
-Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. Current chart versions do not render or mount that ConfigMap; migrate existing content through the web UI or, when automation needs it, to `/var/lib/carapace/config.yaml` on the data PVC. Do not keep a `config:` block in Helm values; it is ignored.
+Historical chart versions accepted application config under a Helm `config` value and mounted it from a ConfigMap at `/var/lib/carapace/config.yaml`. Current chart versions do not render or mount that ConfigMap and the server no longer reads a config file at all; configure operator settings via env vars and platform settings via the web UI. Do not keep a `config:` block in Helm values; it is ignored.
 
 ### Bitwarden / Vaultwarden credential backend
 
@@ -261,8 +274,8 @@ The Bitwarden CLI binds to a fixed localhost-only internal port (`8088`) inside 
 | `redis.image.tag`                                      | `8-alpine`                       | Redis image tag                                                     |
 | `redis.resources`                                      | requests: 25m/64Mi, limit: 128Mi | Redis resource requests/limits                                      |
 | `postgres.enabled`                                     | `true`                           | Deploy the bundled in-cluster PostgreSQL                            |
-| `postgres.auth.password`                               | `""` (auto-generated)            | DB password; empty auto-generates into the `<release>-postgres` Secret |
-| `postgres.auth.existingSecret`                         | `""`                             | Externally managed Secret (needs `passwordKey` + `urlKey`)         |
+| `postgres.auth.password`                               | `""` (auto-generated)            | DB password; empty auto-generates into the `<release>-postgres` Secret (Helm `lookup`, **not** GitOps-safe) |
+| `postgres.auth.existingSecret`                         | `""`                             | Externally managed Secret (needs `passwordKey` + `urlKey`); **recommended for GitOps** |
 | `postgres.persistence.size`                            | `8Gi`                            | Postgres data PVC size                                              |
 | `database.url`                                         | `""`                             | External SQLAlchemy URL (used only when `postgres.enabled=false`)   |
 | `resources`                                            | requests: 200m/256Mi, limit: 1Gi | Server resource requests/limits                                     |

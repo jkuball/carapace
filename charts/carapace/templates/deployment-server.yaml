@@ -40,8 +40,8 @@ spec:
             - name: proxy
               containerPort: {{ .Values.server.proxyPort }}
           env:
-            - name: CARAPACE_CONFIG
-              value: /var/lib/carapace/config.yaml
+            - name: CARAPACE_DATA_DIR
+              value: /var/lib/carapace
             - name: CARAPACE_LOG_LEVEL
               value: {{ .Values.logLevel | quote }}
             - name: CARAPACE_SERVER_PORT

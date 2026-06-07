@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_ai.models import Model
 
-from ..config import get_config_path
 from ..llm import make_model_factory
 from ..models.config import (
     OPENAI_COMPATIBLE_PROVIDERS,
@@ -125,10 +124,9 @@ class PlatformSettingsPatch(PlatformSettingsModel):
 
 
 def _config_path() -> Path:
-    configured = getattr(server, "_config_path", None)
-    if isinstance(configured, Path):
-        return configured
-    return get_config_path()
+    # No config file anymore; report the data dir (informational only — the catalog is DB-backed).
+    data_dir = getattr(server, "_data_dir", None)
+    return data_dir if isinstance(data_dir, Path) else Path(".")
 
 
 def _public_secret(secret: Secret | None) -> PublicModelSecret:
@@ -158,8 +156,8 @@ def _public_model_entry(entry: AvailableModelEntry) -> PublicPlatformModelEntry:
 
 
 def _response() -> PlatformSettingsResponse:
-    # Platform settings are DB-backed now; the config file path is informational only and the
-    # catalog is always editable (no more config.yaml read-modify-write).
+    # Platform settings are DB-backed; config_path reports the data dir (informational only) and
+    # the catalog is always editable.
     return PlatformSettingsResponse(
         config_path=str(_config_path()),
         config_writable=True,

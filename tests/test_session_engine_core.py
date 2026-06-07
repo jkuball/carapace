@@ -542,22 +542,22 @@ def test_truncate_incomplete_events_keeps_completed_user_approved_exec(tmp_path:
 
 
 def test_available_model_entries_override_default_with_metadata(tmp_path: Path, db_factory):
-    """``available_models`` lists every selectable model; duplicate id in YAML keeps last row metadata."""
-    (tmp_path / "config.yaml").write_text(
-        "agent:\n"
-        "  model: anthropic:alpha\n"
-        "  sentinel_model: anthropic:beta\n"
-        "  title_model: anthropic:gamma\n"
-        "  available_models:\n"
-        "    - provider: anthropic\n"
-        "      name: alpha\n"
-        "      max_input_tokens: 424242\n"
-        "    - provider: anthropic\n"
-        "      name: beta\n"
-        "    - provider: anthropic\n"
-        "      name: gamma\n"
+    """``available_models`` lists every selectable model; duplicate id keeps last row metadata."""
+    from carapace.config import build_config
+    from carapace.models.config import AgentConfig, AvailableModelEntry
+
+    agent = AgentConfig(
+        model="anthropic:alpha",
+        sentinel_model="anthropic:beta",
+        title_model="anthropic:gamma",
+        available_models=[
+            AvailableModelEntry(provider="anthropic", name="alpha", max_input_tokens=424242),
+            AvailableModelEntry(provider="anthropic", name="beta"),
+            AvailableModelEntry(provider="anthropic", name="gamma"),
+        ],
     )
-    engine = _make_engine(tmp_path, session_factory=db_factory)
+    config = build_config(tmp_path).model_copy(update={"agent": agent})
+    engine = _make_engine(tmp_path, session_factory=db_factory, config=config)
     by_id = {e.model_id: e for e in engine.available_model_entries}
     assert by_id["anthropic:alpha"].max_input_tokens == 424242
     ids = [e.model_id for e in engine.available_model_entries]

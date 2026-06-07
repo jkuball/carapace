@@ -233,12 +233,19 @@ postgres:
   auth:
     database: carapace
     username: carapace
-    # -- Password for the carapace DB user. Leave empty to auto-generate one and
-    # persist it in the {release}-postgres Secret (reused across upgrades via lookup).
+    # -- Password for the carapace DB user. Leave empty to auto-generate one and persist
+    # it in the {release}-postgres Secret, reused across upgrades via a Helm `lookup`.
+    # WARNING: `lookup` only works under `helm install/upgrade`. GitOps tools that render
+    # with `helm template` (Argo CD, Flux) get an empty lookup and regenerate a fresh
+    # random password on every sync — but Postgres only sets the password at initdb, so
+    # the running DB keeps the old one and the server fails with "password authentication
+    # failed". Under GitOps, set existingSecret (recommended) or an explicit password.
     password: ""
-    # -- Use an externally managed Secret instead of generating one. It must contain the
-    # password under passwordKey and a SQLAlchemy URL under urlKey. The URL may omit the
-    # password (it is injected separately as PGPASSWORD, so no URL-encoding is needed).
+    # -- Use an externally managed Secret (SealedSecret, External Secrets, etc.) instead of
+    # generating one. Recommended for GitOps. It must contain the password under passwordKey
+    # and a SQLAlchemy URL under urlKey. The URL may omit the password (it is injected
+    # separately as PGPASSWORD, so no URL-encoding is needed), e.g.
+    # postgresql+psycopg://carapace@{release}-postgres:5432/carapace
     existingSecret: ""
     passwordKey: postgres-password
     urlKey: database-url
