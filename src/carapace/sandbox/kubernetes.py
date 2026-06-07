@@ -846,7 +846,7 @@ class KubernetesRuntime(ContainerRuntime):
             pass
 
         try:
-            return {"hostname": socket.gethostbyname(hostname)}
+            return {"hostname": await asyncio.to_thread(socket.gethostbyname, hostname)}
         except Exception:
             return {}
 
@@ -858,7 +858,7 @@ class KubernetesRuntime(ContainerRuntime):
 
         svc_dns = f"carapace.{self._namespace}.svc.cluster.local"
         try:
-            return socket.gethostbyname(svc_dns)
+            return await asyncio.to_thread(socket.gethostbyname, svc_dns)
         except socket.gaierror:
             logger.warning(f"Could not resolve {svc_dns}")
             return None

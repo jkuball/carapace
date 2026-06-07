@@ -59,6 +59,10 @@ class ProxyServer:
         self._host = host
         self._port = port
         self._server: asyncio.Server | None = None
+        # Build once: create_default_context() reads + parses the system CA
+        # bundle from disk, which blocks the event loop. Reused for all
+        # HTTPS-forward requests instead of per-request.
+        self._tls_context = ssl.create_default_context()
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(
@@ -110,7 +114,9 @@ class ProxyServer:
             session_id: str | None = None
             if proxy_auth:
                 sid, token = proxy_auth
-                if self._verify_session_token(sid, token):
+                # verify_session_token may hit the DB (sync) on cache miss;
+                # run off-loop so a pool checkout can't stall the event loop.
+                if await asyncio.to_thread(self._verify_session_token, sid, token):
                     session_id = sid
             if session_id is None:
                 if proxy_auth:
@@ -257,7 +263,7 @@ class ProxyServer:
                     asyncio.open_connection(
                         domain,
                         port,
-                        ssl=ssl.create_default_context(),
+                        ssl=self._tls_context,
                         server_hostname=domain,
                     ),
                     timeout=30,
