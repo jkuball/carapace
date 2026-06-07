@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.140.2 (2026-06-07)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: avoid asyncio loop blockade
+  ([`763f233`](https://github.com/thiesgerken/carapace/commit/763f233ba6acaf15a28a8642e1fae958a76e4a38))
+
+- 🐛 fix: increase k8s idle timeout for sandboxes
+  ([`aeb6c57`](https://github.com/thiesgerken/carapace/commit/aeb6c57d3766f63c01b4d7ca7975ae4f70124969))
+
 ## v0.140.1 (2026-06-07)
 
 
