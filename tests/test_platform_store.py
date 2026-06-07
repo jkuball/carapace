@@ -28,17 +28,17 @@ def _agent(**overrides) -> AgentConfig:
     return AgentConfig(**base)
 
 
-def test_seed_is_idempotent(db_factory):
+def test_overlay_empty_db_falls_back_to_code_defaults(db_factory):
+    # No seeding on a fresh DB: overlay must fall back to the AgentConfig code defaults
+    # (sonnet + haiku) and validate, so the server still boots until an admin saves a catalog.
     store = PlatformSettingsStore(db_factory)
-    config = Config(agent=_agent())
+    assert store.load_models() == []
 
-    assert store.seed_from_config(config) is True
-    assert store.seed_from_config(config) is False  # second run is a no-op
-
-    models = store.load_models()
-    assert {m.model_id for m in models} == {"anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5"}
-    assert store.load_section("agent") is not None
-    assert store.load_section("sessions") is not None
+    overlaid = store.overlay_config(Config(agent=_agent()))
+    assert {m.model_id for m in overlaid.agent.available_models} == {
+        "anthropic:claude-sonnet-4-6",
+        "anthropic:claude-haiku-4-5",
+    }
 
 
 def test_replace_models_round_trips_api_key_sources(db_factory):
@@ -78,27 +78,10 @@ def test_duplicate_model_ids_are_deduplicated(db_factory):
         ],
     )
 
-    assert store.seed_from_config(Config(agent=agent)) is True
+    store.save_agent_config(agent)  # dedup on save must not PK-conflict
     loaded = store.load_models()
     assert len(loaded) == 1
     assert loaded[0].max_input_tokens == 2  # last entry wins
-
-    store.save_agent_config(agent)  # must also not conflict
-    assert len(store.load_models()) == 1
-
-
-def test_seed_race_loser_does_not_raise(db_factory):
-    # Simulate a concurrent winner having already seeded between our empty-check and commit:
-    # a second seed of a populated DB must return False, never propagate IntegrityError.
-    store = PlatformSettingsStore(db_factory)
-    config = Config(agent=_agent())
-    assert store.seed_from_config(config) is True
-    assert store.is_seeded() is True
-    assert store.seed_from_config(config) is False
-
-
-def test_is_seeded_false_on_empty_db(db_factory):
-    assert PlatformSettingsStore(db_factory).is_seeded() is False
 
 
 def test_assemble_agent_config_validates_defaults_in_catalog(db_factory):
@@ -131,8 +114,6 @@ def test_overlay_config_replaces_agent_and_sessions_only(db_factory):
         agent=_agent(),
         sessions=SessionsConfig(commit=SessionCommitConfig(path_prefix="sessions")),
     )
-    store.seed_from_config(config)
-    # Mutate the DB sources after seeding.
     store.save_agent_config(_agent(max_parallel_llm=9))
     store.save_section("sessions", {"commit": {"path_prefix": "archived"}})
 

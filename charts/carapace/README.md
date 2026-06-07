@@ -104,27 +104,6 @@ Three options:
   The DB is a file (`carapace.db`) on the existing data PVC — fine for the single-replica
   server, no extra infra.
 
-### Migrating existing YAML data
-
-Upgrading a deployment that predates the SQL backend? Its old YAML (`users.yaml`,
-`jobs.yaml`, `sessions/…`, …) still sits on the data PVC but the server now reads the
-database, which starts **empty**. Run the one-shot importer once after upgrading — it is
-idempotent (skips rows that already exist):
-
-```bash
-# Runs inside the already-running server pod, which has the data PVC mounted and the DB
-# env configured. Safe to re-run.
-kubectl exec -n carapace deploy/carapace-server -- carapace-migrate import-yaml
-```
-
-Tip: run this **immediately after the upgrade**, before relying on logins. If your YAML
-contains an `admin` user, set `CARAPACE_TOKEN` to that admin's intended password (the
-bootstrap admin created on first empty-DB boot otherwise shadows the imported one).
-
-The old YAML files are left in place as a rollback backup; delete them once you've
-verified the import. Add `--dry-run` to preview counts, or `--purge` to truncate the DB
-tables first (destructive — only for a clean re-import).
-
 ## Configuration
 
 All images default to the chart's `appVersion` tag. Release charts use the semantic-release project version, and PR preview charts use `pr<PR number>`.
@@ -168,7 +147,7 @@ The chart no longer accepts application `config.yaml` through Helm values and do
 - **Settings** -> **Account** for per-user model defaults, Matrix, Git, and credential backends.
 - **Settings** -> **Jobs** for saved jobs and schedules.
 
-The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. On the first startup after upgrading from a file-based deployment they are seeded once from the `agent` and `sessions` sections of an existing `config.yaml`, then those sections are removed from the file (a one-time `config.yaml.pre-db-migration.bak` backup is kept) so on-disk edits cannot silently no-op. The admin UI is the source of truth thereafter.
+The model catalog and the scalar `agent`/`sessions` settings edited in **Platform** are stored in the database (`models` + `platform_settings` tables), not in `config.yaml`. A fresh database starts **empty**; until an admin configures the catalog the server runs on the built-in default models. The admin UI is the source of truth.
 
 The server still stores its backing config on the data PVC at `/var/lib/carapace/config.yaml` through `CARAPACE_CONFIG`, and creates a valid empty file when it does not exist yet. It holds operator/bootstrap settings only; treat direct file edits as a migration or automation escape hatch, not as the normal Helm interface.
 

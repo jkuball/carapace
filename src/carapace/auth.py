@@ -198,7 +198,7 @@ class AuthStore:
         return UsersFile(users={row.username: _row_to_user(row) for row in rows})
 
     def save_users(self, users_file: UsersFile) -> UsersFile:
-        """Replace the full user set (importer / bulk operations)."""
+        """Replace the full user set (bulk operations)."""
         with self._session_factory.begin() as db:
             db.execute(delete(User))
             db.add_all(_user_to_row(username, user) for username, user in users_file.users.items())
@@ -336,7 +336,7 @@ class AuthStore:
         return SessionsFile(sessions={row.id: _row_to_session(row) for row in rows})
 
     def save_sessions(self, sessions_file: SessionsFile) -> SessionsFile:
-        """Replace the full session set (importer / bulk operations)."""
+        """Replace the full session set (bulk operations)."""
         with self._session_factory.begin() as db:
             db.execute(delete(AuthSessionRow))
             db.add_all(_session_to_row(session) for session in sessions_file.sessions.values())

@@ -84,7 +84,7 @@ class JobsStore:
         return JobsFile(jobs=self.list_jobs())
 
     def save(self, jobs_file: JobsFile) -> JobsFile:
-        """Replace the full job set (used by the importer and bulk operations)."""
+        """Replace the full job set (bulk operations)."""
         with self._session_factory.begin() as db:
             db.execute(delete(JobRow))
             db.add_all(_job_to_row(job) for job in jobs_file.jobs)

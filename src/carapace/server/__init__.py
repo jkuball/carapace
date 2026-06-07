@@ -38,7 +38,6 @@ from ..config import (
     get_config_path,
     get_data_dir,
     load_config,
-    strip_db_managed_sections,
 )
 from ..credentials import CredentialBackendError, CredentialRegistry, build_credential_registry
 from ..database.engine import SessionFactory, create_engine_and_factory, run_migrations
@@ -328,18 +327,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     run_migrations(_engine_db)
 
     # Runtime platform config (model catalog + scalar agent/sessions settings) lives in the DB.
-    # Seed once from config.yaml on first boot, then overlay so the in-memory Config reflects the DB.
+    # Overlay the DB values onto the in-memory Config. An empty catalog falls back to the
+    # AgentConfig code defaults, so a fresh DB boots until an admin configures the catalog.
     _platform_store = PlatformSettingsStore(_session_factory)
-    if _platform_store.seed_from_config(_config):
-        logger.info("Seeded platform settings (models + agent/sessions) from config.yaml")
     _config = _platform_store.overlay_config(_config)
-    # Once the DB is authoritative, strip the now DB-managed sections from config.yaml so editing
-    # them on disk can't silently no-op. Runs every boot (idempotent no-op when absent) so a strip
-    # that failed on the seeding boot is retried later; gated on the DB actually being seeded.
-    if _platform_store.is_seeded():
-        removed = strip_db_managed_sections(config_path)
-        if removed:
-            logger.info(f"Removed DB-managed sections {removed} from config.yaml (backup kept)")
 
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
     if _auth_store.ensure_bootstrap_admin() is not None:

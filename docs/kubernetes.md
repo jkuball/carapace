@@ -224,16 +224,12 @@ Relational state (users, sessions, jobs, auth sessions, sandbox tokens, notifica
 subscriptions) lives in a SQL database; schema migrations run automatically on server
 startup. The chart deploys a bundled in-cluster PostgreSQL by default (`postgres.enabled`),
 with an external-URL (`database.url`) or SQLite-on-the-data-PVC option. See the
-[chart README — Database](../charts/carapace/README.md#database) for backend selection and,
-when upgrading from a YAML-only deployment, the one-shot
-`kubectl exec deploy/<release>-server -- carapace-migrate import-yaml` step.
+[chart README — Database](../charts/carapace/README.md#database) for backend selection.
 
 Runtime platform settings — the model catalog and scalar `agent`/`sessions` config edited in
-the admin UI — also live in the database (`models` + `platform_settings` tables). On the first
-startup after upgrade they are **seeded once** from the `agent` and `sessions` sections of
-`config.yaml`, after which those two sections are **removed** from the file (a one-time copy is
-kept at `config.yaml.pre-db-migration.bak`) so editing them on disk can no longer silently
-no-op. The admin UI is then the source of truth. Operator/bootstrap config (`database.url`,
+the admin UI — also live in the database (`models` + `platform_settings` tables). A fresh DB
+starts **empty**; until an admin configures the catalog, the server runs on the built-in
+default models. The admin UI is the source of truth. Operator/bootstrap config (`database.url`,
 `log_level`, `server.*`, `sandbox.*`, …) stays in env vars / `config.yaml` — prefer env vars in
 Kubernetes.
 
