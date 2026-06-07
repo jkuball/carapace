@@ -66,6 +66,8 @@ sandbox:
   sandboxesName:
   # -- Number of generic warm sandboxes to keep ready for faster claims (0 disables)
   warmPoolSize: 1
+  # -- Minutes of inactivity before a sandbox is automatically cleaned up
+  idleTimeoutMinutes: 960
 
 # -- Ingress configuration (Gateway API HTTPRoute)
 ingress:
