@@ -1,6 +1,32 @@
 # CHANGELOG
 
 
+## v0.140.4 (2026-06-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 force release
+  ([`d7e9341`](https://github.com/thiesgerken/carapace/commit/d7e934122b4f982916dc60493ef6763d5174719a))
+
+### Other
+
+
+- 🩺 debug: log logs() kr8s failures at debug level
+  ([`2475c17`](https://github.com/thiesgerken/carapace/commit/2475c17c8734ace363736f1f1fdc36447e292e76))
+
+  Keep the get-vs-stream split and exact exception repr, but emit at debug so it's quiet by default; enable via CARAPACE_LOG_LEVEL=debug when diagnosing the wait_for_ready stall.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- 🩺 debug: surface exact kr8s error in logs(), split get vs stream
+  ([`ad787e5`](https://github.com/thiesgerken/carapace/commit/ad787e591042e86f6fcafcb61e6216bca5e6a578))
+
+  logs() returned the "(pod not found or logs unavailable)" placeholder on a running StatefulSet pod, so wait_for_ready burned 180s. Promote the swallowed exception to a warning and split Pod.get from pod.logs so the next stall reveals which call fails and the exact kr8s error.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.140.3 (2026-06-10)
 
 
