@@ -66,7 +66,10 @@ def _file_write_commands(path: str, content: str, *, mode: int | None, quote: bo
     for start in range(0, len(data) or 1, _FILE_WRITE_CHUNK_BYTES):
         b64 = base64.b64encode(data[start : start + _FILE_WRITE_CHUNK_BYTES]).decode()
         if not writes:
-            writes.append(f'mkdir -p "$(dirname {shell_path})" && printf %s {b64} | base64 -d > {shell_path}')
+            writes.append(
+                f'mkdir -p "$(dirname {shell_path})" && rm -f {shell_path} '
+                f"&& printf %s {b64} | base64 -d > {shell_path}"
+            )
         else:
             writes.append(f"printf %s {b64} | base64 -d >> {shell_path}")
     chmod: str | None = None
