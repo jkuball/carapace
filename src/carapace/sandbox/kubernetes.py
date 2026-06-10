@@ -804,15 +804,19 @@ class KubernetesRuntime(ContainerRuntime):
             return False
 
     async def logs(self, container_id: str, tail: int = 40) -> str:
+        api = await self._ensure_api()
         try:
-            api = await self._ensure_api()
             pod = await Pod.get(container_id, namespace=self._namespace, api=api)
+        except (kr8s.NotFoundError, kr8s.ServerError) as exc:
+            logger.warning(f"logs(): Pod.get failed for {container_id}: {type(exc).__name__}: {exc!r}")
+            return "(pod not found or logs unavailable)"
+        try:
             lines: list[str] = []
             async for line in pod.logs(container="sandbox", tail_lines=tail, timestamps=True):
                 lines.append(line)
             return "\n".join(lines)
         except (kr8s.NotFoundError, kr8s.ServerError) as exc:
-            logger.debug(f"logs() unavailable for {container_id}: {type(exc).__name__}: {exc}")
+            logger.warning(f"logs(): pod.logs failed for {container_id}: {type(exc).__name__}: {exc!r}")
             return "(pod not found or logs unavailable)"
 
     def image_exists(self, tag: str) -> bool:
