@@ -547,12 +547,16 @@ class SandboxSessionLifecycle:
 
     async def wait_for_ready(self, container_id: str, session_id: str) -> None:
         """Poll container logs until the ready marker appears."""
+        last_output = ""
         for _ in range(self._READY_TIMEOUT_SECONDS):
-            log_output = await self._runtime.logs(container_id, tail=10)
-            if self._READY_MARKER in log_output:
+            last_output = await self._runtime.logs(container_id, tail=10)
+            if self._READY_MARKER in last_output:
                 return
             await asyncio.sleep(1)
-        logger.warning(f"Sandbox for {session_id} did not become ready within {self._READY_TIMEOUT_SECONDS}s")
+        logger.warning(
+            f"Sandbox for {session_id} did not become ready within {self._READY_TIMEOUT_SECONDS}s "
+            f"(container={container_id}); last log tail: {last_output!r}"
+        )
 
     async def clone_knowledge_repo(
         self,

@@ -808,10 +808,11 @@ class KubernetesRuntime(ContainerRuntime):
             api = await self._ensure_api()
             pod = await Pod.get(container_id, namespace=self._namespace, api=api)
             lines: list[str] = []
-            async for line in pod.logs(tail_lines=tail, timestamps=True):
+            async for line in pod.logs(container="sandbox", tail_lines=tail, timestamps=True):
                 lines.append(line)
             return "\n".join(lines)
-        except (kr8s.NotFoundError, kr8s.ServerError):
+        except (kr8s.NotFoundError, kr8s.ServerError) as exc:
+            logger.debug(f"logs() unavailable for {container_id}: {type(exc).__name__}: {exc}")
             return "(pod not found or logs unavailable)"
 
     def image_exists(self, tag: str) -> bool:
