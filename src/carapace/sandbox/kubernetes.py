@@ -808,7 +808,7 @@ class KubernetesRuntime(ContainerRuntime):
         try:
             pod = await Pod.get(container_id, namespace=self._namespace, api=api)
         except (kr8s.NotFoundError, kr8s.ServerError) as exc:
-            logger.warning(f"logs(): Pod.get failed for {container_id}: {type(exc).__name__}: {exc!r}")
+            logger.debug(f"logs(): Pod.get failed for {container_id}: {type(exc).__name__}: {exc!r}")
             return "(pod not found or logs unavailable)"
         try:
             lines: list[str] = []
@@ -816,7 +816,7 @@ class KubernetesRuntime(ContainerRuntime):
                 lines.append(line)
             return "\n".join(lines)
         except (kr8s.NotFoundError, kr8s.ServerError) as exc:
-            logger.warning(f"logs(): pod.logs failed for {container_id}: {type(exc).__name__}: {exc!r}")
+            logger.debug(f"logs(): pod.logs failed for {container_id}: {type(exc).__name__}: {exc!r}")
             return "(pod not found or logs unavailable)"
 
     def image_exists(self, tag: str) -> bool:
