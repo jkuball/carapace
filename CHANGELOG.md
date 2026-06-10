@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.140.5 (2026-06-10)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: grant pods/log RBAC so sandbox readiness wait works
+  ([`6731cbf`](https://github.com/thiesgerken/carapace/commit/6731cbf8fa544aaca25a314a05a85778cc32f6e4))
+
+  The server ServiceAccount could get pods and pods/exec but not the pods/log subresource, so every logs() call 403'd. wait_for_ready scrapes container logs for the ready marker and thus never matched, burning the full 180s timeout on every sandbox create/resume/claim before silently proceeding — the multi-minute startup users observed.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.140.4 (2026-06-10)
 
 
