@@ -13,7 +13,7 @@ metadata:
     {{- include "carapace.labels" . | nindent 4 }}
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/exec"]
+    resources: ["pods", "pods/exec", "pods/log"]
     verbs: ["create", "get", "list", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
