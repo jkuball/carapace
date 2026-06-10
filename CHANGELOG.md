@@ -1,6 +1,39 @@
 # CHANGELOG
 
 
+## v0.140.3 (2026-06-10)
+
+
+### Other
+
+
+- 🩺 debug: instrument sandbox readiness wait + pin logs container
+  ([`fc5d99e`](https://github.com/thiesgerken/carapace/commit/fc5d99e3ea5ea86f96d69760ff27ec535774d3ef))
+
+  wait_for_ready burned the full 180s timeout on resumed StatefulSet pods even though the pod printed the ready marker quickly. logs() swallowed kr8s errors silently, hiding why the marker poll never matched.
+
+  - logs(): pass container="sandbox" explicitly (kr8s container=None can
+    resolve the default container oddly on a just-restarted pod) and log
+    the kr8s exception at debug instead of swallowing it.
+  - wait_for_ready(): include container id and the last log tail in the
+    timeout warning to reveal whether logs() returned the error
+    placeholder or real marker-less output.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+- 📝 chore: update roadmap by removing obsolete workspace items
+  ([`b9bfb72`](https://github.com/thiesgerken/carapace/commit/b9bfb7220adf4c0d08033cabdccaeaaf18923c2a))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: force-overwrite read-only file on credential write
+  ([`e49d71c`](https://github.com/thiesgerken/carapace/commit/e49d71c83990ec195ca7d54888bef93f0857642e))
+
+  Credential files are written mode 0400. A stale read-only token.txt surviving in the persisted /workspace (backend crash or pod eviction skips post-exec cleanup) made the next truncating redirect fail with "Permission denied". rm -f before redirect clears the leftover.
+
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 ## v0.140.2 (2026-06-07)
 
 
