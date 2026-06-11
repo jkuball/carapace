@@ -83,6 +83,15 @@ def test_key_dies_when_user_disabled_or_deleted(stores):
     assert keys.validate_key(secret) is None
 
 
+def test_recreated_user_does_not_inherit_old_keys(stores):
+    auth, keys = stores
+    _info, secret = keys.create_key(user="thies", name="ci", grants=[_read_grant(Scope.jobs, Access.read)])
+    auth.delete_user("thies")
+    auth.create_user(username="thies", password="a-fresh-password", display_name="Thies")
+    assert keys.validate_key(secret) is None
+    assert keys.list_keys("thies") == []
+
+
 def test_key_survives_password_change(stores):
     auth, keys = stores
     _info, secret = keys.create_key(user="thies", name="ci", grants=[_read_grant(Scope.jobs, Access.read)])
