@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, model_validator
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..models.tooling import SentFileInfo, normalize_tool_call_args
 from ..security.context import ApprovalSource, ApprovalVerdict
 from ..ws_models import Attachment, FinalStatus
-from .auth import verify_token
+from .auth import require
 from .state import server_module
 
 server = server_module()
@@ -85,7 +86,7 @@ class HistoryMessage(BaseModel):
 @router.get("/sessions/{session_id}/history", response_model=list[HistoryMessage])
 async def get_session_history(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.history, Access.read))],
     limit: Annotated[int, Query()] = -1,
 ) -> list[HistoryMessage]:
     if server._engine.session_mgr.load_state(session_id) is None or not server._engine.session_mgr.is_owned_by(

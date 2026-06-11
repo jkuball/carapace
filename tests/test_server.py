@@ -19,6 +19,7 @@ from sqlalchemy import select
 import carapace.server as srv
 import carapace.server.jobs as server_jobs
 import carapace.server.platform_settings as platform_settings
+from carapace.api_keys import Access, ApiKeyGrant, ApiKeyStore, Scope
 from carapace.auth import AuthStore
 from carapace.bootstrap import ensure_data_dir
 from carapace.config import build_config, resolve_user_knowledge_dir
@@ -145,6 +146,7 @@ def _setup_server(tmp_path, monkeypatch, db_factory):
     srv._auth_store = AuthStore(db_factory, config.auth, tmp_path)
     srv._auth_store.create_user(username="admin", password="admin-secret", display_name="Admin", roles=["admin"])
     srv._auth_store.create_user(username="thies", password="secret", display_name="Thies")
+    srv._api_key_store = ApiKeyStore(db_factory, srv._auth_store)
     srv._notification_store = NotificationStore(db_factory)
     srv._notification_presence = NotificationPresenceRegistry(
         ttl=timedelta(seconds=config.notifications.presence_ttl_seconds)
@@ -286,7 +288,98 @@ def _headers_for_user(username: str) -> dict[str, str]:
     return {"Cookie": f"{srv._config.auth.cookie.name}={token}"}
 
 
+def _api_key_headers(username: str, grants: list[ApiKeyGrant]) -> dict[str, str]:
+    _info, secret = srv._api_key_store.create_key(user=username, name="test", grants=grants)
+    return {"Authorization": f"Bearer {secret}"}
+
+
 # --- Auth ---
+
+
+def test_api_key_read_scope_allows_get_but_not_write():
+    headers = _api_key_headers("thies", [ApiKeyGrant(scope=Scope.sessions, access=Access.read)])
+    client = TestClient(app)
+    assert client.get("/api/sessions", headers=headers).status_code == 200
+    assert client.post("/api/sessions", headers=headers, json={}).status_code == 403
+
+
+def test_api_key_write_scope_allows_write():
+    headers = _api_key_headers("thies", [ApiKeyGrant(scope=Scope.sessions, access=Access.write)])
+    client = TestClient(app)
+    assert client.get("/api/sessions", headers=headers).status_code == 200
+    assert client.post("/api/sessions", headers=headers, json={}).status_code == 200
+
+
+def test_api_key_wrong_scope_forbidden():
+    headers = _api_key_headers("thies", [ApiKeyGrant(scope=Scope.jobs, access=Access.write)])
+    client = TestClient(app)
+    assert client.get("/api/jobs", headers=headers).status_code == 200
+    assert client.get("/api/sessions", headers=headers).status_code == 403
+
+
+def test_api_key_admin_scope_requires_admin_role():
+    # non-admin cannot even mint an admin-scoped key
+    with pytest.raises(ValueError, match="admin"):
+        srv._api_key_store.create_key(
+            user="thies", name="x", grants=[ApiKeyGrant(scope=Scope.admin, access=Access.write)]
+        )
+    headers = _api_key_headers("admin", [ApiKeyGrant(scope=Scope.admin, access=Access.write)])
+    client = TestClient(app)
+    assert client.get("/api/admin/users", headers=headers).status_code == 200
+
+
+def test_api_key_admin_grant_decays_when_role_removed():
+    headers = _api_key_headers("admin", [ApiKeyGrant(scope=Scope.admin, access=Access.write)])
+    client = TestClient(app)
+    assert client.get("/api/admin/users", headers=headers).status_code == 200
+    srv._auth_store.create_user(username="admin2", password="admin-secret-2", roles=["admin"])
+    srv._auth_store.update_user("admin", {"roles": []})
+    assert client.get("/api/admin/users", headers=headers).status_code == 403
+
+
+def test_api_key_dies_when_user_disabled():
+    headers = _api_key_headers("thies", [ApiKeyGrant(scope=Scope.sessions, access=Access.read)])
+    client = TestClient(app)
+    assert client.get("/api/sessions", headers=headers).status_code == 200
+    srv._auth_store.update_user("thies", {"enabled": False})
+    assert client.get("/api/sessions", headers=headers).status_code == 401
+
+
+def test_api_key_management_requires_cookie_not_key():
+    cookie = _headers_for_user("thies")
+    client = TestClient(app)
+    resp = client.post("/api/keys", headers=cookie, json={"name": "ci", "scopes": ["sessions:read"]})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["secret"]
+    secret = body["secret"]
+    # the freshly minted key cannot itself create or list keys (cookie-only management)
+    key_headers = {"Authorization": f"Bearer {secret}"}
+    assert (
+        client.post("/api/keys", headers=key_headers, json={"name": "x", "scopes": ["sessions:read"]}).status_code
+        == 401
+    )
+    assert client.get("/api/keys", headers=key_headers).status_code == 401
+
+
+def test_list_api_keys_omits_secret():
+    cookie = _headers_for_user("thies")
+    client = TestClient(app)
+    client.post("/api/keys", headers=cookie, json={"name": "ci", "scopes": ["jobs:write"]})
+    listed = client.get("/api/keys", headers=cookie).json()
+    assert len(listed) == 1
+    assert "secret" not in listed[0]
+    assert "secret_hash" not in listed[0]
+    assert listed[0]["scopes"] == ["jobs:write"]
+
+
+def test_revoke_other_users_key_returns_404():
+    info, _secret = srv._api_key_store.create_key(
+        user="admin", name="k", grants=[ApiKeyGrant(scope=Scope.jobs, access=Access.read)]
+    )
+    cookie = _headers_for_user("thies")
+    client = TestClient(app)
+    assert client.delete(f"/api/keys/{info.id}", headers=cookie).status_code == 404
 
 
 def test_no_auth_returns_401(client):
@@ -2996,6 +3089,26 @@ def test_ws_ticket_allows_cookie_free_websocket(client, auth_headers):
 
     with client.websocket_connect(f"/api/chat/{sid}?ticket={ticket}") as ws:
         _consume_status(ws)
+
+
+def test_ws_api_key_with_sessions_write_connects(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+    _info, secret = srv._api_key_store.create_key(
+        user="thies", name="ws", grants=[ApiKeyGrant(scope=Scope.sessions, access=Access.write)]
+    )
+    with client.websocket_connect(f"/api/chat/{sid}?api_key={secret}") as ws:
+        _consume_status(ws)
+
+
+def test_ws_api_key_read_only_rejected(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+    _info, secret = srv._api_key_store.create_key(
+        user="thies", name="ws", grants=[ApiKeyGrant(scope=Scope.sessions, access=Access.read)]
+    )
+    with pytest.raises(Exception), client.websocket_connect(f"/api/chat/{sid}?api_key={secret}"):  # noqa: B017
+        pass
 
 
 def _consume_status(ws):

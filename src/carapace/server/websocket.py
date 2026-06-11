@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 from pydantic import BaseModel
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..models.tooling import ToolResult, normalize_tool_call_args
 from ..notifications.models import NotificationClientType
@@ -44,7 +45,7 @@ from ..ws_models import (
     UserMessageNotification,
     parse_client_message,
 )
-from .auth import verify_token, verify_ws_token
+from .auth import require, verify_ws_token
 from .notifications import _set_notification_presence
 from .state import server_module
 
@@ -81,12 +82,14 @@ def _llm_activity_payload(activity: LlmRequestState | None) -> LlmActivity | Non
 
 
 @router.get("/commands")
-async def list_commands(_user: Annotated[UserIdentity, Depends(verify_token)]) -> list[dict[str, str]]:
+async def list_commands(
+    _user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
+) -> list[dict[str, str]]:
     return SLASH_COMMANDS
 
 
 @router.get("/meta", response_model=ServerMeta)
-async def get_meta(_user: Annotated[UserIdentity, Depends(verify_token)]) -> ServerMeta:
+async def get_meta(_user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))]) -> ServerMeta:
     return ServerMeta(version=server._APP_VERSION)
 
 
@@ -99,7 +102,9 @@ async def get_vapid_public_key() -> VapidPublicKeyResponse:
 
 
 @router.get("/models")
-async def list_models(_user: Annotated[UserIdentity, Depends(verify_token)]) -> list[dict[str, Any]]:
+async def list_models(
+    _user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
+) -> list[dict[str, Any]]:
     return [e.model_dump(mode="json", by_alias=True) for e in server._engine.available_model_entries]
 
 

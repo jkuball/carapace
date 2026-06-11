@@ -311,6 +311,63 @@ export async function deleteAdminUser(
   }
 }
 
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ApiKeyCreateInput {
+  name: string;
+  scopes: string[];
+  expires_in_days?: number | null;
+}
+
+export interface ApiKeyCreateResult {
+  key: ApiKeyInfo;
+  secret: string;
+}
+
+export async function listApiKeys(server: string): Promise<ApiKeyInfo[]> {
+  const res = await fetch(`${server}/api/keys`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to list API keys"));
+  }
+  return (await res.json()) as ApiKeyInfo[];
+}
+
+export async function createApiKey(
+  server: string,
+  body: ApiKeyCreateInput,
+): Promise<ApiKeyCreateResult> {
+  const res = await fetch(`${server}/api/keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to create API key"));
+  }
+  return (await res.json()) as ApiKeyCreateResult;
+}
+
+export async function revokeApiKey(server: string, id: string): Promise<void> {
+  const res = await fetch(`${server}/api/keys/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to revoke API key"));
+  }
+}
+
 export async function getServerMeta(
   server: string,
   token: string,

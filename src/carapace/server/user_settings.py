@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from ..api_keys import Access, Scope
 from ..auth import AuthStore, UserIdentity, normalize_username
 from ..credentials.registry import file_credential_backend_allowed_from_env
 from ..models.credentials import (
@@ -19,7 +20,7 @@ from ..models.credentials import (
 from ..models.matrix import MatrixChannelConfig, MatrixTokensFile
 from ..models.session import SessionBudget
 from ..models.user import UserConfig, UserDefaultModelsConfig, UserGitConfig
-from .auth import verify_token
+from .auth import require
 from .state import server_module
 
 server = server_module()
@@ -469,14 +470,16 @@ def _apply_git_patch(config: UserConfig, patch: GitSettingsPatch) -> None:
 
 
 @router.get("/user/settings", response_model=UserSettingsResponse)
-async def get_user_settings(user: Annotated[UserIdentity, Depends(verify_token)]) -> UserSettingsResponse:
+async def get_user_settings(
+    user: Annotated[UserIdentity, Depends(require(Scope.preferences, Access.read))],
+) -> UserSettingsResponse:
     return _settings_response(user.username)
 
 
 @router.patch("/user/settings", response_model=UserSettingsResponse)
 async def update_user_settings(
     body: UserSettingsPatch,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.preferences, Access.write))],
 ) -> UserSettingsResponse:
     stored_user = _auth_store().get_user(user.username)
     if stored_user is None:

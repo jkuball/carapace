@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..notifications.models import (
     NotificationClientType,
@@ -13,7 +14,7 @@ from ..notifications.models import (
     NotificationPreferences,
     NotificationSubscription,
 )
-from .auth import verify_token
+from .auth import require
 from .state import server_module
 
 server = server_module()
@@ -135,7 +136,7 @@ async def _set_notification_presence(
 
 @router.get("/notifications/subscriptions", response_model=list[NotificationSubscriptionResponse])
 async def list_notification_subscriptions(
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.read))],
 ) -> list[NotificationSubscriptionResponse]:
     server._notification_store.cleanup_expired()
     subscriptions = server._notification_store.list_subscriptions(user=user.username)
@@ -145,7 +146,7 @@ async def list_notification_subscriptions(
 @router.post("/notifications/subscriptions", response_model=NotificationSubscriptionResponse)
 async def upsert_notification_subscription(
     request: NotificationSubscriptionCreateRequest,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> NotificationSubscriptionResponse:
     server._notification_store.cleanup_expired()
     prefs = _default_notification_preferences()
@@ -166,7 +167,7 @@ async def upsert_notification_subscription(
 @router.delete("/notifications/subscriptions/{subscription_id}", status_code=204)
 async def delete_notification_subscription(
     subscription_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> Response:
     subscription = _owned_notification_subscription(subscription_id, user)
     server._notification_store.delete_subscription(subscription.id)
@@ -180,7 +181,7 @@ async def delete_notification_subscription(
 async def patch_notification_subscription_preferences(
     subscription_id: str,
     request: NotificationPreferencesPatch,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> NotificationSubscriptionResponse:
     subscription = _owned_notification_subscription(subscription_id, user)
     updated = subscription.model_copy(update={"notification_prefs": request.apply(subscription.notification_prefs)})
@@ -194,7 +195,7 @@ async def patch_notification_subscription_preferences(
 )
 async def test_notification_subscription(
     subscription_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> NotificationTestResponse:
     server._notification_store.cleanup_expired()
     subscription = _owned_notification_subscription(subscription_id, user)
@@ -208,7 +209,7 @@ async def test_notification_subscription(
 async def update_notification_presence(
     subscription_id: str,
     request: NotificationPresenceRequest,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> dict[str, bool]:
     subscription = _owned_notification_subscription(subscription_id, user)
     if not server._engine.session_mgr.is_owned_by(request.session_id, user.username):
@@ -229,7 +230,7 @@ async def update_notification_presence(
 @router.post("/notifications/presence")
 async def update_interactive_presence(
     request: InteractivePresenceRequest,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.notifications, Access.write))],
 ) -> dict[str, bool]:
     if not server._engine.session_mgr.is_owned_by(request.session_id, user.username):
         raise HTTPException(status_code=404, detail="Session not found")

@@ -18,6 +18,7 @@ import {
 import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { AdminUsersPage } from "@/components/admin-users-page";
+import { ApiKeysView } from "@/components/api-keys-view";
 import { PlatformSettingsView } from "@/components/platform-settings-view";
 import { PreferencesView } from "@/components/preferences-view";
 import { UserSettingsView } from "@/components/user-settings-view";
@@ -40,7 +41,7 @@ interface JobsViewProps {
   onTabChange: (tab: SettingsTab) => void;
 }
 
-export type SettingsTab = "jobs" | "platform-models" | "platform-users" | "preferences" | "account";
+export type SettingsTab = "jobs" | "platform-models" | "platform-users" | "preferences" | "account" | "api-keys";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -639,6 +640,7 @@ export function JobsView({
   const isPlatformUsersTab = effectiveActiveTab === "platform-users";
   const isPreferencesTab = effectiveActiveTab === "preferences";
   const isAccountTab = effectiveActiveTab === "account";
+  const isApiKeysTab = effectiveActiveTab === "api-keys";
   const tabButtonClassName = (selected: boolean): string => cn(
     "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     selected
@@ -695,6 +697,18 @@ export function JobsView({
                 className={tabButtonClassName(isJobsTab)}
               >
                 {tRoot("navigation.jobs")}
+              </button>
+              <button
+                id="settings-tab-api-keys"
+                type="button"
+                role="tab"
+                aria-selected={isApiKeysTab}
+                aria-controls="settings-panel-api-keys"
+                tabIndex={isApiKeysTab ? 0 : -1}
+                onClick={() => onTabChange("api-keys")}
+                className={tabButtonClassName(isApiKeysTab)}
+              >
+                {tRoot("navigation.apiKeys")}
               </button>
             </div>
 
@@ -1292,6 +1306,15 @@ export function JobsView({
           className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
         >
           <UserSettingsView server={server} token={token} />
+        </div>
+      ) : isApiKeysTab ? (
+        <div
+          id="settings-panel-api-keys"
+          role="tabpanel"
+          aria-labelledby="settings-tab-api-keys"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
+        >
+          <ApiKeysView server={server} token={token} isAdmin={isAdmin} />
         </div>
       ) : isPlatformModelsTab ? (
         <div
