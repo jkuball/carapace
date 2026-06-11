@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import sys
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, NoReturn
 from urllib.parse import quote
 
 import httpx
@@ -766,6 +770,7 @@ def chat(
     history: int = typer.Option(
         -1, "--history", "-H", help="Number of past messages to show on resume (-1 = all, 0 = none)"
     ),
+    force: bool = typer.Option(False, "--force", help="Bypass the interactive-terminal check"),
 ):
     """Start an interactive chat session with the carapace server."""
     if api_key:
@@ -823,6 +828,21 @@ def chat(
         client.close()
         raise typer.Exit()
 
+    if not force and not (sys.stdin.isatty() and sys.stdout.isatty()):
+        client.close()
+        typer.echo(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error": "chat is interactive but stdin/stdout is not a TTY",
+                    "hint": "use the non-interactive commands: 'carapace session send/history/get/list', "
+                    "'carapace approval allow/deny', 'carapace job ...' (or pass --force)",
+                }
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
+
     # Create or resume session
     if session:
         try:
@@ -857,6 +877,497 @@ def chat(
         console.print(f"[red]Connection error: {e}[/red]")
     finally:
         client.close()
+
+
+# --- Agent-facing (non-interactive) commands ---------------------------------
+#
+# These emit JSON to stdout and never render markdown/LaTeX — agent text passes through
+# verbatim. Exit codes: 0 ok, 1 error, 2 needs_approval, 3 timeout.
+
+EXIT_OK = 0
+EXIT_ERROR = 1
+EXIT_NEEDS_APPROVAL = 2
+EXIT_TIMEOUT = 3
+
+# Server->client request type -> approval "kind".
+_APPROVAL_TYPES = {
+    "approval_request": "tool",
+    "domain_access_approval_request": "domain_access",
+    "proxy_approval_request": "domain_access",
+    "credential_approval_request": "credential_access",
+    "git_push_approval_request": "git_push",
+}
+
+
+@dataclass
+class _AgentCtx:
+    server: str
+    api_key: str | None
+    client: httpx.Client
+    ws_headers: dict[str, str]
+
+
+def _resolve_ctx(server: str, api_key: str | None, username: str | None, password: str | None) -> _AgentCtx:
+    if api_key:
+        return _AgentCtx(server=server, api_key=api_key, client=_api_key_client(server, api_key), ws_headers={})
+    client = _login_client(server, username, password)
+    return _AgentCtx(server=server, api_key=None, client=client, ws_headers=_cookie_headers(client))
+
+
+def _agent_auth(
+    ctx: typer.Context,
+    server: str = typer.Option(DEFAULT_SERVER, "--server", envvar="CARAPACE_SERVER", help="Server URL"),
+    api_key: str | None = typer.Option(
+        None, "--api-key", "-k", envvar="CARAPACE_API_KEY", help="API key (Bearer). Takes precedence over login."
+    ),
+    username: str | None = typer.Option(None, "--user", "-u", envvar="CARAPACE_USER", help="Username"),
+    password: str | None = typer.Option(None, "--password", envvar="CARAPACE_PASSWORD", help="Password"),
+) -> None:
+    ctx.obj = _resolve_ctx(server, api_key, username, password)
+
+
+def _print_json(obj: Any) -> None:
+    typer.echo(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
+
+
+def _fail(detail: str, *, code: int = EXIT_ERROR, status: str = "error", **extra: Any) -> NoReturn:
+    _print_json({"status": status, "error": detail, **extra})
+    raise typer.Exit(code)
+
+
+def _safe_detail(resp: httpx.Response) -> str:
+    try:
+        body = resp.json()
+    except ValueError:
+        return resp.text
+    if isinstance(body, dict) and "detail" in body:
+        return str(body["detail"])
+    return resp.text
+
+
+def _request_json(
+    cli: _AgentCtx, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: Any = None
+) -> Any:
+    try:
+        resp = cli.client.request(method, path, params=params, json=json_body)
+    except httpx.HTTPError as exc:
+        _fail(f"request failed: {exc}")
+    if resp.status_code >= 400:
+        _fail(_safe_detail(resp), http_status=resp.status_code)
+    if resp.status_code == 204:
+        return None
+    return resp.json()
+
+
+def _read_json_input(path: str) -> Any:
+    raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        _fail(f"invalid JSON in {path!r}: {exc}")
+
+
+def _approval_info(msg: dict[str, Any], session_id: str) -> dict[str, Any]:
+    kind = _APPROVAL_TYPES.get(msg.get("type", ""), "unknown")
+    request_id = msg.get("tool_call_id") if kind == "tool" else msg.get("request_id")
+    request = {"id": request_id, "kind": kind, **{k: v for k, v in msg.items() if k != "type"}}
+    return {
+        "request": request,
+        "allow_command": f"carapace approval allow {session_id} {request_id}",
+        "deny_command": f"carapace approval deny {session_id} {request_id}",
+    }
+
+
+async def _read_turn(ws: Any, *, session_id: str, timeout: float, stream: bool) -> tuple[dict[str, Any], int]:
+    """Read server frames until a terminal signal, an approval request, or timeout."""
+    try:
+        async with asyncio.timeout(timeout):
+            while True:
+                msg = json.loads(await ws.recv())
+                match msg.get("type"):
+                    case "done":
+                        return {"status": "done", "content": msg.get("content", ""), "usage": msg.get("usage")}, EXIT_OK
+                    case "error":
+                        return {"status": "error", "detail": msg.get("detail", "")}, EXIT_ERROR
+                    case "cancelled":
+                        return {"status": "cancelled", "detail": msg.get("detail", "")}, EXIT_OK
+                    case "command_result":
+                        return {
+                            "status": "command_result",
+                            "command": msg.get("command"),
+                            "data": msg.get("data"),
+                        }, EXIT_OK
+                    case t if t in _APPROVAL_TYPES:
+                        return {"status": "needs_approval", **_approval_info(msg, session_id)}, EXIT_NEEDS_APPROVAL
+                    case t if stream and t in ("token", "thinking", "tool_call", "tool_result"):
+                        typer.echo(
+                            json.dumps(
+                                {"event": t, **{k: v for k, v in msg.items() if k != "type"}},
+                                ensure_ascii=False,
+                                default=str,
+                            ),
+                            err=True,
+                        )
+                    case _:
+                        continue  # status, llm_activity, user_message, session_title — ignore
+    except TimeoutError:
+        # Leave the turn running server-side; the caller can re-read history later.
+        return {"status": "timeout"}, EXIT_TIMEOUT
+
+
+async def _drive_turn(
+    cli: _AgentCtx,
+    session_id: str,
+    *,
+    message: str | None = None,
+    approval: dict[str, Any] | None = None,
+    wait: bool,
+    timeout: float,
+    stream: bool = False,
+) -> tuple[dict[str, Any], int]:
+    url = _ws_url(cli.server, session_id, cli.api_key)
+    try:
+        ws = await websockets.asyncio.client.connect(url, additional_headers=cli.ws_headers)
+    except (OSError, InvalidHandshake, ConnectionClosed) as exc:
+        return {"status": "error", "error": f"connection failed: {exc}"}, EXIT_ERROR
+    try:
+        if message is not None:
+            await ws.send(json.dumps({"type": "message", "content": message}))
+        elif approval is not None:
+            await ws.send(json.dumps(approval))
+        if not wait:
+            return {"status": "submitted"}, EXIT_OK
+        return await _read_turn(ws, session_id=session_id, timeout=timeout, stream=stream)
+    except ConnectionClosed as exc:
+        return {"status": "error", "error": f"connection closed: {exc}"}, EXIT_ERROR
+    finally:
+        with contextlib.suppress(Exception):
+            await ws.close()
+
+
+def _emit_turn(cli: _AgentCtx, result: dict[str, Any], code: int) -> None:
+    _print_json(result)
+    cli.client.close()
+    raise typer.Exit(code)
+
+
+# --- session sub-app ---
+
+session_app = typer.Typer(help="Manage and drive sessions (non-interactive, JSON output).", no_args_is_help=True)
+job_app = typer.Typer(help="Manage jobs (non-interactive, JSON output).", no_args_is_help=True)
+approval_app = typer.Typer(help="Resolve pending approval/escalation requests by id.", no_args_is_help=True)
+for _sub in (session_app, job_app, approval_app):
+    _sub.callback()(_agent_auth)
+
+
+@session_app.command("list")
+def session_list(
+    ctx: typer.Context,
+    archived: bool = typer.Option(False, "--archived", help="Include archived sessions"),
+    limit: int = typer.Option(-1, "--limit", help="Max sessions to return (-1 = all)"),
+) -> None:
+    """List sessions."""
+    cli: _AgentCtx = ctx.obj
+    sessions: list[dict[str, Any]] = []
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {"include_message_count": "true", "limit": 200}
+        if archived:
+            params["include_archived"] = "true"
+        if cursor is not None:
+            params["cursor"] = cursor
+        payload = _request_json(cli, "GET", "/api/sessions", params=params)
+        if isinstance(payload, list):
+            sessions.extend(payload)
+            break
+        page = dict_or_empty(payload)
+        sessions.extend(list_of_dicts(page.get("items")))
+        if not page.get("has_more", False):
+            break
+        next_cursor = page.get("next_cursor")
+        if not isinstance(next_cursor, str) or not next_cursor:
+            break
+        cursor = next_cursor
+    if limit >= 0:
+        sessions = sessions[:limit]
+    _print_json(sessions)
+    cli.client.close()
+
+
+@session_app.command("get")
+def session_get(ctx: typer.Context, session_id: str = typer.Argument(...)) -> None:
+    """Show a single session."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_request_json(cli, "GET", f"/api/sessions/{session_id}"))
+    cli.client.close()
+
+
+@session_app.command("create")
+def session_create(
+    ctx: typer.Context,
+    ask: bool = typer.Option(False, "--ask", help="Ask before every action"),
+    yolo: bool = typer.Option(False, "--yolo", help="Auto-approve everything"),
+    unattended: bool = typer.Option(False, "--unattended", help="Unattended mode"),
+    model: str | None = typer.Option(None, "--model", help="Agent model name"),
+    sentinel_model: str | None = typer.Option(None, "--sentinel-model", help="Sentinel model name"),
+    channel: str = typer.Option("cli", "--channel", help="Channel type"),
+) -> None:
+    """Create a session."""
+    cli: _AgentCtx = ctx.obj
+    body: dict[str, Any] = {"channel_type": channel}
+    if ask:
+        body["ask_mode"] = True
+    if yolo:
+        body["yolo_mode"] = True
+    if unattended:
+        body["unattended"] = True
+    created = _request_json(cli, "POST", "/api/sessions", json_body=body)
+    if model is not None or sentinel_model is not None:
+        update: dict[str, Any] = {}
+        if model is not None:
+            update["agent_model_name"] = model
+        if sentinel_model is not None:
+            update["sentinel_model_name"] = sentinel_model
+        created = _request_json(cli, "PATCH", f"/api/sessions/{created['session_id']}", json_body=update)
+    _print_json(created)
+    cli.client.close()
+
+
+@session_app.command("update")
+def session_update(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(...),
+    ask: bool = typer.Option(False, "--ask"),
+    yolo: bool = typer.Option(False, "--yolo"),
+    unattended: bool = typer.Option(False, "--unattended"),
+    model: str | None = typer.Option(None, "--model"),
+    sentinel_model: str | None = typer.Option(None, "--sentinel-model"),
+    archived: bool | None = typer.Option(None, "--archive/--unarchive"),
+    pinned: bool | None = typer.Option(None, "--pin/--unpin"),
+    favorite: bool | None = typer.Option(None, "--favorite/--unfavorite"),
+) -> None:
+    """Update session settings (modes, models, flags)."""
+    cli: _AgentCtx = ctx.obj
+    attributes: dict[str, Any] = {}
+    if ask:
+        attributes["ask_mode"] = True
+    if yolo:
+        attributes["yolo_mode"] = True
+    if unattended:
+        attributes["unattended"] = True
+    if archived is not None:
+        attributes["archived"] = archived
+    if pinned is not None:
+        attributes["pinned"] = pinned
+    if favorite is not None:
+        attributes["favorite"] = favorite
+    body: dict[str, Any] = {}
+    if attributes:
+        body["attributes"] = attributes
+    if model is not None:
+        body["agent_model_name"] = model
+    if sentinel_model is not None:
+        body["sentinel_model_name"] = sentinel_model
+    if not body:
+        _fail("nothing to update")
+    _print_json(_request_json(cli, "PATCH", f"/api/sessions/{session_id}", json_body=body))
+    cli.client.close()
+
+
+def _pending_with_hints(cli: _AgentCtx, session_id: str) -> dict[str, Any]:
+    data = _request_json(cli, "GET", f"/api/sessions/{session_id}/pending-approvals")
+    for entry in [*data.get("approvals", []), *data.get("escalations", [])]:
+        rid = entry.get("id")
+        entry["allow_command"] = f"carapace approval allow {session_id} {rid}"
+        entry["deny_command"] = f"carapace approval deny {session_id} {rid}"
+    return data
+
+
+@session_app.command("history")
+def session_history(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(...),
+    limit: int = typer.Option(-1, "--limit", help="Number of past messages (-1 = all)"),
+) -> None:
+    """Show a session's message history plus any pending approval requests."""
+    cli: _AgentCtx = ctx.obj
+    messages = _request_json(cli, "GET", f"/api/sessions/{session_id}/history", params={"limit": limit})
+    _print_json({"messages": messages, "pending": _pending_with_hints(cli, session_id)})
+    cli.client.close()
+
+
+@session_app.command("pending")
+def session_pending(ctx: typer.Context, session_id: str = typer.Argument(...)) -> None:
+    """List pending approval/escalation requests for a session."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_pending_with_hints(cli, session_id))
+    cli.client.close()
+
+
+@session_app.command("send")
+def session_send(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(...),
+    content: str = typer.Argument(...),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for the turn to finish"),
+    timeout: float = typer.Option(120.0, "--timeout", help="Seconds to wait before giving up"),
+    stream: bool = typer.Option(False, "--stream", help="Emit token/tool events to stderr while waiting"),
+) -> None:
+    """Send input to a session and (by default) wait for the next turn to finish."""
+    cli: _AgentCtx = ctx.obj
+    result, code = asyncio.run(_drive_turn(cli, session_id, message=content, wait=wait, timeout=timeout, stream=stream))
+    _emit_turn(cli, result, code)
+
+
+@session_app.command("cancel")
+def session_cancel(ctx: typer.Context, session_id: str = typer.Argument(...)) -> None:
+    """Cancel the running turn of a session."""
+    cli: _AgentCtx = ctx.obj
+    result, code = asyncio.run(_drive_turn(cli, session_id, approval={"type": "cancel"}, wait=False, timeout=0.0))
+    if result.get("status") == "submitted":
+        result = {"status": "cancelled"}
+    _emit_turn(cli, result, code)
+
+
+# --- approval sub-app ---
+
+
+def _resolve_approval(
+    ctx: typer.Context,
+    session_id: str,
+    request_id: str,
+    *,
+    allow: bool,
+    message: str | None,
+    wait: bool,
+    timeout: float,
+) -> None:
+    cli: _AgentCtx = ctx.obj
+    data = _request_json(cli, "GET", f"/api/sessions/{session_id}/pending-approvals")
+    entry = next(
+        (e for e in [*data.get("approvals", []), *data.get("escalations", [])] if e.get("id") == request_id), None
+    )
+    if entry is None:
+        _print_json({"status": "not_found", "session_id": session_id, "request_id": request_id})
+        cli.client.close()
+        raise typer.Exit(EXIT_ERROR)
+    if entry.get("kind") == "tool":
+        response = {"type": "approval_response", "tool_call_id": request_id, "approved": allow, "message": message}
+    else:
+        response = {
+            "type": "escalation_response",
+            "request_id": request_id,
+            "decision": "allow" if allow else "deny",
+            "message": message,
+        }
+    result, code = asyncio.run(_drive_turn(cli, session_id, approval=response, wait=wait, timeout=timeout))
+    if not wait and result.get("status") == "submitted":
+        result = {"status": "resolved", "id": request_id, "decision": "allow" if allow else "deny"}
+    _emit_turn(cli, result, code)
+
+
+@approval_app.command("allow")
+def approval_allow(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(...),
+    request_id: str = typer.Argument(..., help="Unique id of the pending request"),
+    message: str | None = typer.Option(None, "--message", "-m"),
+    wait: bool = typer.Option(False, "--wait/--no-wait", help="Wait for the resumed turn to finish"),
+    timeout: float = typer.Option(120.0, "--timeout"),
+) -> None:
+    """Approve a specific pending request by id."""
+    _resolve_approval(ctx, session_id, request_id, allow=True, message=message, wait=wait, timeout=timeout)
+
+
+@approval_app.command("deny")
+def approval_deny(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(...),
+    request_id: str = typer.Argument(..., help="Unique id of the pending request"),
+    message: str | None = typer.Option(None, "--message", "-m"),
+    wait: bool = typer.Option(False, "--wait/--no-wait", help="Wait for the resumed turn to finish"),
+    timeout: float = typer.Option(120.0, "--timeout"),
+) -> None:
+    """Deny a specific pending request by id."""
+    _resolve_approval(ctx, session_id, request_id, allow=False, message=message, wait=wait, timeout=timeout)
+
+
+# --- job sub-app ---
+
+
+@job_app.command("list")
+def job_list(ctx: typer.Context) -> None:
+    """List jobs."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_request_json(cli, "GET", "/api/jobs"))
+    cli.client.close()
+
+
+@job_app.command("get")
+def job_get(ctx: typer.Context, job_id: str = typer.Argument(...)) -> None:
+    """Show a single job."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_request_json(cli, "GET", f"/api/jobs/{job_id}"))
+    cli.client.close()
+
+
+@job_app.command("create")
+def job_create(
+    ctx: typer.Context,
+    file: str = typer.Option(..., "--file", "-f", help="JobDefinition JSON file ('-' for stdin)"),
+) -> None:
+    """Create a job from a JobDefinition JSON document."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_request_json(cli, "POST", "/api/jobs", json_body=_read_json_input(file)))
+    cli.client.close()
+
+
+@job_app.command("update")
+def job_update(
+    ctx: typer.Context,
+    job_id: str = typer.Argument(...),
+    file: str = typer.Option(..., "--file", "-f", help="JobDefinition JSON file ('-' for stdin)"),
+) -> None:
+    """Replace a job from a JobDefinition JSON document."""
+    cli: _AgentCtx = ctx.obj
+    _print_json(_request_json(cli, "PUT", f"/api/jobs/{job_id}", json_body=_read_json_input(file)))
+    cli.client.close()
+
+
+@job_app.command("delete")
+def job_delete(ctx: typer.Context, job_id: str = typer.Argument(...)) -> None:
+    """Delete a job."""
+    cli: _AgentCtx = ctx.obj
+    _request_json(cli, "DELETE", f"/api/jobs/{job_id}")
+    _print_json({"status": "deleted", "job_id": job_id})
+    cli.client.close()
+
+
+@job_app.command("run")
+def job_run(
+    ctx: typer.Context,
+    job_id: str = typer.Argument(...),
+    input_: str | None = typer.Option(None, "--input", help="Input payload passed to the job"),
+    wait: bool = typer.Option(False, "--wait/--no-wait", help="Wait for the started turn to finish"),
+    timeout: float = typer.Option(120.0, "--timeout"),
+) -> None:
+    """Run a job now."""
+    cli: _AgentCtx = ctx.obj
+    body = {"data": input_} if input_ is not None else None
+    run = _request_json(cli, "POST", f"/api/jobs/{job_id}/run", json_body=body)
+    out: dict[str, Any] = {"run": run}
+    if not wait:
+        _print_json(out)
+        cli.client.close()
+        return
+    result, code = asyncio.run(_drive_turn(cli, run["session_id"], wait=True, timeout=timeout))
+    out["turn"] = result
+    _emit_turn(cli, out, code)
+
+
+app.add_typer(session_app, name="session")
+app.add_typer(job_app, name="job")
+app.add_typer(approval_app, name="approval")
 
 
 if __name__ == "__main__":
