@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 import carapace.cli as cli_module
-from carapace.cli import _render_escalation_request, _replay_history, app
+from carapace.cli import _render_escalation_request, _replay_history, _ws_url, app
 
 runner = CliRunner()
 
@@ -33,6 +33,35 @@ def test_chat_help():
     assert "--server" in output
     assert "--user" in output
     assert "--password" in output
+    assert "--api-key" in output
+
+
+def test_ws_url_appends_api_key():
+    assert _ws_url("http://example.test", "s1") == "ws://example.test/api/chat/s1"
+    assert _ws_url("https://example.test", "s1", "ck_a.b c") == "wss://example.test/api/chat/s1?api_key=ck_a.b%20c"
+
+
+def test_chat_api_key_uses_bearer_and_skips_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeClient:
+        def __init__(self, base_url: str, headers: dict[str, str] | None = None):
+            assert base_url == "http://example.test"
+            assert headers == {"Authorization": "Bearer ck_secret"}
+
+        def post(self, *args: object, **kwargs: object):
+            raise AssertionError("API-key auth must not call /api/auth/login")
+
+        def get(self, url: str, *, params: dict[str, str] | None = None):
+            assert url == "/api/sessions"
+            return _FakeHttpResponse({"items": [], "has_more": False, "next_cursor": None})
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cli_module.httpx, "Client", _FakeClient)
+
+    result = runner.invoke(app, ["chat", "--server", "http://example.test", "--api-key", "ck_secret", "--list"])
+    assert result.exit_code == 0
+    assert "No existing sessions." in _strip_ansi(result.output)
 
 
 @pytest.mark.parametrize(
