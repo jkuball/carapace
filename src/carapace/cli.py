@@ -92,7 +92,9 @@ def _replay_history(client: httpx.Client, session_id: str, limit: int) -> None:
     try:
         resp = client.get(f"/api/sessions/{session_id}/history", params=params)
         resp.raise_for_status()
-    except httpx.HTTPStatusError:
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 403:
+            console.print("[yellow]Skipping history replay: the API key lacks the 'history:read' scope.[/yellow]")
         return
 
     messages = resp.json()
@@ -758,7 +760,10 @@ def chat(
         "--api-key",
         "-k",
         envvar="CARAPACE_API_KEY",
-        help="API key for Bearer auth (needs the 'sessions' scope). Takes precedence over username/password.",
+        help=(
+            "API key for Bearer auth (needs 'sessions' scope; '--history' replay also needs 'history'). "
+            "Takes precedence over username/password."
+        ),
     ),
     username: str | None = typer.Option(None, "--user", "-u", envvar="CARAPACE_USER", help="Username"),
     password: str | None = typer.Option(None, "--password", envvar="CARAPACE_PASSWORD", help="Password"),

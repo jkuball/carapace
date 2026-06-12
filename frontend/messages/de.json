@@ -1029,7 +1029,8 @@
       "title": "Aktive Schlüssel",
       "empty": "Noch keine API-Schlüssel.",
       "loading": "Schlüssel werden geladen…",
-      "unnamed": "Unbenannter Schlüssel"
+      "unnamed": "Unbenannter Schlüssel",
+      "expired": "Abgelaufen"
     },
     "fields": {
       "created": "Erstellt {timestamp}",

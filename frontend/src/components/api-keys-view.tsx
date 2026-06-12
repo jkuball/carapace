@@ -42,6 +42,7 @@ export function ApiKeysView({ server: serverProp, token, isAdmin }: ApiKeysViewP
   const t = useTranslations("apiKeys");
   const [server, setServer] = useState(() => normalizeServer(serverProp ?? ""));
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
+  const [loadedAtMs, setLoadedAtMs] = useState(0);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export function ApiKeysView({ server: serverProp, token, isAdmin }: ApiKeysViewP
     setError(null);
     try {
       setKeys(await listApiKeys(normalizedServer));
+      setLoadedAtMs(Date.now());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
@@ -270,14 +272,23 @@ export function ApiKeysView({ server: serverProp, token, isAdmin }: ApiKeysViewP
             </div>
           ) : (
             <div className="space-y-2">
-              {keys.map((key) => (
+              {keys.map((key) => {
+                const expired = key.expires_at != null && Date.parse(key.expires_at) <= loadedAtMs;
+                return (
                 <div key={key.id} className="flex items-start gap-3 rounded-lg border border-border bg-background px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-semibold">{key.name || t("list.unnamed")}</span>
+                      <span className={cn("truncate text-sm font-semibold", expired && "text-muted-foreground")}>
+                        {key.name || t("list.unnamed")}
+                      </span>
                       <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
                         {key.prefix}…
                       </span>
+                      {expired ? (
+                        <span className="shrink-0 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                          {t("list.expired")}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {key.scopes.map((scope) => (
@@ -303,7 +314,8 @@ export function ApiKeysView({ server: serverProp, token, isAdmin }: ApiKeysViewP
                     {revokingId === key.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

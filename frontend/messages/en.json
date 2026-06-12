@@ -1029,7 +1029,8 @@
       "title": "Active keys",
       "empty": "No API keys yet.",
       "loading": "Loading keys…",
-      "unnamed": "Unnamed key"
+      "unnamed": "Unnamed key",
+      "expired": "Expired"
     },
     "fields": {
       "created": "Created {timestamp}",
