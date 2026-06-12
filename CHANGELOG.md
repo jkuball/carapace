@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.140.6 (2026-06-12)
+
+
+### Other
+
+
+- Merge pull request #220 from thiesgerken/renovate/all-routine-dependencies
+  ([`a8331ad`](https://github.com/thiesgerken/carapace/commit/a8331ad06fa08fb3169ff97b8bd27e805732cd67))
+
+- Merge pull request #221 from thiesgerken/renovate/alpine-3.x
+  ([`7e1eb13`](https://github.com/thiesgerken/carapace/commit/7e1eb138e206f90bcb0a7975d528dd9abbfce18d))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`a8331ad`](https://github.com/thiesgerken/carapace/commit/a8331ad06fa08fb3169ff97b8bd27e805732cd67))
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`90ee923`](https://github.com/thiesgerken/carapace/commit/90ee923467d77f5602aaa07a64c8463ba5c28efd))
+
+- ⬆️ chore: upgrade alpine Docker tag to v3.24
+  ([`7e1eb13`](https://github.com/thiesgerken/carapace/commit/7e1eb138e206f90bcb0a7975d528dd9abbfce18d))
+
+- ⬆️ chore: upgrade alpine Docker tag to v3.24
+  ([`c1618af`](https://github.com/thiesgerken/carapace/commit/c1618af541e84d0f64b551da62f974bae65ead31))
+
 ## v0.140.5 (2026-06-10)
 
 
