@@ -26,6 +26,11 @@ id = "check-toml"
 id = "check-json"
 
 [[repos.hooks]]
+id = "pretty-format-json"
+args = ["--autofix", "--indent", "4", "--no-sort-keys", "--no-ensure-ascii"]
+files = "^frontend/messages/.*\\.json$"
+
+[[repos.hooks]]
 id = "check-added-large-files"
 
 [[repos.hooks]]
