@@ -1,1055 +1,1055 @@
 {
-  "app": {
-    "name": "carapace",
-    "description": "Security-first personal AI agent"
-  },
-  "navigation": {
-    "home": "Home",
-    "settings": "Settings",
-    "jobs": "Jobs",
-    "account": "Account",
-    "preferences": "Preferences",
-    "platform": "Admin",
-    "models": "Models",
-    "users": "Users",
-    "disconnect": "Disconnect",
-    "github": "thiesgerken/carapace",
-    "apiKeys": "API Keys"
-  },
-  "account": {
-    "menu": "Account menu",
-    "openMenu": "Open account menu",
-    "unknown": "Unknown user",
-    "logout": "Log out"
-  },
-  "accountSettings": {
-    "status": {
-      "loading": "Loading settings",
-      "unavailable": "Settings are unavailable",
-      "configured": "configured",
-      "notSet": "not set"
+    "app": {
+        "name": "carapace",
+        "description": "Security-first personal AI agent"
     },
-    "notices": {
-      "saved": "Saved."
+    "navigation": {
+        "home": "Home",
+        "settings": "Settings",
+        "jobs": "Jobs",
+        "account": "Account",
+        "preferences": "Preferences",
+        "platform": "Admin",
+        "models": "Models",
+        "users": "Users",
+        "disconnect": "Disconnect",
+        "github": "thiesgerken/carapace",
+        "apiKeys": "API Keys"
     },
-    "errors": {
-      "load": "Failed to load user settings",
-      "save": "Failed to update user settings",
-      "credentialsInvalid": "Credential backend settings are invalid",
-      "credentialNameRequired": "Credential backend name is required",
-      "credentialNameNoSlash": "Credential backend name {name} must not contain /",
-      "credentialNameDuplicate": "Credential backend name {name} is already used",
-      "fileBackendDisabled": "File credential backends are disabled on this server",
-      "basicAuthUsernameRequired": "Basic Auth username is required for {name}",
-      "basicAuthPasswordRequired": "Basic Auth password is required for {name}",
-      "matrixPasswordRequired": "Matrix password is required when Matrix is enabled",
-      "budgetWholeNumber": "{field} must be a non-negative whole number.",
-      "budgetNumber": "{field} must be a non-negative number."
+    "account": {
+        "menu": "Account menu",
+        "openMenu": "Open account menu",
+        "unknown": "Unknown user",
+        "logout": "Log out"
     },
-    "sections": {
-      "defaultModels": "Default models",
-      "defaultBudgets": "Default budgets",
-      "matrix": "Matrix",
-      "credentials": "Credentials",
-      "gitRemote": "Git remote"
-    },
-    "fields": {
-      "agent": "Agent",
-      "sentinel": "Sentinel",
-      "title": "Title",
-      "inputTokens": "Input tokens",
-      "outputTokens": "Output tokens",
-      "costUsd": "Cost USD",
-      "toolCalls": "Tool calls",
-      "enabled": "Enabled",
-      "homeserver": "Homeserver",
-      "userId": "User ID",
-      "deviceName": "Device name",
-      "password": "Password",
-      "allowedRooms": "Allowed rooms",
-      "allowedUsers": "Allowed users",
-      "remote": "Remote",
-      "branch": "Branch",
-      "author": "Author",
-      "token": "Token",
-      "name": "Name",
-      "path": "Path",
-      "url": "URL",
-      "basicAuth": "Basic Auth",
-      "basicAuthUsername": "Basic Auth username",
-      "basicAuthPassword": "Basic Auth password",
-      "expose": "Expose",
-      "hide": "Hide"
-    },
-    "defaults": {
-      "serverDefault": "Server default",
-      "currentModel": "{model}"
-    },
-    "placeholders": {
-      "addRoom": "Add room, Enter or comma",
-      "addUser": "Add user, Enter or comma",
-      "addIdentifier": "Add identifier, Enter or comma"
-    },
-    "tooltips": {
-      "filePath": "Relative paths are resolved from the server working directory.",
-      "expose": "Allow only these credential identifiers from this backend. Leave empty to allow everything except hidden entries.",
-      "hide": "Deny these credential identifiers from this backend. Ignored when Expose is set."
-    },
-    "actions": {
-      "save": "Save",
-      "saving": "Saving",
-      "addBitwarden": "Bitwarden",
-      "addFile": "File",
-      "remove": "Remove",
-      "removeValue": "Remove {value}",
-      "removeBackend": "Remove backend",
-      "removeBackendAria": "Remove {name}"
-    },
-    "empty": {
-      "credentials": "No credential backends configured"
-    },
-    "credentials": {
-      "backendFallback": "credential backend",
-      "types": {
-        "file": {
-          "label": "File",
-          "description": "Local credentials file"
+    "accountSettings": {
+        "status": {
+            "loading": "Loading settings",
+            "unavailable": "Settings are unavailable",
+            "configured": "configured",
+            "notSet": "not set"
         },
-        "bitwarden": {
-          "label": "Bitwarden",
-          "description": "Password manager proxy"
+        "notices": {
+            "saved": "Saved."
+        },
+        "errors": {
+            "load": "Failed to load user settings",
+            "save": "Failed to update user settings",
+            "credentialsInvalid": "Credential backend settings are invalid",
+            "credentialNameRequired": "Credential backend name is required",
+            "credentialNameNoSlash": "Credential backend name {name} must not contain /",
+            "credentialNameDuplicate": "Credential backend name {name} is already used",
+            "fileBackendDisabled": "File credential backends are disabled on this server",
+            "basicAuthUsernameRequired": "Basic Auth username is required for {name}",
+            "basicAuthPasswordRequired": "Basic Auth password is required for {name}",
+            "matrixPasswordRequired": "Matrix password is required when Matrix is enabled",
+            "budgetWholeNumber": "{field} must be a non-negative whole number.",
+            "budgetNumber": "{field} must be a non-negative number."
+        },
+        "sections": {
+            "defaultModels": "Default models",
+            "defaultBudgets": "Default budgets",
+            "matrix": "Matrix",
+            "credentials": "Credentials",
+            "gitRemote": "Git remote"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Title",
+            "inputTokens": "Input tokens",
+            "outputTokens": "Output tokens",
+            "costUsd": "Cost USD",
+            "toolCalls": "Tool calls",
+            "enabled": "Enabled",
+            "homeserver": "Homeserver",
+            "userId": "User ID",
+            "deviceName": "Device name",
+            "password": "Password",
+            "allowedRooms": "Allowed rooms",
+            "allowedUsers": "Allowed users",
+            "remote": "Remote",
+            "branch": "Branch",
+            "author": "Author",
+            "token": "Token",
+            "name": "Name",
+            "path": "Path",
+            "url": "URL",
+            "basicAuth": "Basic Auth",
+            "basicAuthUsername": "Basic Auth username",
+            "basicAuthPassword": "Basic Auth password",
+            "expose": "Expose",
+            "hide": "Hide"
+        },
+        "defaults": {
+            "serverDefault": "Server default",
+            "currentModel": "{model}"
+        },
+        "placeholders": {
+            "addRoom": "Add room, Enter or comma",
+            "addUser": "Add user, Enter or comma",
+            "addIdentifier": "Add identifier, Enter or comma"
+        },
+        "tooltips": {
+            "filePath": "Relative paths are resolved from the server working directory.",
+            "expose": "Allow only these credential identifiers from this backend. Leave empty to allow everything except hidden entries.",
+            "hide": "Deny these credential identifiers from this backend. Ignored when Expose is set."
+        },
+        "actions": {
+            "save": "Save",
+            "saving": "Saving",
+            "addBitwarden": "Bitwarden",
+            "addFile": "File",
+            "remove": "Remove",
+            "removeValue": "Remove {value}",
+            "removeBackend": "Remove backend",
+            "removeBackendAria": "Remove {name}"
+        },
+        "empty": {
+            "credentials": "No credential backends configured"
+        },
+        "credentials": {
+            "backendFallback": "credential backend",
+            "types": {
+                "file": {
+                    "label": "File",
+                    "description": "Local credentials file"
+                },
+                "bitwarden": {
+                    "label": "Bitwarden",
+                    "description": "Password manager proxy"
+                }
+            }
         }
-      }
+    },
+    "platformSettings": {
+        "status": {
+            "loading": "Loading platform settings",
+            "unavailable": "Platform settings are unavailable",
+            "readOnly": "Config file is read-only."
+        },
+        "notices": {
+            "saved": "Saved."
+        },
+        "errors": {
+            "load": "Failed to load platform settings",
+            "save": "Failed to update platform settings",
+            "wholeNumber": "{field} must be a positive whole number.",
+            "nonNegativeWholeNumber": "{field} must be a non-negative whole number.",
+            "number": "{field} must be a non-negative number.",
+            "providerRequired": "Provider is required for model {index}.",
+            "nameRequired": "Name is required for model {index}.",
+            "duplicateModel": "Model id {id} is used more than once.",
+            "rawSecretRequired": "Paste an API key for {id}, or choose another secret source.",
+            "secretValueRequired": "Secret reference is required for {id}.",
+            "defaultRequired": "{field} default model is required.",
+            "defaultUnknown": "{field} default model {id} is not in the catalog."
+        },
+        "sections": {
+            "defaultModels": "Default models",
+            "defaultBudgets": "Default budgets",
+            "catalog": "Model catalog"
+        },
+        "fields": {
+            "agent": "Agent",
+            "sentinel": "Sentinel",
+            "title": "Title",
+            "inputTokens": "Input tokens",
+            "outputTokens": "Output tokens",
+            "costUsd": "Cost USD",
+            "toolCalls": "Tool calls",
+            "provider": "Provider",
+            "name": "Name",
+            "id": "ID",
+            "maxInputTokens": "Max input tokens",
+            "thinking": "Thinking",
+            "thinkingBudgetTokens": "Thinking budget tokens",
+            "baseUrl": "Base URL",
+            "vision": "Vision",
+            "visionHint": "Accepts image input",
+            "apiKeySource": "API key source",
+            "apiKey": "API key",
+            "secretReference": "Secret reference"
+        },
+        "placeholders": {
+            "selectModel": "Select model",
+            "unlimited": "Unlimited",
+            "generatedId": "provider:name",
+            "keepSecret": "Keep configured secret"
+        },
+        "actions": {
+            "save": "Save",
+            "saving": "Saving",
+            "addModel": "Add model",
+            "removeModel": "Remove model",
+            "confirmRemoveModel": "Remove model \"{name}\"? This cannot be undone."
+        },
+        "secretSources": {
+            "none": "None",
+            "raw": "Raw value",
+            "env": "Environment variable",
+            "file": "File"
+        },
+        "thinking": {
+            "default": "Default",
+            "true": "Enabled",
+            "false": "Disabled",
+            "minimal": "Minimal",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "xhigh": "Extra high"
+        },
+        "units": {
+            "tokens": "tokens"
+        },
+        "modelRow": "Model {index}"
+    },
+    "home": {
+        "empty": {
+            "description": "Select a session or start a new one"
+        }
+    },
+    "connect": {
+        "description": "Sign in to carapace",
+        "serverLabel": "Server URL",
+        "usernameLabel": "Username",
+        "usernamePlaceholder": "Username",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Password",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "errors": {
+            "serverError": "Server error: {status}",
+            "connectionFailed": "Connection failed"
+        }
+    },
+    "admin": {
+        "title": "Admin",
+        "backToApp": "Back to app",
+        "serverLabel": "Server URL",
+        "serverPlaceholder": "No server selected",
+        "users": {
+            "title": "Users",
+            "description": "Global platform accounts, roles, and data ownership.",
+            "savedUsers": "Users",
+            "loading": "Loading users…",
+            "empty": "No users found",
+            "selectUser": "Select a user",
+            "you": "You",
+            "admin": "Admin",
+            "enabled": "Enabled",
+            "disabled": "Disabled"
+        },
+        "create": {
+            "title": "New user",
+            "subtitle": "Create a local user"
+        },
+        "fields": {
+            "username": "Username",
+            "password": "Password",
+            "newPassword": "New password",
+            "keepPassword": "Keep current password",
+            "displayName": "Display name",
+            "email": "Email",
+            "roles": "Roles",
+            "enabled": "Enabled"
+        },
+        "actions": {
+            "load": "Load",
+            "loading": "Loading…",
+            "refresh": "Refresh users",
+            "new": "New user",
+            "deleteUser": "Delete {username}",
+            "create": "Create user",
+            "creating": "Creating…",
+            "save": "Save changes",
+            "saving": "Saving…"
+        },
+        "notices": {
+            "loaded": "Users loaded.",
+            "created": "Created {username}.",
+            "saved": "Saved {username}.",
+            "deleted": "Deleted {username}."
+        },
+        "errors": {
+            "missingCredentials": "Current origin is unavailable.",
+            "load": "Failed to load users.",
+            "create": "Failed to create user.",
+            "save": "Failed to save user.",
+            "delete": "Failed to delete user."
+        },
+        "confirm": {
+            "deleteUser": "Delete {username}? Existing data owned by this user is not deleted."
+        },
+        "meta": {
+            "tokenVersion": "Token v{version}",
+            "updated": "Updated {timestamp}",
+            "lastLogin": "Last login {timestamp}",
+            "never": "never"
+        }
+    },
+    "preferences": {
+        "title": "Preferences",
+        "description": "Personal settings for this browser and your account experience.",
+        "currentLocale": "Current interface language: {locale}",
+        "language": {
+            "label": "Language",
+            "description": "Choose how the interface language is resolved.",
+            "options": {
+                "system": "System",
+                "en": "English",
+                "de": "Deutsch"
+            }
+        },
+        "theme": {
+            "label": "Appearance",
+            "description": "Choose how the color theme is resolved.",
+            "options": {
+                "system": "System",
+                "light": "Light",
+                "dark": "Dark"
+            }
+        },
+        "chatList": {
+            "label": "Chats",
+            "showArchived": {
+                "label": "Show archived chats",
+                "description": "When disabled, archived chats are hidden and session list requests exclude them."
+            }
+        },
+        "notifications": {
+            "title": "Push notifications",
+            "description": "Deliver escalations and turn outcomes to this browser or installed PWA.",
+            "status": {
+                "loading": "Checking notification support…",
+                "loadingShort": "Checking",
+                "enabled": "Notifications are enabled for this browser.",
+                "enabledShort": "Enabled",
+                "disabled": "Notifications are off for this browser.",
+                "disabledShort": "Off",
+                "unsupported": "This browser cannot receive Web Push notifications in the current context.",
+                "permissionDenied": "Browser notification permission is blocked. Re-enable it in browser or device settings.",
+                "permissionRequired": "Notification permission was not granted.",
+                "invalidSubscription": "Browser returned an incomplete push subscription.",
+                "loadFailed": "Failed to load notification settings.",
+                "enableFailed": "Failed to enable notifications.",
+                "disableFailed": "Failed to disable notifications.",
+                "preferencesFailed": "Failed to update notification preferences.",
+                "testFailed": "Failed to send test notification.",
+                "testSent": "Test notification sent."
+            },
+            "deviceName": {
+                "label": "Device name",
+                "placeholder": "Android phone",
+                "hint": "Shown in server-side notification subscriptions for this browser."
+            },
+            "toggle": {
+                "label": "Notifications"
+            },
+            "actions": {
+                "enable": "Enable notifications",
+                "enabling": "Enabling…",
+                "disable": "Disable notifications",
+                "disabling": "Disabling…",
+                "test": "Send test notification",
+                "testing": "Sending test notification…"
+            },
+            "preferences": {
+                "label": "Send notifications for",
+                "escalation_pending": "Escalations that need approval",
+                "attended_turn_completed": "Attended sessions when a turn finishes",
+                "unattended_turn_completed": "Unattended jobs that finish successfully",
+                "unattended_turn_failed": "Unattended jobs that fail"
+            },
+            "meta": {
+                "permission": "Browser permission: {permission}",
+                "heartbeat": "Last heartbeat: {timestamp}",
+                "expires": "Subscription expires: {timestamp}"
+            },
+            "permission": {
+                "default": "not requested",
+                "granted": "granted",
+                "denied": "denied"
+            }
+        }
+    },
+    "newSessionButton": {
+        "label": "New session",
+        "chooseOptions": "Choose session options",
+        "private": {
+            "enabledTitle": "Private",
+            "enabledDescription": "Exclude this session from knowledge commits.",
+            "disabledTitle": "Saved",
+            "disabledDescription": "Can be included in knowledge commits."
+        },
+        "ask": {
+            "enabledTitle": "Read-Only Mode",
+            "enabledDescription": "Read-only outside sandbox. External writes are blocked.",
+            "disabledTitle": "Read and Write Access",
+            "disabledDescription": "Normal permissions. External writes are allowed."
+        },
+        "yolo": {
+            "enabledTitle": "YOLO",
+            "enabledDescription": "Disable sentinel review and allow operations immediately.",
+            "disabledTitle": "Reviewed",
+            "disabledDescription": "Keep actions gated by safe-list and sentinel review."
+        },
+        "unattended": {
+            "enabledTitle": "Unattended",
+            "enabledDescription": "Runs on its own with no user approval path.",
+            "disabledTitle": "With Approval",
+            "disabledDescription": "Stays interactive with a user approval path."
+        }
+    },
+    "chatInput": {
+        "disabled": "Input disabled",
+        "sendMessageTooltip": "Send message (Enter)",
+        "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
+        "stopGenerationTooltip": "Stop generation",
+        "queued": "Queued: {message}",
+        "startVoiceInput": "Start voice input",
+        "stopVoiceInput": "Stop voice input",
+        "attachFile": "Attach file",
+        "attachFileUnavailable": "Start the sandbox to upload files",
+        "startingSandbox": "Starting sandbox…",
+        "removeAttachment": "Remove",
+        "placeholder": "Message carapace…",
+        "usageBreakdown": {
+            "systemLine": "system: {percent}%",
+            "userLine": "user: {percent}%",
+            "assistantLine": "assistant: {percent}%",
+            "toolCallsLine": "tool calls: {percent}%",
+            "toolOutputsLine": "tool outputs: {percent}%",
+            "otherLine": "other: {percent}%"
+        },
+        "context": {
+            "limit": "Context limit: {tokens} tokens.",
+            "assumedLimit": "Assuming a {tokens} context limit.",
+            "lastRequestTokens": "{tokens} API tokens (last agent request)",
+            "clickForUsage": "Click to send /usage to the agent for more details.",
+            "tokensLabel": "{tokens} tokens"
+        },
+        "budget": {
+            "budgetLabel": "{label} budget",
+            "current": "Current: {value}",
+            "max": "Max: {value}",
+            "remaining": "Remaining: {value}",
+            "exhausted": "Budget exhausted."
+        }
+    },
+    "approval": {
+        "general": {
+            "title": "Approval Required",
+            "toolLabel": "Tool:",
+            "reasonLabel": "Reason:",
+            "riskLabel": "Risk:",
+            "arguments": "Arguments",
+            "allow": "Approve",
+            "denyPlaceholder": "Why should this be blocked?",
+            "risk": {
+                "high": "high",
+                "medium": "medium",
+                "low": "low"
+            }
+        },
+        "denialNote": {
+            "deny": "Deny",
+            "optionalNote": "Optional note for the agent",
+            "addNote": "Add note",
+            "hideNote": "Hide note"
+        },
+        "credential": {
+            "title": "Credential Request",
+            "skillLabel": "Skill:",
+            "allow": "Allow",
+            "denyPlaceholder": "Why should this credential access be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        },
+        "domainAccess": {
+            "title": "Domain Access Request",
+            "domainLabel": "Domain:",
+            "triggeredByLabel": "Triggered by:",
+            "allow": "Allow {domain}",
+            "denyPlaceholder": "Why should this be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        },
+        "gitPush": {
+            "title": "Git Push Request",
+            "refLabel": "Ref:",
+            "reasonLabel": "Reason:",
+            "changedFiles": "{count, plural, one {# changed file} other {# changed files}}",
+            "allow": "Allow Push",
+            "denyPlaceholder": "Why should this push be blocked?",
+            "decision": {
+                "allow": "Allowed",
+                "deny": "Denied"
+            }
+        }
+    },
+    "versionBadge": {
+        "frontend": "Frontend: {version}",
+        "backend": "Backend: {version}",
+        "unknown": "unknown",
+        "mismatchTooltip": "Version mismatch between frontend and backend containers.",
+        "mismatchSr": "Frontend and backend versions do not match."
+    },
+    "toolCallBadge": {
+        "approvalBadge": {
+            "review": "review",
+            "skill": "skill",
+            "bypass": "bypass",
+            "denied": "denied"
+        },
+        "fallbacks": {
+            "missingPath": "(missing path)",
+            "missingCommand": "(missing command)",
+            "missingSkillName": "(missing skill_name)",
+            "credential": "credential"
+        },
+        "labels": {
+            "read": "read",
+            "wrote": "wrote",
+            "replaced": "replaced",
+            "activatedSkill": "activated skill",
+            "executed": "executed",
+            "listedCredentials": "listed credentials",
+            "credentialDenied": "credential denied",
+            "accessedCredential": "accessed credential",
+            "domainDenied": "domain denied",
+            "accessedDomain": "accessed domain",
+            "gitPush": "git push",
+            "readAction": "read",
+            "write": "write",
+            "activateSkill": "activate skill",
+            "execute": "execute",
+            "listCredentials": "list credentials",
+            "accessCredential": "access credential",
+            "accessDomain": "access domain",
+            "replace": "replace",
+            "sentFile": "sent file",
+            "sendFile": "send file"
+        },
+        "summaries": {
+            "readFirstLines": "first {count} lines of {path}",
+            "readLinesRange": "lines {start} to {end} of {path}",
+            "writeLines": "{count} lines to {path}",
+            "lineCount": "{count} lines",
+            "lineCountWithReplacement": "{source} lines with {replacement} lines",
+            "replaceInPath": "{lineSummary} in {path}{suffix}",
+            "allMatchesSuffix": " (all matches)"
+        },
+        "details": {
+            "activateSkillPromptPrefix": "Agent wants to activate the",
+            "activateSkillPromptSuffix": "skill.",
+            "sentinelLabel": "Sentinel:",
+            "sentinelReviewing": "Reviewing this tool call.",
+            "userLabel": "User:",
+            "deniedByUser": "Denied by user.",
+            "contexts": "Contexts:",
+            "domains": "Domains:",
+            "credentials": "Credentials",
+            "name": "Name",
+            "path": "Path",
+            "description": "Description",
+            "activation": "Activation",
+            "skillInstructions": "Skill Instructions",
+            "source": "Source",
+            "replacement": "Replacement",
+            "diff": "Diff",
+            "arguments": "Arguments",
+            "result": "Result"
+        }
+    },
+    "commandResult": {
+        "help": {
+            "command": "Command",
+            "description": "Description"
+        },
+        "rules": {
+            "id": "ID",
+            "trigger": "Trigger",
+            "mode": "Mode",
+            "status": {
+                "label": "Status",
+                "disabled": "disabled",
+                "alwaysOn": "always-on",
+                "activated": "activated"
+            }
+        },
+        "models": {
+            "type": "Type",
+            "model": "Model",
+            "default": "Default",
+            "available": "Available:",
+            "provider": "Type",
+            "name": "Name",
+            "context": "Context",
+            "contextWindow": "({tokens} ctx)",
+            "contextWindowShort": "{tokens} ctx",
+            "noneAvailable": "No models available.",
+            "noMatches": "No matching models.",
+            "filterPlaceholder": "Filter models...",
+            "currentLabel": "Current model:",
+            "defaultLabel": "Default: {model}"
+        },
+        "usage": {
+            "none": "No token usage recorded yet.",
+            "total": "Total: {total} tokens ({input} in + {output} out)",
+            "toolCalls": "Tool Calls: {count}",
+            "byModel": "By Model",
+            "byCategory": "By Category",
+            "context": "Context",
+            "table": {
+                "source": "Source",
+                "input": "Input",
+                "output": "Output",
+                "cacheRead": "Cache Read",
+                "cacheWrite": "Cache Write",
+                "requests": "Requests",
+                "cost": "Cost"
+            },
+            "contextTable": {
+                "source": "Source",
+                "tokens": "Tokens",
+                "system": "System %",
+                "user": "User %",
+                "assistant": "Assistant %",
+                "toolCalls": "Tool Calls %",
+                "toolOutputs": "Tool Outputs %",
+                "other": "Other %"
+            }
+        },
+        "budget": {
+            "none": "No session budgets configured.",
+            "title": "Session Budgets",
+            "table": {
+                "metric": "Metric",
+                "current": "Current",
+                "limit": "Limit",
+                "remaining": "Remaining",
+                "used": "Used",
+                "blocked": "blocked"
+            }
+        }
+    },
+    "chatView": {
+        "inputDisabled": {
+            "archived": "Unarchive first",
+            "unattended": "This session is unattended. Fork it first to continue here."
+        },
+        "waiting": {
+            "processingPrompt": "Processing prompt...",
+            "thinking": "Thinking...",
+            "generating": "Generating...",
+            "working": "Working..."
+        },
+        "unknown": "Unknown",
+        "status": {
+            "connecting": "Connecting…",
+            "disconnected": "Disconnected"
+        },
+        "empty": {
+            "start": "Send a message to get started",
+            "connectingSession": "Connecting to session…"
+        },
+        "errors": {
+            "unexpected": "Unexpected error",
+            "resetTarget": "Could not resolve reset target.",
+            "forkTarget": "Could not resolve fork target."
+        },
+        "confirm": {
+            "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
+            "scaleDownSandbox": "Scale down the sandbox for this session? Storage will be kept.",
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo.",
+            "unarchiveSession": "Unarchive this session? It will return to the active session list.",
+            "makePrivate": "Mark this session private? Existing knowledge commits will remain in git history."
+        },
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "includeInRepo": "Include in repo",
+            "keepPrivate": "Keep private",
+            "delete": "Delete session"
+        },
+        "badges": {
+            "archived": "Archived",
+            "private": "Private",
+            "pinned": "Pinned",
+            "favorite": "Favorite",
+            "askMode": "Read-Only Mode",
+            "yoloMode": "YOLO",
+            "unattended": "Unattended",
+            "interactive": "Interactive"
+        },
+        "inspector": {
+            "actions": "Actions",
+            "session": "Session"
+        },
+        "session": {
+            "title": "Title",
+            "id": "ID",
+            "copyId": "Copy session id",
+            "idCopied": "Copied session id",
+            "idCopiedShort": "Copied",
+            "source": "Source",
+            "created": "Created",
+            "lastActive": "Last active",
+            "messages": "Messages",
+            "totalCost": "Cost",
+            "job": "Job",
+            "reference": "Reference",
+            "modes": "Modes",
+            "askMode": "Read-Only Mode",
+            "askModeHelp": "Only read-only work outside the sandbox. External writes are denied.",
+            "yoloMode": "YOLO Mode",
+            "yoloModeHelp": "Bypass sentinel approval and allow actions immediately.",
+            "savingPrivate": "Saving…",
+            "updatingMode": "Updating mode…"
+        },
+        "source": {
+            "unknown": "Unknown",
+            "job": "Job",
+            "web": "Web",
+            "cli": "CLI"
+        },
+        "jobRun": {
+            "title": "Latest Job Run",
+            "job": "Job",
+            "ranAt": "Ran at",
+            "schedule": "Schedule",
+            "data": "Data",
+            "trigger": {
+                "label": "Trigger",
+                "api": "API",
+                "cron": "Cron",
+                "manual": "Manual"
+            }
+        },
+        "sandbox": {
+            "title": "Sandbox",
+            "refreshing": "Refreshing…",
+            "checking": "Checking sandbox…",
+            "status": {
+                "missing": "Not Started",
+                "running": "Running",
+                "scaled_down": "Spun Down",
+                "pending": "Starting Up",
+                "stopped": "Stopped",
+                "error": "Error"
+            },
+            "actions": {
+                "start": "Start sandbox",
+                "starting": "Starting sandbox",
+                "scaleDown": "Scale down sandbox",
+                "scalingDown": "Scaling down sandbox",
+                "reset": "Reset sandbox"
+            },
+            "storage": {
+                "used": "{size} used",
+                "none": "no sandbox storage",
+                "allocated": "{size} allocated"
+            },
+            "fields": {
+                "id": "Sandbox ID"
+            }
+        },
+        "knowledge": {
+            "title": "Knowledge",
+            "commit": "Commit to repo",
+            "committed": "Committed",
+            "committedToRepo": "Committed to knowledge",
+            "notCommittedYet": "Not committed yet",
+            "savedAt": "Saved {timestamp}",
+            "commitDisabledNoHistory": "This session has no conversation history yet.",
+            "noNewChanges": "{status}. No new changes to commit.",
+            "privateExistingCommits": "Session is private. Existing knowledge commits remain unchanged.",
+            "privateExcluded": "Session is private and will not be committed to knowledge.",
+            "includedInRepo": "Session is included in knowledge commits to your repo.",
+            "badges": {
+                "excluded": "Excluded",
+                "missing": "Missing",
+                "outdated": "Outdated",
+                "upToDate": "Up to Date"
+            }
+        },
+        "mobile": {
+            "details": "Details",
+            "done": "Done"
+        }
+    },
+    "message": {
+        "copy": "Copy message",
+        "copied": "Copied",
+        "codeBlock": {
+            "copy": "Copy code",
+            "copied": "Copied"
+        },
+        "thinking": {
+            "streaming": "thinking",
+            "complete": "thought"
+        },
+        "thinkingMeta": {
+            "durationStreaming": "for {duration}",
+            "durationComplete": "for {duration}",
+            "reasoning": "{count} tokens"
+        },
+        "actions": {
+            "fork": "Fork session from here",
+            "retry": "Retry turn",
+            "reset": "Reset conversation to after this turn"
+        },
+        "finalStatus": {
+            "status": {
+                "success": "success",
+                "warning": "warning"
+            },
+            "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
+        }
+    },
+    "jobs": {
+        "settingsSections": "Settings sections",
+        "savedJobs": "Saved Jobs",
+        "loading": "Loading jobs...",
+        "paused": "Paused",
+        "unattendedTooltip": "Unattended sessions cannot escalate tool calls",
+        "confirmDelete": "Delete job {name}?",
+        "summary": {
+            "onDemandOnly": "On-demand only",
+            "cronTriggerCount": "{count, plural, one {# cron trigger} other {# cron triggers}}"
+        },
+        "validation": {
+            "idRequired": "Job ID is required.",
+            "nameRequired": "Job name is required.",
+            "promptRequired": "Prompt is required.",
+            "persistentSessionIdRequired": "Select a persistent session ID or disable the option.",
+            "persistentSessionMustBeAttended": "Persistent-session jobs must be attended.",
+            "sessionModesRequireFreshSession": "Session modes require a fresh session.",
+            "modelOverridesRequireFreshSession": "Model overrides require a fresh session.",
+            "askAndYoloMutuallyExclusive": "Read-only mode and YOLO are mutually exclusive.",
+            "cronEmpty": "Cron expressions must not be empty.",
+            "cronInvalid": "Cron expression is invalid: {expression}."
+        },
+        "cron": {
+            "invalidExpression": "Invalid cron expression."
+        },
+        "triggerKind": {
+            "scheduled": "Scheduled",
+            "manual": "Manual"
+        },
+        "errors": {
+            "load": "Failed to load jobs.",
+            "refresh": "Failed to refresh jobs.",
+            "save": "Failed to save job.",
+            "delete": "Failed to delete job.",
+            "run": "Failed to run job.",
+            "saveBeforeRun": "Save the job before running it.",
+            "saveChangesBeforeRun": "Save job changes before running it."
+        },
+        "notices": {
+            "refreshed": "Jobs refreshed.",
+            "created": "Job created.",
+            "saved": "Job saved.",
+            "deleted": "Job deleted.",
+            "runStartedNewSession": "Run started in new session {sessionId}.",
+            "runStartedSession": "Run started in session {sessionId}."
+        },
+        "actions": {
+            "refresh": "Refresh jobs",
+            "new": "New job",
+            "clear": "Clear",
+            "clearPersistentSession": "Clear persistent session",
+            "delete": "Delete",
+            "save": "Save",
+            "addTrigger": "Add trigger",
+            "remove": "Remove",
+            "runNow": "Run now"
+        },
+        "empty": {
+            "noJobs": "No jobs yet. Create one to store prompts and optional cron schedules in jobs.yaml."
+        },
+        "editor": {
+            "newJob": "New job",
+            "editing": "Editing {name}",
+            "jobFallback": "job"
+        },
+        "fields": {
+            "name": "Name",
+            "jobId": "Job ID",
+            "enabled": "Enabled",
+            "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
+            "newSession": "Options",
+            "newSessionHelp": "These options only apply to fresh sessions created by this job.",
+            "unattended": "Run unattended",
+            "unattendedHelp": "Tool calls will not be escalated to you.",
+            "persistentSession": "Persistent Session",
+            "persistentSessionToggleHelp": "Reuse an existing session instead of starting a fresh one each run.",
+            "persistentSessionDisabled": "Can't be used in unattended mode",
+            "persistentSessionUncheckedHelp": "Enable this option to choose an existing session ID below.",
+            "persistentSessionMissingIdHelp": "Enabled, but no session ID selected yet. Choose an existing session below.",
+            "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
+            "persistentSessionActiveHelp": "Active: this session ID overrides the fresh-session options above.",
+            "models": "Models",
+            "modelsHelp": "Optional per-job overrides for fresh sessions created by this job.",
+            "modelsDisabled": "Persistent sessions keep their own model selection.",
+            "modelsLinked": "Models linked",
+            "modelsLinkedHelp": "Linked: changing either model updates both.",
+            "modelsUnlinked": "Models unlinked",
+            "modelsUnlinkedHelp": "Unlinked: agent and sentinel models can be changed independently.",
+            "agentModel": "Agent",
+            "sentinelModel": "Sentinel",
+            "titleModel": "Title Model",
+            "prompt": "Prompt",
+            "expression": "Expression",
+            "timeZone": "Time Zone",
+            "inputOptional": "Input (Optional)"
+        },
+        "placeholders": {
+            "name": "Nightly inbox review",
+            "jobId": "nightly-inbox-review",
+            "persistentSession": "select session ID",
+            "prompt": "Summarize new tasks, triage urgent items, then propose next actions.",
+            "model": "Leave empty for default"
+        },
+        "sections": {
+            "cronTriggers": "Cron Triggers",
+            "cronTriggersDescription": "Leave empty for on-demand jobs.",
+            "noTriggers": "No cron triggers configured.",
+            "runJob": "Run Job",
+            "previousInvocations": "Previous Invocations",
+            "previousInvocationsDescription": "Select an invocation to open its session.",
+            "saveToViewHistory": "Save this job to view invocation history.",
+            "noInvocations": "No invocations yet. Refresh sessions to load newly completed runs.",
+            "ranAt": "Ran at {timestamp}"
+        }
+    },
+    "sidebar": {
+        "time": {
+            "justNow": "just now"
+        },
+        "messageCount": "{count, plural, one {# message} other {# messages}}",
+        "unattendedSession": "Unattended session",
+        "privateSession": "Private session",
+        "knowledgeCommitted": "All changes committed to knowledge",
+        "actions": {
+            "pin": "Pin session",
+            "unpin": "Unpin session",
+            "favorite": "Favorite session",
+            "unfavorite": "Remove favorite",
+            "archive": "Archive session",
+            "unarchive": "Unarchive session",
+            "delete": "Delete session",
+            "deleteEmpty": "Delete empty session",
+            "shiftSkip": "Shift+click to skip confirmation"
+        },
+        "confirm": {
+            "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
+            "deleteUnpushed": "This session has {count, plural, one {# commit} other {# commits}} not yet pushed to your knowledge repo. Deleting it will discard them. Delete anyway?",
+            "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
+        },
+        "sections": {
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "last7Days": "Last 7 Days",
+            "last30Days": "Last 30 Days",
+            "archived": "Archived",
+            "unknownDate": "Unknown Date"
+        },
+        "empty": "No sessions yet",
+        "loadingMore": "Loading more sessions"
+    },
+    "git": {
+        "upToDate": "Up to date",
+        "noRemote": "No remote configured",
+        "sandbox": {
+            "label": "Workspace sync",
+            "help": "Sync between this session's sandbox workspace and your knowledge repository on the server. Counts show commits this workspace is ahead (↑) and behind (↓) the server repo.",
+            "notRunning": "Sandbox not running",
+            "refresh": "Re-check the workspace against the server repository (fetches first)",
+            "pull": "Pull commits from the server repository into this workspace",
+            "push": "Push this workspace's commits to the server repository (each push is reviewed by the sentinel)"
+        },
+        "global": {
+            "label": "Knowledge remote",
+            "help": "Sync between your knowledge repository on the server and its external git remote. Counts show commits the server repo is ahead (↑) and behind (↓) the remote.",
+            "indicatorBehind": "{count, plural, one {# commit} other {# commits}} to pull from the knowledge remote",
+            "refresh": "Re-check the server repository against the remote (fetches first)",
+            "pull": "Pull commits from the external remote into the server repository",
+            "push": "Push the server repository's commits to the external remote"
+        },
+        "denied": "Push denied",
+        "errors": {
+            "status": "Could not read git status",
+            "pull": "Pull failed",
+            "push": "Push failed"
+        }
+    },
+    "apiKeys": {
+        "title": "API Keys",
+        "description": "Create long-lived tokens for scripts and integrations. Use them as 'Authorization: Bearer <token>'.",
+        "create": {
+            "nameLabel": "Name",
+            "namePlaceholder": "e.g. CI deploy bot",
+            "scopesLabel": "Scopes",
+            "expiryLabel": "Expires after (days)",
+            "expiryPlaceholder": "Leave empty for no expiry",
+            "submit": "Create key",
+            "creating": "Creating…"
+        },
+        "access": {
+            "none": "None",
+            "read": "Read",
+            "write": "Write"
+        },
+        "scopes": {
+            "sessions": "Sessions",
+            "jobs": "Jobs",
+            "preferences": "Preferences",
+            "notifications": "Notifications",
+            "history": "History",
+            "admin": "Admin"
+        },
+        "secret": {
+            "warning": "Copy this token now — it won't be shown again.",
+            "copy": "Copy token",
+            "done": "Done"
+        },
+        "list": {
+            "title": "Active keys",
+            "empty": "No API keys yet.",
+            "loading": "Loading keys…",
+            "unnamed": "Unnamed key",
+            "expired": "Expired"
+        },
+        "fields": {
+            "created": "Created {timestamp}",
+            "lastUsed": "Last used {timestamp}",
+            "expires": "Expires {timestamp}",
+            "never": "never",
+            "noExpiry": "no expiry"
+        },
+        "actions": {
+            "revoke": "Revoke key"
+        },
+        "confirm": {
+            "revoke": "Revoke API key \"{name}\"? This cannot be undone."
+        },
+        "errors": {
+            "load": "Failed to load API keys.",
+            "create": "Failed to create API key.",
+            "revoke": "Failed to revoke API key.",
+            "noScopes": "Select at least one scope."
+        }
     }
-  },
-  "platformSettings": {
-    "status": {
-      "loading": "Loading platform settings",
-      "unavailable": "Platform settings are unavailable",
-      "readOnly": "Config file is read-only."
-    },
-    "notices": {
-      "saved": "Saved."
-    },
-    "errors": {
-      "load": "Failed to load platform settings",
-      "save": "Failed to update platform settings",
-      "wholeNumber": "{field} must be a positive whole number.",
-      "nonNegativeWholeNumber": "{field} must be a non-negative whole number.",
-      "number": "{field} must be a non-negative number.",
-      "providerRequired": "Provider is required for model {index}.",
-      "nameRequired": "Name is required for model {index}.",
-      "duplicateModel": "Model id {id} is used more than once.",
-      "rawSecretRequired": "Paste an API key for {id}, or choose another secret source.",
-      "secretValueRequired": "Secret reference is required for {id}.",
-      "defaultRequired": "{field} default model is required.",
-      "defaultUnknown": "{field} default model {id} is not in the catalog."
-    },
-    "sections": {
-      "defaultModels": "Default models",
-      "defaultBudgets": "Default budgets",
-      "catalog": "Model catalog"
-    },
-    "fields": {
-      "agent": "Agent",
-      "sentinel": "Sentinel",
-      "title": "Title",
-      "inputTokens": "Input tokens",
-      "outputTokens": "Output tokens",
-      "costUsd": "Cost USD",
-      "toolCalls": "Tool calls",
-      "provider": "Provider",
-      "name": "Name",
-      "id": "ID",
-      "maxInputTokens": "Max input tokens",
-      "thinking": "Thinking",
-      "thinkingBudgetTokens": "Thinking budget tokens",
-      "baseUrl": "Base URL",
-      "vision": "Vision",
-      "visionHint": "Accepts image input",
-      "apiKeySource": "API key source",
-      "apiKey": "API key",
-      "secretReference": "Secret reference"
-    },
-    "placeholders": {
-      "selectModel": "Select model",
-      "unlimited": "Unlimited",
-      "generatedId": "provider:name",
-      "keepSecret": "Keep configured secret"
-    },
-    "actions": {
-      "save": "Save",
-      "saving": "Saving",
-      "addModel": "Add model",
-      "removeModel": "Remove model",
-      "confirmRemoveModel": "Remove model \"{name}\"? This cannot be undone."
-    },
-    "secretSources": {
-      "none": "None",
-      "raw": "Raw value",
-      "env": "Environment variable",
-      "file": "File"
-    },
-    "thinking": {
-      "default": "Default",
-      "true": "Enabled",
-      "false": "Disabled",
-      "minimal": "Minimal",
-      "low": "Low",
-      "medium": "Medium",
-      "high": "High",
-      "xhigh": "Extra high"
-    },
-    "units": {
-      "tokens": "tokens"
-    },
-    "modelRow": "Model {index}"
-  },
-  "home": {
-    "empty": {
-      "description": "Select a session or start a new one"
-    }
-  },
-  "connect": {
-    "description": "Sign in to carapace",
-    "serverLabel": "Server URL",
-    "usernameLabel": "Username",
-    "usernamePlaceholder": "Username",
-    "passwordLabel": "Password",
-    "passwordPlaceholder": "Password",
-    "connect": "Connect",
-    "connecting": "Connecting…",
-    "errors": {
-      "serverError": "Server error: {status}",
-      "connectionFailed": "Connection failed"
-    }
-  },
-  "admin": {
-    "title": "Admin",
-    "backToApp": "Back to app",
-    "serverLabel": "Server URL",
-    "serverPlaceholder": "No server selected",
-    "users": {
-      "title": "Users",
-      "description": "Global platform accounts, roles, and data ownership.",
-      "savedUsers": "Users",
-      "loading": "Loading users…",
-      "empty": "No users found",
-      "selectUser": "Select a user",
-      "you": "You",
-      "admin": "Admin",
-      "enabled": "Enabled",
-      "disabled": "Disabled"
-    },
-    "create": {
-      "title": "New user",
-      "subtitle": "Create a local user"
-    },
-    "fields": {
-      "username": "Username",
-      "password": "Password",
-      "newPassword": "New password",
-      "keepPassword": "Keep current password",
-      "displayName": "Display name",
-      "email": "Email",
-      "roles": "Roles",
-      "enabled": "Enabled"
-    },
-    "actions": {
-      "load": "Load",
-      "loading": "Loading…",
-      "refresh": "Refresh users",
-      "new": "New user",
-      "deleteUser": "Delete {username}",
-      "create": "Create user",
-      "creating": "Creating…",
-      "save": "Save changes",
-      "saving": "Saving…"
-    },
-    "notices": {
-      "loaded": "Users loaded.",
-      "created": "Created {username}.",
-      "saved": "Saved {username}.",
-      "deleted": "Deleted {username}."
-    },
-    "errors": {
-      "missingCredentials": "Current origin is unavailable.",
-      "load": "Failed to load users.",
-      "create": "Failed to create user.",
-      "save": "Failed to save user.",
-      "delete": "Failed to delete user."
-    },
-    "confirm": {
-      "deleteUser": "Delete {username}? Existing data owned by this user is not deleted."
-    },
-    "meta": {
-      "tokenVersion": "Token v{version}",
-      "updated": "Updated {timestamp}",
-      "lastLogin": "Last login {timestamp}",
-      "never": "never"
-    }
-  },
-  "preferences": {
-    "title": "Preferences",
-    "description": "Personal settings for this browser and your account experience.",
-    "currentLocale": "Current interface language: {locale}",
-    "language": {
-      "label": "Language",
-      "description": "Choose how the interface language is resolved.",
-      "options": {
-        "system": "System",
-        "en": "English",
-        "de": "Deutsch"
-      }
-    },
-    "theme": {
-      "label": "Appearance",
-      "description": "Choose how the color theme is resolved.",
-      "options": {
-        "system": "System",
-        "light": "Light",
-        "dark": "Dark"
-      }
-    },
-    "chatList": {
-      "label": "Chats",
-      "showArchived": {
-        "label": "Show archived chats",
-        "description": "When disabled, archived chats are hidden and session list requests exclude them."
-      }
-    },
-    "notifications": {
-      "title": "Push notifications",
-      "description": "Deliver escalations and turn outcomes to this browser or installed PWA.",
-      "status": {
-        "loading": "Checking notification support…",
-        "loadingShort": "Checking",
-        "enabled": "Notifications are enabled for this browser.",
-        "enabledShort": "Enabled",
-        "disabled": "Notifications are off for this browser.",
-        "disabledShort": "Off",
-        "unsupported": "This browser cannot receive Web Push notifications in the current context.",
-        "permissionDenied": "Browser notification permission is blocked. Re-enable it in browser or device settings.",
-        "permissionRequired": "Notification permission was not granted.",
-        "invalidSubscription": "Browser returned an incomplete push subscription.",
-        "loadFailed": "Failed to load notification settings.",
-        "enableFailed": "Failed to enable notifications.",
-        "disableFailed": "Failed to disable notifications.",
-        "preferencesFailed": "Failed to update notification preferences.",
-        "testFailed": "Failed to send test notification.",
-        "testSent": "Test notification sent."
-      },
-      "deviceName": {
-        "label": "Device name",
-        "placeholder": "Android phone",
-        "hint": "Shown in server-side notification subscriptions for this browser."
-      },
-      "toggle": {
-        "label": "Notifications"
-      },
-      "actions": {
-        "enable": "Enable notifications",
-        "enabling": "Enabling…",
-        "disable": "Disable notifications",
-        "disabling": "Disabling…",
-        "test": "Send test notification",
-        "testing": "Sending test notification…"
-      },
-      "preferences": {
-        "label": "Send notifications for",
-        "escalation_pending": "Escalations that need approval",
-        "attended_turn_completed": "Attended sessions when a turn finishes",
-        "unattended_turn_completed": "Unattended jobs that finish successfully",
-        "unattended_turn_failed": "Unattended jobs that fail"
-      },
-      "meta": {
-        "permission": "Browser permission: {permission}",
-        "heartbeat": "Last heartbeat: {timestamp}",
-        "expires": "Subscription expires: {timestamp}"
-      },
-      "permission": {
-        "default": "not requested",
-        "granted": "granted",
-        "denied": "denied"
-      }
-    }
-  },
-  "newSessionButton": {
-    "label": "New session",
-    "chooseOptions": "Choose session options",
-    "private": {
-      "enabledTitle": "Private",
-      "enabledDescription": "Exclude this session from knowledge commits.",
-      "disabledTitle": "Saved",
-      "disabledDescription": "Can be included in knowledge commits."
-    },
-    "ask": {
-      "enabledTitle": "Read-Only Mode",
-      "enabledDescription": "Read-only outside sandbox. External writes are blocked.",
-      "disabledTitle": "Read and Write Access",
-      "disabledDescription": "Normal permissions. External writes are allowed."
-    },
-    "yolo": {
-      "enabledTitle": "YOLO",
-      "enabledDescription": "Disable sentinel review and allow operations immediately.",
-      "disabledTitle": "Reviewed",
-      "disabledDescription": "Keep actions gated by safe-list and sentinel review."
-    },
-    "unattended": {
-      "enabledTitle": "Unattended",
-      "enabledDescription": "Runs on its own with no user approval path.",
-      "disabledTitle": "With Approval",
-      "disabledDescription": "Stays interactive with a user approval path."
-    }
-  },
-  "chatInput": {
-    "disabled": "Input disabled",
-    "sendMessageTooltip": "Send message (Enter)",
-    "queueInterruptStopTooltip": "Enter to queue · ⌥Enter to interrupt · Click to stop",
-    "stopGenerationTooltip": "Stop generation",
-    "queued": "Queued: {message}",
-    "startVoiceInput": "Start voice input",
-    "stopVoiceInput": "Stop voice input",
-    "attachFile": "Attach file",
-    "attachFileUnavailable": "Start the sandbox to upload files",
-    "startingSandbox": "Starting sandbox…",
-    "removeAttachment": "Remove",
-    "placeholder": "Message carapace…",
-    "usageBreakdown": {
-      "systemLine": "system: {percent}%",
-      "userLine": "user: {percent}%",
-      "assistantLine": "assistant: {percent}%",
-      "toolCallsLine": "tool calls: {percent}%",
-      "toolOutputsLine": "tool outputs: {percent}%",
-      "otherLine": "other: {percent}%"
-    },
-    "context": {
-      "limit": "Context limit: {tokens} tokens.",
-      "assumedLimit": "Assuming a {tokens} context limit.",
-      "lastRequestTokens": "{tokens} API tokens (last agent request)",
-      "clickForUsage": "Click to send /usage to the agent for more details.",
-      "tokensLabel": "{tokens} tokens"
-    },
-    "budget": {
-      "budgetLabel": "{label} budget",
-      "current": "Current: {value}",
-      "max": "Max: {value}",
-      "remaining": "Remaining: {value}",
-      "exhausted": "Budget exhausted."
-    }
-  },
-  "approval": {
-    "general": {
-      "title": "Approval Required",
-      "toolLabel": "Tool:",
-      "reasonLabel": "Reason:",
-      "riskLabel": "Risk:",
-      "arguments": "Arguments",
-      "allow": "Approve",
-      "denyPlaceholder": "Why should this be blocked?",
-      "risk": {
-        "high": "high",
-        "medium": "medium",
-        "low": "low"
-      }
-    },
-    "denialNote": {
-      "deny": "Deny",
-      "optionalNote": "Optional note for the agent",
-      "addNote": "Add note",
-      "hideNote": "Hide note"
-    },
-    "credential": {
-      "title": "Credential Request",
-      "skillLabel": "Skill:",
-      "allow": "Allow",
-      "denyPlaceholder": "Why should this credential access be blocked?",
-      "decision": {
-        "allow": "Allowed",
-        "deny": "Denied"
-      }
-    },
-    "domainAccess": {
-      "title": "Domain Access Request",
-      "domainLabel": "Domain:",
-      "triggeredByLabel": "Triggered by:",
-      "allow": "Allow {domain}",
-      "denyPlaceholder": "Why should this be blocked?",
-      "decision": {
-        "allow": "Allowed",
-        "deny": "Denied"
-      }
-    },
-    "gitPush": {
-      "title": "Git Push Request",
-      "refLabel": "Ref:",
-      "reasonLabel": "Reason:",
-      "changedFiles": "{count, plural, one {# changed file} other {# changed files}}",
-      "allow": "Allow Push",
-      "denyPlaceholder": "Why should this push be blocked?",
-      "decision": {
-        "allow": "Allowed",
-        "deny": "Denied"
-      }
-    }
-  },
-  "versionBadge": {
-    "frontend": "Frontend: {version}",
-    "backend": "Backend: {version}",
-    "unknown": "unknown",
-    "mismatchTooltip": "Version mismatch between frontend and backend containers.",
-    "mismatchSr": "Frontend and backend versions do not match."
-  },
-  "toolCallBadge": {
-    "approvalBadge": {
-      "review": "review",
-      "skill": "skill",
-      "bypass": "bypass",
-      "denied": "denied"
-    },
-    "fallbacks": {
-      "missingPath": "(missing path)",
-      "missingCommand": "(missing command)",
-      "missingSkillName": "(missing skill_name)",
-      "credential": "credential"
-    },
-    "labels": {
-      "read": "read",
-      "wrote": "wrote",
-      "replaced": "replaced",
-      "activatedSkill": "activated skill",
-      "executed": "executed",
-      "listedCredentials": "listed credentials",
-      "credentialDenied": "credential denied",
-      "accessedCredential": "accessed credential",
-      "domainDenied": "domain denied",
-      "accessedDomain": "accessed domain",
-      "gitPush": "git push",
-      "readAction": "read",
-      "write": "write",
-      "activateSkill": "activate skill",
-      "execute": "execute",
-      "listCredentials": "list credentials",
-      "accessCredential": "access credential",
-      "accessDomain": "access domain",
-      "replace": "replace",
-      "sentFile": "sent file",
-      "sendFile": "send file"
-    },
-    "summaries": {
-      "readFirstLines": "first {count} lines of {path}",
-      "readLinesRange": "lines {start} to {end} of {path}",
-      "writeLines": "{count} lines to {path}",
-      "lineCount": "{count} lines",
-      "lineCountWithReplacement": "{source} lines with {replacement} lines",
-      "replaceInPath": "{lineSummary} in {path}{suffix}",
-      "allMatchesSuffix": " (all matches)"
-    },
-    "details": {
-      "activateSkillPromptPrefix": "Agent wants to activate the",
-      "activateSkillPromptSuffix": "skill.",
-      "sentinelLabel": "Sentinel:",
-      "sentinelReviewing": "Reviewing this tool call.",
-      "userLabel": "User:",
-      "deniedByUser": "Denied by user.",
-      "contexts": "Contexts:",
-      "domains": "Domains:",
-      "credentials": "Credentials",
-      "name": "Name",
-      "path": "Path",
-      "description": "Description",
-      "activation": "Activation",
-      "skillInstructions": "Skill Instructions",
-      "source": "Source",
-      "replacement": "Replacement",
-      "diff": "Diff",
-      "arguments": "Arguments",
-      "result": "Result"
-    }
-  },
-  "commandResult": {
-    "help": {
-      "command": "Command",
-      "description": "Description"
-    },
-    "rules": {
-      "id": "ID",
-      "trigger": "Trigger",
-      "mode": "Mode",
-      "status": {
-        "label": "Status",
-        "disabled": "disabled",
-        "alwaysOn": "always-on",
-        "activated": "activated"
-      }
-    },
-    "models": {
-      "type": "Type",
-      "model": "Model",
-      "default": "Default",
-      "available": "Available:",
-      "provider": "Type",
-      "name": "Name",
-      "context": "Context",
-      "contextWindow": "({tokens} ctx)",
-      "contextWindowShort": "{tokens} ctx",
-      "noneAvailable": "No models available.",
-      "noMatches": "No matching models.",
-      "filterPlaceholder": "Filter models...",
-      "currentLabel": "Current model:",
-      "defaultLabel": "Default: {model}"
-    },
-    "usage": {
-      "none": "No token usage recorded yet.",
-      "total": "Total: {total} tokens ({input} in + {output} out)",
-      "toolCalls": "Tool Calls: {count}",
-      "byModel": "By Model",
-      "byCategory": "By Category",
-      "context": "Context",
-      "table": {
-        "source": "Source",
-        "input": "Input",
-        "output": "Output",
-        "cacheRead": "Cache Read",
-        "cacheWrite": "Cache Write",
-        "requests": "Requests",
-        "cost": "Cost"
-      },
-      "contextTable": {
-        "source": "Source",
-        "tokens": "Tokens",
-        "system": "System %",
-        "user": "User %",
-        "assistant": "Assistant %",
-        "toolCalls": "Tool Calls %",
-        "toolOutputs": "Tool Outputs %",
-        "other": "Other %"
-      }
-    },
-    "budget": {
-      "none": "No session budgets configured.",
-      "title": "Session Budgets",
-      "table": {
-        "metric": "Metric",
-        "current": "Current",
-        "limit": "Limit",
-        "remaining": "Remaining",
-        "used": "Used",
-        "blocked": "blocked"
-      }
-    }
-  },
-  "chatView": {
-    "inputDisabled": {
-      "archived": "Unarchive first",
-      "unattended": "This session is unattended. Fork it first to continue here."
-    },
-    "waiting": {
-      "processingPrompt": "Processing prompt...",
-      "thinking": "Thinking...",
-      "generating": "Generating...",
-      "working": "Working..."
-    },
-    "unknown": "Unknown",
-    "status": {
-      "connecting": "Connecting…",
-      "disconnected": "Disconnected"
-    },
-    "empty": {
-      "start": "Send a message to get started",
-      "connectingSession": "Connecting to session…"
-    },
-    "errors": {
-      "unexpected": "Unexpected error",
-      "resetTarget": "Could not resolve reset target.",
-      "forkTarget": "Could not resolve fork target."
-    },
-    "confirm": {
-      "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
-      "scaleDownSandbox": "Scale down the sandbox for this session? Storage will be kept.",
-      "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
-      "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo.",
-      "unarchiveSession": "Unarchive this session? It will return to the active session list.",
-      "makePrivate": "Mark this session private? Existing knowledge commits will remain in git history."
-    },
-    "actions": {
-      "pin": "Pin session",
-      "unpin": "Unpin session",
-      "favorite": "Favorite session",
-      "unfavorite": "Remove favorite",
-      "archive": "Archive session",
-      "unarchive": "Unarchive session",
-      "includeInRepo": "Include in repo",
-      "keepPrivate": "Keep private",
-      "delete": "Delete session"
-    },
-    "badges": {
-      "archived": "Archived",
-      "private": "Private",
-      "pinned": "Pinned",
-      "favorite": "Favorite",
-      "askMode": "Read-Only Mode",
-      "yoloMode": "YOLO",
-      "unattended": "Unattended",
-      "interactive": "Interactive"
-    },
-    "inspector": {
-      "actions": "Actions",
-      "session": "Session"
-    },
-    "session": {
-      "title": "Title",
-      "id": "ID",
-      "copyId": "Copy session id",
-      "idCopied": "Copied session id",
-      "idCopiedShort": "Copied",
-      "source": "Source",
-      "created": "Created",
-      "lastActive": "Last active",
-      "messages": "Messages",
-      "totalCost": "Cost",
-      "job": "Job",
-      "reference": "Reference",
-      "modes": "Modes",
-      "askMode": "Read-Only Mode",
-      "askModeHelp": "Only read-only work outside the sandbox. External writes are denied.",
-      "yoloMode": "YOLO Mode",
-      "yoloModeHelp": "Bypass sentinel approval and allow actions immediately.",
-      "savingPrivate": "Saving…",
-      "updatingMode": "Updating mode…"
-    },
-    "source": {
-      "unknown": "Unknown",
-      "job": "Job",
-      "web": "Web",
-      "cli": "CLI"
-    },
-    "jobRun": {
-      "title": "Latest Job Run",
-      "job": "Job",
-      "ranAt": "Ran at",
-      "schedule": "Schedule",
-      "data": "Data",
-      "trigger": {
-        "label": "Trigger",
-        "api": "API",
-        "cron": "Cron",
-        "manual": "Manual"
-      }
-    },
-    "sandbox": {
-      "title": "Sandbox",
-      "refreshing": "Refreshing…",
-      "checking": "Checking sandbox…",
-      "status": {
-        "missing": "Not Started",
-        "running": "Running",
-        "scaled_down": "Spun Down",
-        "pending": "Starting Up",
-        "stopped": "Stopped",
-        "error": "Error"
-      },
-      "actions": {
-        "start": "Start sandbox",
-        "starting": "Starting sandbox",
-        "scaleDown": "Scale down sandbox",
-        "scalingDown": "Scaling down sandbox",
-        "reset": "Reset sandbox"
-      },
-      "storage": {
-        "used": "{size} used",
-        "none": "no sandbox storage",
-        "allocated": "{size} allocated"
-      },
-      "fields": {
-        "id": "Sandbox ID"
-      }
-    },
-    "knowledge": {
-      "title": "Knowledge",
-      "commit": "Commit to repo",
-      "committed": "Committed",
-      "committedToRepo": "Committed to knowledge",
-      "notCommittedYet": "Not committed yet",
-      "savedAt": "Saved {timestamp}",
-      "commitDisabledNoHistory": "This session has no conversation history yet.",
-      "noNewChanges": "{status}. No new changes to commit.",
-      "privateExistingCommits": "Session is private. Existing knowledge commits remain unchanged.",
-      "privateExcluded": "Session is private and will not be committed to knowledge.",
-      "includedInRepo": "Session is included in knowledge commits to your repo.",
-      "badges": {
-        "excluded": "Excluded",
-        "missing": "Missing",
-        "outdated": "Outdated",
-        "upToDate": "Up to Date"
-      }
-    },
-    "mobile": {
-      "details": "Details",
-      "done": "Done"
-    }
-  },
-  "message": {
-    "copy": "Copy message",
-    "copied": "Copied",
-    "codeBlock": {
-      "copy": "Copy code",
-      "copied": "Copied"
-    },
-    "thinking": {
-      "streaming": "thinking",
-      "complete": "thought"
-    },
-    "thinkingMeta": {
-      "durationStreaming": "for {duration}",
-      "durationComplete": "for {duration}",
-      "reasoning": "{count} tokens"
-    },
-    "actions": {
-      "fork": "Fork session from here",
-      "retry": "Retry turn",
-      "reset": "Reset conversation to after this turn"
-    },
-    "finalStatus": {
-      "status": {
-        "success": "success",
-        "warning": "warning"
-      },
-      "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
-    }
-  },
-  "jobs": {
-    "settingsSections": "Settings sections",
-    "savedJobs": "Saved Jobs",
-    "loading": "Loading jobs...",
-    "paused": "Paused",
-    "unattendedTooltip": "Unattended sessions cannot escalate tool calls",
-    "confirmDelete": "Delete job {name}?",
-    "summary": {
-      "onDemandOnly": "On-demand only",
-      "cronTriggerCount": "{count, plural, one {# cron trigger} other {# cron triggers}}"
-    },
-    "validation": {
-      "idRequired": "Job ID is required.",
-      "nameRequired": "Job name is required.",
-      "promptRequired": "Prompt is required.",
-      "persistentSessionIdRequired": "Select a persistent session ID or disable the option.",
-      "persistentSessionMustBeAttended": "Persistent-session jobs must be attended.",
-      "sessionModesRequireFreshSession": "Session modes require a fresh session.",
-      "modelOverridesRequireFreshSession": "Model overrides require a fresh session.",
-      "askAndYoloMutuallyExclusive": "Read-only mode and YOLO are mutually exclusive.",
-      "cronEmpty": "Cron expressions must not be empty.",
-      "cronInvalid": "Cron expression is invalid: {expression}."
-    },
-    "cron": {
-      "invalidExpression": "Invalid cron expression."
-    },
-    "triggerKind": {
-      "scheduled": "Scheduled",
-      "manual": "Manual"
-    },
-    "errors": {
-      "load": "Failed to load jobs.",
-      "refresh": "Failed to refresh jobs.",
-      "save": "Failed to save job.",
-      "delete": "Failed to delete job.",
-      "run": "Failed to run job.",
-      "saveBeforeRun": "Save the job before running it.",
-      "saveChangesBeforeRun": "Save job changes before running it."
-    },
-    "notices": {
-      "refreshed": "Jobs refreshed.",
-      "created": "Job created.",
-      "saved": "Job saved.",
-      "deleted": "Job deleted.",
-      "runStartedNewSession": "Run started in new session {sessionId}.",
-      "runStartedSession": "Run started in session {sessionId}."
-    },
-    "actions": {
-      "refresh": "Refresh jobs",
-      "new": "New job",
-      "clear": "Clear",
-      "clearPersistentSession": "Clear persistent session",
-      "delete": "Delete",
-      "save": "Save",
-      "addTrigger": "Add trigger",
-      "remove": "Remove",
-      "runNow": "Run now"
-    },
-    "empty": {
-      "noJobs": "No jobs yet. Create one to store prompts and optional cron schedules in jobs.yaml."
-    },
-    "editor": {
-      "newJob": "New job",
-      "editing": "Editing {name}",
-      "jobFallback": "job"
-    },
-    "fields": {
-      "name": "Name",
-      "jobId": "Job ID",
-      "enabled": "Enabled",
-      "enabledHelp": "Paused jobs stay in jobs.yaml but never run from cron.",
-      "newSession": "Options",
-      "newSessionHelp": "These options only apply to fresh sessions created by this job.",
-      "unattended": "Run unattended",
-      "unattendedHelp": "Tool calls will not be escalated to you.",
-      "persistentSession": "Persistent Session",
-      "persistentSessionToggleHelp": "Reuse an existing session instead of starting a fresh one each run.",
-      "persistentSessionDisabled": "Can't be used in unattended mode",
-      "persistentSessionUncheckedHelp": "Enable this option to choose an existing session ID below.",
-      "persistentSessionMissingIdHelp": "Enabled, but no session ID selected yet. Choose an existing session below.",
-      "persistentSessionHelp": "Reuse an existing session instead of creating a new one on every job invocation.",
-      "persistentSessionActiveHelp": "Active: this session ID overrides the fresh-session options above.",
-      "models": "Models",
-      "modelsHelp": "Optional per-job overrides for fresh sessions created by this job.",
-      "modelsDisabled": "Persistent sessions keep their own model selection.",
-      "modelsLinked": "Models linked",
-      "modelsLinkedHelp": "Linked: changing either model updates both.",
-      "modelsUnlinked": "Models unlinked",
-      "modelsUnlinkedHelp": "Unlinked: agent and sentinel models can be changed independently.",
-      "agentModel": "Agent",
-      "sentinelModel": "Sentinel",
-      "titleModel": "Title Model",
-      "prompt": "Prompt",
-      "expression": "Expression",
-      "timeZone": "Time Zone",
-      "inputOptional": "Input (Optional)"
-    },
-    "placeholders": {
-      "name": "Nightly inbox review",
-      "jobId": "nightly-inbox-review",
-      "persistentSession": "select session ID",
-      "prompt": "Summarize new tasks, triage urgent items, then propose next actions.",
-      "model": "Leave empty for default"
-    },
-    "sections": {
-      "cronTriggers": "Cron Triggers",
-      "cronTriggersDescription": "Leave empty for on-demand jobs.",
-      "noTriggers": "No cron triggers configured.",
-      "runJob": "Run Job",
-      "previousInvocations": "Previous Invocations",
-      "previousInvocationsDescription": "Select an invocation to open its session.",
-      "saveToViewHistory": "Save this job to view invocation history.",
-      "noInvocations": "No invocations yet. Refresh sessions to load newly completed runs.",
-      "ranAt": "Ran at {timestamp}"
-    }
-  },
-  "sidebar": {
-    "time": {
-      "justNow": "just now"
-    },
-    "messageCount": "{count, plural, one {# message} other {# messages}}",
-    "unattendedSession": "Unattended session",
-    "privateSession": "Private session",
-    "knowledgeCommitted": "All changes committed to knowledge",
-    "actions": {
-      "pin": "Pin session",
-      "unpin": "Unpin session",
-      "favorite": "Favorite session",
-      "unfavorite": "Remove favorite",
-      "archive": "Archive session",
-      "unarchive": "Unarchive session",
-      "delete": "Delete session",
-      "deleteEmpty": "Delete empty session",
-      "shiftSkip": "Shift+click to skip confirmation"
-    },
-    "confirm": {
-      "deleteSession": "Delete this session? Chat history and sandbox state will be removed.",
-      "deleteUnpushed": "This session has {count, plural, one {# commit} other {# commits}} not yet pushed to your knowledge repo. Deleting it will discard them. Delete anyway?",
-      "archiveSession": "Archive this session? It will leave the default list, reset its sandbox, and stay in the knowledge repo."
-    },
-    "sections": {
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "last7Days": "Last 7 Days",
-      "last30Days": "Last 30 Days",
-      "archived": "Archived",
-      "unknownDate": "Unknown Date"
-    },
-    "empty": "No sessions yet",
-    "loadingMore": "Loading more sessions"
-  },
-  "git": {
-    "upToDate": "Up to date",
-    "noRemote": "No remote configured",
-    "sandbox": {
-      "label": "Workspace sync",
-      "help": "Sync between this session's sandbox workspace and your knowledge repository on the server. Counts show commits this workspace is ahead (↑) and behind (↓) the server repo.",
-      "notRunning": "Sandbox not running",
-      "refresh": "Re-check the workspace against the server repository (fetches first)",
-      "pull": "Pull commits from the server repository into this workspace",
-      "push": "Push this workspace's commits to the server repository (each push is reviewed by the sentinel)"
-    },
-    "global": {
-      "label": "Knowledge remote",
-      "help": "Sync between your knowledge repository on the server and its external git remote. Counts show commits the server repo is ahead (↑) and behind (↓) the remote.",
-      "indicatorBehind": "{count, plural, one {# commit} other {# commits}} to pull from the knowledge remote",
-      "refresh": "Re-check the server repository against the remote (fetches first)",
-      "pull": "Pull commits from the external remote into the server repository",
-      "push": "Push the server repository's commits to the external remote"
-    },
-    "denied": "Push denied",
-    "errors": {
-      "status": "Could not read git status",
-      "pull": "Pull failed",
-      "push": "Push failed"
-    }
-  },
-  "apiKeys": {
-    "title": "API Keys",
-    "description": "Create long-lived tokens for scripts and integrations. Use them as 'Authorization: Bearer <token>'.",
-    "create": {
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. CI deploy bot",
-      "scopesLabel": "Scopes",
-      "expiryLabel": "Expires after (days)",
-      "expiryPlaceholder": "Leave empty for no expiry",
-      "submit": "Create key",
-      "creating": "Creating…"
-    },
-    "access": {
-      "none": "None",
-      "read": "Read",
-      "write": "Write"
-    },
-    "scopes": {
-      "sessions": "Sessions",
-      "jobs": "Jobs",
-      "preferences": "Preferences",
-      "notifications": "Notifications",
-      "history": "History",
-      "admin": "Admin"
-    },
-    "secret": {
-      "warning": "Copy this token now — it won't be shown again.",
-      "copy": "Copy token",
-      "done": "Done"
-    },
-    "list": {
-      "title": "Active keys",
-      "empty": "No API keys yet.",
-      "loading": "Loading keys…",
-      "unnamed": "Unnamed key",
-      "expired": "Expired"
-    },
-    "fields": {
-      "created": "Created {timestamp}",
-      "lastUsed": "Last used {timestamp}",
-      "expires": "Expires {timestamp}",
-      "never": "never",
-      "noExpiry": "no expiry"
-    },
-    "actions": {
-      "revoke": "Revoke key"
-    },
-    "confirm": {
-      "revoke": "Revoke API key \"{name}\"? This cannot be undone."
-    },
-    "errors": {
-      "load": "Failed to load API keys.",
-      "create": "Failed to create API key.",
-      "revoke": "Failed to revoke API key.",
-      "noScopes": "Select at least one scope."
-    }
-  }
 }
