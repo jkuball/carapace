@@ -124,7 +124,11 @@ class ApiKeyStore:
                 .where(ApiKeyRow.user == key_user, ApiKeyRow.revoked_at.is_(None))
                 .order_by(ApiKeyRow.created_at.desc())
             ).all()
-        return [_row_to_info(row) for row in rows]
+        # Reflect effective grants: admin scopes don't apply once the owner loses the admin role
+        # (validate_key strips them too), so don't list them as active.
+        owner = self._auth.get_user(key_user)
+        keep_admin = owner is not None and has_admin_role(owner.roles)
+        return [_row_to_info(row, keep_admin=keep_admin) for row in rows]
 
     def revoke_key(self, *, user: str, key_id: str) -> bool:
         key_user = normalize_username(user)
@@ -200,12 +204,13 @@ def _normalize_grants(grants: Iterable[ApiKeyGrant]) -> set[ApiKeyGrant]:
     return {ApiKeyGrant(scope=scope, access=access) for scope, access in by_scope.items()}
 
 
-def _row_to_info(row: ApiKeyRow) -> ApiKeyInfo:
+def _row_to_info(row: ApiKeyRow, *, keep_admin: bool = True) -> ApiKeyInfo:
+    scopes = list(row.scopes) if keep_admin else [s for s in row.scopes if not s.startswith(f"{Scope.admin.value}:")]
     return ApiKeyInfo(
         id=row.id,
         name=row.name,
         prefix=row.prefix,
-        scopes=list(row.scopes),
+        scopes=scopes,
         created_at=row.created_at,
         last_used_at=row.last_used_at,
         expires_at=row.expires_at,

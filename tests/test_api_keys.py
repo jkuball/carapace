@@ -117,6 +117,18 @@ def test_admin_grant_stripped_after_demotion(stores):
     assert result is not None and result[1] == set()
 
 
+def test_list_keys_drops_admin_scope_after_demotion(stores):
+    auth, keys = stores
+    keys.create_key(
+        user="admin",
+        name="x",
+        grants=[_read_grant(Scope.admin, Access.write), _read_grant(Scope.jobs, Access.read)],
+    )
+    assert keys.list_keys("admin")[0].scopes == ["admin:write", "jobs:read"]
+    auth.update_user("admin", {"roles": []})
+    assert keys.list_keys("admin")[0].scopes == ["jobs:read"]
+
+
 def test_create_requires_at_least_one_scope(stores):
     _auth, keys = stores
     with pytest.raises(ValueError, match="scope"):
