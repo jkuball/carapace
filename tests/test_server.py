@@ -3101,6 +3101,18 @@ def test_ws_api_key_with_sessions_write_connects(client, auth_headers):
         _consume_status(ws)
 
 
+def test_ws_stale_cookie_falls_through_to_api_key(client, auth_headers):
+    create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
+    sid = create_resp.json()["session_id"]
+    _info, secret = srv._api_key_store.create_key(
+        user="thies", name="ws", grants=[ApiKeyGrant(scope=Scope.sessions, access=Access.write)]
+    )
+    # A stale/invalid session cookie must not block a valid api_key in the query string.
+    stale_cookie = {"cookie": f"{srv._config.auth.cookie.name}=not-a-valid-token"}
+    with client.websocket_connect(f"/api/chat/{sid}?api_key={secret}", headers=stale_cookie) as ws:
+        _consume_status(ws)
+
+
 def test_ws_api_key_read_only_rejected(client, auth_headers):
     create_resp = client.post("/api/sessions", headers=auth_headers, json={"channel_type": "web"})
     sid = create_resp.json()["session_id"]

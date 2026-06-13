@@ -169,7 +169,8 @@ class ApiKeyRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)  # uuid4 hex
     prefix: Mapped[str] = mapped_column(String(16), unique=True, index=True)  # non-secret lookup handle
     secret_hash: Mapped[str] = mapped_column(String(128))  # sha256 hex of the full token
-    user: Mapped[str] = mapped_column(String(256), index=True)  # normalized username
+    # Owning user; ON DELETE CASCADE drops keys with their user so a reused username can't inherit them.
+    user: Mapped[str] = mapped_column(String(256), ForeignKey("users.username", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(Text, default="")
     # Granted scopes as "scope:access" strings (e.g. "sessions:write", "jobs:read").
     scopes: Mapped[list[str]] = mapped_column(JsonType, default=list)

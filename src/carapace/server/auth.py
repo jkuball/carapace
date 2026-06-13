@@ -266,25 +266,22 @@ async def current_ws_context(websocket: WebSocket) -> AuthContext:
     token = websocket.cookies.get(cookie_name)
     ticket = websocket.query_params.get("ticket")
     api_key = websocket.query_params.get("api_key")
+    # Try each credential in order, falling through on failure (a stale browser cookie must not
+    # block a valid api_key in the query string — mirrors the REST cookie→Bearer fall-through).
     if token:
         identity = _auth_store().validate_session_token(token)
-        return _ws_context_or_close(identity, None)
+        if identity is not None:
+            return AuthContext(identity=identity, grants=None)
     if ticket:
         identity = _auth_store().validate_websocket_token(ticket)
-        return _ws_context_or_close(identity, None)
+        if identity is not None:
+            return AuthContext(identity=identity, grants=None)
     if api_key:
         result = _api_key_store().validate_key(api_key)
-        if result is None:
-            raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-        identity, grants = result
-        return AuthContext(identity=identity, grants=frozenset(grants))
+        if result is not None:
+            identity, grants = result
+            return AuthContext(identity=identity, grants=frozenset(grants))
     raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-
-
-def _ws_context_or_close(identity: UserIdentity | None, grants: frozenset[ApiKeyGrant] | None) -> AuthContext:
-    if identity is None:
-        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-    return AuthContext(identity=identity, grants=grants)
 
 
 async def current_ws_user(websocket: WebSocket) -> UserIdentity:

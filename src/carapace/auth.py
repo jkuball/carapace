@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select, update
 
 from .database.engine import SessionFactory
-from .database.models import ApiKeyRow, AuthSessionRow, User
+from .database.models import AuthSessionRow, User
 from .models.config import AuthConfig
 from .models.user import UserConfig
 from .usernames import normalize_username
@@ -294,14 +294,12 @@ class AuthStore:
             existing = db.get(User, key)
             if existing is None:
                 raise KeyError(key)
-            db.delete(existing)
+            db.delete(existing)  # api_keys cascade-delete via their ON DELETE CASCADE FK
             db.execute(
                 update(AuthSessionRow)
                 .where(AuthSessionRow.user == key, AuthSessionRow.revoked_at.is_(None))
                 .values(revoked_at=now)
             )
-            # Hard-delete API keys so a later user with the same username can't inherit them.
-            db.execute(delete(ApiKeyRow).where(ApiKeyRow.user == key))
 
     def set_password(self, username: str, password: str) -> AuthUser:
         key = normalize_username(username)

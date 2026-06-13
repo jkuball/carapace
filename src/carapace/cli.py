@@ -758,6 +758,7 @@ def chat(
     api_key: str | None = typer.Option(
         None,
         "--api-key",
+        "--key",
         "-k",
         envvar="CARAPACE_API_KEY",
         help=(
@@ -773,6 +774,8 @@ def chat(
     ),
 ):
     """Start an interactive chat session with the carapace server."""
+    if api_key and (username or password):
+        raise typer.BadParameter("pass either --api-key or --user/--password, not both")
     if api_key:
         client = _api_key_client(server, api_key)
         headers: dict[str, str] = {}  # WebSocket auths via the api_key query parameter instead

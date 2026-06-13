@@ -34,6 +34,13 @@ def test_chat_help():
     assert "--user" in output
     assert "--password" in output
     assert "--api-key" in output
+    assert "--key" in output
+
+
+def test_chat_rejects_api_key_with_credentials() -> None:
+    result = runner.invoke(app, ["chat", "--api-key", "ck_secret", "--user", "thies"])
+    assert result.exit_code != 0
+    assert "not both" in _strip_ansi(result.output)
 
 
 def test_ws_url_appends_api_key():

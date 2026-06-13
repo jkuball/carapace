@@ -38,6 +38,7 @@ def upgrade() -> None:
         sa.Column("last_used_at", carapace.database.base.UtcDateTime(timezone=True), nullable=True),
         sa.Column("expires_at", carapace.database.base.UtcDateTime(timezone=True), nullable=True),
         sa.Column("revoked_at", carapace.database.base.UtcDateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(["user"], ["users.username"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("api_keys", schema=None) as batch_op:
