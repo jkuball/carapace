@@ -1,11 +1,26 @@
 # CHANGELOG
 
 
+## v0.142.3 (2026-06-14)
+
+
+### Other
+
+
+- 📋 docs: remove done items from roadmap
+  ([`d2588fc`](https://github.com/thiesgerken/carapace/commit/d2588fc759a96504f725fee61c2da89d33bc07a4))
+
+- Merge remote-tracking branch 'refs/remotes/origin/main'
+  ([`ad6d455`](https://github.com/thiesgerken/carapace/commit/ad6d45566f5d99447f6f2553a4e12aac4f91da72))
+
 ## v0.142.2 (2026-06-14)
 
 
 ### 🐛 Bug Fixes
 
+
+- 🐛 fix: exclude None values in session history response model
+  ([`4f3f706`](https://github.com/thiesgerken/carapace/commit/4f3f706592fd303e1dfd0889652faad6943b4575))
 
 - 🐛 fix: set max_tokens above thinking budget for Anthropic models
   ([`3974949`](https://github.com/thiesgerken/carapace/commit/3974949163141a9979202bf2b2d6763d7e82360b))
