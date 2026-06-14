@@ -1,6 +1,108 @@
 # CHANGELOG
 
 
+## v0.141.0 (2026-06-14)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #222 from thiesgerken/worktree-api-keys
+  ([`89fa0e6`](https://github.com/thiesgerken/carapace/commit/89fa0e62a60f7c261e6b7ca1720e2fbbb790d681))
+
+- ✨ feat: user-managed scoped API keys
+  ([`89fa0e6`](https://github.com/thiesgerken/carapace/commit/89fa0e62a60f7c261e6b7ca1720e2fbbb790d681))
+
+- ✨ feat: API-key auth for the CLI client
+  ([`d306d63`](https://github.com/thiesgerken/carapace/commit/d306d632c170e754e802e31cb767c7d2155e79be))
+
+  Add --api-key / CARAPACE_API_KEY to `carapace chat`. When set, the CLI uses Authorization: Bearer for REST and the ?api_key= query param for the chat WebSocket, skipping username/password login. Key needs the sessions scope. Username/password login stays as the fallback.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat: user-managed scoped API keys
+  ([`7be7b72`](https://github.com/thiesgerken/carapace/commit/7be7b723a714ae63f441b4a567fcabdf97461d06))
+
+  Add long-lived API keys that users self-manage in the web UI. A key acts as its owning user but its scopes narrow access (read/write per route group: sessions, jobs, preferences, notifications, history, admin).
+
+  - Opaque tokens (ck_<prefix>.<body>), sha256-hashed at rest, prefix-indexed
+    lookup, shown once. New api_keys table + alembic 0003.
+  - ApiKeyStore + Scope/Access/ApiKeyGrant. Bounded by owner: dies on user
+    disable/delete, survives password change, admin grant stripped live on
+    demotion.
+  - Auth resolves cookie OR Authorization: Bearer; require(scope, access)
+    dependency gates every /api route. Bearer also works on the chat WS via
+    ?api_key= (sessions:write). Sandbox API untouched.
+  - Cookie-only key management endpoints (POST/GET/DELETE /api/keys) — a key
+    cannot mint or list keys.
+  - Frontend: API Keys settings tab with per-scope read/write toggles, admin
+    scope only for admins, secret shown once with copy box. en/de i18n.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: hide stale admin scope in API key listing
+  ([`52824c1`](https://github.com/thiesgerken/carapace/commit/52824c10e6870f8c989e984a4b1c07b5cfc274d5))
+
+  Cursor: GET /api/keys showed stored scopes verbatim, so a demoted owner
+
+  still saw admin:* even though validate_key strips those grants. list_keys now drops admin scopes when the owner lacks the admin role, matching the effective grants used at auth time.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: WS cookie fall-through, FK-owned API keys, CLI auth guards
+  ([`8a632e5`](https://github.com/thiesgerken/carapace/commit/8a632e5969fef79f9f6547dc3267e24eb84488bb))
+
+  PR review follow-ups:
+  - WS auth now falls through a stale/invalid session cookie to the api_key
+    query param (matched REST's cookie→Bearer fall-through); a valid key in
+    the URL was being rejected when the browser still sent an old cookie.
+  - api_keys.user is now a FK to users.username with ON DELETE CASCADE, so
+    the DB drops a user's keys on delete; removed the manual delete in
+    delete_user.
+  - CLI: add --key alias and reject --api-key combined with --user/--password.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: surface expired API keys and history-scope needs in CLI
+  ([`ccb4ae4`](https://github.com/thiesgerken/carapace/commit/ccb4ae41bc141921983e8e000cb10be66efc624b))
+
+  Cursor Bugbot follow-ups on 300d011:
+  - list view now badges expired keys instead of showing them as active
+  - chat --history replay warns when the key lacks history:read, and the
+    --api-key help notes the extra scope
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: delete API keys when their owning user is deleted
+  ([`300d011`](https://github.com/thiesgerken/carapace/commit/300d0110d1a7e494d986c1ead8e2ec7175f44735))
+
+  Cursor Bugbot: a recreated user with the same username would inherit the deleted account's still-hashed API keys. Hard-delete keys on user removal.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🔧 Configuration
+
+
+- 🔧 chore: enforce 4-space message catalogs via prek
+  ([`7ec25f5`](https://github.com/thiesgerken/carapace/commit/7ec25f59bb6e9c5977f835cd57498d7a32824307))
+
+  pretty-format-json with --no-ensure-ascii keeps indentation consistent while preserving literal UTF-8 (umlauts, ellipses), so the catalogs can't silently reflow to 2-space again.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- 🎨 style: restore 4-space indent in message catalogs
+  ([`5c83041`](https://github.com/thiesgerken/carapace/commit/5c83041712275f8070d82393298d384f5bb29a0e))
+
+  Earlier api-keys work rewrote en/de.json at 2-space, bloating the PR diff. Reindent to the repo's 4-space (umlauts/ellipses kept literal) so the diff shows only the apiKeys additions.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.140.6 (2026-06-12)
 
 
