@@ -270,6 +270,32 @@ def test_read_turn_times_out() -> None:
     assert result["status"] == "timeout"
 
 
+def test_read_turn_observe_status_already_finished() -> None:
+    # job run --wait: turn finished before connect -> only an on-connect status, no done frame.
+    ws = _FakeWS([{"type": "status", "agent_running": False, "usage": {"total": 1}}])
+    result, code = asyncio.run(_read_turn(ws, session_id="s1", timeout=5, stream=False, observe=True))
+    assert code == 0
+    assert result["status"] == "done"
+    assert result["usage"] == {"total": 1}
+
+
+def test_read_turn_observe_status_running_waits_for_done() -> None:
+    # Still running on connect: ignore the status, wait for the real done frame.
+    ws = _FakeWS([{"type": "status", "agent_running": True}, {"type": "done", "content": "ok", "usage": {}}])
+    result, code = asyncio.run(_read_turn(ws, session_id="s1", timeout=5, stream=False, observe=True))
+    assert code == 0
+    assert result["status"] == "done"
+    assert result["content"] == "ok"
+
+
+def test_read_turn_status_ignored_when_not_observing() -> None:
+    # send/approval path: the on-connect status (agent_running False, pre-send) must not terminate.
+    ws = _FakeWS([{"type": "status", "agent_running": False}])
+    result, code = asyncio.run(_read_turn(ws, session_id="s1", timeout=0.05, stream=False))
+    assert code == 3
+    assert result["status"] == "timeout"
+
+
 def test_approval_info_escalation() -> None:
     info = _approval_info({"type": "domain_access_approval_request", "request_id": "r1", "domain": "x.test"}, "s1")
     assert info["request"]["id"] == "r1"

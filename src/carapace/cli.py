@@ -978,8 +978,16 @@ def _approval_info(msg: dict[str, Any], session_id: str) -> dict[str, Any]:
     }
 
 
-async def _read_turn(ws: Any, *, session_id: str, timeout: float, stream: bool) -> tuple[dict[str, Any], int]:
-    """Read server frames until a terminal signal, an approval request, or timeout."""
+async def _read_turn(
+    ws: Any, *, session_id: str, timeout: float, stream: bool, observe: bool = False
+) -> tuple[dict[str, Any], int]:
+    """Read server frames until a terminal signal, an approval request, or timeout.
+
+    When *observe* is set the caller is a pure observer that did not start the turn over
+    this socket (e.g. ``job run --wait``): the turn was kicked off via REST beforehand.  If
+    it already finished, the server replays no ``done`` frame, only the on-connect ``status``
+    with ``agent_running=False`` — treat that as completion instead of waiting for a timeout.
+    """
     try:
         async with asyncio.timeout(timeout):
             while True:
@@ -987,6 +995,8 @@ async def _read_turn(ws: Any, *, session_id: str, timeout: float, stream: bool) 
                 match msg.get("type"):
                     case "done":
                         return {"status": "done", "content": msg.get("content", ""), "usage": msg.get("usage")}, EXIT_OK
+                    case "status" if observe and msg.get("agent_running") is False:
+                        return {"status": "done", "content": "", "usage": msg.get("usage")}, EXIT_OK
                     case "error":
                         return {"status": "error", "detail": msg.get("detail", "")}, EXIT_ERROR
                     case "cancelled":
@@ -1037,7 +1047,10 @@ async def _drive_turn(
             await ws.send(json.dumps(approval))
         if not wait:
             return {"status": "submitted"}, EXIT_OK
-        return await _read_turn(ws, session_id=session_id, timeout=timeout, stream=stream)
+        # Pure observer (no frame sent on this socket): the turn was started elsewhere
+        # (e.g. `job run` via REST), so a finished turn surfaces only as an on-connect status.
+        observe = message is None and approval is None
+        return await _read_turn(ws, session_id=session_id, timeout=timeout, stream=stream, observe=observe)
     except ConnectionClosed as exc:
         return {"status": "error", "error": f"connection closed: {exc}"}, EXIT_ERROR
     finally:
