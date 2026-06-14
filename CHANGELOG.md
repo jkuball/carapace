@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.141.1 (2026-06-14)
+
+
+### Other
+
+
+- Merge pull request #226 from thiesgerken/fix/sandbox-git-identity
+  ([`5a1b2cc`](https://github.com/thiesgerken/carapace/commit/5a1b2cc1f2a90dabbe360d4c1118f1fe6605b0a3))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: persist sandbox git identity across pod restarts
+  ([`5a1b2cc`](https://github.com/thiesgerken/carapace/commit/5a1b2cc1f2a90dabbe360d4c1118f1fe6605b0a3))
+
+- 🐛 fix: persist sandbox git identity across pod restarts
+  ([`d8f669e`](https://github.com/thiesgerken/carapace/commit/d8f669eea4d90b1bb9e0eebfba7c800ace6a67a4))
+
+  Git identity was set via `git config --global`, writing to `~/.gitconfig` on the ephemeral container rootfs. Only `/workspace` and `/tmp` are on the persistent PVC, so suspend/resume (StatefulSet scale 0→1 → fresh pod) wiped the identity while the cloned repo survived. `clone_knowledge_repo` early-returned when the repo was already present, so identity was never re-applied — the agent's first commit failed with an unknown author and it had to set identity by hand.
+
+  Write identity as repo-local config (`/workspace/.git/config`), which lives on the PVC and survives pod recreation. Also re-apply identity + commit-msg hook even when the repo already exists, migrating sessions cloned under the old global scheme.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.141.0 (2026-06-14)
 
 
