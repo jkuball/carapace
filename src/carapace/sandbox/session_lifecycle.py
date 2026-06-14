@@ -569,19 +569,21 @@ class SandboxSessionLifecycle:
         probe = await self._runtime.exec(container_id, "test -d /workspace/.git", timeout=5)
         if probe.exit_code == 0:
             logger.debug(f"Knowledge repo already present in sandbox for {session_id}")
-            return
-
-        result = await self._runtime.exec(
-            container_id,
-            "git clone $GIT_REPO_URL /workspace",
-            timeout=60,
-            env=env,
-        )
-        if result.exit_code != 0:
-            raise RuntimeError(
-                f"Git clone failed in sandbox for {session_id} (exit {result.exit_code}): {result.output}"
+        else:
+            result = await self._runtime.exec(
+                container_id,
+                "git clone $GIT_REPO_URL /workspace",
+                timeout=60,
+                env=env,
             )
+            if result.exit_code != 0:
+                raise RuntimeError(
+                    f"Git clone failed in sandbox for {session_id} (exit {result.exit_code}): {result.output}"
+                )
 
+        # Always (re)apply identity and hook: both are repo-local, living on the
+        # persistent /workspace PVC, but a fresh pod after suspend/resume may have
+        # raced ahead of the original clone or predate this repo-local scheme.
         await self.setup_git_identity(container_id, session_id)
         await self.install_commit_msg_hook(container_id, session_id)
 
@@ -594,7 +596,14 @@ class SandboxSessionLifecycle:
             )
 
     async def setup_git_identity(self, container_id: str, session_id: str) -> None:
-        """Configure git user.name and user.email inside the sandbox."""
+        """Configure git user.name and user.email for the knowledge repo.
+
+        Written as repo-local config (``/workspace/.git/config``) rather than
+        ``--global``: only ``/workspace`` is on the persistent PVC, so a global
+        ``~/.gitconfig`` would be wiped whenever the pod is recreated (e.g. on
+        suspend/resume), leaving the agent's first commit to fail with an unknown
+        author. Repo-local config survives on the PVC.
+        """
         name_tpl = self._author_for_session(session_id).replace("%s", session_id)
         if "<" in name_tpl and name_tpl.endswith(">"):
             name, _, email = name_tpl.rpartition("<")
@@ -604,8 +613,9 @@ class SandboxSessionLifecycle:
         name_sh = name.replace("%h", "$(hostname)")
         email_sh = email.replace("%h", "$(hostname)")
         cmd = (
-            f"git config --global user.name {shlex.quote(name_sh)} && "
-            f"git config --global user.email {shlex.quote(email_sh)}"
+            "cd /workspace && "
+            f"git config user.name {shlex.quote(name_sh)} && "
+            f"git config user.email {shlex.quote(email_sh)}"
         )
         await self._runtime.exec(container_id, cmd, timeout=10)
 

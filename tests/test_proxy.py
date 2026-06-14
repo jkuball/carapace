@@ -402,8 +402,12 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path, db_factory):
     runtime.exec = AsyncMock(
         side_effect=[
             _git_exists,  # knowledge repo probe after first create
+            _git_exists,  # setup_git_identity
+            _git_exists,  # install_commit_msg_hook
             ContainerGoneError(),  # exec_command triggers recreate
             _git_exists,  # knowledge repo probe after recreate
+            _git_exists,  # setup_git_identity
+            _git_exists,  # install_commit_msg_hook
             ExecResult(exit_code=0, output="ok"),  # actual command retry
         ]
     )
@@ -432,8 +436,12 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path, db_facto
     runtime.exec = AsyncMock(
         side_effect=[
             _ok,  # _clone_knowledge_repo probe after first create
+            _ok,  # setup_git_identity
+            _ok,  # install_commit_msg_hook
             ContainerGoneError(),  # exec_command triggers recreate
             _ok,  # _clone_knowledge_repo probe after recreate
+            _ok,  # setup_git_identity
+            _ok,  # install_commit_msg_hook
             _ok,  # git checkout SKILL.md
             _ok,  # git checkout setup.sh
             _ok,  # _file_write_in_container (credential materialization)
@@ -471,13 +479,13 @@ async def test_exec_recreate_reinjects_credential_files(tmp_path: Path, db_facto
     activation_cb.assert_awaited_once_with(session_id, "moneydb")
 
     # Verify upstream restore is used for trusted provider files.
-    restore_call = runtime.exec.call_args_list[4]
+    restore_call = runtime.exec.call_args_list[8]
     assert "git checkout @{upstream} -- skills/moneydb/setup.sh" in restore_call.args[1]
 
     # Verify the credential file was written into the new container via exec.
-    # The 6th exec call (index 5) is the _file_write_in_container for the
-    # credential — check that it targeted the correct workdir.
-    write_call = runtime.exec.call_args_list[5]
+    # Index 9 is the _file_write_in_container for the credential — check that
+    # it targeted the correct workdir.
+    write_call = runtime.exec.call_args_list[9]
     shell_cmd = write_call.args[1]
     assert "/tmp/creds/api_key.json" in shell_cmd
     assert base64.b64encode(b"secret-key-value").decode() in shell_cmd
@@ -494,6 +502,8 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
     runtime.exec = AsyncMock(
         side_effect=[
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after create
+            ExecResult(exit_code=0, output=""),  # setup_git_identity
+            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
             ExecResult(exit_code=0, output=""),  # git checkout SKILL.md
             ExecResult(exit_code=0, output=""),  # git checkout setup.sh
             ExecResult(exit_code=0, output=""),  # credential file write
@@ -521,12 +531,12 @@ async def test_activate_skill_runs_setup_provider_with_activation_inputs(tmp_pat
     result = await mgr.activate_skill("sess-1", "cred-setup")
     assert "setup.sh completed." in result
 
-    setup_call = runtime.exec.call_args_list[4]
+    setup_call = runtime.exec.call_args_list[6]
     assert setup_call.args[1] == "sh ./setup.sh"
     assert setup_call.kwargs.get("workdir") == "/workspace/skills/cred-setup"
     assert setup_call.kwargs.get("env") == {"API_TOKEN": "secret-token"}
 
-    restore_call = runtime.exec.call_args_list[2]
+    restore_call = runtime.exec.call_args_list[4]
     assert "git checkout @{upstream} -- skills/cred-setup/setup.sh" in restore_call.args[1]
 
 
@@ -540,8 +550,12 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
     runtime.exec = AsyncMock(
         side_effect=[
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after first create
+            ExecResult(exit_code=0, output=""),  # setup_git_identity
+            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
             ContainerGoneError(),  # trusted restore triggers recreate
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after recreate
+            ExecResult(exit_code=0, output=""),  # setup_git_identity
+            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
             ExecResult(exit_code=0, output=""),  # retried git checkout SKILL.md
             ExecResult(exit_code=0, output=""),  # git checkout setup.sh
             ExecResult(exit_code=0, output=""),  # setup.sh execution
@@ -560,7 +574,7 @@ async def test_activate_skill_recovers_if_trusted_restore_hits_gone_container(tm
     assert "setup.sh completed." in result
     assert runtime.create_sandbox.await_count == 2
 
-    restore_retry_call = runtime.exec.call_args_list[4]
+    restore_retry_call = runtime.exec.call_args_list[8]
     assert "git checkout @{upstream} -- skills/restore-retry/setup.sh" in restore_retry_call.args[1]
 
 
@@ -607,6 +621,8 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     runtime.exec = AsyncMock(
         side_effect=[
             ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after create
+            ExecResult(exit_code=0, output=""),  # setup_git_identity
+            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
             ExecResult(exit_code=0, output=""),  # git checkout SKILL.md
             ExecResult(exit_code=0, output=""),  # command alias registration
         ]
@@ -629,7 +645,7 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     assert "Command aliases registered: web." in result
     assert "PATH" not in mgr.get_session_env("sess-1")
 
-    register_call = runtime.exec.call_args_list[2]
+    register_call = runtime.exec.call_args_list[4]
     shell_cmd = register_call.args[1]
     wrapper = '#!/bin/sh\nexec uv run --directory /workspace/skills/web web-search "$@"\n'
     assert "/workspace/.carapace/bin/web" in shell_cmd
@@ -1047,19 +1063,23 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path, db_fa
     _ok = ExecResult(exit_code=0, output="")
     runtime.exec = AsyncMock(
         side_effect=[
+            _ok,  # clone probe (create)
+            _ok,  # setup_git_identity
+            _ok,  # install_commit_msg_hook
+            _ok,  # tunnel prep
             _ok,
             _ok,
             _ok,
+            ContainerGoneError(),  # command exec triggers recreate
+            _ok,  # clone probe (recreate)
+            _ok,  # setup_git_identity
+            _ok,  # install_commit_msg_hook
+            _ok,  # tunnel prep
             _ok,
             _ok,
-            ContainerGoneError(),
             _ok,
-            _ok,
-            _ok,
-            _ok,
-            _ok,
-            ExecResult(exit_code=0, output="ok"),
-            _ok,
+            ExecResult(exit_code=0, output="ok"),  # retried command
+            _ok,  # cleanup
         ]
     )
 
@@ -1089,13 +1109,15 @@ async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Pa
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(
         side_effect=[
+            ExecResult(exit_code=0, output=""),  # clone probe
+            ExecResult(exit_code=0, output=""),  # setup_git_identity
+            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
+            ExecResult(exit_code=0, output=""),  # tunnel prep
             ExecResult(exit_code=0, output=""),
             ExecResult(exit_code=0, output=""),
             ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=5, output="mail failed"),
-            ExecResult(exit_code=0, output=""),
+            ExecResult(exit_code=5, output="mail failed"),  # command
+            ExecResult(exit_code=0, output=""),  # cleanup
         ]
     )
 
