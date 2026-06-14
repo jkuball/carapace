@@ -1,6 +1,89 @@
 # CHANGELOG
 
 
+## v0.142.0 (2026-06-14)
+
+
+### Other
+
+
+- Merge pull request #224 from thiesgerken/renovate/all-routine-dependencies
+  ([`4ef22b3`](https://github.com/thiesgerken/carapace/commit/4ef22b37e78901ba3e10a52ba129cced0b1dcb77))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates to 11.5.3
+  ([`4ef22b3`](https://github.com/thiesgerken/carapace/commit/4ef22b37e78901ba3e10a52ba129cced0b1dcb77))
+
+- ⬆️ chore: upgrade all routine dependency updates to 11.5.3
+  ([`8c568c8`](https://github.com/thiesgerken/carapace/commit/8c568c8b1e545ddc49f13ba3e60305eb9d73104d))
+
+### ✨ Features
+
+
+- ✨Merge pull request #227 from thiesgerken/worktree-api-keys
+  ([`72971be`](https://github.com/thiesgerken/carapace/commit/72971be8bcb8537c0bafc0cf4b2a1e5a9669669a))
+
+- ✨ feat: agent-drivable CLI (non-interactive session + job control)
+  ([`72971be`](https://github.com/thiesgerken/carapace/commit/72971be8bcb8537c0bafc0cf4b2a1e5a9669669a))
+
+- ✨Merge pull request #223 from thiesgerken/cli-enhancements
+  ([`6980b72`](https://github.com/thiesgerken/carapace/commit/6980b7267dd33ade673487400d9906ad2c9b32b5))
+
+- ✨ feat: agent-drivable CLI (non-interactive session + job control)
+  ([`6980b72`](https://github.com/thiesgerken/carapace/commit/6980b7267dd33ade673487400d9906ad2c9b32b5))
+
+- ✨ feat: carapace CLI skill + CLI-only base package
+  ([`5ce598e`](https://github.com/thiesgerken/carapace/commit/5ce598e41a59cb5c7f4afaaffeef8b91663e7732))
+
+  Bundle a `carapace` skill so a sandboxed agent can drive a carapace server over the non-interactive JSON CLI (sessions, approvals, jobs). Auth via a vault-injected API key; server domain is a per-deploy placeholder documented in REFERENCE.md.
+
+  Split the package so the client is light: base `dependencies` now cover only the CLI (typer/rich/httpx/websockets/python-dotenv — ~16 deps, no compiled wheels), and the server/agent/db stack moves to the `server` optional extra. `pip install carapace` is now a client; the server installs `carapace[server]`. Dockerfile syncs `--extra server`; the dev group includes it so CI/tests are unchanged. The skill's git install thus pulls the light client only.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat: agent-drivable CLI (non-interactive session + job control)
+  ([`4a93863`](https://github.com/thiesgerken/carapace/commit/4a93863780ee1f9f899158e9b045b79f98b07c44))
+
+  Add JSON-output, non-interactive CLI commands so an agent can drive the server: session list/get/create/update/history/pending/send/cancel, approval allow/deny by unique request id, job list/get/create/update/ delete/run. The human `chat` REPL now refuses on a non-TTY (--force to override).
+
+  - `session send --wait` drives a turn over the WS and returns when it
+    ends; on an approval/escalation request it ABORTS (without cancelling),
+    returning the request's unique id plus ready-to-run allow/deny commands.
+    A --wait timeout returns status=timeout and leaves the turn running.
+  - `approval allow|deny <session> <id>` resolves one specific pending
+    request by id (rejects unknown ids); --wait reads the resumed turn.
+  - Agent text (markdown/LaTeX) passes through verbatim — no rendering, no
+    stripping. Exit codes: 0 ok, 1 error, 2 needs_approval, 3 timeout.
+  - New server endpoint GET /api/sessions/{id}/pending-approvals
+    (sessions:read) backs `history`/`pending` and approval lookups.
+
+  Auth via --api-key / CARAPACE_API_KEY (env is the ergonomic default for the grouped sub-apps).
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: observer turn-wait must not report missed failures as success
+  ([`14b8935`](https://github.com/thiesgerken/carapace/commit/14b8935535991c8518008b921f78c65cf0d3aa9f))
+
+  The previous observe-mode fix reported any on-connect `status` with `agent_running=false` as `done`/exit 0. But the server replays no terminal frame to a late subscriber, so a turn that *failed* or was *cancelled* before connect was also surfaced as an empty success.
+
+  `_read_turn` now returns a neutral `finished` instead of fabricating `done`, and `_drive_turn` backfills `content` from the last assistant message in history — which, for a failed/cancelled turn, is the persisted terminal message rather than nothing.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: job run --wait misses turns that finish before WS connect
+  ([`10b76dd`](https://github.com/thiesgerken/carapace/commit/10b76dd167ce07f42f75c8f14ce73f2bb8767acd))
+
+  `job run --wait` starts the turn via REST, then connects the WebSocket as a pure observer. If the turn finished before that connect, the server replays no `done` frame — only the on-connect `status` with `agent_running=false`, which `_read_turn` ignored, so the CLI hit `--timeout` (exit 3) on an already-done job.
+
+  Add an `observe` mode to `_read_turn`: a `status` frame with `agent_running` false now resolves to `done`. `_drive_turn` enables it only when no frame is sent on the socket (`message is None and approval is None`), so the send/approval paths — which connect, then send, then run — still ignore their pre-send `status:false`.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.141.1 (2026-06-14)
 
 
