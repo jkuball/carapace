@@ -978,6 +978,26 @@ def _approval_info(msg: dict[str, Any], session_id: str) -> dict[str, Any]:
     }
 
 
+def _last_assistant_content(cli: _AgentCtx, session_id: str) -> str:
+    """Return the most recent assistant message text from history (best-effort, "" on failure).
+
+    Used to recover the outcome of a turn whose terminal WebSocket frame was missed; for a
+    failed/cancelled turn this surfaces the persisted terminal message instead of nothing.
+    """
+    try:
+        resp = cli.client.get(f"/api/sessions/{session_id}/history", params={"limit": 20})
+        resp.raise_for_status()
+        messages = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return ""
+    if not isinstance(messages, list):
+        return ""
+    for msg in reversed(messages):
+        if isinstance(msg, dict) and msg.get("role") == "assistant":
+            return str(msg.get("content", ""))
+    return ""
+
+
 async def _read_turn(
     ws: Any, *, session_id: str, timeout: float, stream: bool, observe: bool = False
 ) -> tuple[dict[str, Any], int]:
@@ -985,8 +1005,10 @@ async def _read_turn(
 
     When *observe* is set the caller is a pure observer that did not start the turn over
     this socket (e.g. ``job run --wait``): the turn was kicked off via REST beforehand.  If
-    it already finished, the server replays no ``done`` frame, only the on-connect ``status``
-    with ``agent_running=False`` — treat that as completion instead of waiting for a timeout.
+    it already finished, the server replays no terminal frame, only the on-connect ``status``
+    with ``agent_running=False``.  The status frame carries no outcome (the real ``done`` /
+    ``error`` / ``cancelled`` is gone), so report a neutral ``finished`` rather than guessing
+    success — the caller backfills the result from history.
     """
     try:
         async with asyncio.timeout(timeout):
@@ -996,7 +1018,7 @@ async def _read_turn(
                     case "done":
                         return {"status": "done", "content": msg.get("content", ""), "usage": msg.get("usage")}, EXIT_OK
                     case "status" if observe and msg.get("agent_running") is False:
-                        return {"status": "done", "content": "", "usage": msg.get("usage")}, EXIT_OK
+                        return {"status": "finished", "usage": msg.get("usage")}, EXIT_OK
                     case "error":
                         return {"status": "error", "detail": msg.get("detail", "")}, EXIT_ERROR
                     case "cancelled":
@@ -1050,7 +1072,12 @@ async def _drive_turn(
         # Pure observer (no frame sent on this socket): the turn was started elsewhere
         # (e.g. `job run` via REST), so a finished turn surfaces only as an on-connect status.
         observe = message is None and approval is None
-        return await _read_turn(ws, session_id=session_id, timeout=timeout, stream=stream, observe=observe)
+        result, code = await _read_turn(ws, session_id=session_id, timeout=timeout, stream=stream, observe=observe)
+        # The terminal frame was missed; recover the actual outcome text from history so a
+        # failed/cancelled turn is not reported as an empty success.
+        if result.get("status") == "finished":
+            result["content"] = _last_assistant_content(cli, session_id)
+        return result, code
     except ConnectionClosed as exc:
         return {"status": "error", "error": f"connection closed: {exc}"}, EXIT_ERROR
     finally:

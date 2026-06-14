@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+from types import SimpleNamespace
 from typing import ClassVar
 from unittest.mock import patch
 
@@ -10,7 +11,15 @@ import pytest
 from typer.testing import CliRunner
 
 import carapace.cli as cli_module
-from carapace.cli import _approval_info, _read_turn, _render_escalation_request, _replay_history, _ws_url, app
+from carapace.cli import (
+    _approval_info,
+    _last_assistant_content,
+    _read_turn,
+    _render_escalation_request,
+    _replay_history,
+    _ws_url,
+    app,
+)
 
 runner = CliRunner()
 
@@ -271,11 +280,12 @@ def test_read_turn_times_out() -> None:
 
 
 def test_read_turn_observe_status_already_finished() -> None:
-    # job run --wait: turn finished before connect -> only an on-connect status, no done frame.
+    # job run --wait: turn finished before connect -> only an on-connect status, no terminal frame.
+    # Reported as neutral "finished" (not a fabricated "done" success), with usage carried over.
     ws = _FakeWS([{"type": "status", "agent_running": False, "usage": {"total": 1}}])
     result, code = asyncio.run(_read_turn(ws, session_id="s1", timeout=5, stream=False, observe=True))
     assert code == 0
-    assert result["status"] == "done"
+    assert result["status"] == "finished"
     assert result["usage"] == {"total": 1}
 
 
@@ -294,6 +304,27 @@ def test_read_turn_status_ignored_when_not_observing() -> None:
     result, code = asyncio.run(_read_turn(ws, session_id="s1", timeout=0.05, stream=False))
     assert code == 3
     assert result["status"] == "timeout"
+
+
+def test_last_assistant_content_returns_latest_assistant() -> None:
+    # A failed/cancelled turn persists its terminal message as the last assistant event;
+    # the observer backfill surfaces that instead of an empty success.
+    history = [
+        {"role": "user", "content": "go"},
+        {"role": "assistant", "content": "first"},
+        {"role": "tool_call", "tool": "bash"},
+        {"role": "assistant", "content": "The previous turn failed before completion."},
+    ]
+    cli = SimpleNamespace(client=SimpleNamespace(get=lambda url, *, params=None: _FakeHttpResponse(history)))
+    assert _last_assistant_content(cli, "s1") == "The previous turn failed before completion."  # type: ignore[arg-type]
+
+
+def test_last_assistant_content_tolerates_errors() -> None:
+    def _boom(url: str, *, params: object = None) -> None:
+        raise cli_module.httpx.ConnectError("down")
+
+    cli = SimpleNamespace(client=SimpleNamespace(get=_boom))
+    assert _last_assistant_content(cli, "s1") == ""  # type: ignore[arg-type]
 
 
 def test_approval_info_escalation() -> None:
