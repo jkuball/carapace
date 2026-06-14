@@ -4,19 +4,28 @@ version = "0.140.5"
 description = "Security-first personal AI agent with rule-based information flow control"
 readme = "README.md"
 requires-python = ">=3.12"
+# Base deps cover only the `carapace` CLI client (cli.py + payloads.py), so a
+# plain `pip install carapace` is a light client install. The server, agent,
+# database, and integration stack lives in the `server` extra below — install
+# `carapace[server]` to run carapace-server / carapace-migrate.
 dependencies = [
-    "pydantic-ai>=1.59,<2",
     "typer>=0.23,<1",
+    "rich>=15,<16",
+    "httpx>=0.28,<1",
+    "websockets>=16,<17",
+    "python-dotenv>=1.2,<2",
+]
+
+[project.optional-dependencies]
+server = [
+    "pydantic-ai>=1.59,<2",
     "pyyaml>=6,<7",
     "croniter>=6,<7",
-    "rich>=15,<16",
-    "python-dotenv>=1.2,<2",
     "tenacity>=9,<10",
     "logfire[httpx]>=4,<5",
     "fastapi>=0.115,<1",
     "python-multipart>=0.0.20,<1",
     "uvicorn[standard]>=0.40,<1",
-    "websockets>=16,<17",
     "pydantic-settings>=2,<3",
     "genai-prices>=0.0.53",
     "docker>=7,<8",
@@ -41,7 +50,9 @@ carapace-server = "carapace.server:main"
 carapace-migrate = "carapace.database.cli:app"
 
 [dependency-groups]
+# Dev/test/type-check needs the full server stack.
 dev = [
+    "carapace[server]",
     "pyrefly>=1.0.0",
     "pytest",
     "pytest-asyncio",
