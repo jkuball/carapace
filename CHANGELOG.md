@@ -1,6 +1,55 @@
 # CHANGELOG
 
 
+## v0.142.1 (2026-06-14)
+
+
+### ♻️ Refactoring
+
+
+- ♻️Merge pull request #225 from thiesgerken/worktree-settings-routes
+  ([`b899b1e`](https://github.com/thiesgerken/carapace/commit/b899b1e81f113a0c265939c7067e9f5faf2d8f64))
+
+- ♻️ Settings as real routes + extract jobs panel
+  ([`b899b1e`](https://github.com/thiesgerken/carapace/commit/b899b1e81f113a0c265939c7067e9f5faf2d8f64))
+
+- ♻️ refactor: settings as real routes; extract jobs panel
+  ([`e1e17bd`](https://github.com/thiesgerken/carapace/commit/e1e17bd29394efd2c8ae595c689c40d726a17dba))
+
+  Follow-up to the API-keys PR. Replaces the query-param settings tabs and the mis-named 1355-line jobs-view container with real Next.js routes.
+
+  - /settings/<tab> are real routes (App Router route group (app)/), prerendered
+    per tab under output:export. Existing nginx try_files serves them — no infra
+    change. Chat stays at / with ?session=.
+  - App shell (sidebar + connection/session state + auth gate) hoisted into
+    AppShellProvider/useAppShell; page.tsx split into (app)/layout + (app)/page +
+    (app)/settings/{layout,[tab]/page}.
+  - jobs-view.tsx is now just the JobsView jobs panel (tab nav + 5 panel dispatches
+    moved to the settings route). The settings container no longer masquerades as
+    "JobsView".
+  - jobs deep-link is now /settings/jobs?job=<id>.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 better logging for login problems
+  ([`d3d8e2b`](https://github.com/thiesgerken/carapace/commit/d3d8e2baf630830c6f9f80887da894ddd2db1610))
+
+- 🐛 fix: don't bounce admins off platform tabs before roles load
+  ([`bf0eb9c`](https://github.com/thiesgerken/carapace/commit/bf0eb9cebae8798cb372223d4f3cbadd4f7838c0))
+
+  Cursor (PR #225): on a stored connection currentUser loads asynchronously, so isAdmin is false until it resolves. The platform-tab guard redirected to /settings/preferences before roles were known, bouncing admins who deep-link or refresh /settings/platform-*. Only redirect once currentUser is known.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- Merge remote-tracking branch 'origin/main' into worktree-settings-routes
+  ([`af674ec`](https://github.com/thiesgerken/carapace/commit/af674ec86f0f2afe00f93f8d619e4173b35435b8))
+
 ## v0.142.0 (2026-06-14)
 
 
