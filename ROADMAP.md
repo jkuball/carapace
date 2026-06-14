@@ -4,12 +4,7 @@
 
 ### Agent
 
-- [ ] subagents: bundle a skill for carapace itself - firing jobs, creating subsessions, ... (auth? via key?)
 - [ ] Compaction
-
-## General
-
-- [ ] api keys, mainly for subagents
 
 ## Security
 
