@@ -530,6 +530,50 @@ def test_model_settings_for_config_preserves_explicit_thinking_false():
     assert settings == {"thinking": False}
 
 
+def test_model_settings_for_config_sets_max_tokens_for_anthropic_thinking():
+    # Budget-based Anthropic thinking (haiku has no adaptive thinking) maps True -> 10000
+    # budget; without a raised max_tokens, Anthropic rejects the request because
+    # pydantic_ai defaults max_tokens to 4096 (<= budget).
+    cfg = Config.model_validate(
+        {
+            "agent": {
+                "model": "anthropic:claude-haiku-4-5",
+                "sentinel_model": "anthropic:claude-haiku-4-5",
+                "title_model": "anthropic:claude-haiku-4-5",
+                "available_models": [{"provider": "anthropic", "name": "claude-haiku-4-5"}],
+            }
+        }
+    )
+
+    settings = model_settings_for_config(cfg, "anthropic:claude-haiku-4-5", default_thinking=True)
+
+    assert settings == {"thinking": True, "max_tokens": 10000 + 8192}
+
+
+def test_model_settings_for_config_no_max_tokens_for_non_anthropic_thinking():
+    cfg = Config.model_validate(
+        {
+            "agent": {
+                "model": "local:qwen",
+                "sentinel_model": "local:qwen",
+                "title_model": "local:qwen",
+                "available_models": [
+                    {
+                        "provider": "openai",
+                        "name": "qwen/qwen3-32b",
+                        "id": "local:qwen",
+                        "base_url": "http://llm/v1",
+                    }
+                ],
+            }
+        }
+    )
+
+    settings = model_settings_for_config(cfg, "local:qwen", default_thinking=True)
+
+    assert "max_tokens" not in (settings or {})
+
+
 def test_agent_config_mixed_available_models():
     ac = AgentConfig.model_validate(
         {

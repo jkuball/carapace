@@ -10,6 +10,7 @@ from httpx import AsyncClient, HTTPStatusError, Timeout
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.profiles.anthropic import ANTHROPIC_THINKING_BUDGET_MAP
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -21,6 +22,11 @@ from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponenti
 from .models.config import Config, agent_available_model_entries
 
 ThinkingSetting = bool | Literal["minimal", "low", "medium", "high", "xhigh"]
+
+# Output headroom reserved above a budget-based thinking allowance. Anthropic rejects
+# requests where max_tokens <= thinking.budget_tokens, and pydantic_ai defaults max_tokens
+# to 4096 — too small once thinking maps to a budget (e.g. True -> 10000).
+_THINKING_OUTPUT_RESERVE = 8192
 
 
 def retry_http_client() -> AsyncClient:
@@ -80,6 +86,14 @@ def model_settings_for_entry(
     thinking = entry.thinking if entry.thinking is not None else default_thinking
     if thinking is not None:
         settings["thinking"] = thinking
+        # Anthropic-specific: their API counts thinking tokens toward max_tokens and rejects
+        # requests where max_tokens <= thinking.budget_tokens. pydantic_ai translates a unified
+        # thinking level into an Anthropic budget only for budget-based models (those without
+        # adaptive thinking, e.g. haiku-4-5), so we must raise max_tokens above that budget.
+        # Other providers (openai, openrouter, google) bill thinking separately and ignore this.
+        budget = ANTHROPIC_THINKING_BUDGET_MAP.get(thinking)
+        if entry.provider == "anthropic" and budget is not None and "max_tokens" not in settings:
+            settings["max_tokens"] = budget + _THINKING_OUTPUT_RESERVE
     if entry.thinking_budget_tokens is not None:
         settings["extra_body"] = {"thinking_budget_tokens": entry.thinking_budget_tokens}
     return cast(ModelSettings, settings) if settings else None
