@@ -83,7 +83,7 @@ class HistoryMessage(BaseModel):
         return self
 
 
-@router.get("/sessions/{session_id}/history", response_model=list[HistoryMessage])
+@router.get("/sessions/{session_id}/history", response_model=list[HistoryMessage], response_model_exclude_none=True)
 async def get_session_history(
     session_id: str,
     user: Annotated[UserIdentity, Depends(require(Scope.history, Access.read))],

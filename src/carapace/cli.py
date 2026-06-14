@@ -934,8 +934,17 @@ def _agent_auth(
     ctx.obj = _resolve_ctx(server, api_key, username, password)
 
 
+def _strip_nulls(obj: Any) -> Any:
+    """Recursively drop null values to keep CLI output compact."""
+    if isinstance(obj, dict):
+        return {k: _strip_nulls(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_strip_nulls(v) for v in obj]
+    return obj
+
+
 def _print_json(obj: Any) -> None:
-    typer.echo(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
+    typer.echo(json.dumps(_strip_nulls(obj), ensure_ascii=False, indent=2, default=str))
 
 
 def _fail(detail: str, *, code: int = EXIT_ERROR, status: str = "error", **extra: Any) -> NoReturn:
