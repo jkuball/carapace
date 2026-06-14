@@ -17,15 +17,19 @@ export function SettingsTabPanel({ tab }: { tab: SettingsTab }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shell = useAppShell();
-  const { isAdmin } = shell;
+  const { isAdmin, currentUser } = shell;
 
   const adminOnly = ADMIN_SETTINGS_TABS.includes(tab);
+  // currentUser loads asynchronously on a stored connection; isAdmin is false until it resolves.
+  // Only bounce once we actually know the user is a non-admin, else an admin deep-linking a
+  // platform tab gets redirected before their roles are known.
+  const denied = adminOnly && currentUser !== null && !isAdmin;
 
   useEffect(() => {
-    if (adminOnly && !isAdmin) {
+    if (denied) {
       router.replace("/settings/preferences");
     }
-  }, [adminOnly, isAdmin, router]);
+  }, [denied, router]);
 
   if (adminOnly && !isAdmin) {
     return null;
