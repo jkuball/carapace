@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.142.2 (2026-06-14)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: set max_tokens above thinking budget for Anthropic models
+  ([`3974949`](https://github.com/thiesgerken/carapace/commit/3974949163141a9979202bf2b2d6763d7e82360b))
+
+  Anthropic counts thinking tokens toward max_tokens and rejects requests where max_tokens <= thinking.budget_tokens. pydantic_ai defaults max_tokens to 4096, but a unified thinking level maps to a larger budget for budget-based models (e.g. haiku-4-5: True -> 10000), causing a 400. Raise max_tokens above the budget when enabling thinking on an Anthropic entry.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.142.1 (2026-06-14)
 
 
