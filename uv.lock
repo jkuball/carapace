@@ -384,6 +384,15 @@ name = "carapace"
 version = "0.140.5"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
+    { name = "python-dotenv" },
+    { name = "rich" },
+    { name = "typer" },
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+server = [
     { name = "alembic" },
     { name = "croniter" },
     { name = "docker" },
@@ -399,23 +408,20 @@ dependencies = [
     { name = "pwdlib", extra = ["argon2"] },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
-    { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "pywebpush" },
     { name = "pyyaml" },
     { name = "redis" },
-    { name = "rich" },
     { name = "sqlalchemy" },
     { name = "tenacity" },
     { name = "tiktoken" },
-    { name = "typer" },
     { name = "types-docker" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "carapace", extra = ["server"] },
     { name = "pyrefly" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -426,38 +432,41 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic", specifier = ">=1.18,<2" },
-    { name = "croniter", specifier = ">=6,<7" },
-    { name = "docker", specifier = ">=7,<8" },
-    { name = "fastapi", specifier = ">=0.115,<1" },
-    { name = "genai-prices", specifier = ">=0.0.53" },
-    { name = "joserfc", specifier = ">=1.6.5" },
-    { name = "kr8s", specifier = ">=0.20,<1" },
-    { name = "logfire", extras = ["httpx"], specifier = ">=4,<5" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "markdown", specifier = ">=3,<4" },
-    { name = "matrix-nio", specifier = ">=0.25,<1" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.3,<4" },
-    { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.0" },
-    { name = "pydantic-ai", specifier = ">=1.59,<2" },
-    { name = "pydantic-settings", specifier = ">=2,<3" },
+    { name = "alembic", marker = "extra == 'server'", specifier = ">=1.18,<2" },
+    { name = "croniter", marker = "extra == 'server'", specifier = ">=6,<7" },
+    { name = "docker", marker = "extra == 'server'", specifier = ">=7,<8" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115,<1" },
+    { name = "genai-prices", marker = "extra == 'server'", specifier = ">=0.0.53" },
+    { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "joserfc", marker = "extra == 'server'", specifier = ">=1.6.5" },
+    { name = "kr8s", marker = "extra == 'server'", specifier = ">=0.20,<1" },
+    { name = "logfire", extras = ["httpx"], marker = "extra == 'server'", specifier = ">=4,<5" },
+    { name = "loguru", marker = "extra == 'server'", specifier = ">=0.7.3" },
+    { name = "markdown", marker = "extra == 'server'", specifier = ">=3,<4" },
+    { name = "matrix-nio", marker = "extra == 'server'", specifier = ">=0.25,<1" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'server'", specifier = ">=3.3,<4" },
+    { name = "pwdlib", extras = ["argon2"], marker = "extra == 'server'", specifier = ">=0.3.0" },
+    { name = "pydantic-ai", marker = "extra == 'server'", specifier = ">=1.59,<2" },
+    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2,<3" },
     { name = "python-dotenv", specifier = ">=1.2,<2" },
-    { name = "python-multipart", specifier = ">=0.0.20,<1" },
-    { name = "pywebpush", specifier = ">=2,<3" },
-    { name = "pyyaml", specifier = ">=6,<7" },
-    { name = "redis", specifier = ">=8,<9" },
+    { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.20,<1" },
+    { name = "pywebpush", marker = "extra == 'server'", specifier = ">=2,<3" },
+    { name = "pyyaml", marker = "extra == 'server'", specifier = ">=6,<7" },
+    { name = "redis", marker = "extra == 'server'", specifier = ">=8,<9" },
     { name = "rich", specifier = ">=15,<16" },
-    { name = "sqlalchemy", specifier = ">=2.0,<2.1" },
-    { name = "tenacity", specifier = ">=9,<10" },
-    { name = "tiktoken", specifier = ">=0.8,<1" },
+    { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0,<2.1" },
+    { name = "tenacity", marker = "extra == 'server'", specifier = ">=9,<10" },
+    { name = "tiktoken", marker = "extra == 'server'", specifier = ">=0.8,<1" },
     { name = "typer", specifier = ">=0.23,<1" },
-    { name = "types-docker", specifier = ">=7.1.0.20260518" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.40,<1" },
+    { name = "types-docker", marker = "extra == 'server'", specifier = ">=7.1.0.20260518" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.40,<1" },
     { name = "websockets", specifier = ">=16,<17" },
 ]
+provides-extras = ["server"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "carapace", extras = ["server"] },
     { name = "pyrefly", specifier = ">=1.0.0" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
