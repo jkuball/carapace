@@ -17,11 +17,6 @@ import {
 } from "@/lib/api";
 import { useAppLocale } from "@/components/locale-provider";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
-import { AdminUsersPage } from "@/components/admin-users-page";
-import { ApiKeysView } from "@/components/api-keys-view";
-import { PlatformSettingsView } from "@/components/platform-settings-view";
-import { PreferencesView } from "@/components/preferences-view";
-import { UserSettingsView } from "@/components/user-settings-view";
 import { SESSION_OPTION_ORDER, SessionOptionTiles, type SessionOptionKey } from "@/components/session-option-tiles";
 import { SwitchRow } from "@/components/switch-row";
 import type { JobCronTrigger, JobDefinition, SessionInfo, SessionLatestJobRun } from "@/lib/types";
@@ -30,18 +25,10 @@ import { cn } from "@/lib/utils";
 interface JobsViewProps {
   server: string;
   token: string;
-  isAdmin: boolean;
-  currentUsername: string | null;
   sessions: SessionInfo[];
-  showArchivedSessions: boolean;
-  onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
   onSessionActivated: (session: SessionInfo) => void;
   requestedJobId?: string | null;
-  activeTab: SettingsTab;
-  onTabChange: (tab: SettingsTab) => void;
 }
-
-export type SettingsTab = "jobs" | "platform-models" | "platform-users" | "preferences" | "account" | "api-keys";
 
 const CRON_EXAMPLE_EXPRESSIONS = [
   "*/15 * * * *",
@@ -140,15 +127,9 @@ function toKebabCaseId(value: string): string {
 export function JobsView({
   server,
   token,
-  isAdmin,
-  currentUsername,
   sessions,
-  showArchivedSessions,
-  onShowArchivedSessionsChange,
   onSessionActivated,
   requestedJobId,
-  activeTab,
-  onTabChange,
 }: JobsViewProps) {
   const t = useTranslations("jobs");
   const tRoot = useTranslations();
@@ -634,127 +615,9 @@ export function JobsView({
   const usePersistentSession = draft.persistent_session_id !== null;
   const hasPersistentSessionId = Boolean(draft.persistent_session_id?.trim());
   const defaultModelLabel = tRoot("commandResult.models.default");
-  const effectiveActiveTab = activeTab.startsWith("platform-") && !isAdmin ? "preferences" : activeTab;
-  const isJobsTab = effectiveActiveTab === "jobs";
-  const isPlatformModelsTab = effectiveActiveTab === "platform-models";
-  const isPlatformUsersTab = effectiveActiveTab === "platform-users";
-  const isPreferencesTab = effectiveActiveTab === "preferences";
-  const isAccountTab = effectiveActiveTab === "account";
-  const isApiKeysTab = effectiveActiveTab === "api-keys";
-  const tabButtonClassName = (selected: boolean): string => cn(
-    "rounded-t-lg border border-b-0 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    selected
-      ? "relative z-10 -mb-px border-border bg-background text-foreground"
-      : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background/70 hover:text-foreground",
-  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_color-mix(in_oklch,var(--accent)_55%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklch,var(--background)_96%,var(--muted))_0%,var(--background)_100%)]">
-      <div className="px-5 pt-4 sm:px-6">
-        <div className="flex flex-col">
-          <div className="pb-4">
-            <h1 className="text-2xl font-semibold tracking-tight">{tRoot("navigation.settings")}</h1>
-          </div>
-
-          <div
-            role="tablist"
-            aria-label={t("settingsSections")}
-            className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-border/80"
-          >
-            <div className="flex items-end gap-1">
-              <button
-                id="settings-tab-preferences"
-                type="button"
-                role="tab"
-                aria-selected={isPreferencesTab}
-                aria-controls="settings-panel-preferences"
-                tabIndex={isPreferencesTab ? 0 : -1}
-                onClick={() => onTabChange("preferences")}
-                className={tabButtonClassName(isPreferencesTab)}
-              >
-                {tRoot("navigation.preferences")}
-              </button>
-              <button
-                id="settings-tab-account"
-                type="button"
-                role="tab"
-                aria-selected={isAccountTab}
-                aria-controls="settings-panel-account"
-                tabIndex={isAccountTab ? 0 : -1}
-                onClick={() => onTabChange("account")}
-                className={tabButtonClassName(isAccountTab)}
-              >
-                {tRoot("navigation.account")}
-              </button>
-              <button
-                id="settings-tab-jobs"
-                type="button"
-                role="tab"
-                aria-selected={isJobsTab}
-                aria-controls="settings-panel-jobs"
-                tabIndex={isJobsTab ? 0 : -1}
-                onClick={() => onTabChange("jobs")}
-                className={tabButtonClassName(isJobsTab)}
-              >
-                {tRoot("navigation.jobs")}
-              </button>
-              <button
-                id="settings-tab-api-keys"
-                type="button"
-                role="tab"
-                aria-selected={isApiKeysTab}
-                aria-controls="settings-panel-api-keys"
-                tabIndex={isApiKeysTab ? 0 : -1}
-                onClick={() => onTabChange("api-keys")}
-                className={tabButtonClassName(isApiKeysTab)}
-              >
-                {tRoot("navigation.apiKeys")}
-              </button>
-            </div>
-
-            {isAdmin ? (
-              <div className="flex items-end gap-1 border-l border-border/80 pl-4">
-                <span className="pb-2 pr-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  {tRoot("navigation.platform")}
-                </span>
-                <button
-                  id="settings-tab-platform-models"
-                  type="button"
-                  role="tab"
-                  aria-selected={isPlatformModelsTab}
-                  aria-controls="settings-panel-platform-models"
-                  tabIndex={isPlatformModelsTab ? 0 : -1}
-                  onClick={() => onTabChange("platform-models")}
-                  className={tabButtonClassName(isPlatformModelsTab)}
-                >
-                  {tRoot("navigation.models")}
-                </button>
-                <button
-                  id="settings-tab-platform-users"
-                  type="button"
-                  role="tab"
-                  aria-selected={isPlatformUsersTab}
-                  aria-controls="settings-panel-platform-users"
-                  tabIndex={isPlatformUsersTab ? 0 : -1}
-                  onClick={() => onTabChange("platform-users")}
-                  className={tabButtonClassName(isPlatformUsersTab)}
-                >
-                  {tRoot("navigation.users")}
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-        </div>
-      </div>
-
-      {isJobsTab ? (
-        <div
-          id="settings-panel-jobs"
-          role="tabpanel"
-          aria-labelledby="settings-tab-jobs"
-          className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[22rem_minmax(0,1fr)]"
-        >
+    <>
         <aside className="border-b border-border/80 bg-background/65 lg:border-r lg:border-b-0">
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-3">
@@ -1297,59 +1160,6 @@ export function JobsView({
 
           </div>
         </section>
-        </div>
-      ) : isAccountTab ? (
-        <div
-          id="settings-panel-account"
-          role="tabpanel"
-          aria-labelledby="settings-tab-account"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
-        >
-          <UserSettingsView server={server} token={token} />
-        </div>
-      ) : isApiKeysTab ? (
-        <div
-          id="settings-panel-api-keys"
-          role="tabpanel"
-          aria-labelledby="settings-tab-api-keys"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
-        >
-          <ApiKeysView server={server} token={token} isAdmin={isAdmin} />
-        </div>
-      ) : isPlatformModelsTab ? (
-        <div
-          id="settings-panel-platform-models"
-          role="tabpanel"
-          aria-labelledby="settings-tab-platform-models"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
-        >
-          <PlatformSettingsView server={server} token={token} />
-        </div>
-      ) : isPlatformUsersTab ? (
-        <div
-          id="settings-panel-platform-users"
-          role="tabpanel"
-          aria-labelledby="settings-tab-platform-users"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
-        >
-          <AdminUsersPage key={server} embedded server={server} currentUsername={currentUsername} />
-        </div>
-      ) : (
-        <div
-          id="settings-panel-preferences"
-          role="tabpanel"
-          aria-labelledby="settings-tab-preferences"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background/65"
-        >
-          <PreferencesView
-            embedded
-            server={server}
-            token={token}
-            showArchivedSessions={showArchivedSessions}
-            onShowArchivedSessionsChange={onShowArchivedSessionsChange}
-          />
-        </div>
-      )}
-    </div>
+    </>
   );
 }

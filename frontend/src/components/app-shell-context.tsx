@@ -1,28 +1,34 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Menu, X } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { ConnectForm } from "@/components/connect-form";
-import { JobsView, type SettingsTab } from "@/components/jobs-view";
-import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
-import { Sidebar } from "@/components/sidebar";
-import { ChatView } from "@/components/chat-view";
-import { VersionBadge } from "@/components/version-badge";
-import { AUTH_REQUIRED_EVENT, createSession, deleteSession, getCurrentUser, getSandboxGit, getServerMeta, getSession, listSessions, logout, updateSession, type AuthUserInfo } from "@/lib/api";
+import {
+  AUTH_REQUIRED_EVENT,
+  createSession,
+  deleteSession,
+  getCurrentUser,
+  getSandboxGit,
+  getServerMeta,
+  getSession,
+  listSessions,
+  logout,
+  updateSession,
+  type AuthUserInfo,
+} from "@/lib/api";
+import { type NewSessionOptions } from "@/components/new-session-button";
 import {
   clearConnection,
-  getShowArchivedSessionsPreference,
   getServer,
+  getShowArchivedSessionsPreference,
   getToken,
   hasConnection,
   saveConnection,
   saveShowArchivedSessionsPreference,
 } from "@/lib/storage";
 import type { SessionInfo } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
+import { useTranslations } from "next-intl";
+
+const SESSION_PAGE_SIZE = 50;
 
 function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefined): number {
   const updatedAt = sandbox?.updated_at;
@@ -30,10 +36,6 @@ function sandboxTimestampValue(sandbox: SessionInfo["sandbox"] | null | undefine
   const value = Date.parse(updatedAt);
   return Number.isNaN(value) ? 0 : value;
 }
-
-const SESSION_PAGE_SIZE = 50;
-const MAX_DOCUMENT_TITLE_LENGTH = 30;
-const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
 
 function mergeSessions(
   current: SessionInfo[],
@@ -80,7 +82,49 @@ function sortSessions(sessions: SessionInfo[]): SessionInfo[] {
   return [...sessions].sort(compareSessions);
 }
 
-const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
+export interface AppShell {
+  connected: boolean;
+  server: string;
+  token: string;
+  currentUser: AuthUserInfo | null;
+  isAdmin: boolean;
+  serverVersion: string | null;
+  sessions: SessionInfo[];
+  activeSessionId: string | null;
+  activeSession: SessionInfo | null;
+  showArchivedSessions: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onConnect: (user: AuthUserInfo) => void;
+  onDisconnect: () => void;
+  onSelectSession: (id: string) => void;
+  onNewSession: (options?: NewSessionOptions) => Promise<void>;
+  onGoHome: () => void;
+  onOpenSettings: (tab?: string) => void;
+  onOpenJobSettings: (jobId: string) => void;
+  onShowArchivedSessionsChange: (showArchivedSessions: boolean) => void;
+  onUpdateSessionAttributes: (
+    id: string,
+    attributes: NonNullable<Parameters<typeof updateSession>[3]["attributes"]>,
+  ) => Promise<SessionInfo>;
+  onDeleteSession: (id: string, options?: { skipUnpushedWarning?: boolean }) => Promise<void>;
+  onForkSession: (session: SessionInfo) => void;
+  onLoadMore: () => void;
+  onSessionUpdate: (session: SessionInfo) => void;
+  onTitleUpdate: (sessionId: string, title: string) => void;
+  onSandboxUpdate: (sessionId: string, sandbox: SessionInfo["sandbox"]) => void;
+}
+
+const AppShellContext = createContext<AppShell | null>(null);
+
+export function useAppShell(): AppShell {
+  const value = useContext(AppShellContext);
+  if (!value) {
+    throw new Error("useAppShell must be used within an AppShellProvider");
+  }
+  return value;
+}
 
 type ConnectionState = {
   connected: boolean;
@@ -88,78 +132,27 @@ type ConnectionState = {
   token: string;
 };
 
-type AppView = "chat" | "settings";
-
 function loadStoredConnection(): ConnectionState {
   if (!hasConnection()) {
-    return {
-      connected: false,
-      server: "",
-      token: "",
-    };
+    return { connected: false, server: "", token: "" };
   }
-
-  return {
-    connected: true,
-    server: getServer(),
-    token: getToken(),
-  };
+  return { connected: true, server: getServer(), token: getToken() };
 }
 
-export default function Home() {
-  return (
-    <Suspense>
-      <HomeContent />
-    </Suspense>
-  );
-}
-
-function HomeContent() {
+export function AppShellProvider({ children }: { children: ReactNode }) {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchParamsKey = searchParams.toString();
-  const initialView: AppView = (() => {
-    const view = searchParams.get("view");
-    if (view === "settings" || view === "jobs" || view === "preferences") {
-      return "settings";
-    }
-    return "chat";
-  })();
-  const initialSettingsTab: SettingsTab = (() => {
-    const tab = searchParams.get("tab");
-    if (
-      tab === "jobs" ||
-      tab === "platform-models" ||
-      tab === "platform-users" ||
-      tab === "account" ||
-      tab === "api-keys"
-    ) {
-      return tab;
-    }
-    return "preferences";
-  })();
-  const [connection, setConnection] = useState<ConnectionState>({
-    connected: false,
-    server: "",
-    token: "",
-  });
+  const activeSessionId = searchParams.get("session");
+
+  const [connection, setConnection] = useState<ConnectionState>({ connected: false, server: "", token: "" });
   const [currentUser, setCurrentUser] = useState<AuthUserInfo | null>(null);
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    initialView === "chat" ? searchParams.get("session") : null,
-  );
-  const [activeView, setActiveView] = useState<AppView>(
-    initialView,
-  );
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab);
   const [showArchivedSessions, setShowArchivedSessionsState] = useState(false);
-  const [requestedJobId, setRequestedJobId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [creatingSession, setCreatingSession] = useState(false);
   const [refreshingSessions, setRefreshingSessions] = useState(false);
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
+  const [creatingSession, setCreatingSession] = useState(false);
   const [sessionListInitialized, setSessionListInitialized] = useState(false);
   const [sessionListCursor, setSessionListCursor] = useState<string | null>(null);
   const [sessionListHasMore, setSessionListHasMore] = useState(false);
@@ -173,30 +166,7 @@ function HomeContent() {
   const loading = creatingSession || refreshingSessions;
   const hasActiveSessionLoaded = activeSessionId != null
     && sessions.some((session) => session.session_id === activeSessionId);
-
-  useSwipeDrawer(sidebarOpen, setSidebarOpen);
-
-  // Sync activeSessionId → URL query param
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (activeView === "settings") {
-      params.set("view", "settings");
-      if (settingsTab !== "preferences") {
-        params.set("tab", settingsTab);
-      }
-    } else if (activeSessionId) {
-      params.set("session", activeSessionId);
-    }
-
-    const query = params.toString();
-    if (query) {
-      router.replace(`?${query}`, {
-        scroll: false,
-      });
-    } else {
-      router.replace("/", { scroll: false });
-    }
-  }, [activeSessionId, activeView, router, settingsTab]);
+  const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
 
   useEffect(() => {
     // Defer to avoid synchronous setState in effect body.
@@ -211,7 +181,6 @@ function HomeContent() {
         ) {
           return current;
         }
-
         return nextConnection;
       });
       setShowArchivedSessionsState((current) =>
@@ -224,7 +193,6 @@ function HomeContent() {
     };
   }, []);
 
-  // Fetch sessions when connected
   const loadInitialSessions = useCallback(async (
     srv: string,
     tok: string,
@@ -265,7 +233,6 @@ function HomeContent() {
   useEffect(() => {
     if (!connected) return;
 
-    // Defer to avoid synchronous setState in effect body.
     const timer = setTimeout(() => {
       void loadInitialSessions(server, token, showArchivedSessions);
     }, 0);
@@ -312,11 +279,8 @@ function HomeContent() {
     setSessions([]);
     setSessionListCursor(null);
     setSessionListHasMore(false);
-    setRequestedJobId(null);
-    setActiveSessionId(null);
-    setActiveView("chat");
-    setSidebarOpen(false);
-  }, []);
+    router.replace("/");
+  }, [router]);
 
   useEffect(() => {
     window.addEventListener(AUTH_REQUIRED_EVENT, requireLogin);
@@ -354,7 +318,7 @@ function HomeContent() {
     };
   }, [connected, server, token]);
 
-  const loadMoreSessions = useCallback(async () => {
+  const onLoadMore = useCallback(async () => {
     if (
       !server
       || !token
@@ -395,11 +359,12 @@ function HomeContent() {
     }
   }, [refreshingSessions, server, sessionListCursor, sessionListHasMore, showArchivedSessions, token]);
 
-  const handleShowArchivedSessionsChange = useCallback((nextShowArchivedSessions: boolean) => {
+  const onShowArchivedSessionsChange = useCallback((nextShowArchivedSessions: boolean) => {
     saveShowArchivedSessionsPreference(nextShowArchivedSessions);
     setShowArchivedSessionsState(nextShowArchivedSessions);
   }, []);
 
+  // Hydrate an active session that isn't in the loaded page yet (deep link).
   useEffect(() => {
     if (!connected || !activeSessionId || !sessionListInitialized || hasActiveSessionLoaded) return;
 
@@ -412,7 +377,7 @@ function HomeContent() {
           setSessions((current) => mergeSessions(current, [session], pendingSandboxUpdatesRef.current));
         })
         .catch(() => {
-          // Leave the active id alone; ChatView will surface session-specific failures if needed.
+          // Leave the active id alone; ChatView surfaces session-specific failures if needed.
         });
     }, 0);
 
@@ -422,7 +387,7 @@ function HomeContent() {
     };
   }, [activeSessionId, connected, hasActiveSessionLoaded, server, sessionListInitialized, token]);
 
-  function handleConnect(user: AuthUserInfo) {
+  const onConnect = useCallback((user: AuthUserInfo) => {
     const srv = getServer();
     refreshRequestIdRef.current += 1;
     loadingMoreSessionsRef.current = false;
@@ -437,33 +402,30 @@ function HomeContent() {
     saveConnection(user.username);
     setCurrentUser(user);
     setConnection({ connected: true, server: srv, token: user.username });
-  }
+  }, []);
 
-  function handleDisconnect() {
+  const onDisconnect = useCallback(() => {
     if (server) {
       void logout(server).catch(() => undefined);
     }
     clearConnection();
     requireLogin();
-  }
+  }, [requireLogin, server]);
 
-  async function handleNewSession(options: NewSessionOptions = {}) {
+  const onNewSession = useCallback(async (options: NewSessionOptions = {}) => {
     setCreatingSession(true);
     try {
       const session = await createSession(server, token, options);
       setSessions((prev) => sortSessions([session, ...prev]));
-      setRequestedJobId(null);
-      setActiveSessionId(session.session_id);
-      setActiveView("chat");
-      setSidebarOpen(false);
+      router.push(`/?session=${session.session_id}`);
     } catch {
       // handled in UI
     } finally {
       setCreatingSession(false);
     }
-  }
+  }, [router, server, token]);
 
-  const handleDeleteSession = useCallback(async (id: string, options?: { skipUnpushedWarning?: boolean }) => {
+  const onDeleteSession = useCallback(async (id: string, options?: { skipUnpushedWarning?: boolean }) => {
     // Warn about unpushed sandbox commits. The backend status check never boots
     // a stopped sandbox (returns running=false / no counts), so we ask it
     // directly rather than trusting the possibly-stale cached row snapshot.
@@ -483,60 +445,28 @@ function HomeContent() {
       await deleteSession(server, token, id);
       pendingSandboxUpdatesRef.current.delete(id);
       setSessions((prev) => prev.filter((s) => s.session_id !== id));
-      setActiveSessionId((current) => (current === id ? null : current));
+      if (activeSessionId === id) {
+        router.push("/");
+      }
     } catch {
       // deletion failed silently
     }
-  }, [server, token, t]);
+  }, [activeSessionId, router, server, t, token]);
 
-  const handleUpdateSessionAttributes = useCallback(async (
+  const onUpdateSessionAttributes = useCallback(async (
     id: string,
     attributes: NonNullable<Parameters<typeof updateSession>[3]["attributes"]>,
   ) => {
     const updated = await updateSession(server, token, id, { attributes });
     pendingSandboxUpdatesRef.current.delete(id);
     setSessions((prev) => sortSessions(prev.map((entry) => (entry.session_id === id ? { ...entry, ...updated } : entry))));
-    setActiveSessionId((current) => (updated.attributes.archived && current === id ? null : current));
+    if (updated.attributes.archived && activeSessionId === id) {
+      router.push("/");
+    }
     return updated;
-  }, [server, token]);
+  }, [activeSessionId, router, server, token]);
 
-  function handleSelectSession(id: string) {
-    setRequestedJobId(null);
-    setActiveSessionId(id);
-    setActiveView("chat");
-    setSidebarOpen(false);
-  }
-
-  function handleOpenSettings(tab: SettingsTab = "preferences"): void {
-    setRequestedJobId(null);
-    setActiveSessionId(null);
-    setSettingsTab(tab);
-    setActiveView("settings");
-    setSidebarOpen(false);
-  }
-
-  function handleOpenJobSettings(jobId: string): void {
-    setRequestedJobId(jobId);
-    setActiveSessionId(null);
-    setSettingsTab("jobs");
-    setActiveView("settings");
-    setSidebarOpen(false);
-  }
-
-  function handleGoHome(): void {
-    setRequestedJobId(null);
-    setActiveSessionId(null);
-    setActiveView("chat");
-    setSidebarOpen(false);
-  }
-
-  function handleTitleUpdate(sessionId: string, title: string) {
-    setSessions((prev) =>
-      prev.map((s) => (s.session_id === sessionId ? { ...s, title } : s)),
-    );
-  }
-
-  function handleSessionUpdate(session: SessionInfo) {
+  const onSessionUpdate = useCallback((session: SessionInfo) => {
     setSessions((prev) => {
       const next = prev.map((entry) =>
         entry.session_id === session.session_id ? { ...entry, ...session } : entry,
@@ -547,187 +477,101 @@ function HomeContent() {
           : [session, ...next],
       );
     });
-  }
+  }, []);
 
-  function handleSandboxUpdate(sessionId: string, sandbox: SessionInfo["sandbox"]) {
+  const onTitleUpdate = useCallback((sessionId: string, title: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.session_id === sessionId ? { ...s, title } : s)),
+    );
+  }, []);
+
+  const onSandboxUpdate = useCallback((sessionId: string, sandbox: SessionInfo["sandbox"]) => {
     pendingSandboxUpdatesRef.current.set(sessionId, sandbox);
     setSessions((prev) =>
       prev.map((s) => (s.session_id === sessionId ? { ...s, sandbox } : s)),
     );
-  }
-
-  const handleActiveSessionTitleUpdate = useCallback((title: string) => {
-    if (!activeSessionId) return;
-    handleTitleUpdate(activeSessionId, title);
-  }, [activeSessionId]);
-
-  const handleActiveSessionSandboxUpdate = useCallback((sandbox: SessionInfo["sandbox"]) => {
-    if (!activeSessionId) return;
-    handleSandboxUpdate(activeSessionId, sandbox);
-  }, [activeSessionId]);
-
-  const handleActiveSessionUpdate = useCallback((session: SessionInfo) => {
-    handleSessionUpdate(session);
   }, []);
 
-  const handleForkSession = useCallback((session: SessionInfo) => {
-    handleSessionUpdate(session);
-    setActiveSessionId(session.session_id);
-    setActiveView("chat");
-    setSidebarOpen(false);
-  }, []);
+  const onForkSession = useCallback((session: SessionInfo) => {
+    onSessionUpdate(session);
+    router.push(`/?session=${session.session_id}`);
+  }, [onSessionUpdate, router]);
 
-  const handleActiveSessionDelete = useCallback(async () => {
-    if (!activeSessionId) return;
-    await handleDeleteSession(activeSessionId);
-  }, [activeSessionId, handleDeleteSession]);
+  const onSelectSession = useCallback((id: string) => {
+    router.push(`/?session=${id}`);
+  }, [router]);
 
-  const activeSession = sessions.find((session) => session.session_id === activeSessionId) ?? null;
+  const onGoHome = useCallback(() => {
+    router.push("/");
+  }, [router]);
 
-  useEffect(() => {
-    const appTitle = t("app.name");
-    if (activeView === "settings") {
-      const viewTitle = settingsTab === "jobs"
-        ? t("navigation.jobs")
-        : settingsTab === "platform-models"
-          ? t("navigation.models")
-        : settingsTab === "platform-users"
-          ? t("navigation.users")
-          : t("navigation.settings");
-      document.title = `${viewTitle} • ${appTitle}`;
-      return;
-    }
+  const onOpenSettings = useCallback((tab: string = "preferences") => {
+    router.push(`/settings/${tab}`);
+  }, [router]);
 
-    const sessionTitle = activeSession?.title?.trim();
-    const useDefaultTitle = !activeSession
-      || activeSession.attributes.private
-      || !sessionTitle;
-    const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
-      ? `${sessionTitle.slice(0, MAX_DOCUMENT_TITLE_LENGTH - 3)}...`
-      : sessionTitle;
+  const onOpenJobSettings = useCallback((jobId: string) => {
+    router.push(`/settings/jobs?job=${encodeURIComponent(jobId)}`);
+  }, [router]);
 
-    document.title = useDefaultTitle
-      ? appTitle
-      : `${truncatedTitle} • ${appTitle}`;
-  }, [activeSession, activeView, searchParamsKey, settingsTab, t]);
+  const value = useMemo<AppShell>(() => ({
+    connected,
+    server,
+    token,
+    currentUser,
+    isAdmin,
+    serverVersion,
+    sessions,
+    activeSessionId,
+    activeSession,
+    showArchivedSessions,
+    loading,
+    hasMore: sessionListHasMore,
+    loadingMore: loadingMoreSessions,
+    onConnect,
+    onDisconnect,
+    onSelectSession,
+    onNewSession,
+    onGoHome,
+    onOpenSettings,
+    onOpenJobSettings,
+    onShowArchivedSessionsChange,
+    onUpdateSessionAttributes,
+    onDeleteSession,
+    onForkSession,
+    onLoadMore,
+    onSessionUpdate,
+    onTitleUpdate,
+    onSandboxUpdate,
+  }), [
+    activeSession,
+    activeSessionId,
+    connected,
+    currentUser,
+    isAdmin,
+    loading,
+    loadingMoreSessions,
+    onConnect,
+    onDeleteSession,
+    onDisconnect,
+    onForkSession,
+    onGoHome,
+    onLoadMore,
+    onNewSession,
+    onOpenJobSettings,
+    onOpenSettings,
+    onSandboxUpdate,
+    onSelectSession,
+    onSessionUpdate,
+    onShowArchivedSessionsChange,
+    onTitleUpdate,
+    onUpdateSessionAttributes,
+    server,
+    serverVersion,
+    sessions,
+    sessionListHasMore,
+    showArchivedSessions,
+    token,
+  ]);
 
-  if (!connected) {
-    return <ConnectForm onConnect={handleConnect} />;
-  }
-
-  return (
-    <div className="flex h-dvh overflow-hidden">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 w-72 border-r border-border bg-background transition-transform duration-200 md:static md:w-84 md:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-        <Sidebar
-          server={server}
-          token={token}
-          sessions={sessions}
-          showArchivedSessions={showArchivedSessions}
-          activeSessionId={activeSessionId}
-          activeView={activeView}
-          frontendVersion={BUILD_APP_VERSION}
-          backendVersion={serverVersion}
-          currentUser={currentUser}
-          onSelect={handleSelectSession}
-          onNew={handleNewSession}
-          onGoHome={handleGoHome}
-          onOpenSettings={() => handleOpenSettings()}
-          onUpdateAttributes={handleUpdateSessionAttributes}
-          onDelete={handleDeleteSession}
-          onDisconnect={handleDisconnect}
-          githubUrl={GITHUB_REPO_URL}
-          loading={loading}
-          hasMore={sessionListHasMore}
-          loadingMore={loadingMoreSessions}
-          onLoadMore={loadMoreSessions}
-        />
-      </aside>
-
-      {/* Main content */}
-      <main className="flex min-h-0 flex-1 flex-col min-w-0 overflow-hidden">
-        {/* Mobile header */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-2 md:hidden">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-md p-2.5 hover:bg-muted transition-colors"
-          >
-            {sidebarOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </button>
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold">
-              {activeView === "settings" ? t("navigation.settings") : t("app.name")}
-            </span>
-            {activeView === "chat" ? (
-              <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={serverVersion} />
-            ) : null}
-          </div>
-        </div>
-
-        {/* Chat or empty state */}
-        {activeView === "settings" ? (
-          <JobsView
-            server={server}
-            token={token}
-            isAdmin={isAdmin}
-            currentUsername={currentUser?.username ?? null}
-            sessions={sessions}
-            showArchivedSessions={showArchivedSessions}
-            onShowArchivedSessionsChange={handleShowArchivedSessionsChange}
-            onSessionActivated={handleForkSession}
-            requestedJobId={requestedJobId}
-            activeTab={settingsTab}
-            onTabChange={setSettingsTab}
-          />
-        ) : activeSessionId ? (
-          <ChatView
-            key={activeSessionId}
-            server={server}
-            token={token}
-            sessionId={activeSessionId}
-            session={activeSession}
-            initialSandbox={activeSession?.sandbox ?? null}
-            onTitleUpdate={handleActiveSessionTitleUpdate}
-            onSessionUpdate={handleActiveSessionUpdate}
-            onSandboxUpdate={handleActiveSessionSandboxUpdate}
-            onForkSession={handleForkSession}
-            onOpenJobSettings={handleOpenJobSettings}
-            onUpdateSessionAttributes={handleUpdateSessionAttributes}
-            onDeleteSession={handleActiveSessionDelete}
-          />
-        ) : (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="text-center">
-              <p className="text-lg font-medium text-foreground/80">{t("app.name")}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("home.empty.description")}
-              </p>
-              <NewSessionButton
-                onCreate={handleNewSession}
-                disabled={loading}
-                className="mt-4"
-              />
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
+  return <AppShellContext.Provider value={value}>{children}</AppShellContext.Provider>;
 }

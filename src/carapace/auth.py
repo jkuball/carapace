@@ -11,6 +11,7 @@ from typing import Any
 from joserfc import jwt
 from joserfc.errors import JoseError
 from joserfc.jwk import OctKey
+from loguru import logger
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select, update
@@ -323,11 +324,18 @@ class AuthStore:
         return updated
 
     def verify_password(self, username: str, password: str) -> AuthUser | None:
-        user = self.get_user(username)
-        if user is None or not user.enabled:
+        key = normalize_username(username)
+        user = self.get_user(key)
+        if user is None:
+            logger.debug(f"login failed: unknown user {key!r}")
+            return None
+        if not user.enabled:
+            logger.debug(f"login failed: user {key!r} is disabled")
             return None
         if not verify_password(password, user.password_hash):
+            logger.debug(f"login failed: wrong password for user {key!r}")
             return None
+        logger.debug(f"login succeeded for user {key!r}")
         return user
 
     def load_sessions(self) -> SessionsFile:

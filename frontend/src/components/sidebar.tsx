@@ -27,7 +27,6 @@ interface SidebarProps {
   sessions: SessionInfo[];
   showArchivedSessions?: boolean;
   activeSessionId: string | null;
-  activeView?: "chat" | "settings";
   frontendVersion?: string | null;
   backendVersion?: string | null;
   currentUser?: AuthUserInfo | null;
