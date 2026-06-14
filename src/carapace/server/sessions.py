@@ -497,6 +497,31 @@ async def delete_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
 
+class PendingApprovalsResponse(BaseModel):
+    # Heterogeneous payloads: each entry carries an "id" plus a "kind" and kind-specific fields,
+    # mirroring what the WebSocket handler replays to connecting clients.
+    approvals: list[dict[str, Any]] = []
+    escalations: list[dict[str, Any]] = []
+
+
+@router.get("/sessions/{session_id}/pending-approvals", response_model=PendingApprovalsResponse)
+async def get_pending_approvals(
+    session_id: str,
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
+) -> PendingApprovalsResponse:
+    """List approval/escalation requests the running turn is currently parked on (by id)."""
+    _load_owned_state(session_id, user)
+    active = server._engine.get_active(session_id)
+    if active is None:
+        return PendingApprovalsResponse()
+    approvals = [
+        {"id": pa.get("tool_call_id", ""), "kind": "tool", **{k: v for k, v in pa.items() if k != "type"}}
+        for pa in active.pending_approval_requests
+    ]
+    escalations = [{"id": pe.get("request_id", ""), **pe} for pe in active.pending_escalations]
+    return PendingApprovalsResponse(approvals=approvals, escalations=escalations)
+
+
 # ----------------------------------------------------------------------
 # Sandbox git (B1: /workspace clone ↔ backend repo)
 # ----------------------------------------------------------------------

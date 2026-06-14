@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:3394073cf29bbeea37424b32915cd491d404c952d0ff1ef69feef080524a4c94
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:bebc7d6de6dd015a483903461eaedea12805728be6f9a044ca7106a2f7e11ddf
 
 # Install git, jq, curl — needed for git http-backend and pre-receive hooks
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,12 +16,12 @@ ENV UV_LINK_MODE=copy
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev
+    uv sync --locked --no-install-project --no-dev --extra server
 
 # Copy project source and install the project itself
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+    uv sync --locked --no-dev --extra server
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT []

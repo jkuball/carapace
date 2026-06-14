@@ -382,6 +382,48 @@ def test_revoke_other_users_key_returns_404():
     assert client.delete(f"/api/keys/{info.id}", headers=cookie).status_code == 404
 
 
+def _create_session(headers: dict[str, str]) -> str:
+    resp = TestClient(app).post("/api/sessions", headers=headers, json={"channel_type": "web"})
+    assert resp.status_code == 200
+    return resp.json()["session_id"]
+
+
+def test_pending_approvals_empty_when_idle(auth_headers):
+    sid = _create_session(auth_headers)
+    resp = TestClient(app).get(f"/api/sessions/{sid}/pending-approvals", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json() == {"approvals": [], "escalations": []}
+
+
+def test_pending_approvals_lists_by_id(auth_headers):
+    sid = _create_session(auth_headers)
+    active = srv._engine.get_or_activate(sid)
+    active.pending_approval_requests.append(
+        {"type": "approval_request", "tool_call_id": "tc1", "tool": "bash", "args": {}, "risk_level": "high"}
+    )
+    active.pending_escalations.append(
+        {"request_id": "r1", "kind": "domain_access", "domain": "x.test", "command": "curl"}
+    )
+    body = TestClient(app).get(f"/api/sessions/{sid}/pending-approvals", headers=auth_headers).json()
+    assert body["approvals"][0]["id"] == "tc1"
+    assert body["approvals"][0]["kind"] == "tool"
+    assert "type" not in body["approvals"][0]
+    assert body["escalations"][0]["id"] == "r1"
+    assert body["escalations"][0]["kind"] == "domain_access"
+
+
+def test_pending_approvals_non_owner_404(auth_headers, admin_auth_headers):
+    sid = _create_session(auth_headers)
+    resp = TestClient(app).get(f"/api/sessions/{sid}/pending-approvals", headers=admin_auth_headers)
+    assert resp.status_code == 404
+
+
+def test_pending_approvals_api_key_read_scope(auth_headers):
+    sid = _create_session(auth_headers)
+    headers = _api_key_headers("thies", [ApiKeyGrant(scope=Scope.sessions, access=Access.read)])
+    assert TestClient(app).get(f"/api/sessions/{sid}/pending-approvals", headers=headers).status_code == 200
+
+
 def test_no_auth_returns_401(client):
     resp = client.get("/api/sessions")
     assert resp.status_code in (401, 403)
