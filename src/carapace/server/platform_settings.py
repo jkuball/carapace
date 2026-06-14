@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_ai.models import Model
 
+from ..api_keys import Access, Scope
 from ..llm import make_model_factory
 from ..models.config import (
     OPENAI_COMPATIBLE_PROVIDERS,
@@ -19,7 +20,7 @@ from ..models.config import (
     agent_available_model_entries,
 )
 from ..models.session import SessionBudget
-from .auth import verify_admin_user
+from .auth import require
 from .state import server_module
 
 server = server_module()
@@ -259,7 +260,7 @@ def _apply_runtime_config(
 
 @router.get("/admin/platform/settings", response_model=PlatformSettingsResponse)
 async def get_platform_settings(
-    _admin: Annotated[object, Depends(verify_admin_user)],
+    _admin: Annotated[object, Depends(require(Scope.admin, Access.read))],
 ) -> PlatformSettingsResponse:
     return _response()
 
@@ -267,7 +268,7 @@ async def get_platform_settings(
 @router.patch("/admin/platform/settings", response_model=PlatformSettingsResponse)
 async def update_platform_settings(
     body: PlatformSettingsPatch,
-    _admin: Annotated[object, Depends(verify_admin_user)],
+    _admin: Annotated[object, Depends(require(Scope.admin, Access.write))],
 ) -> PlatformSettingsResponse:
     # Build + validate the new agent config (AgentConfig() re-runs the defaults∈catalog check),
     # then a candidate Config so the runtime model factory can be built before we persist anything.

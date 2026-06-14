@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import typer
@@ -62,15 +63,27 @@ def _login_client(server: str, username: str | None, password: str | None) -> ht
     return client
 
 
+def _api_key_client(server: str, api_key: str) -> httpx.Client:
+    """Build an authenticated client from an API key (Authorization: Bearer)."""
+    return httpx.Client(base_url=server, headers={"Authorization": f"Bearer {api_key}"})
+
+
 def _cookie_headers(client: httpx.Client) -> dict[str, str]:
     cookie_header = "; ".join(f"{cookie.name}={cookie.value}" for cookie in client.cookies.jar)
     return {"Cookie": cookie_header} if cookie_header else {}
 
 
-def _ws_url(server: str, session_id: str) -> str:
-    """Build WebSocket URL for a session."""
+def _ws_url(server: str, session_id: str, api_key: str | None = None) -> str:
+    """Build WebSocket URL for a session.
+
+    Browsers cannot set ``Authorization`` on a WebSocket, so the chat endpoint also
+    accepts an API key via the ``api_key`` query parameter.
+    """
     base = server.replace("http://", "ws://").replace("https://", "wss://")
-    return f"{base}/api/chat/{session_id}"
+    url = f"{base}/api/chat/{session_id}"
+    if api_key:
+        url += f"?api_key={quote(api_key)}"
+    return url
 
 
 def _replay_history(client: httpx.Client, session_id: str, limit: int) -> None:
@@ -79,7 +92,9 @@ def _replay_history(client: httpx.Client, session_id: str, limit: int) -> None:
     try:
         resp = client.get(f"/api/sessions/{session_id}/history", params=params)
         resp.raise_for_status()
-    except httpx.HTTPStatusError:
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 403:
+            console.print("[yellow]Skipping history replay: the API key lacks the 'history:read' scope.[/yellow]")
         return
 
     messages = resp.json()
@@ -740,6 +755,17 @@ async def _read_server_responses(ws, *, show_tool_events: bool = True) -> None:
 def chat(
     session: str | None = typer.Option(None, "--session", "-s", help="Resume a session by ID"),
     server: str = typer.Option(DEFAULT_SERVER, "--server", envvar="CARAPACE_SERVER", help="Server URL"),
+    api_key: str | None = typer.Option(
+        None,
+        "--api-key",
+        "--key",
+        "-k",
+        envvar="CARAPACE_API_KEY",
+        help=(
+            "API key for Bearer auth (needs 'sessions' scope; '--history' replay also needs 'history'). "
+            "Takes precedence over username/password."
+        ),
+    ),
     username: str | None = typer.Option(None, "--user", "-u", envvar="CARAPACE_USER", help="Username"),
     password: str | None = typer.Option(None, "--password", envvar="CARAPACE_PASSWORD", help="Password"),
     list_sessions: bool = typer.Option(False, "--list", "-l", help="List existing sessions"),
@@ -748,8 +774,14 @@ def chat(
     ),
 ):
     """Start an interactive chat session with the carapace server."""
-    client = _login_client(server, username, password)
-    headers = _cookie_headers(client)
+    if api_key and (username or password):
+        raise typer.BadParameter("pass either --api-key or --user/--password, not both")
+    if api_key:
+        client = _api_key_client(server, api_key)
+        headers: dict[str, str] = {}  # WebSocket auths via the api_key query parameter instead
+    else:
+        client = _login_client(server, username, password)
+        headers = _cookie_headers(client)
 
     if list_sessions:
         sessions: list[dict[str, Any]] = []
@@ -826,7 +858,7 @@ def chat(
     if session and history != 0:
         _replay_history(client, session_id, history)
 
-    url = _ws_url(server, session_id)
+    url = _ws_url(server, session_id, api_key)
     try:
         asyncio.run(_chat_loop(url, headers=headers))
     except Exception as e:

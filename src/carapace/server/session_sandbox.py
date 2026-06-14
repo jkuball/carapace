@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..sandbox.manager import UploadError, UploadTooLargeError
 from ..sandbox.state import SessionSandboxSnapshot
 from ..session import sent_files
-from .auth import verify_token
+from .auth import require
 from .state import server_module
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -30,7 +31,7 @@ def _load_owned_session(session_id: str, user: UserIdentity):
 @router.get("/sessions/{session_id}/sandbox", response_model=SessionSandboxSnapshot)
 async def get_session_sandbox(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
 ) -> SessionSandboxSnapshot:
     _load_owned_session(session_id, user)
     snapshot = server._engine.session_mgr.load_sandbox_snapshot(session_id)
@@ -40,7 +41,7 @@ async def get_session_sandbox(
 @router.post("/sessions/{session_id}/sandbox/up", response_model=SessionSandboxSnapshot)
 async def start_session_sandbox(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionSandboxSnapshot:
     state = _load_owned_session(session_id, user)
     if state.attributes.archived:
@@ -55,7 +56,7 @@ async def start_session_sandbox(
 @router.post("/sessions/{session_id}/sandbox/down", response_model=SessionSandboxSnapshot)
 async def stop_session_sandbox(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionSandboxSnapshot:
     state = _load_owned_session(session_id, user)
     if state.attributes.archived:
@@ -78,7 +79,7 @@ class UploadedFile(BaseModel):
 @router.post("/sessions/{session_id}/sandbox/files", response_model=UploadedFile)
 async def upload_session_sandbox_file(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
     file: Annotated[UploadFile, File()],
 ) -> UploadedFile:
     state = _load_owned_session(session_id, user)
@@ -133,7 +134,7 @@ async def upload_session_sandbox_file(
 async def download_sent_file(
     session_id: str,
     file_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
     download: Annotated[bool, Query()] = False,
 ) -> FileResponse:
     _load_owned_session(session_id, user)
@@ -153,7 +154,7 @@ async def download_sent_file(
 @router.post("/sessions/{session_id}/sandbox/wipe", response_model=SessionSandboxSnapshot)
 async def wipe_session_sandbox(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionSandboxSnapshot:
     state = _load_owned_session(session_id, user)
     if state.attributes.archived:

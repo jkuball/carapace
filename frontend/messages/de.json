@@ -13,7 +13,8 @@
         "models": "Modelle",
         "users": "Benutzer",
         "disconnect": "Trennen",
-        "github": "thiesgerken/carapace"
+        "github": "thiesgerken/carapace",
+        "apiKeys": "API-Schlüssel"
     },
     "account": {
         "menu": "Kontomenü",
@@ -992,6 +993,63 @@
             "status": "Git-Status konnte nicht gelesen werden",
             "pull": "Pull fehlgeschlagen",
             "push": "Push fehlgeschlagen"
+        }
+    },
+    "apiKeys": {
+        "title": "API-Schlüssel",
+        "description": "Erstelle langlebige Tokens für Skripte und Integrationen. Verwende sie als 'Authorization: Bearer <token>'.",
+        "create": {
+            "nameLabel": "Name",
+            "namePlaceholder": "z. B. CI-Deploy-Bot",
+            "scopesLabel": "Berechtigungen",
+            "expiryLabel": "Läuft ab nach (Tagen)",
+            "expiryPlaceholder": "Leer lassen für kein Ablaufdatum",
+            "submit": "Schlüssel erstellen",
+            "creating": "Wird erstellt…"
+        },
+        "access": {
+            "none": "Keine",
+            "read": "Lesen",
+            "write": "Schreiben"
+        },
+        "scopes": {
+            "sessions": "Sitzungen",
+            "jobs": "Jobs",
+            "preferences": "Einstellungen",
+            "notifications": "Benachrichtigungen",
+            "history": "Verlauf",
+            "admin": "Administration"
+        },
+        "secret": {
+            "warning": "Kopiere diesen Token jetzt — er wird nicht erneut angezeigt.",
+            "copy": "Token kopieren",
+            "done": "Fertig"
+        },
+        "list": {
+            "title": "Aktive Schlüssel",
+            "empty": "Noch keine API-Schlüssel.",
+            "loading": "Schlüssel werden geladen…",
+            "unnamed": "Unbenannter Schlüssel",
+            "expired": "Abgelaufen"
+        },
+        "fields": {
+            "created": "Erstellt {timestamp}",
+            "lastUsed": "Zuletzt verwendet {timestamp}",
+            "expires": "Läuft ab {timestamp}",
+            "never": "nie",
+            "noExpiry": "kein Ablauf"
+        },
+        "actions": {
+            "revoke": "Schlüssel widerrufen"
+        },
+        "confirm": {
+            "revoke": "API-Schlüssel \"{name}\" widerrufen? Dies kann nicht rückgängig gemacht werden."
+        },
+        "errors": {
+            "load": "API-Schlüssel konnten nicht geladen werden.",
+            "create": "API-Schlüssel konnte nicht erstellt werden.",
+            "revoke": "API-Schlüssel konnte nicht widerrufen werden.",
+            "noScopes": "Wähle mindestens eine Berechtigung."
         }
     }
 }

@@ -294,7 +294,7 @@ class AuthStore:
             existing = db.get(User, key)
             if existing is None:
                 raise KeyError(key)
-            db.delete(existing)
+            db.delete(existing)  # api_keys cascade-delete via their ON DELETE CASCADE FK
             db.execute(
                 update(AuthSessionRow)
                 .where(AuthSessionRow.user == key, AuthSessionRow.revoked_at.is_(None))

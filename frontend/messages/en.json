@@ -13,7 +13,8 @@
         "models": "Models",
         "users": "Users",
         "disconnect": "Disconnect",
-        "github": "thiesgerken/carapace"
+        "github": "thiesgerken/carapace",
+        "apiKeys": "API Keys"
     },
     "account": {
         "menu": "Account menu",
@@ -992,6 +993,63 @@
             "status": "Could not read git status",
             "pull": "Pull failed",
             "push": "Push failed"
+        }
+    },
+    "apiKeys": {
+        "title": "API Keys",
+        "description": "Create long-lived tokens for scripts and integrations. Use them as 'Authorization: Bearer <token>'.",
+        "create": {
+            "nameLabel": "Name",
+            "namePlaceholder": "e.g. CI deploy bot",
+            "scopesLabel": "Scopes",
+            "expiryLabel": "Expires after (days)",
+            "expiryPlaceholder": "Leave empty for no expiry",
+            "submit": "Create key",
+            "creating": "Creating…"
+        },
+        "access": {
+            "none": "None",
+            "read": "Read",
+            "write": "Write"
+        },
+        "scopes": {
+            "sessions": "Sessions",
+            "jobs": "Jobs",
+            "preferences": "Preferences",
+            "notifications": "Notifications",
+            "history": "History",
+            "admin": "Admin"
+        },
+        "secret": {
+            "warning": "Copy this token now — it won't be shown again.",
+            "copy": "Copy token",
+            "done": "Done"
+        },
+        "list": {
+            "title": "Active keys",
+            "empty": "No API keys yet.",
+            "loading": "Loading keys…",
+            "unnamed": "Unnamed key",
+            "expired": "Expired"
+        },
+        "fields": {
+            "created": "Created {timestamp}",
+            "lastUsed": "Last used {timestamp}",
+            "expires": "Expires {timestamp}",
+            "never": "never",
+            "noExpiry": "no expiry"
+        },
+        "actions": {
+            "revoke": "Revoke key"
+        },
+        "confirm": {
+            "revoke": "Revoke API key \"{name}\"? This cannot be undone."
+        },
+        "errors": {
+            "load": "Failed to load API keys.",
+            "create": "Failed to create API key.",
+            "revoke": "Failed to revoke API key.",
+            "noScopes": "Select at least one scope."
         }
     }
 }

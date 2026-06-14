@@ -163,6 +163,23 @@ class SandboxTokenRow(Base):
     token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
 
 
+class ApiKeyRow(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # uuid4 hex
+    prefix: Mapped[str] = mapped_column(String(16), unique=True, index=True)  # non-secret lookup handle
+    secret_hash: Mapped[str] = mapped_column(String(128))  # sha256 hex of the full token
+    # Owning user; ON DELETE CASCADE drops keys with their user so a reused username can't inherit them.
+    user: Mapped[str] = mapped_column(String(256), ForeignKey("users.username", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(Text, default="")
+    # Granted scopes as "scope:access" strings (e.g. "sessions:write", "jobs:read").
+    scopes: Mapped[list[str]] = mapped_column(JsonType, default=list)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    last_used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+
 class ModelRow(Base):
     __tablename__ = "models"
 

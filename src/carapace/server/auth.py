@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from loguru import logger
 from pydantic import BaseModel
 
+from ..api_keys import Access, ApiKeyGrant, ApiKeyStore, Scope
 from ..auth import AuthStore, AuthUser, UserIdentity, has_admin_role, normalize_username
 from ..bootstrap import ensure_knowledge_dir
 from ..models.credentials import BitwardenCredentialBackendConfig
@@ -166,6 +167,15 @@ def _auth_store() -> AuthStore:
     return store
 
 
+def _api_key_store() -> ApiKeyStore:
+    store = getattr(server, "_api_key_store", None)
+    if isinstance(store, ApiKeyStore):
+        return store
+    store = ApiKeyStore(_auth_store()._session_factory, _auth_store())
+    server._api_key_store = store  # type: ignore[attr-defined]
+    return store
+
+
 def _user_response(username: str) -> AdminUserResponse:
     try:
         normalized_username = normalize_username(username)
@@ -189,7 +199,16 @@ def _user_response(username: str) -> AdminUserResponse:
     )
 
 
+class AuthContext(BaseModel):
+    """Resolved principal for a request. ``grants`` is ``None`` for cookie sessions
+    (full access); for API keys it is the set of grants the key carries."""
+
+    identity: UserIdentity
+    grants: frozenset[ApiKeyGrant] | None = None
+
+
 async def current_user(request: Request) -> UserIdentity:
+    """Cookie-session identity only. Used by login-bootstrap and key-management routes."""
     session_cookie = request.cookies.get(server._config.auth.cookie.name)
     if not session_cookie:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
@@ -199,33 +218,96 @@ async def current_user(request: Request) -> UserIdentity:
     return identity
 
 
-async def current_ws_user(websocket: WebSocket) -> UserIdentity:
+async def current_auth_context(request: Request) -> AuthContext:
+    """Resolve identity from the session cookie OR an ``Authorization: Bearer`` API key."""
+    session_cookie = request.cookies.get(server._config.auth.cookie.name)
+    if session_cookie:
+        identity = _auth_store().validate_session_token(session_cookie)
+        if identity is not None:
+            return AuthContext(identity=identity, grants=None)
+
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        result = _api_key_store().validate_key(token)
+        if result is not None:
+            identity, grants = result
+            return AuthContext(identity=identity, grants=frozenset(grants))
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+
+def _enforce_scope(ctx: AuthContext, scope: Scope, access: Access) -> UserIdentity:
+    if ctx.grants is not None and not any(grant.satisfies(scope, access) for grant in ctx.grants):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"API key missing {scope.value}:{access.value} scope",
+        )
+    if scope is Scope.admin and not has_admin_role(ctx.identity.roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    return ctx.identity
+
+
+def require(scope: Scope, access: Access):
+    """Build a dependency that requires the given scope/access for API keys.
+
+    Cookie sessions bypass scope checks (full access), except ``admin`` which always
+    requires the admin role.
+    """
+
+    async def dependency(ctx: Annotated[AuthContext, Depends(current_auth_context)]) -> UserIdentity:
+        return _enforce_scope(ctx, scope, access)
+
+    return dependency
+
+
+async def current_ws_context(websocket: WebSocket) -> AuthContext:
     cookie_name = server._config.auth.cookie.name
     token = websocket.cookies.get(cookie_name)
     ticket = websocket.query_params.get("ticket")
+    api_key = websocket.query_params.get("api_key")
+    # Try each credential in order, falling through on failure (a stale browser cookie must not
+    # block a valid api_key in the query string — mirrors the REST cookie→Bearer fall-through).
     if token:
         identity = _auth_store().validate_session_token(token)
-    elif ticket:
+        if identity is not None:
+            return AuthContext(identity=identity, grants=None)
+    if ticket:
         identity = _auth_store().validate_websocket_token(ticket)
-    else:
-        identity = None
-    if identity is None:
+        if identity is not None:
+            return AuthContext(identity=identity, grants=None)
+    if api_key:
+        result = _api_key_store().validate_key(api_key)
+        if result is not None:
+            identity, grants = result
+            return AuthContext(identity=identity, grants=frozenset(grants))
+    raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
+
+async def current_ws_user(websocket: WebSocket) -> UserIdentity:
+    return await current_ws_user_scoped(websocket, Scope.sessions, Access.write)
+
+
+async def current_ws_user_scoped(websocket: WebSocket, scope: Scope, access: Access) -> UserIdentity:
+    ctx = await current_ws_context(websocket)
+    if ctx.grants is not None and not any(grant.satisfies(scope, access) for grant in ctx.grants):
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-    return identity
+    if scope is Scope.admin and not has_admin_role(ctx.identity.roles):
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+    return ctx.identity
 
 
-async def verify_token(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdentity:
-    return user
+async def verify_token(ctx: Annotated[AuthContext, Depends(current_auth_context)]) -> UserIdentity:
+    """Any authenticated principal (cookie or API key), no scope requirement."""
+    return ctx.identity
 
 
 async def verify_ws_token(websocket: WebSocket) -> UserIdentity:
     return await current_ws_user(websocket)
 
 
-async def verify_admin_user(user: Annotated[UserIdentity, Depends(current_user)]) -> UserIdentity:
-    if not has_admin_role(user.roles):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
-    return user
+async def verify_admin_user(ctx: Annotated[AuthContext, Depends(current_auth_context)]) -> UserIdentity:
+    return _enforce_scope(ctx, Scope.admin, Access.write)
 
 
 def _enabled_admin_usernames() -> set[str]:
@@ -359,7 +441,9 @@ async def create_websocket_ticket(
 
 
 @router.get("/admin/users", response_model=list[AdminUserResponse])
-async def list_admin_users(_admin_user: Annotated[UserIdentity, Depends(verify_admin_user)]) -> list[AdminUserResponse]:
+async def list_admin_users(
+    _admin_user: Annotated[UserIdentity, Depends(require(Scope.admin, Access.read))],
+) -> list[AdminUserResponse]:
     users = _auth_store().load_users().users
     return [_user_response(username) for username in sorted(users)]
 
@@ -367,7 +451,7 @@ async def list_admin_users(_admin_user: Annotated[UserIdentity, Depends(verify_a
 @router.post("/admin/users", response_model=AdminUserResponse, status_code=201)
 async def create_admin_user(
     body: AdminUserCreateRequest,
-    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
+    _admin_user: Annotated[UserIdentity, Depends(require(Scope.admin, Access.write))],
 ) -> AdminUserResponse:
     store = _auth_store()
     previous_user = store.get_user(body.username)
@@ -394,7 +478,7 @@ async def create_admin_user(
 async def update_admin_user(
     username: str,
     body: AdminUserUpdateRequest,
-    _admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
+    _admin_user: Annotated[UserIdentity, Depends(require(Scope.admin, Access.write))],
 ) -> AdminUserResponse:
     store = _auth_store()
     existing_user = store.get_user(username)
@@ -433,7 +517,7 @@ async def update_admin_user(
 @router.delete("/admin/users/{username}", status_code=204)
 async def delete_admin_user(
     username: str,
-    admin_user: Annotated[UserIdentity, Depends(verify_admin_user)],
+    admin_user: Annotated[UserIdentity, Depends(require(Scope.admin, Access.write))],
 ) -> Response:
     try:
         normalized_username = normalize_username(username)

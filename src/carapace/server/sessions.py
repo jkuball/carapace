@@ -9,12 +9,13 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError, field_validator, model_validator
 from pydantic_ai.messages import ModelMessage
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..models.git import GitActionResult, GlobalGitStatus, SandboxGitStatus
 from ..models.session import SessionAttributes, SessionJobRunContext, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
 from ..user_defaults import apply_user_model_defaults, effective_user_budget
-from .auth import verify_token
+from .auth import require
 from .history import _history_from_messages
 from .state import server_module
 
@@ -258,7 +259,7 @@ async def _list_session_page(
 
 @router.post("/sessions", response_model=SessionInfo)
 async def create_session(
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
     body: SessionCreateRequest | None = None,
 ) -> SessionInfo:
     body = body or SessionCreateRequest()
@@ -279,7 +280,7 @@ async def create_session(
 
 @router.get("/sessions", response_model=SessionListPage)
 async def list_sessions(
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
     include_message_count: bool = False,
     include_archived: bool = False,
     limit: int = Query(default=50, ge=1, le=200),
@@ -295,7 +296,9 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}", response_model=SessionInfo)
-async def get_session(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> SessionInfo:
+async def get_session(
+    session_id: str, user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))]
+) -> SessionInfo:
     state = _load_owned_state(session_id, user)
     sandbox = server._engine.session_mgr.load_sandbox_snapshot(session_id)
     return SessionInfo.from_state(
@@ -310,7 +313,7 @@ async def get_session(session_id: str, user: Annotated[UserIdentity, Depends(ver
 async def update_session(
     session_id: str,
     body: SessionUpdateRequest,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionInfo:
     state = _load_owned_state(session_id, user)
 
@@ -413,7 +416,7 @@ async def update_session(
 async def fork_session(
     session_id: str,
     body: SessionForkRequest,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionInfo:
     _load_owned_state(session_id, user)
 
@@ -444,7 +447,7 @@ async def fork_session(
 @router.post("/sessions/{session_id}/knowledge/commit", response_model=SessionArchiveCommitResponse)
 async def commit_session_knowledge(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
 ) -> SessionArchiveCommitResponse:
     state = _load_owned_state(session_id, user)
     if not server._session_archive.enabled:
@@ -479,7 +482,9 @@ async def commit_session_knowledge(
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
-async def delete_session(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> None:
+async def delete_session(
+    session_id: str, user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))]
+) -> None:
     state = _load_owned_state(session_id, user)
     server._engine.deactivate(session_id)
     await server._engine.sandbox_mgr.destroy_session(session_id)
@@ -500,7 +505,7 @@ async def delete_session(session_id: str, user: Annotated[UserIdentity, Depends(
 @router.get("/sessions/{session_id}/sandbox/git", response_model=SandboxGitStatus)
 async def get_sandbox_git(
     session_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
     fetch: Annotated[bool, Query()] = True,
 ) -> SandboxGitStatus:
     _load_owned_state(session_id, user)
@@ -512,13 +517,17 @@ async def get_sandbox_git(
 
 
 @router.post("/sessions/{session_id}/sandbox/git/pull", response_model=GitActionResult)
-async def pull_sandbox_git(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+async def pull_sandbox_git(
+    session_id: str, user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))]
+) -> GitActionResult:
     _load_owned_state(session_id, user)
     return await server._engine.sandbox_mgr.sandbox_git_pull(session_id)
 
 
 @router.post("/sessions/{session_id}/sandbox/git/push", response_model=GitActionResult)
-async def push_sandbox_git(session_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+async def push_sandbox_git(
+    session_id: str, user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))]
+) -> GitActionResult:
     _load_owned_state(session_id, user)
     return await server._engine.sandbox_mgr.sandbox_git_push(session_id)
 
@@ -529,7 +538,9 @@ async def push_sandbox_git(session_id: str, user: Annotated[UserIdentity, Depend
 
 
 @router.get("/git/status", response_model=GlobalGitStatus)
-async def get_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GlobalGitStatus:
+async def get_global_git(
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
+) -> GlobalGitStatus:
     try:
         configured, ahead, behind = await server._knowledge_git_runtime.status_for_user(user.username)
     except Exception as exc:
@@ -539,7 +550,9 @@ async def get_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -
 
 
 @router.post("/git/pull", response_model=GitActionResult)
-async def pull_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+async def pull_global_git(
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
+) -> GitActionResult:
     try:
         ok, message = await server._knowledge_git_runtime.pull_for_user(user.username)
     except Exception as exc:
@@ -548,7 +561,9 @@ async def pull_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) 
 
 
 @router.post("/git/push", response_model=GitActionResult)
-async def push_global_git(user: Annotated[UserIdentity, Depends(verify_token)]) -> GitActionResult:
+async def push_global_git(
+    user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.write))],
+) -> GitActionResult:
     try:
         ok, message = await server._knowledge_git_runtime.push_for_user(user.username)
     except Exception as exc:

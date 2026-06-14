@@ -29,6 +29,7 @@ from pydantic_ai.exceptions import UsageLimitExceeded
 from sqlalchemy import Engine
 
 from .. import get_version
+from ..api_keys import ApiKeyStore
 from ..auth import AuthStore
 from ..bootstrap import ensure_data_dir, ensure_knowledge_dir
 from ..cache import SessionListCache
@@ -53,6 +54,7 @@ from ..sandbox.runtime import ContainerRuntime
 from ..session import SessionEngine, SessionManager
 from ..session.archive import SessionArchiveService
 from ..usage import SessionBudgetExceededError
+from .api_keys import router as api_keys_router
 from .auth import router as auth_router
 from .auth import verify_ws_token
 from .history import router as history_router
@@ -94,6 +96,7 @@ _notification_store: NotificationStore
 _notification_presence: NotificationPresenceRegistry
 _notification_router: NotificationRouter
 _auth_store: AuthStore
+_api_key_store: ApiKeyStore
 _platform_store: PlatformSettingsStore
 
 
@@ -305,6 +308,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _notification_presence, \
         _notification_router, \
         _auth_store, \
+        _api_key_store, \
         _platform_store
 
     # 1. Build config from env (CARAPACE_DATA_DIR + CARAPACE_* subsections; no config file)
@@ -323,6 +327,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _config = _platform_store.overlay_config(_config)
 
     _auth_store = AuthStore(_session_factory, _config.auth, _data_dir)
+    _api_key_store = ApiKeyStore(_session_factory, _auth_store)
     if _auth_store.ensure_bootstrap_admin() is not None:
         logger.warning("Created bootstrap admin user 'admin' with password from CARAPACE_TOKEN")
     _knowledge_repo_registry = KnowledgeRepoRegistry(_data_dir)
@@ -734,6 +739,7 @@ router.include_router(platform_settings_router)
 router.include_router(user_settings_router)
 router.include_router(websocket_router)
 router.include_router(auth_router)
+router.include_router(api_keys_router)
 app.include_router(router)
 
 

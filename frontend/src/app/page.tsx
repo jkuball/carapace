@@ -128,7 +128,13 @@ function HomeContent() {
   })();
   const initialSettingsTab: SettingsTab = (() => {
     const tab = searchParams.get("tab");
-    if (tab === "jobs" || tab === "platform-models" || tab === "platform-users" || tab === "account") {
+    if (
+      tab === "jobs" ||
+      tab === "platform-models" ||
+      tab === "platform-users" ||
+      tab === "account" ||
+      tab === "api-keys"
+    ) {
       return tab;
     }
     return "preferences";

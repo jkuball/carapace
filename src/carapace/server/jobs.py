@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from loguru import logger
 from pydantic import BaseModel
 
+from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..jobs import build_job_run_message
 from ..models.jobs import JobDefinition, JobDefinitionInput, JobsFile
 from ..models.session import SessionJobRunContext
 from ..user_defaults import apply_job_model_defaults, effective_user_budget
-from .auth import verify_token
+from .auth import require
 from .sessions import SessionInfo, _session_info_from_state
 from .state import server_module
 
@@ -156,14 +157,14 @@ async def _run_job_definition(
 
 
 @router.get("/jobs", response_model=JobsFile)
-async def list_jobs(user: Annotated[UserIdentity, Depends(verify_token)]) -> JobsFile:
+async def list_jobs(user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.read))]) -> JobsFile:
     return JobsFile(jobs=server._jobs_store.list_jobs_for_user(user.username))
 
 
 @router.post("/jobs", response_model=JobDefinition, status_code=201)
 async def create_job(
     body: JobDefinitionInput,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.write))],
 ) -> JobDefinition:
     job = JobDefinition.model_validate({**body.model_dump(mode="json"), "user": user.username})
     try:
@@ -173,7 +174,9 @@ async def create_job(
 
 
 @router.get("/jobs/{job_id}", response_model=JobDefinition)
-async def get_job(job_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> JobDefinition:
+async def get_job(
+    job_id: str, user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.read))]
+) -> JobDefinition:
     job = server._jobs_store.get_job_for_user(job_id, user.username)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -184,7 +187,7 @@ async def get_job(job_id: str, user: Annotated[UserIdentity, Depends(verify_toke
 async def update_job(
     job_id: str,
     body: JobDefinitionInput,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.write))],
 ) -> JobDefinition:
     if body.id != job_id:
         raise HTTPException(status_code=400, detail="Job id in path and body must match")
@@ -199,7 +202,9 @@ async def update_job(
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
-async def delete_job(job_id: str, user: Annotated[UserIdentity, Depends(verify_token)]) -> Response:
+async def delete_job(
+    job_id: str, user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.write))]
+) -> Response:
     if server._jobs_store.get_job_for_user(job_id, user.username) is None:
         raise HTTPException(status_code=404, detail="Job not found")
     deleted = server._jobs_store.delete_job(job_id)
@@ -211,7 +216,7 @@ async def delete_job(job_id: str, user: Annotated[UserIdentity, Depends(verify_t
 @router.post("/jobs/{job_id}/run", response_model=JobRunResult)
 async def run_job(
     job_id: str,
-    user: Annotated[UserIdentity, Depends(verify_token)],
+    user: Annotated[UserIdentity, Depends(require(Scope.jobs, Access.write))],
     body: JobRunRequest | None = None,
 ) -> JobRunResult:
     job = server._jobs_store.get_job_for_user(job_id, user.username)
