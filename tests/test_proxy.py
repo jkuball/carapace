@@ -1191,6 +1191,56 @@ async def test_exec_cleanup_tunnel_error_does_not_mask_command_error_or_skip_cre
     delete_context_file_credentials.assert_awaited_once_with("sess-1", written_files)
 
 
+def _make_exec_state(**overrides) -> SandboxExecState:
+    base = dict(
+        sessions={},
+        allowed_domains={},
+        exec_temp_domains={},
+        exec_context_skill_domains={},
+        session_current_command={},
+        domain_approval_cbs={},
+        domain_notify_cbs={},
+        exec_locks={},
+        proxy_bypass_sessions=set(),
+        session_current_contexts={},
+        exec_notified_domains={},
+        exec_notified_credentials={},
+    )
+    base.update(overrides)
+    return SandboxExecState(**base)
+
+
+@pytest.mark.anyio
+async def test_request_domain_approval_denies_orphaned_request_without_sentinel():
+    """No live exec → deny without invoking the sentinel callback (orphaned process)."""
+    cb = AsyncMock(return_value=True)
+    state = _make_exec_state(domain_approval_cbs={"sess-1": cb})
+    coordinator = SandboxExecCoordinator(runtime=make_runtime_mock(), state=state)
+
+    allowed = await coordinator.request_domain_approval("sess-1", "registry.npmjs.org")
+
+    assert allowed is False
+    cb.assert_not_awaited()
+    assert "registry.npmjs.org" not in state.exec_temp_domains.get("sess-1", set())
+
+
+@pytest.mark.anyio
+async def test_request_domain_approval_consults_sentinel_during_live_exec():
+    """Live exec (command recorded) → callback is consulted as before."""
+    cb = AsyncMock(return_value=True)
+    state = _make_exec_state(
+        domain_approval_cbs={"sess-1": cb},
+        session_current_command={"sess-1": "npm ci"},
+    )
+    coordinator = SandboxExecCoordinator(runtime=make_runtime_mock(), state=state)
+
+    allowed = await coordinator.request_domain_approval("sess-1", "registry.npmjs.org")
+
+    assert allowed is True
+    cb.assert_awaited_once_with("registry.npmjs.org", "npm ci")
+    assert "registry.npmjs.org" in state.exec_temp_domains["sess-1"]
+
+
 # ── Proxy token extraction ───────────────────────────────────────────
 
 

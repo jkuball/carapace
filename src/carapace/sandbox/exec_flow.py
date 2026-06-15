@@ -292,6 +292,13 @@ class SandboxExecCoordinator:
             logger.warning(f"No domain approval callback for session {session_id}, denying {domain}")
             return False
 
+        # No live exec: the request comes from a process orphaned by a cancelled
+        # exec (e.g. an interrupted skill install still hitting registry.npmjs.org).
+        # Deny without invoking the sentinel so orphaned traffic can't burn tokens.
+        if session_id not in self._state.session_current_command:
+            logger.info(f"Denying {domain} for session {session_id}: no active exec (orphaned request)")
+            return False
+
         command = self._state.session_current_command.get(session_id, "")
         allowed = await cb(domain, command)
         if allowed:
