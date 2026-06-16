@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Eye, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
 import { SandboxGitControls } from "@/components/git-sync";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
@@ -31,6 +31,7 @@ import type {
   Attachment,
   ChatMessage,
   ClientMessage,
+  CompactionAnnotation,
   EscalationDecision,
   HistoryMessage,
   LlmActivity,
@@ -54,6 +55,7 @@ import {
 } from "@/lib/utils";
 import { Message } from "./message";
 import { ChatInput } from "./chat-input";
+import { AgentHistoryView } from "./agent-history-view";
 
 interface ChatViewProps {
   server: string;
@@ -455,7 +457,12 @@ function updateToolCallMessageById(
 function updateToolResultById(
   messages: ChatMessage[],
   toolId: string,
-  result: { result: string; exitCode?: number; files?: SentFile[] },
+  result: {
+    result: string;
+    exitCode?: number;
+    files?: SentFile[];
+    compaction?: CompactionAnnotation;
+  },
 ): { messages: ChatMessage[]; found: boolean } {
   return updateToolCallMessageById(messages, toolId, (entry) => ({
     ...entry,
@@ -463,6 +470,9 @@ function updateToolResultById(
     files: result.files,
     exitCode: result.exitCode,
     loading: false,
+    compaction:
+      result.compaction
+      ?? (entry as { compaction?: CompactionAnnotation }).compaction,
   }));
 }
 
@@ -561,6 +571,43 @@ function groupChildToolCalls(messages: ChatMessage[]): ChatMessage[] {
     : messages;
 }
 
+function foldNodeOf(message: ChatMessage): string | undefined {
+  if (
+    message.kind === "user"
+    || message.kind === "assistant"
+    || message.kind === "tool_call"
+  ) {
+    return message.compaction?.folded_into;
+  }
+  return undefined;
+}
+
+/** Collapse consecutive folded messages (same node) into one expandable summary block. */
+function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const node = foldNodeOf(messages[i]);
+    if (!node) {
+      out.push(messages[i]);
+      i++;
+      continue;
+    }
+    const children: ChatMessage[] = [];
+    while (i < messages.length && foldNodeOf(messages[i]) === node) {
+      children.push(messages[i]);
+      i++;
+    }
+    out.push({
+      kind: "compaction_summary",
+      nodeId: node,
+      foldedCount: children.length,
+      children,
+    });
+  }
+  return out;
+}
+
 function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   const pendingToolCallIndices = new Map<string, number[]>();
@@ -573,6 +620,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
         kind: "user",
         content: entry.content,
         attachments: entry.attachments,
+        compaction: entry.compaction,
       });
       continue;
     }
@@ -616,6 +664,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
         loading,
         toolId: normalizeOptionalString(entry.tool_id),
         parentToolId: normalizeOptionalString(entry.parent_tool_id),
+        compaction: entry.compaction,
       });
 
       const queue = pendingToolCallIndices.get(tool) ?? [];
@@ -631,6 +680,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
           result: entry.result ?? "",
           files: entry.files,
           exitCode: entry.exit_code,
+          compaction: entry.compaction,
         });
         if (updated.found) {
           messages.length = 0;
@@ -650,6 +700,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
           files: entry.files,
           exitCode: entry.exit_code,
           loading: false,
+          compaction: entry.compaction ?? toolCall.compaction,
         };
       }
       if (queue && queue.length === 0) {
@@ -814,10 +865,11 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       content: entry.content,
       finalStatus: entry.final_status,
       eventIndex: typeof entry.event_index === "number" ? entry.event_index : undefined,
+      compaction: entry.compaction,
     });
   }
 
-  return groupChildToolCalls(messages);
+  return groupFoldedMessages(groupChildToolCalls(messages));
 }
 
 export function countSubmittedUserMessages(messages: ChatMessage[]): number {
@@ -879,6 +931,7 @@ export function ChatView({
   onDeleteSession,
 }: ChatViewProps) {
   const t = useTranslations("chatView");
+  const tc = useTranslations("compaction");
   const tRoot = useTranslations();
   const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -887,6 +940,7 @@ export function ChatView({
   const [usage, setUsage] = useState<TurnUsage | null>(null);
   const [llmActivity, setLlmActivity] = useState<LlmActivity | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [agentViewOpen, setAgentViewOpen] = useState(false);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [availableModelEntries, setAvailableModelEntries] = useState<
     AvailableModelInfo[]
@@ -1349,6 +1403,13 @@ export function ChatView({
             ...prev,
             { kind: "command", command: msg.command, data: msg.data },
           ]);
+          if (msg.command === "compact") {
+            // History was rewritten server-side; re-project so folds/badges render.
+            // The refetched transcript already includes this command event.
+            fetchHistory(server, token, sessionId)
+              .then((history) => setMessages(projectHistoryToMessages(history)))
+              .catch(() => {});
+          }
           setLlmActivity(null);
           lastThinkingStartedAtRef.current = null;
           finishWaiting();
@@ -1457,7 +1518,7 @@ export function ChatView({
           break;
       }
     },
-    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox],
+    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox, server, token, sessionId],
   );
 
   const onWsDisconnect = useCallback(() => {
@@ -2083,6 +2144,14 @@ export function ChatView({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1">
           <button
+            onClick={() => setAgentViewOpen(true)}
+            disabled={!session}
+            title={tc("agentViewHint")}
+            className="rounded-md p-1.5 text-foreground/70 transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+          <button
             onClick={() => void handleTogglePinned()}
             disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
             title={sessionPinned ? t("actions.unpin") : t("actions.pin")}
@@ -2588,6 +2657,15 @@ export function ChatView({
           <div className="h-full overflow-y-auto p-3">{inspectorContent}</div>
         </aside>
       </div>
+
+      {agentViewOpen ? (
+        <AgentHistoryView
+          server={server}
+          token={token}
+          sessionId={sessionId}
+          onClose={() => setAgentViewOpen(false)}
+        />
+      ) : null}
 
       {mobileInspectorOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">

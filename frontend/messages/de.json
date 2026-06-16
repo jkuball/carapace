@@ -637,6 +637,14 @@
                 "used": "Verwendet",
                 "blocked": "blockiert"
             }
+        },
+        "compact": {
+            "title": "Komprimierung",
+            "nothing": "Nichts zu komprimieren.",
+            "saved": "{saved} Tokens gespart ({before}→{after}).",
+            "folded": "{count} Runden gefaltet",
+            "tools": "{count} Tool-Ausgaben zusammengefasst",
+            "thinking": "{count} Denk-Teile verworfen"
         }
     },
     "chatView": {
@@ -1051,5 +1059,18 @@
             "revoke": "API-Schlüssel konnte nicht widerrufen werden.",
             "noScopes": "Wähle mindestens eine Berechtigung."
         }
+    },
+    "compaction": {
+        "badge": "komprimiert",
+        "foldedCount": "{count} ältere Nachrichten komprimiert",
+        "foldTitle": "In eine Zusammenfassung gefaltet, um Kontext zu sparen",
+        "foldExplainer": "Diese Nachrichten wurden im Agent-Kontext zusammengefasst. Die Originale sind unten zu sehen.",
+        "toolTitle": "Tool-Ausgabe {method}, um Kontext zu sparen ({orig}→{summary} Tokens)",
+        "toolBadge": "{method}",
+        "agentView": "Agent-Ansicht",
+        "agentViewOff": "Normale Ansicht",
+        "agentViewHint": "Verlauf genau so anzeigen, wie ihn der Agent sieht",
+        "agentSummary": "Komprimierte Zusammenfassung",
+        "agentEmpty": "Noch kein Verlauf."
     }
 }

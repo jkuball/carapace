@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
+  Archive,
   ChevronRight,
   FileText,
   FilePen,
@@ -29,7 +30,7 @@ import {
   languageFromFilePath,
   splitReadToolResult,
 } from "@/lib/sandbox-read";
-import type { SentFile } from "@/lib/types";
+import type { CompactionAnnotation, SentFile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ToolCallBadgeProps {
@@ -45,6 +46,7 @@ interface ToolCallBadgeProps {
   files?: SentFile[];
   exitCode?: number;
   loading?: boolean;
+  compaction?: CompactionAnnotation;
   childCalls?: ToolCallBadgeProps[];
   server?: string;
   sessionId?: string;
@@ -508,11 +510,13 @@ export function ToolCallBadge({
   files,
   exitCode,
   loading,
+  compaction,
   childCalls,
   server,
   sessionId,
 }: ToolCallBadgeProps) {
   const t = useTranslations("toolCallBadge");
+  const tc = useTranslations("compaction");
   const isSendFileTool = tool === "send_file";
   const [open, setOpen] = useState(isSendFileTool);
   const [skillInstructionsOpen, setSkillInstructionsOpen] = useState(false);
@@ -727,6 +731,19 @@ export function ToolCallBadge({
             );
           })()}
           {source && <ApprovalBadge source={source} verdict={verdict} tooltip={finalDecisionMessage || sentinelExplanation || undefined} />}
+          {compaction?.method && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+              title={tc("toolTitle", {
+                method: compaction.method,
+                orig: compaction.orig_tokens ?? 0,
+                summary: compaction.summary_tokens ?? 0,
+              })}
+            >
+              <Archive className="h-2.5 w-2.5" />
+              {tc("toolBadge", { method: compaction.method })}
+            </span>
+          )}
           {loading && (
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
           )}

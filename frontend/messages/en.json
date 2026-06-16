@@ -637,6 +637,14 @@
                 "used": "Used",
                 "blocked": "blocked"
             }
+        },
+        "compact": {
+            "title": "Compaction",
+            "nothing": "Nothing to compact.",
+            "saved": "Saved {saved} tokens ({before}→{after}).",
+            "folded": "Folded {count} turns",
+            "tools": "Summarized {count} tool outputs",
+            "thinking": "Dropped {count} thinking parts"
         }
     },
     "chatView": {
@@ -1051,5 +1059,18 @@
             "revoke": "Failed to revoke API key.",
             "noScopes": "Select at least one scope."
         }
+    },
+    "compaction": {
+        "badge": "compacted",
+        "foldedCount": "{count} earlier messages compacted",
+        "foldTitle": "Folded into a summary to save context",
+        "foldExplainer": "These messages were summarized in the agent's context. The originals are shown below.",
+        "toolTitle": "Tool output {method} to save context ({orig}→{summary} tokens)",
+        "toolBadge": "{method}",
+        "agentView": "Agent view",
+        "agentViewOff": "Normal view",
+        "agentViewHint": "Show the history exactly as the agent sees it",
+        "agentSummary": "Compacted summary",
+        "agentEmpty": "No history yet."
     }
 }

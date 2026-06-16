@@ -269,6 +269,10 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
     return <BudgetView data={data} />;
   }
 
+  if (command === "compact") {
+    return <CompactView data={data} />;
+  }
+
   const plainMessage = decodePlainMessagePayload(data);
   if (plainMessage) {
     if (plainMessage.error) {
@@ -288,6 +292,53 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
     <pre className="my-2 rounded-md bg-muted p-2 text-xs font-mono overflow-x-auto">
       {JSON.stringify(data, null, 2)}
     </pre>
+  );
+}
+
+function CompactView({ data }: { data: unknown }) {
+  const t = useTranslations("commandResult.compact");
+  const d = isRecord(data) ? data : {};
+  const error = typeof d.error === "string" ? d.error : undefined;
+  if (error) {
+    return <p className="my-1 text-sm text-destructive">{error}</p>;
+  }
+  const num = (k: string) => (typeof d[k] === "number" ? (d[k] as number) : 0);
+  const before = num("before_tokens");
+  const after = num("after_tokens");
+  const folded = num("turns_folded");
+  const tools = num("tool_returns_compacted");
+  const thinking = num("thinking_dropped");
+  const nothing = folded === 0 && tools === 0 && thinking === 0;
+  const lines: string[] = [];
+  if (folded) lines.push(t("folded", { count: folded }));
+  if (tools) lines.push(t("tools", { count: tools }));
+  if (thinking) lines.push(t("thinking", { count: thinking }));
+  return (
+    <div className="my-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-sm">
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {t("title")}
+      </div>
+      {nothing ? (
+        <p className="mt-1 text-muted-foreground">{t("nothing")}</p>
+      ) : (
+        <>
+          <p className="mt-1 font-medium">
+            {t("saved", {
+              saved: Math.max(0, before - after).toLocaleString(),
+              before: before.toLocaleString(),
+              after: after.toLocaleString(),
+            })}
+          </p>
+          {lines.length > 0 && (
+            <ul className="mt-1 list-inside list-disc text-muted-foreground">
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

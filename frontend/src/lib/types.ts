@@ -220,6 +220,51 @@ export interface HistoryMessage {
   skill_name?: string;
   tool_id?: string;
   parent_tool_id?: string;
+  compaction?: CompactionAnnotation;
+}
+
+/**
+ * Compaction annotation attached to a history event:
+ * - `{ folded_into }` on a user/assistant/tool event folded into a summary node
+ * - `{ method, orig_tokens, summary_tokens }` on a compacted tool_result
+ */
+export interface CompactionAnnotation {
+  folded_into?: string;
+  method?: "truncate" | "summarize" | "drop";
+  orig_tokens?: number;
+  summary_tokens?: number;
+}
+
+export interface AgentHistoryRow {
+  role:
+    | "user"
+    | "assistant"
+    | "thinking"
+    | "tool_call"
+    | "tool_result"
+    | "compaction_summary";
+  content: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  tool_id?: string;
+  compaction?: CompactionAnnotation;
+}
+
+export interface AgentHistoryResponse {
+  rows: AgentHistoryRow[];
+  node_count: number;
+}
+
+export interface CompactionReport {
+  mode: "all" | "fold" | "tools";
+  before_tokens: number;
+  after_tokens: number;
+  thinking_dropped: number;
+  turns_folded: number;
+  tool_returns_compacted: number;
+  consolidated: boolean;
+  message: string;
+  error?: string;
 }
 
 // WebSocket protocol — Server → Client
@@ -467,12 +512,24 @@ export type ClientMessage =
 // Chat UI messages
 
 export type ChatMessage =
-  | { kind: "user"; content: string; attachments?: Attachment[] }
+  | {
+      kind: "user";
+      content: string;
+      attachments?: Attachment[];
+      compaction?: CompactionAnnotation;
+    }
   | {
       kind: "assistant";
       content: string;
       eventIndex?: number;
       finalStatus?: "success" | "warning";
+      compaction?: CompactionAnnotation;
+    }
+  | {
+      kind: "compaction_summary";
+      nodeId: string;
+      foldedCount: number;
+      children: ChatMessage[];
     }
   | { kind: "streaming"; content: string }
   | {
@@ -509,6 +566,7 @@ export type ChatMessage =
       loading?: boolean;
       toolId?: string;
       parentToolId?: string;
+      compaction?: CompactionAnnotation;
       children?: Array<{
         kind: "tool_call";
         tool: string;

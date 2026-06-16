@@ -1,4 +1,5 @@
 import type {
+  AgentHistoryResponse,
   HistoryMessage,
   JobDefinition,
   JobRunResult,
@@ -762,6 +763,19 @@ export async function fetchHistory(
     headers: headers(token),
   });
   if (!res.ok) throw new Error(`Failed to fetch history: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAgentHistory(
+  server: string,
+  token: string,
+  sessionId: string,
+): Promise<AgentHistoryResponse> {
+  const res = await fetch(
+    `${server}/api/sessions/${sessionId}/agent-history`,
+    { headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(`Failed to fetch agent history: ${res.status}`);
   return res.json();
 }
 

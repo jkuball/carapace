@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, Paperclip, RotateCcw, Undo2 } from "lucide-react";
+import { AlertTriangle, Archive, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, Paperclip, RotateCcw, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
@@ -290,6 +290,60 @@ function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
   );
 }
 
+function CompactionSummaryBlock({
+  message,
+  server,
+  sessionId,
+  activeLlmActivity,
+}: {
+  message: Extract<ChatMessage, { kind: "compaction_summary" }>;
+  server?: string;
+  sessionId?: string;
+  activeLlmActivity?: LlmActivity | null;
+}) {
+  const t = useTranslations("compaction");
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="my-1 w-full min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
+          "border border-dashed border-border/70 bg-muted/40 text-muted-foreground",
+          "hover:bg-accent transition-colors",
+        )}
+        title={t("foldTitle")}
+      >
+        <ChevronRight
+          className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-90")}
+        />
+        <Archive className="h-3 w-3 shrink-0" />
+        <span className="font-medium">
+          {t("foldedCount", { count: message.foldedCount })}
+        </span>
+        <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide opacity-70">
+          {t("badge")}
+        </span>
+      </button>
+      {open ? (
+        <div className="ml-5 mt-1.5 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+          <p className="text-[11px] text-muted-foreground">{t("foldExplainer")}</p>
+          {message.children.map((child, idx) => (
+            <Message
+              key={idx}
+              message={child}
+              server={server}
+              sessionId={sessionId}
+              activeLlmActivity={activeLlmActivity}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface MessageProps {
   message: ChatMessage;
   server?: string;
@@ -443,6 +497,7 @@ export function Message({
           files={message.files}
           exitCode={message.exitCode}
           loading={message.loading}
+          compaction={message.compaction}
           server={server}
           sessionId={sessionId}
           childCalls={message.children?.map((c) => ({
@@ -506,6 +561,16 @@ export function Message({
               responseMessage,
             )
           }
+        />
+      );
+
+    case "compaction_summary":
+      return (
+        <CompactionSummaryBlock
+          message={message}
+          server={server}
+          sessionId={sessionId}
+          activeLlmActivity={activeLlmActivity}
         />
       );
 
