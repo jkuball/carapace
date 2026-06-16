@@ -18,12 +18,14 @@ from ..database.engine import SessionFactory
 from ..database.models import (
     SandboxTokenRow,
     SessionAuditRow,
+    SessionCompactionRow,
     SessionEventRow,
     SessionHistoryRow,
     SessionLlmRequestRow,
     SessionRow,
     SessionUsageRow,
 )
+from ..models.compaction import SessionCompaction
 from ..models.session import SessionAttributes, SessionBudget, SessionState
 from ..sandbox.state import SessionSandboxSnapshot
 from ..usage import LlmRequestLog, LlmRequestState, UsageTracker
@@ -292,6 +294,22 @@ class SessionManager:
                 db.add(SessionLlmRequestRow(session_id=session_id, log=log))
             else:
                 row.log = log
+
+    # --- Compaction summary tree ---
+
+    def load_compaction(self, session_id: str) -> SessionCompaction:
+        with self._session_factory() as db:
+            row = db.get(SessionCompactionRow, session_id)
+            return row.tree if row is not None else SessionCompaction()
+
+    def save_compaction(self, session_id: str, tree: SessionCompaction) -> None:
+        with self._session_factory.begin() as db:
+            row = db.get(SessionCompactionRow, session_id)
+            if row is None:
+                db.add(SessionCompactionRow(session_id=session_id, tree=tree))
+            else:
+                row.tree = tree
+        self._notify_change()
 
     # --- In-flight LLM request activity (transient — stays on disk) ---
 
