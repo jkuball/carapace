@@ -169,6 +169,34 @@ def test_compact_all_ladder_end_to_end(tmp_path: Path, db_factory) -> None:
     asyncio.run(_run())
 
 
+def test_fold_after_tools_still_badges_turns(tmp_path: Path, db_factory) -> None:
+    """`/compact tools` then `/compact fold`: folded turns must still get folded_into badges."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 10, tool_output="line\n" * 3000)
+
+        # Compact tools first — annotates tool_result events with a method.
+        await engine.run_compaction(active, mode="tools")
+        # Then fold the old turns.
+        report = await engine.run_compaction(active, mode="fold", keep_turns=3)
+
+        assert report.turns_folded == 7
+        tree = engine.session_mgr.load_compaction(sid)
+        node_id = tree.nodes[0].id
+        events = list(engine.session_mgr.load_events(sid))
+        folded = [e for e in events if e.get("compaction", {}).get("folded_into") == node_id]
+        # 7 folded turns, each with user + tool_call + tool_result + assistant events, get the badge.
+        assert len(folded) >= 7
+        # tool method annotations survived the merge where both apply.
+        assert any(e.get("compaction", {}).get("method") and e.get("compaction", {}).get("folded_into") for e in events)
+
+    asyncio.run(_run())
+
+
 def test_compact_noop_when_short(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():

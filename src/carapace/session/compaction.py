@@ -122,7 +122,8 @@ def find_tool_return_candidates(
         if not isinstance(msg, ModelRequest):
             continue
         for pi, part in enumerate(msg.parts):
-            if not isinstance(part, ToolReturnPart) or tool_return_is_compacted(part):
+            # Exact type only — capability-return subclasses narrow ``content`` and must not be compacted.
+            if type(part) is not ToolReturnPart or tool_return_is_compacted(part):
                 continue
             tokens = count_text_tokens(_tool_content_text(part.content), model_name=model_name)
             if tokens < floor_tokens:
@@ -156,7 +157,7 @@ def apply_tool_return_compaction(
         changed = False
         new_parts: list[Any] = []
         for part in msg.parts:
-            if isinstance(part, ToolReturnPart) and part.tool_call_id in applied and not tool_return_is_compacted(part):
+            if type(part) is ToolReturnPart and part.tool_call_id in applied and not tool_return_is_compacted(part):
                 rep = applied[part.tool_call_id]
                 meta = dict(part.metadata) if isinstance(part.metadata, dict) else {}
                 meta[_META_KEY] = {
@@ -165,7 +166,16 @@ def apply_tool_return_compaction(
                     "orig_tokens": rep.orig_tokens,
                     "summary_tokens": rep.summary_tokens,
                 }
-                new_parts.append(replace(part, content=_tool_marker(rep.method) + rep.new_content, metadata=meta))
+                # Rebuild as a base ToolReturnPart (str content) — never a capability subclass.
+                new_parts.append(
+                    ToolReturnPart(
+                        tool_name=part.tool_name,
+                        content=_tool_marker(rep.method) + rep.new_content,
+                        tool_call_id=part.tool_call_id,
+                        metadata=meta,
+                        timestamp=part.timestamp,
+                    )
+                )
                 changed = True
             else:
                 new_parts.append(part)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -52,7 +53,9 @@ class SessionCompactionMixin:
         def _resolve_model_settings(self, name: str) -> ModelSettings | None: ...
         def _remaining_aux_usage_limits(self, active: ActiveSession) -> UsageLimits | None: ...
         def agent_model_id_for_gauge(self, active: ActiveSession) -> str: ...
-        def llm_request_recording(self, active: ActiveSession, *, track_activity: bool = True): ...
+        def llm_request_recording(
+            self, active: ActiveSession, *, track_activity: bool = True
+        ) -> AbstractContextManager[Any, bool | None]: ...
 
     def _compaction_model(self) -> str:
         return self._config.agent.compaction.model or self._config.agent.title_model
@@ -221,10 +224,14 @@ def _annotate_folded_events(events: list[dict[str, Any]], count: int, node_id: s
     annotated = 0
     for turn in completed_event_turns(events):
         span = events[turn.start_event_index : turn.end_event_index + 1]
-        if any("compaction" in e for e in span):
+        # Skip only turns already folded — a tool-output annotation (method) must not block folding.
+        if any(isinstance(e.get("compaction"), dict) and "folded_into" in e["compaction"] for e in span):
             continue
         for e in span:
-            e["compaction"] = {"folded_into": node_id}
+            ann = e.get("compaction")
+            ann = dict(ann) if isinstance(ann, dict) else {}
+            ann["folded_into"] = node_id
+            e["compaction"] = ann
         annotated += 1
         if annotated >= count:
             break
@@ -234,7 +241,10 @@ def _annotate_tool_result_events(events: list[dict[str, Any]], applied: dict[str
     for e in events:
         if e.get("role") != "tool_result":
             continue
-        rep = applied.get(e.get("tool_id"))
+        tool_id = e.get("tool_id")
+        if not isinstance(tool_id, str):
+            continue
+        rep = applied.get(tool_id)
         if rep is None:
             continue
         e["compaction"] = {
