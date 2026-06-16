@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.142.4 (2026-06-16)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: deny orphaned proxy requests without invoking sentinel
+  ([`e73d2b8`](https://github.com/thiesgerken/carapace/commit/e73d2b8bbe2a57794205d42dce924bd8cb18d618))
+
+  When a skill activation (or any exec) is cancelled, the in-container process keeps running and its network requests reach the session-scoped domain approval callback, escalating each one to the sentinel and burning tokens. Guard request_domain_approval: if no exec is live (no entry in session_current_command), deny immediately instead of consulting the sentinel.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.142.3 (2026-06-14)
 
 
