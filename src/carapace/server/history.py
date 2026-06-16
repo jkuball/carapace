@@ -71,6 +71,9 @@ class HistoryMessage(BaseModel):
     exit_code: int | None = None
     attachments: list[Attachment] | None = None
     files: list[SentFileInfo] | None = None
+    # Compaction annotation: {folded_into: node_id} on folded events, or
+    # {method, orig_tokens, summary_tokens} on a compacted tool_result.
+    compaction: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _contexts_from_args_when_missing(self) -> Self:
@@ -118,6 +121,74 @@ async def get_session_history(
     if limit > 0:
         result = result[-limit:]
     return result
+
+
+class AgentHistoryRow(BaseModel):
+    """One row of the model history as the agent actually sees it (the compacted cut)."""
+
+    role: Literal["user", "assistant", "thinking", "tool_call", "tool_result", "compaction_summary"]
+    content: str = ""
+    tool: str | None = None
+    args: dict[str, Any] | None = None
+    tool_id: str | None = None
+    compaction: dict[str, Any] | None = None
+
+
+class AgentHistoryResponse(BaseModel):
+    rows: list[AgentHistoryRow]
+    node_count: int = 0
+
+
+@router.get("/sessions/{session_id}/agent-history", response_model=AgentHistoryResponse)
+async def get_agent_history(
+    session_id: str,
+    user: Annotated[UserIdentity, Depends(require(Scope.history, Access.read))],
+) -> AgentHistoryResponse:
+    """The model history verbatim — fold summaries + compacted tool returns — for the agent-view toggle."""
+    from pydantic_ai.messages import ToolReturnPart
+
+    from ..models.compaction import FOLD_MARKER
+    from ..session.compaction import is_fold_message, tool_return_compaction_info
+
+    if server._engine.session_mgr.load_state(session_id) is None or not server._engine.session_mgr.is_owned_by(
+        session_id, user.username
+    ):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = server._engine.session_mgr.load_history(session_id)
+    tree = server._engine.session_mgr.load_compaction(session_id)
+    rows: list[AgentHistoryRow] = []
+    for msg in messages:
+        if is_fold_message(msg):
+            text = msg.parts[0].content
+            summary = text.split("\n", 1)[1].strip() if "\n" in text else text.removeprefix(FOLD_MARKER).strip()
+            rows.append(AgentHistoryRow(role="compaction_summary", content=summary))
+            continue
+        if isinstance(msg, ModelRequest):
+            for part in msg.parts:
+                if isinstance(part, UserPromptPart) and isinstance(part.content, str):
+                    rows.append(AgentHistoryRow(role="user", content=part.content))
+                elif isinstance(part, ToolReturnPart):
+                    info = tool_return_compaction_info(part)
+                    rows.append(
+                        AgentHistoryRow(
+                            role="tool_result",
+                            content=part.content if isinstance(part.content, str) else str(part.content),
+                            tool=part.tool_name,
+                            tool_id=part.tool_call_id,
+                            compaction=info,
+                        )
+                    )
+        elif isinstance(msg, ModelResponse):
+            for part in msg.parts:
+                if isinstance(part, ToolCallPart):
+                    args = normalize_tool_call_args(part.tool_name, part.args) if isinstance(part.args, dict) else {}
+                    rows.append(AgentHistoryRow(role="tool_call", content="", tool=part.tool_name, args=args))
+                elif isinstance(part, TextPart):
+                    rows.append(AgentHistoryRow(role="assistant", content=part.content))
+                elif isinstance(part, ThinkingPart) and part.content:
+                    rows.append(AgentHistoryRow(role="thinking", content=part.content))
+    return AgentHistoryResponse(rows=rows, node_count=len(tree.nodes))
 
 
 def _history_from_messages(session_id: str) -> list[HistoryMessage]:

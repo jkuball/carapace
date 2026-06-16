@@ -91,9 +91,16 @@ class AppliedToolReturn:
     summary_tokens: int
 
 
-def tool_return_is_compacted(part: ToolReturnPart) -> bool:
+def tool_return_compaction_info(part: ToolReturnPart) -> dict[str, Any] | None:
+    """The stamped compaction record on a tool return, or None if not compacted."""
     meta = part.metadata
-    return isinstance(meta, dict) and isinstance(meta.get(_META_KEY), dict)
+    if isinstance(meta, dict) and isinstance(info := meta.get(_META_KEY), dict):
+        return info
+    return None
+
+
+def tool_return_is_compacted(part: ToolReturnPart) -> bool:
+    return tool_return_compaction_info(part) is not None
 
 
 def find_tool_return_candidates(
