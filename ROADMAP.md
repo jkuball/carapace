@@ -4,7 +4,7 @@
 
 ### Agent
 
-- [ ] Compaction
+- [x] Compaction (manual `/compact`; auto-trigger still pending)
 
 ## Security
 

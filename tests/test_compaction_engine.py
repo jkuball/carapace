@@ -9,6 +9,7 @@ from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     TextPart,
+    ThinkingPart,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
@@ -114,6 +115,56 @@ def test_compact_command_parsing(tmp_path: Path, db_factory) -> None:
 
         bad = await engine.handle_slash_command(sid, "/compact tools 5")
         assert "error" in bad["data"]
+
+    asyncio.run(_run())
+
+
+def test_compact_all_ladder_end_to_end(tmp_path: Path, db_factory) -> None:
+    """`/compact` (all): thinking dropped + old turns folded + big tool outputs summarized."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+
+        # 10 turns, each with a large tool output and a thinking part in the response.
+        history: list = []
+        events: list = []
+        for i in range(10):
+            cid = f"call-{i}"
+            history.append(ModelRequest(parts=[UserPromptPart(content=f"q{i}")]))
+            history.append(
+                ModelResponse(
+                    parts=[
+                        ThinkingPart(content=f"reason {i}"),
+                        ToolCallPart(tool_name="exec", args={}, tool_call_id=cid),
+                    ]
+                )
+            )
+            history.append(
+                ModelRequest(parts=[ToolReturnPart(tool_name="exec", content="row\n" * 3000, tool_call_id=cid)])
+            )
+            history.append(ModelResponse(parts=[TextPart(content=f"a{i}")]))
+            events.append({"role": "user", "content": f"q{i}"})
+            events.append({"role": "tool_call", "tool": "exec", "tool_id": cid})
+            events.append({"role": "tool_result", "tool": "exec", "tool_id": cid, "result": "row\n" * 3000})
+            events.append({"role": "assistant", "content": f"a{i}"})
+        engine.session_mgr.save_history(sid, history)
+        engine.session_mgr.save_events(sid, events)
+
+        report = await engine.run_compaction(active, mode="all", keep_turns=3)
+
+        assert report.thinking_dropped > 0
+        assert report.turns_folded == 7
+        assert report.tool_returns_compacted >= 1  # only kept-region returns
+        assert report.after_tokens < report.before_tokens
+        # compaction LLM usage is attributed to its own category, not the agent
+        assert "compaction" in active.usage_tracker.categories
+        # idempotent second run
+        report2 = await engine.run_compaction(active, mode="all", keep_turns=3)
+        assert report2.turns_folded == 0
+        assert report2.tool_returns_compacted == 0
 
     asyncio.run(_run())
 
