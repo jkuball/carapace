@@ -33,6 +33,10 @@ SLASH_COMMANDS: list[dict[str, str]] = [
         + "/budget cost N, or /budget tools N",
     },
     {"command": "/usage", "description": "Show token usage for this session"},
+    {
+        "command": "/compact",
+        "description": "Compact history to save context. /compact [K], /compact fold [K], or /compact tools",
+    },
     {"command": "/quit", "description": "Disconnect"},
     {"command": "/help", "description": "Show this help"},
 ]

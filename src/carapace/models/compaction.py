@@ -43,6 +43,23 @@ class CompactionNode(BaseModel):
     created_at: datetime | None = None
 
 
+class CompactionReport(BaseModel):
+    """Outcome of one `/compact` run, returned to the client."""
+
+    mode: Literal["all", "fold", "tools"]
+    before_tokens: int = 0
+    after_tokens: int = 0
+    thinking_dropped: int = 0
+    turns_folded: int = 0
+    tool_returns_compacted: int = 0
+    consolidated: bool = False
+    message: str = ""
+
+    @property
+    def saved_tokens(self) -> int:
+        return max(0, self.before_tokens - self.after_tokens)
+
+
 class SessionCompaction(BaseModel):
     """The full compaction tree for a session (ordered oldest-first)."""
 

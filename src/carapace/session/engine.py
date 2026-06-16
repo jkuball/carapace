@@ -57,6 +57,7 @@ from ..ws_models import (
 )
 from .approvals import SessionApprovalMixin
 from .commands import SessionCommandMixin
+from .compaction_engine import SessionCompactionMixin
 from .manager import SessionManager
 from .model_selection import SessionModelMixin
 from .titler import generate_title
@@ -93,6 +94,7 @@ class SessionEngine(
     SessionUsageBudgetMixin,
     SessionApprovalMixin,
     SessionTurnMixin,
+    SessionCompactionMixin,
 ):
     """Central session lifecycle manager.
 

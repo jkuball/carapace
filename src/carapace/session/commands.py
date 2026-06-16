@@ -25,6 +25,9 @@ class SessionCommandHost(Protocol):
     async def _handle_model_selector_command(
         self, active: ActiveSession, arg: str, *, slash_line: str
     ) -> dict[str, Any]: ...
+    async def run_compaction(
+        self, active: ActiveSession, *, mode: Literal["all", "fold", "tools"], keep_turns: int | None
+    ) -> Any: ...
     def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]: ...
     def _budget_gauges(self, active: ActiveSession) -> list[Any]: ...
     def _usage_last_llm_payload_row(
@@ -156,10 +159,30 @@ class SessionCommandMixin:
         if cmd == "/budget":
             return self._handle_budget_command(active, parts)
 
+        if cmd == "/compact":
+            return await self._handle_compact_command(active, parts[1].strip() if len(parts) > 1 else "")
+
         if cmd == "/reload":
             return await self._handle_reload_command(session_id)
 
         return None
+
+    async def _handle_compact_command(self, active: ActiveSession, arg: str) -> dict[str, Any]:
+        mode: Literal["all", "fold", "tools"] = "all"
+        keep: int | None = None
+        tokens = arg.split()
+        if tokens and tokens[0].lower() in ("fold", "tools"):
+            mode = tokens[0].lower()  # type: ignore[assignment]
+            tokens = tokens[1:]
+        if tokens:
+            if mode == "tools" or not tokens[0].isdigit():
+                return {
+                    "command": "compact",
+                    "data": {"error": "Usage: /compact [K], /compact fold [K], or /compact tools"},
+                }
+            keep = int(tokens[0])
+        report = await self.run_compaction(active, mode=mode, keep_turns=keep)
+        return {"command": "compact", "data": report.model_dump(mode="json")}
 
     def _handle_budget_command(self, active: ActiveSession, parts: list[str]) -> dict[str, Any]:
         if len(parts) == 1:
