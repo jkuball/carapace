@@ -1,6 +1,73 @@
 # CHANGELOG
 
 
+## v0.143.0 (2026-06-19)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #233 from thiesgerken/feat/group-tool-rows
+  ([`80b4f1b`](https://github.com/thiesgerken/carapace/commit/80b4f1b20c5aa151b1df4f937498be9f27763f88))
+
+- ✨ feat: group tool-call runs + restyle rows and usage panel
+  ([`80b4f1b`](https://github.com/thiesgerken/carapace/commit/80b4f1b20c5aa151b1df4f937498be9f27763f88))
+
+- ✨ feat: collapse tool-call runs into a summary group
+  ([`72693d6`](https://github.com/thiesgerken/carapace/commit/72693d6ee0a9c9e4e27e858f67772c558dd3c2a5))
+
+  Consecutive tool_call/thinking messages now collapse into a single ToolCallGroup row showing a summary ("Ran 4 commands, read 7 files, edited 3 files"). Finished runs collapse by default; in-progress runs stay expanded with present-tense wording and a spinner, then auto-collapse when the turn ends (unless the user toggled). Grouping is render-only, no backend or type changes.
+
+  Also drop a redundant trailing "geschrieben" in the German write summary.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: collapse history usage panels, expand only live ones
+  ([`7fa4197`](https://github.com/thiesgerken/carapace/commit/7fa4197301c855b84772b5aa40480a6b99255356))
+
+  The setTimeout hydration heuristic failed because history loads async, so panels mounted after the tick and started expanded. Mark live-appended command messages with `live: true` and thread it down as defaultExpanded: replayed history panels start collapsed, a freshly run /usage starts open.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: derive group open state instead of setState in effect
+  ([`6f96b55`](https://github.com/thiesgerken/carapace/commit/6f96b55f291b194240a9f7478240c287cbe78f1f))
+
+  Replace the useEffect+setOpen pattern with derived state (override ?? inProgress) to satisfy react-hooks/set-state-in-effect.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix: count nested child tool calls in group summary
+  ([`2ad6453`](https://github.com/thiesgerken/carapace/commit/2ad64533e04a1b50f901a46158ea2a3c47ba0c0c))
+
+  Flatten message.children into the summary counts so commands/reads spawned as child rows (e.g. under a skill) are no longer under-reported.
+
+  Addresses Cursor Bugbot review.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 💄 UI/UX
+
+
+- 💄 style: lighten tool rows, add timeline rail, collapsible usage
+  ([`e71ec38`](https://github.com/thiesgerken/carapace/commit/e71ec38dac7d4644cef4d0bc4c06e669d2f5651e))
+
+  - Drop per-row background fill; rows are quiet text lines with hover +
+    active (open) fill (bg-accent).
+  - Labels use the UI font; payloads stay mono but a touch smaller (11px)
+    so the right side no longer outweighs the label.
+  - Expanded tool-call groups get a left rail tying their steps together.
+  - Completed thinking blocks show whole seconds; the live timer keeps
+    decimals/ms for a responsive feel.
+  - /usage breakdown is now collapsible (budget gauges + tables fold under
+    the total summary). Existing panels start collapsed on load; a freshly
+    run /usage starts expanded.
+  - Zero-cost cells ("-") use normal text color instead of green.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.142.4 (2026-06-16)
 
 
