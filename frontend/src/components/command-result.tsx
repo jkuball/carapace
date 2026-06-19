@@ -1,6 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   decodeAvailableModel,
   decodeSlashCommand,
@@ -42,6 +45,8 @@ interface MessageData {
 interface CommandResultViewProps {
   command: string;
   data: unknown;
+  /** True when the result just arrived live (vs. replayed from history). */
+  defaultExpanded?: boolean;
 }
 
 function ruleStatusLabel(
@@ -60,7 +65,11 @@ function ruleStatusLabel(
   }
 }
 
-export function CommandResultView({ command, data }: CommandResultViewProps) {
+export function CommandResultView({
+  command,
+  data,
+  defaultExpanded,
+}: CommandResultViewProps) {
   const t = useTranslations("commandResult");
   const helpData = decodeHelpData(data);
   if (command === "help" && helpData) {
@@ -262,7 +271,7 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
   }
 
   if (command === "usage" && isUsageData(data)) {
-    return <UsageView data={data} />;
+    return <UsageView data={data} defaultExpanded={defaultExpanded ?? false} />;
   }
 
   if (command === "budget" && isBudgetData(data)) {
@@ -463,7 +472,8 @@ function fmt(n: number): string {
 function costColor(val: number): string {
   if (val >= 0.25) return "text-red-600 dark:text-red-400";
   if (val >= 0.1) return "text-yellow-600 dark:text-yellow-400";
-  return "text-green-600 dark:text-green-400";
+  if (val > 0) return "text-green-600 dark:text-green-400";
+  return ""; // zero cost ("-") stays normal text color
 }
 
 function fmtCost(val: string): string {
@@ -480,8 +490,15 @@ function lastRequestRowsShowOtherPct(rows: LastLlmRequestRow[]): boolean {
   return rows.some((r) => (r.breakdown_pct?.other ?? 0) > 0);
 }
 
-function UsageView({ data }: { data: UsagePayload }) {
+function UsageView({
+  data,
+  defaultExpanded,
+}: {
+  data: UsagePayload;
+  defaultExpanded: boolean;
+}) {
   const t = useTranslations("commandResult");
+  const [open, setOpen] = useState(defaultExpanded);
   const budgetGauges = Array.isArray(data.budget_gauges) ? data.budget_gauges : [];
   const totalToolCalls = data.total_tool_calls ?? 0;
   const allBuckets = [
@@ -598,18 +615,36 @@ function UsageView({ data }: { data: UsagePayload }) {
   const showOtherPctCol = lastRequestRowsShowOtherPct(lastRequestRows);
 
   return (
-    <div>
-      <p className="mb-2 text-xs text-muted-foreground">
-        {t("usage.total", {
-          total: fmt(total),
-          input: fmt(data.total_input),
-          output: fmt(data.total_output),
-        })}
-        {costStr}
-      </p>
-      <p className="mb-2 text-xs text-muted-foreground">
-        {t("usage.toolCalls", { count: fmt(totalToolCalls) })}
-      </p>
+    <div className="my-1 w-full min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
+          "text-muted-foreground hover:bg-accent transition-colors",
+          open && "bg-accent",
+        )}
+      >
+        <ChevronRight
+          className={cn(
+            "h-3 w-3 shrink-0 transition-transform",
+            open && "rotate-90",
+          )}
+        />
+        <span className="min-w-0 flex-1 truncate">
+          {t("usage.total", {
+            total: fmt(total),
+            input: fmt(data.total_input),
+            output: fmt(data.total_output),
+          })}
+          {costStr}
+          {" · "}
+          {t("usage.toolCalls", { count: fmt(totalToolCalls) })}
+        </span>
+      </button>
+
+      {open && (
+        <div className="ml-3 mt-0.5 border-l border-border/80 pl-3">
       {budgetGauges.length > 0 ? <BudgetTable gauges={budgetGauges} /> : null}
       {Object.keys(data.models).length > 0 &&
         renderTable(t("usage.byModel"), data.models, true)}
@@ -685,6 +720,8 @@ function UsageView({ data }: { data: UsagePayload }) {
           </div>
         </div>
       ) : null}
+        </div>
+      )}
     </div>
   );
 }

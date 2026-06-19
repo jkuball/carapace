@@ -567,6 +567,25 @@
             "result": "Result"
         }
     },
+    "toolCallGroup": {
+        "empty": "tool calls",
+        "past": {
+            "exec": "{count, plural, one {ran # command} other {ran # commands}}",
+            "read": "{count, plural, one {read # file} other {read # files}}",
+            "write": "{count, plural, one {wrote # file} other {wrote # files}}",
+            "edit": "{count, plural, one {edited # file} other {edited # files}}",
+            "skill": "{count, plural, one {used # skill} other {used # skills}}",
+            "other": "{count, plural, one {# more action} other {# more actions}}"
+        },
+        "present": {
+            "exec": "{count, plural, one {running # command} other {running # commands}}",
+            "read": "{count, plural, one {reading # file} other {reading # files}}",
+            "write": "{count, plural, one {writing # file} other {writing # files}}",
+            "edit": "{count, plural, one {editing # file} other {editing # files}}",
+            "skill": "{count, plural, one {using # skill} other {using # skills}}",
+            "other": "{count, plural, one {# more action} other {# more actions}}"
+        }
+    },
     "commandResult": {
         "help": {
             "command": "Command",
