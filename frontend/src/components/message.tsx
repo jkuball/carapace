@@ -514,7 +514,11 @@ export function Message({
 
     case "command":
       return (
-        <CommandResultView command={message.command} data={message.data} />
+        <CommandResultView
+          command={message.command}
+          data={message.data}
+          defaultExpanded={message.live}
+        />
       );
 
     case "error":

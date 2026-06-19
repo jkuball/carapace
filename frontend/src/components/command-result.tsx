@@ -45,6 +45,8 @@ interface MessageData {
 interface CommandResultViewProps {
   command: string;
   data: unknown;
+  /** True when the result just arrived live (vs. replayed from history). */
+  defaultExpanded?: boolean;
 }
 
 function ruleStatusLabel(
@@ -63,7 +65,11 @@ function ruleStatusLabel(
   }
 }
 
-export function CommandResultView({ command, data }: CommandResultViewProps) {
+export function CommandResultView({
+  command,
+  data,
+  defaultExpanded,
+}: CommandResultViewProps) {
   const t = useTranslations("commandResult");
   const helpData = decodeHelpData(data);
   if (command === "help" && helpData) {
@@ -265,7 +271,7 @@ export function CommandResultView({ command, data }: CommandResultViewProps) {
   }
 
   if (command === "usage" && isUsageData(data)) {
-    return <UsageView data={data} />;
+    return <UsageView data={data} defaultExpanded={defaultExpanded ?? false} />;
   }
 
   if (command === "budget" && isBudgetData(data)) {
@@ -484,18 +490,15 @@ function lastRequestRowsShowOtherPct(rows: LastLlmRequestRow[]): boolean {
   return rows.some((r) => (r.breakdown_pct?.other ?? 0) > 0);
 }
 
-// Flips true one tick after first load: usage views rendered in the initial
-// batch start collapsed, ones that arrive later (new commands) start expanded.
-let appHydrated = false;
-if (typeof window !== "undefined") {
-  window.setTimeout(() => {
-    appHydrated = true;
-  }, 0);
-}
-
-function UsageView({ data }: { data: UsagePayload }) {
+function UsageView({
+  data,
+  defaultExpanded,
+}: {
+  data: UsagePayload;
+  defaultExpanded: boolean;
+}) {
   const t = useTranslations("commandResult");
-  const [open, setOpen] = useState(() => appHydrated);
+  const [open, setOpen] = useState(defaultExpanded);
   const budgetGauges = Array.isArray(data.budget_gauges) ? data.budget_gauges : [];
   const totalToolCalls = data.total_tool_calls ?? 0;
   const allBuckets = [

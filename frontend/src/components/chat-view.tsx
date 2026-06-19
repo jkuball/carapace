@@ -1399,7 +1399,7 @@ export function ChatView({
           }
           setMessages((prev) => [
             ...prev,
-            { kind: "command", command: msg.command, data: msg.data },
+            { kind: "command", command: msg.command, data: msg.data, live: true },
           ]);
           setLlmActivity(null);
           lastThinkingStartedAtRef.current = null;
