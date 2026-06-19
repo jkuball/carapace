@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronRight, Layers, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ChatMessage } from "@/lib/types";
@@ -87,13 +87,9 @@ export function ToolCallGroup({
   inProgress,
 }: ToolCallGroupProps) {
   const t = useTranslations("toolCallGroup");
-  const [open, setOpen] = useState(inProgress);
-  const [touched, setTouched] = useState(false);
-
-  // Follow inProgress (collapse when the run finishes) until the user toggles.
-  useEffect(() => {
-    if (!touched) setOpen(inProgress);
-  }, [inProgress, touched]);
+  // Until the user toggles, follow inProgress (collapse when the run finishes).
+  const [override, setOverride] = useState<boolean | null>(null);
+  const open = override ?? inProgress;
 
   const summary = buildSummary(items, inProgress, t);
 
@@ -101,10 +97,7 @@ export function ToolCallGroup({
     <div className="my-1 w-full min-w-0">
       <button
         type="button"
-        onClick={() => {
-          setTouched(true);
-          setOpen((o) => !o);
-        }}
+        onClick={() => setOverride(!open)}
         className={cn(
           "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
           "text-muted-foreground hover:bg-accent transition-colors",
