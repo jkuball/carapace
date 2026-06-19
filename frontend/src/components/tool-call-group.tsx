@@ -16,19 +16,35 @@ interface ToolCallGroupProps {
   inProgress: boolean;
 }
 
+interface ToolCallLike {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+/** All tool calls in the run, including ones nested as children rows. */
+function flattenToolCalls(items: ChatMessage[]): ToolCallLike[] {
+  const out: ToolCallLike[] = [];
+  for (const m of items) {
+    if (m.kind !== "tool_call") continue;
+    out.push({ tool: m.tool, args: m.args });
+    for (const c of m.children ?? []) out.push({ tool: c.tool, args: c.args });
+  }
+  return out;
+}
+
 function distinctPathCount(
-  items: ChatMessage[],
+  calls: ToolCallLike[],
   tool: string,
 ): { calls: number; files: number } {
-  let calls = 0;
+  let count = 0;
   const paths = new Set<string>();
-  for (const m of items) {
-    if (m.kind !== "tool_call" || m.tool !== tool) continue;
-    calls++;
-    const p = m.args.path;
+  for (const c of calls) {
+    if (c.tool !== tool) continue;
+    count++;
+    const p = c.args.path;
     if (typeof p === "string" && p.length > 0) paths.add(p);
   }
-  return { calls, files: paths.size || calls };
+  return { calls: count, files: paths.size || count };
 }
 
 function buildSummary(
@@ -37,15 +53,12 @@ function buildSummary(
   t: (key: string, values?: Record<string, number>) => string,
 ): string {
   const tense = inProgress ? "present" : "past";
-  const exec = items.filter(
-    (m) => m.kind === "tool_call" && m.tool === "exec",
-  ).length;
-  const read = distinctPathCount(items, "read");
-  const write = distinctPathCount(items, "write");
-  const edit = distinctPathCount(items, "str_replace");
-  const skill = items.filter(
-    (m) => m.kind === "tool_call" && m.tool === "use_skill",
-  ).length;
+  const calls = flattenToolCalls(items);
+  const exec = calls.filter((c) => c.tool === "exec").length;
+  const read = distinctPathCount(calls, "read");
+  const write = distinctPathCount(calls, "write");
+  const edit = distinctPathCount(calls, "str_replace");
+  const skill = calls.filter((c) => c.tool === "use_skill").length;
   const counted = new Set([
     "exec",
     "read",
@@ -53,9 +66,7 @@ function buildSummary(
     "str_replace",
     "use_skill",
   ]);
-  const other = items.filter(
-    (m) => m.kind === "tool_call" && !counted.has(m.tool),
-  ).length;
+  const other = calls.filter((c) => !counted.has(c.tool)).length;
 
   const parts: string[] = [];
   if (exec > 0) parts.push(t(`${tense}.exec`, { count: exec }));
