@@ -96,7 +96,8 @@ export function ToolCallGroup({
         }}
         className={cn(
           "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
-          "bg-muted/60 text-muted-foreground hover:bg-accent transition-colors",
+          "text-muted-foreground hover:bg-accent transition-colors",
+          open && "bg-accent",
         )}
       >
         <ChevronRight
@@ -106,7 +107,7 @@ export function ToolCallGroup({
           )}
         />
         <Layers className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
-        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-foreground/70 dark:text-foreground/75">
+        <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-foreground/75 dark:text-foreground/80">
           {summary}
         </span>
         {inProgress && (
@@ -115,7 +116,7 @@ export function ToolCallGroup({
       </button>
 
       {open && (
-        <div className="ml-2 mt-1 border-l border-border/60 pl-2">
+        <div className="ml-3 mt-0.5 border-l border-border/80 pl-3">
           {children}
         </div>
       )}

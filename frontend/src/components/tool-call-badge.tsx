@@ -641,8 +641,8 @@ export function ToolCallBadge({
         className={cn(
           "flex w-full min-w-0 gap-1.5 rounded-md px-2 py-1 text-xs text-left",
           shouldClampSummary ? "items-start" : "items-center",
-          "bg-muted/60 text-muted-foreground",
-          "hover:bg-accent transition-colors",
+          "text-muted-foreground hover:bg-accent transition-colors",
+          open && "bg-accent",
         )}
       >
         <ChevronRight
@@ -657,13 +657,13 @@ export function ToolCallBadge({
             <ToolIcon className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
           ) : null;
         })()}
-        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
+        <span className="shrink-0 font-medium text-foreground/85 dark:text-foreground/90">
           {toolLabel}
         </span>
         {argsSummary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 font-mono text-xs text-foreground/60 dark:text-foreground/65",
+              "min-w-0 flex-1 font-mono text-[11px] text-foreground/60 dark:text-foreground/65",
               shouldClampSummary
                 ? "overflow-hidden [white-space:break-spaces] break-words leading-4 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]"
                 : "overflow-hidden text-ellipsis whitespace-pre",

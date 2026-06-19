@@ -16,7 +16,10 @@ import { GitPushApprovalCard } from "./git-push-approval-card";
 import { CommandResultView } from "./command-result";
 import { cn } from "@/lib/utils";
 
-function formatDuration(ms: number, locale: string): string {
+function formatDuration(ms: number, locale: string, precise = true): string {
+  // Decimals/ms only matter while the timer is live (responsive feel);
+  // a finished block reads cleaner as whole seconds.
+  if (!precise) return `${Math.max(1, Math.round(ms / 1_000))}s`;
   if (ms < 1_000) return `${ms}ms`;
   if (ms < 10_000) {
     const seconds = new Intl.NumberFormat(locale, {
@@ -133,7 +136,7 @@ function ThinkingBadge({
         streaming
           ? "thinkingMeta.durationStreaming"
           : "thinkingMeta.durationComplete",
-        { duration: formatDuration(shownDurationMs, locale) },
+        { duration: formatDuration(shownDurationMs, locale, streaming) },
       ),
     );
   }
@@ -148,8 +151,8 @@ function ThinkingBadge({
         onClick={() => setManualOpen((prev) => !prev)}
         className={cn(
           "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
-          "bg-muted/60 text-muted-foreground",
-          "hover:bg-accent transition-colors",
+          "text-muted-foreground hover:bg-accent transition-colors",
+          open && "bg-accent",
         )}
       >
         <ChevronRight
@@ -163,11 +166,11 @@ function ThinkingBadge({
         ) : (
           <Brain className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
         )}
-        <span className="shrink-0 font-mono font-medium text-foreground/85 dark:text-foreground/90">
+        <span className="shrink-0 font-medium text-foreground/85 dark:text-foreground/90">
           {streaming ? t("thinking.streaming") : t("thinking.complete")}
         </span>
         {meta.length > 0 && (
-          <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/60 dark:text-foreground/65">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/60 dark:text-foreground/65">
             {meta.join(", ")}
           </span>
         )}
