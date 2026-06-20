@@ -4,12 +4,22 @@ from typing import Annotated, Any, Literal, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, model_validator
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ThinkingPart, ToolCallPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 from ..api_keys import Access, Scope
 from ..auth import UserIdentity
+from ..models.compaction import FOLD_MARKER
 from ..models.tooling import SentFileInfo, normalize_tool_call_args
 from ..security.context import ApprovalSource, ApprovalVerdict
+from ..session.compaction import is_fold_message, tool_return_compaction_info
 from ..ws_models import Attachment, FinalStatus
 from .auth import require
 from .state import server_module
@@ -145,11 +155,6 @@ async def get_agent_history(
     user: Annotated[UserIdentity, Depends(require(Scope.history, Access.read))],
 ) -> AgentHistoryResponse:
     """The model history verbatim — fold summaries + compacted tool returns — for the agent-view toggle."""
-    from pydantic_ai.messages import ToolReturnPart
-
-    from ..models.compaction import FOLD_MARKER
-    from ..session.compaction import is_fold_message, tool_return_compaction_info
-
     if server._engine.session_mgr.load_state(session_id) is None or not server._engine.session_mgr.is_owned_by(
         session_id, user.username
     ):
