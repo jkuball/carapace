@@ -143,12 +143,14 @@
             "rawSecretRequired": "Paste an API key for {id}, or choose another secret source.",
             "secretValueRequired": "Secret reference is required for {id}.",
             "defaultRequired": "{field} default model is required.",
-            "defaultUnknown": "{field} default model {id} is not in the catalog."
+            "defaultUnknown": "{field} default model {id} is not in the catalog.",
+            "positiveInt": "{field} must be a whole number of at least 1."
         },
         "sections": {
             "defaultModels": "Default models",
             "defaultBudgets": "Default budgets",
-            "catalog": "Model catalog"
+            "catalog": "Model catalog",
+            "compaction": "Compaction"
         },
         "fields": {
             "agent": "Agent",
@@ -203,7 +205,14 @@
         "units": {
             "tokens": "tokens"
         },
-        "modelRow": "Model {index}"
+        "modelRow": "Model {index}",
+        "compaction": {
+            "model": "Compaction model",
+            "modelDefault": "Default (title model)",
+            "keepTurns": "Keep recent turns (K)",
+            "toolFloor": "Tool-output floor (tokens)",
+            "maxParallel": "Max parallel summaries"
+        }
     },
     "home": {
         "empty": {

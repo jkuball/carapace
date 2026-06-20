@@ -18,6 +18,7 @@ _AGENT_SCALAR_FIELDS = (
     "model",
     "sentinel_model",
     "title_model",
+    "compaction",
     "default_session_budget",
     "max_parallel_llm",
     "max_sentinel_calls_per_tool_call",

@@ -3542,3 +3542,66 @@ def test_agent_history_reflects_compacted_cut(auth_headers):
     assert "OLD SUMMARY TEXT" in body["rows"][0]["content"]
     summarized = [r for r in body["rows"] if r["role"] == "tool_result" and r.get("compaction")]
     assert summarized and summarized[0]["compaction"]["method"] == "summarize"
+
+
+def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_headers):
+    # GET exposes compaction with current (default) values.
+    initial = client.get("/api/admin/platform/settings", headers=admin_auth_headers).json()
+    assert "compaction" in initial["settings"]
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-sonnet-4-6",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "compaction": {
+                "model": "anthropic:claude-haiku-4-5",
+                "keep_turns": 4,
+                "tool_output_floor_tokens": 800,
+                "max_parallel_summaries": 3,
+            },
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-sonnet-4-6"},
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    comp = resp.json()["settings"]["compaction"]
+    assert comp == {
+        "model": "anthropic:claude-haiku-4-5",
+        "keep_turns": 4,
+        "tool_output_floor_tokens": 800,
+        "max_parallel_summaries": 3,
+    }
+    # Applied to runtime config and persisted to the DB scalar row.
+    assert srv._config.agent.compaction.keep_turns == 4
+    assert srv._config.agent.compaction.model == "anthropic:claude-haiku-4-5"
+    assert srv._platform_store.load_section("agent")["compaction"]["keep_turns"] == 4
+
+
+def test_admin_platform_settings_rejects_unknown_compaction_model(client, admin_auth_headers):
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-sonnet-4-6",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "compaction": {"model": "anthropic:not-in-catalog"},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-sonnet-4-6"},
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+            ],
+        },
+    )
+    assert resp.status_code >= 400

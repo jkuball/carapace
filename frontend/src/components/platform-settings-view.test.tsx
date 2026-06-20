@@ -26,6 +26,12 @@ function draftWithModel(model: PlatformDraft["models"][number]): PlatformDraft {
       cost_usd: "",
       tool_calls: "",
     },
+    compaction: {
+      model: "",
+      keepTurns: "6",
+      toolFloor: "500",
+      maxParallel: "6",
+    },
     models: [model],
   };
 }

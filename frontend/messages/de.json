@@ -143,12 +143,14 @@
             "rawSecretRequired": "Füge einen API-Key für {id} ein oder wähle eine andere Secret-Quelle.",
             "secretValueRequired": "Secret-Referenz ist für {id} erforderlich.",
             "defaultRequired": "{field}-Standardmodell ist erforderlich.",
-            "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog."
+            "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog.",
+            "positiveInt": "{field} muss eine ganze Zahl ≥ 1 sein."
         },
         "sections": {
             "defaultModels": "Standardmodelle",
             "defaultBudgets": "Standardbudgets",
-            "catalog": "Modellkatalog"
+            "catalog": "Modellkatalog",
+            "compaction": "Komprimierung"
         },
         "fields": {
             "agent": "Agent",
@@ -203,7 +205,14 @@
         "units": {
             "tokens": "Tokens"
         },
-        "modelRow": "Modell {index}"
+        "modelRow": "Modell {index}",
+        "compaction": {
+            "model": "Komprimierungsmodell",
+            "modelDefault": "Standard (Titelmodell)",
+            "keepTurns": "Letzte Runden behalten (K)",
+            "toolFloor": "Tool-Ausgabe-Schwelle (Tokens)",
+            "maxParallel": "Max. parallele Zusammenfassungen"
+        }
     },
     "home": {
         "empty": {

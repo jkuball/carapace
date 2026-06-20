@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_ai.models import Model
 
 from ..api_keys import Access, Scope
@@ -15,6 +15,7 @@ from ..models.config import (
     PROVIDERS_WITH_MODEL_API_KEYS,
     AgentConfig,
     AvailableModelEntry,
+    CompactionConfig,
     Config,
     Secret,
     agent_available_model_entries,
@@ -55,9 +56,27 @@ class PublicPlatformModelEntry(PlatformSettingsModel):
     api_key: PublicModelSecret = PublicModelSecret()
 
 
+class PlatformCompaction(PlatformSettingsModel):
+    """Compaction settings exposed in the admin UI (mirrors ``agent.compaction``)."""
+
+    model: str | None = None
+    keep_turns: int = Field(default=6, ge=1)
+    tool_output_floor_tokens: int = Field(default=500, ge=1)
+    max_parallel_summaries: int = Field(default=6, ge=1)
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _normalize_model(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class PlatformSettingsPayload(PlatformSettingsModel):
     default_models: PlatformDefaultModels
     default_budget: SessionBudget
+    compaction: PlatformCompaction
     available_models: list[PublicPlatformModelEntry]
 
 
@@ -115,6 +134,7 @@ class PlatformModelEntryPatch(PlatformSettingsModel):
 class PlatformSettingsPatch(PlatformSettingsModel):
     default_models: PlatformDefaultModels
     default_budget: SessionBudget = SessionBudget()
+    compaction: PlatformCompaction = PlatformCompaction()
     available_models: list[PlatformModelEntryPatch]
 
     @model_validator(mode="after")
@@ -169,6 +189,7 @@ def _response() -> PlatformSettingsResponse:
                 title=server._config.agent.title_model,
             ),
             default_budget=server._config.agent.default_session_budget,
+            compaction=PlatformCompaction.model_validate(server._config.agent.compaction.model_dump(mode="json")),
             available_models=[
                 _public_model_entry(entry) for entry in agent_available_model_entries(server._config.agent)
             ],
@@ -230,6 +251,12 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
         model=body.default_models.agent,
         sentinel_model=body.default_models.sentinel,
         title_model=body.default_models.title,
+        compaction=CompactionConfig(
+            model=body.compaction.model,
+            keep_turns=body.compaction.keep_turns,
+            tool_output_floor_tokens=body.compaction.tool_output_floor_tokens,
+            max_parallel_summaries=body.compaction.max_parallel_summaries,
+        ),
         default_session_budget=body.default_budget,
         available_models=entries,
         max_parallel_llm=existing_agent.max_parallel_llm,
@@ -272,7 +299,10 @@ async def update_platform_settings(
 ) -> PlatformSettingsResponse:
     # Build + validate the new agent config (AgentConfig() re-runs the defaults∈catalog check),
     # then a candidate Config so the runtime model factory can be built before we persist anything.
-    agent = _agent_config_from_patch(body, server._config.agent)
+    try:
+        agent = _agent_config_from_patch(body, server._config.agent)
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     config = server._config.model_copy(update={"agent": agent})
     model_factory, agent_model = _runtime_models_for_config(config)
     # Persist to the DB (model catalog + scalar agent row) in one transaction, then swap runtime.

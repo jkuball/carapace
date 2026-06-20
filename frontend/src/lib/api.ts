@@ -1098,6 +1098,13 @@ export interface UserSettingsPatchInput {
   }> | null;
 }
 
+export interface PlatformCompactionSettings {
+  model: string | null;
+  keep_turns: number;
+  tool_output_floor_tokens: number;
+  max_parallel_summaries: number;
+}
+
 export interface PlatformSettingsInfo {
   default_models: {
     agent: string;
@@ -1105,6 +1112,7 @@ export interface PlatformSettingsInfo {
     title: string;
   };
   default_budget: SessionBudgetSettings;
+  compaction: PlatformCompactionSettings;
   available_models: PlatformModelEntryInfo[];
 }
 
@@ -1138,6 +1146,7 @@ export interface PlatformSettingsPatchInput {
     title: string;
   };
   default_budget: SessionBudgetSettings;
+  compaction: PlatformCompactionSettings;
   available_models: PlatformModelEntryPatchInput[];
 }
 
@@ -1324,8 +1333,19 @@ function decodePlatformSettingsResponse(
         title: readString(defaults, "title") ?? "",
       },
       default_budget: decodeBudget(settings.default_budget),
+      compaction: decodeCompaction(settings.compaction),
       available_models: models,
     },
+  };
+}
+
+function decodeCompaction(raw: unknown): PlatformCompactionSettings {
+  const r = isRecord(raw) ? raw : {};
+  return {
+    model: readString(r, "model") ?? null,
+    keep_turns: readNumber(r, "keep_turns") ?? 6,
+    tool_output_floor_tokens: readNumber(r, "tool_output_floor_tokens") ?? 500,
+    max_parallel_summaries: readNumber(r, "max_parallel_summaries") ?? 6,
   };
 }
 

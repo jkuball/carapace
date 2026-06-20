@@ -42,19 +42,20 @@ breakdown of what was compacted.
 
 ## Configuration
 
-Under `agent.compaction` (see `config.yaml`):
+Compaction is configured per platform in **Settings → Platform → Compaction** (admin only). The
+values are stored in the DB-backed platform settings (the `agent` scalar row), not a config file:
 
-```yaml
-agent:
-  compaction:
-    model: null                      # model used for summaries; null falls back to title_model
-    keep_turns: 6                    # default K
-    tool_output_floor_tokens: 500    # tool outputs smaller than this are left alone
-    max_parallel_summaries: 6        # concurrency for tool-output summarization
-```
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| Compaction model | Default (title model) | Model used for fold/tool summaries |
+| Keep recent turns (K) | 6 | Completed turns kept verbatim |
+| Tool-output floor (tokens) | 500 | Tool outputs smaller than this are left alone |
+| Max parallel summaries | 6 | Concurrency for tool-output summarization |
 
 The compaction model is a separate, configurable model (a cheap/haiku-class model is a good
-default). Its usage is tracked under the `compaction` category, separate from the agent.
+default); leaving it on "Default" reuses the title model. Its usage is tracked under the
+`compaction` category, separate from the agent. The code defaults live in `agent.compaction`
+(`AgentConfig` / `CompactionConfig`).
 
 ## Viewing compaction in the UI
 
