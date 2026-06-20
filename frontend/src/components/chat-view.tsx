@@ -1460,7 +1460,13 @@ export function ChatView({
             // The refetched transcript already includes this command event.
             fetchHistory(server, token, sessionId)
               .then((history) => setMessages(projectHistoryToMessages(history)))
-              .catch(() => {});
+              .catch(() => {
+                // Refetch failed — the transcript is stale vs the server's compacted state.
+                setMessages((prev) => [
+                  ...prev,
+                  { kind: "error", detail: t("errors.compactRefresh") },
+                ]);
+              });
           }
           setLlmActivity(null);
           lastThinkingStartedAtRef.current = null;
@@ -1570,7 +1576,7 @@ export function ChatView({
           break;
       }
     },
-    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox, server, token, sessionId],
+    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox, server, token, sessionId, t],
   );
 
   const onWsDisconnect = useCallback(() => {

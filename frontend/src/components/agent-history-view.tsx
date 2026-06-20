@@ -66,8 +66,8 @@ export function AgentHistoryView({
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : null}
-          {error ? <p className="text-sm text-destructive">{t("agentEmpty")}</p> : null}
-          {rows?.length === 0 ? (
+          {error ? <p className="text-sm text-destructive">{t("agentError")}</p> : null}
+          {!error && rows?.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("agentEmpty")}</p>
           ) : null}
           {rows?.map((row, i) => (

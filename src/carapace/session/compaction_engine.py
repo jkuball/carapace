@@ -168,10 +168,13 @@ class SessionCompactionMixin:
         if not candidates:
             return history
 
+        sem = asyncio.Semaphore(self._config.agent.compaction.max_parallel_summaries)
+
         async def _one(cand: Any) -> tuple[str, AppliedToolReturn] | None:
-            summary = await self._summarize(
-                active, lambda **kw: summarize_tool_output(cand.tool_name, _text(cand.content), **kw)
-            )
+            async with sem:
+                summary = await self._summarize(
+                    active, lambda **kw: summarize_tool_output(cand.tool_name, _text(cand.content), **kw)
+                )
             if not summary or cand.tool_call_id is None:
                 return None
             return cand.tool_call_id, AppliedToolReturn(

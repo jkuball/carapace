@@ -698,7 +698,8 @@
         "errors": {
             "unexpected": "Unerwarteter Fehler",
             "resetTarget": "Ziel zum Zurücksetzen konnte nicht aufgelöst werden.",
-            "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden."
+            "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden.",
+            "compactRefresh": "Komprimierung erfolgreich, aber das Aktualisieren des Verlaufs ist fehlgeschlagen. Neu laden, um die komprimierte Ansicht zu sehen."
         },
         "confirm": {
             "wipeSandbox": "Sandbox und ihren Speicher für diese Sitzung löschen? Der Chatverlauf bleibt erhalten.",
@@ -1099,6 +1100,7 @@
         "agentViewOff": "Normale Ansicht",
         "agentViewHint": "Verlauf genau so anzeigen, wie ihn der Agent sieht",
         "agentSummary": "Komprimierte Zusammenfassung",
-        "agentEmpty": "Noch kein Verlauf."
+        "agentEmpty": "Noch kein Verlauf.",
+        "agentError": "Agent-Ansicht konnte nicht geladen werden. Verbindung oder Berechtigungen prüfen."
     }
 }

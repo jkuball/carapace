@@ -698,7 +698,8 @@
         "errors": {
             "unexpected": "Unexpected error",
             "resetTarget": "Could not resolve reset target.",
-            "forkTarget": "Could not resolve fork target."
+            "forkTarget": "Could not resolve fork target.",
+            "compactRefresh": "Compaction succeeded, but refreshing the transcript failed. Reload to see the compacted view."
         },
         "confirm": {
             "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
@@ -1099,6 +1100,7 @@
         "agentViewOff": "Normal view",
         "agentViewHint": "Show the history exactly as the agent sees it",
         "agentSummary": "Compacted summary",
-        "agentEmpty": "No history yet."
+        "agentEmpty": "No history yet.",
+        "agentError": "Could not load agent view. Check your connection or permissions."
     }
 }

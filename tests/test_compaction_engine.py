@@ -100,6 +100,23 @@ def test_compact_tools_summarizes_large_returns(tmp_path: Path, db_factory) -> N
     asyncio.run(_run())
 
 
+def test_compact_tools_honors_parallel_summary_cap(tmp_path: Path, db_factory) -> None:
+    """max_parallel_summaries bounds the fan-out (cap of 1 → sequential, no deadlock)."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        engine._config.agent.compaction.max_parallel_summaries = 1
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 4, tool_output="line\n" * 3000)
+
+        report = await engine.run_compaction(active, mode="tools")
+        assert report.tool_returns_compacted >= 2
+
+    asyncio.run(_run())
+
+
 def test_compact_command_parsing(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
