@@ -607,7 +607,7 @@ export type ChatMessage =
       request: CredentialApprovalRequest;
       decision?: EscalationDecision;
     }
-  | { kind: "command"; command: string; data: unknown }
+  | { kind: "command"; command: string; data: unknown; live?: boolean }
   | {
       kind: "error";
       detail: string;

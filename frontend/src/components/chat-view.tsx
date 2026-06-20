@@ -54,6 +54,7 @@ import {
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 import { Message } from "./message";
+import { ToolCallGroup } from "./tool-call-group";
 import { ChatInput } from "./chat-input";
 import { AgentHistoryView } from "./agent-history-view";
 
@@ -308,6 +309,57 @@ function argsMatch(
   right: Record<string, unknown>,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** A run of consecutive tool/thinking messages, collapsed into one summary. */
+type RenderItem =
+  | { type: "message"; index: number }
+  | { type: "group"; start: number; indices: number[]; inProgress: boolean };
+
+function isToolish(m: ChatMessage): boolean {
+  return (
+    m.kind === "tool_call" ||
+    m.kind === "thinking" ||
+    m.kind === "thinking_streaming"
+  );
+}
+
+/**
+ * Group maximal runs of tool/thinking messages. A run becomes a collapsible
+ * group only when it has ≥2 items and contains ≥1 tool_call; otherwise its
+ * items render individually. A group that reaches the end of the list is still
+ * in progress (rendered expanded).
+ */
+function groupRenderItems(messages: ChatMessage[]): RenderItem[] {
+  const items: RenderItem[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    if (!isToolish(messages[i])) {
+      items.push({ type: "message", index: i });
+      i++;
+      continue;
+    }
+    const start = i;
+    const indices: number[] = [];
+    while (i < messages.length && isToolish(messages[i])) {
+      indices.push(i);
+      i++;
+    }
+    const hasToolCall = indices.some(
+      (j) => messages[j].kind === "tool_call",
+    );
+    if (indices.length >= 2 && hasToolCall) {
+      items.push({
+        type: "group",
+        start,
+        indices,
+        inProgress: i >= messages.length,
+      });
+    } else {
+      for (const j of indices) items.push({ type: "message", index: j });
+    }
+  }
+  return items;
 }
 
 function applyDeniedApprovalToMessages(
@@ -1401,7 +1453,7 @@ export function ChatView({
           }
           setMessages((prev) => [
             ...prev,
-            { kind: "command", command: msg.command, data: msg.data },
+            { kind: "command", command: msg.command, data: msg.data, live: true },
           ]);
           if (msg.command === "compact") {
             // History was rewritten server-side; re-project so folds/badges render.
@@ -2607,25 +2659,43 @@ export function ChatView({
                   </p>
                 </div>
               )}
-              {messages.map((msg, i) => (
-                <Message
-                  key={i}
-                  message={msg}
-                  server={server}
-                  sessionId={sessionId}
-                  activeLlmActivity={llmActivity}
-                  canFork={msg.kind === "assistant"}
-                  canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
-                  canReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg)}
-                  actionDisabled={turnActionsDisabled}
-                  onApproval={handleApproval}
-                  onEscalation={handleEscalation}
-                  onCredentialApproval={handleCredentialEscalation}
-                  onFork={msg.kind === "assistant" ? () => void handleFork(i) : undefined}
-                  onRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg) ? handleRetry : undefined}
-                  onReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg) ? () => void handleReset(i) : undefined}
-                />
-              ))}
+              {(() => {
+                const renderMessage = (i: number) => {
+                  const msg = messages[i];
+                  return (
+                    <Message
+                      key={i}
+                      message={msg}
+                      server={server}
+                      sessionId={sessionId}
+                      activeLlmActivity={llmActivity}
+                      canFork={msg.kind === "assistant"}
+                      canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
+                      canReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg)}
+                      actionDisabled={turnActionsDisabled}
+                      onApproval={handleApproval}
+                      onEscalation={handleEscalation}
+                      onCredentialApproval={handleCredentialEscalation}
+                      onFork={msg.kind === "assistant" ? () => void handleFork(i) : undefined}
+                      onRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg) ? handleRetry : undefined}
+                      onReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg) ? () => void handleReset(i) : undefined}
+                    />
+                  );
+                };
+                return groupRenderItems(messages).map((item) =>
+                  item.type === "message" ? (
+                    renderMessage(item.index)
+                  ) : (
+                    <ToolCallGroup
+                      key={`g-${item.start}`}
+                      items={item.indices.map((j) => messages[j])}
+                      inProgress={item.inProgress}
+                    >
+                      {item.indices.map((j) => renderMessage(j))}
+                    </ToolCallGroup>
+                  ),
+                );
+              })()}
               {waitingLabel && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
