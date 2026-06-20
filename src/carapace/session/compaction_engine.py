@@ -157,13 +157,21 @@ class SessionCompactionMixin:
         model_name: str,
         report: CompactionReport,
     ) -> list[Any]:
-        # Only compact tool returns in the kept (verbatim) region, never inside a fold block.
+        # Only compact tool returns in the kept region, never inside a fold block, and never inside
+        # the verbatim hot zone (the newest `verbatim_tool_turns` completed turns).
+        cfg = self._config.agent.compaction
         _lead, rest = split_lead_folds(history)
         rest_offset = len(history) - len(rest)
-        kept_indexes = set(range(rest_offset, len(history)))
-        floor = self._config.agent.compaction.tool_output_floor_tokens
+        turn_ends = completed_model_turn_end_indexes(rest)
+        if cfg.verbatim_tool_turns <= 0:
+            cut = len(rest)
+        elif len(turn_ends) <= cfg.verbatim_tool_turns:
+            return history  # the entire kept region is within the verbatim hot zone
+        else:
+            cut = turn_ends[len(turn_ends) - cfg.verbatim_tool_turns - 1] + 1
+        eligible_indexes = set(range(rest_offset, rest_offset + cut))
         candidates = find_tool_return_candidates(
-            history, floor_tokens=floor, model_name=model_name, within_indexes=kept_indexes
+            history, floor_tokens=cfg.tool_output_floor_tokens, model_name=model_name, within_indexes=eligible_indexes
         )
         if not candidates:
             return history

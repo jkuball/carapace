@@ -501,6 +501,7 @@ test("platform settings helpers parse model secrets and send patches", async () 
       compaction: {
         model: null,
         keep_turns: 6,
+        verbatim_tool_turns: 2,
         tool_output_floor_tokens: 500,
         max_parallel_summaries: 6,
       },

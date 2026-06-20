@@ -117,6 +117,35 @@ def test_compact_tools_honors_parallel_summary_cap(tmp_path: Path, db_factory) -
     asyncio.run(_run())
 
 
+def test_compact_tools_keeps_verbatim_hot_zone(tmp_path: Path, db_factory) -> None:
+    """The newest verbatim_tool_turns turns keep tool outputs verbatim; older ones get summarized."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        engine._config.agent.compaction.verbatim_tool_turns = 2
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 5, tool_output="line\n" * 3000)
+
+        await engine.run_compaction(active, mode="tools")
+
+        history = engine.session_mgr.load_history(sid)
+        compacted_ids = {
+            p.tool_call_id
+            for m in history
+            if isinstance(m, ModelRequest)
+            for p in m.parts
+            if isinstance(p, ToolReturnPart) and tool_return_is_compacted(p)
+        }
+        # 5 turns, hot zone of 2 → the newest two (call-3, call-4) stay verbatim.
+        assert "call-4" not in compacted_ids
+        assert "call-3" not in compacted_ids
+        assert {"call-0", "call-1", "call-2"} <= compacted_ids
+
+    asyncio.run(_run())
+
+
 def test_compact_command_parsing(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():

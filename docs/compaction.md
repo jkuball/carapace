@@ -16,8 +16,13 @@ Three strategies operate on different regions of the history:
 | Strategy | Region | What it does |
 | --- | --- | --- |
 | Thinking-drop | All but the newest turn | Removes stale `thinking` parts (providers do not need them back). Free, no LLM call. |
-| Tool-return compaction | Recent turns kept verbatim | Summarizes large tool outputs (e.g. log/`kubectl` dumps) in place. The tool call/return pairing is preserved; the part is marked so it is never compacted twice. |
+| Tool-return compaction | Kept turns, excluding the verbatim hot zone | Summarizes large tool outputs (e.g. log/`kubectl` dumps) in place. The tool call/return pairing is preserved; the part is marked so it is never compacted twice. |
 | Message-fold | Turns older than the keep-window `K` | Collapses whole turns (user + assistant + tool returns) into one summary block. |
+
+The newest `verbatim_tool_turns` completed turns form a **verbatim hot zone**: their tool outputs are
+never summarized, so the agent keeps exact fidelity on its most recent work. Tool-return compaction
+only touches outputs in kept turns *older* than that zone (and never inside a fold block). Set it to
+`0` to allow compacting every kept tool output, including the latest turn's.
 
 Folds are **append-only**: each `/compact` adds a new summary block rather than re-summarizing
 existing ones, so summaries do not drift through repeated compaction. Adjacent blocks can later be
@@ -37,8 +42,9 @@ re-running the tool.
 /compact tools      Only summarize large tool outputs in the kept region
 ```
 
-`K` is a count of completed turns to keep verbatim. The reply shows tokens before/after and a
-breakdown of what was compacted.
+`K` is a count of completed turns to keep verbatim. When omitted, `/compact` (and `/compact fold`)
+use the configured default `keep_turns` (see Configuration below); passing a number overrides it for
+that run only. The reply shows tokens before/after and a breakdown of what was compacted.
 
 ## Configuration
 
@@ -48,7 +54,8 @@ values are stored in the DB-backed platform settings (the `agent` scalar row), n
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | Compaction model | Default (title model) | Model used for fold/tool summaries |
-| Keep recent turns (K) | 6 | Completed turns kept verbatim |
+| Keep recent turns (K) | 6 | Completed turns kept verbatim; also the default `K` for `/compact` |
+| Verbatim tool turns | 2 | Newest turns whose tool outputs are never summarized (`0` disables) |
 | Tool-output floor (tokens) | 500 | Tool outputs smaller than this are left alone |
 | Max parallel summaries | 6 | Concurrency for tool-output summarization |
 

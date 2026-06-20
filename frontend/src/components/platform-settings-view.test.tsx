@@ -29,6 +29,7 @@ function draftWithModel(model: PlatformDraft["models"][number]): PlatformDraft {
     compaction: {
       model: "",
       keepTurns: "6",
+      verbatimTurns: "2",
       toolFloor: "500",
       maxParallel: "6",
     },

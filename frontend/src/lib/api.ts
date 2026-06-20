@@ -1101,6 +1101,7 @@ export interface UserSettingsPatchInput {
 export interface PlatformCompactionSettings {
   model: string | null;
   keep_turns: number;
+  verbatim_tool_turns: number;
   tool_output_floor_tokens: number;
   max_parallel_summaries: number;
 }
@@ -1344,6 +1345,7 @@ function decodeCompaction(raw: unknown): PlatformCompactionSettings {
   return {
     model: readString(r, "model") ?? null,
     keep_turns: readNumber(r, "keep_turns") ?? 6,
+    verbatim_tool_turns: readNumber(r, "verbatim_tool_turns") ?? 2,
     tool_output_floor_tokens: readNumber(r, "tool_output_floor_tokens") ?? 500,
     max_parallel_summaries: readNumber(r, "max_parallel_summaries") ?? 6,
   };

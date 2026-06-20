@@ -61,6 +61,7 @@ class PlatformCompaction(PlatformSettingsModel):
 
     model: str | None = None
     keep_turns: int = Field(default=6, ge=1)
+    verbatim_tool_turns: int = Field(default=2, ge=0)
     tool_output_floor_tokens: int = Field(default=500, ge=1)
     max_parallel_summaries: int = Field(default=6, ge=1)
 
@@ -254,6 +255,7 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
         compaction=CompactionConfig(
             model=body.compaction.model,
             keep_turns=body.compaction.keep_turns,
+            verbatim_tool_turns=body.compaction.verbatim_tool_turns,
             tool_output_floor_tokens=body.compaction.tool_output_floor_tokens,
             max_parallel_summaries=body.compaction.max_parallel_summaries,
         ),

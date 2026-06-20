@@ -3562,6 +3562,7 @@ def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_header
             "compaction": {
                 "model": "anthropic:claude-haiku-4-5",
                 "keep_turns": 4,
+                "verbatim_tool_turns": 1,
                 "tool_output_floor_tokens": 800,
                 "max_parallel_summaries": 3,
             },
@@ -3577,11 +3578,13 @@ def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_header
     assert comp == {
         "model": "anthropic:claude-haiku-4-5",
         "keep_turns": 4,
+        "verbatim_tool_turns": 1,
         "tool_output_floor_tokens": 800,
         "max_parallel_summaries": 3,
     }
     # Applied to runtime config and persisted to the DB scalar row.
     assert srv._config.agent.compaction.keep_turns == 4
+    assert srv._config.agent.compaction.verbatim_tool_turns == 1
     assert srv._config.agent.compaction.model == "anthropic:claude-haiku-4-5"
     assert srv._platform_store.load_section("agent")["compaction"]["keep_turns"] == 4
 

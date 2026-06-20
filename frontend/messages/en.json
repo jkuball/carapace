@@ -144,7 +144,7 @@
             "secretValueRequired": "Secret reference is required for {id}.",
             "defaultRequired": "{field} default model is required.",
             "defaultUnknown": "{field} default model {id} is not in the catalog.",
-            "positiveInt": "{field} must be a whole number of at least 1."
+            "minInt": "{field} must be a whole number of at least {min}."
         },
         "sections": {
             "defaultModels": "Default models",
@@ -210,6 +210,7 @@
             "model": "Compaction model",
             "modelDefault": "Default (title model)",
             "keepTurns": "Keep recent turns (K)",
+            "verbatimTurns": "Verbatim tool turns",
             "toolFloor": "Tool-output floor (tokens)",
             "maxParallel": "Max parallel summaries"
         }

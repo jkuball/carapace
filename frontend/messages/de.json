@@ -144,7 +144,7 @@
             "secretValueRequired": "Secret-Referenz ist für {id} erforderlich.",
             "defaultRequired": "{field}-Standardmodell ist erforderlich.",
             "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog.",
-            "positiveInt": "{field} muss eine ganze Zahl ≥ 1 sein."
+            "minInt": "{field} muss eine ganze Zahl ≥ {min} sein."
         },
         "sections": {
             "defaultModels": "Standardmodelle",
@@ -210,6 +210,7 @@
             "model": "Komprimierungsmodell",
             "modelDefault": "Standard (Titelmodell)",
             "keepTurns": "Letzte Runden behalten (K)",
+            "verbatimTurns": "Tool-Runden wörtlich behalten",
             "toolFloor": "Tool-Ausgabe-Schwelle (Tokens)",
             "maxParallel": "Max. parallele Zusammenfassungen"
         }

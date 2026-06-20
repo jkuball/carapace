@@ -152,6 +152,9 @@ class CompactionConfig(ConfigModel):
     model: str | None = None
     # Default number of recent completed turns kept verbatim when folding (the `K` in `/compact`).
     keep_turns: int = Field(default=6, ge=1)
+    # Number of most-recent completed turns whose tool outputs stay fully verbatim (never
+    # summarized), so the agent keeps exact fidelity on its latest work. 0 disables the hot zone.
+    verbatim_tool_turns: int = Field(default=2, ge=0)
     # Tool returns below this token count are left alone (marker overhead would exceed the saving).
     tool_output_floor_tokens: int = Field(default=500, ge=1)
     # Concurrency for parallel tool-output summarization on the compaction model.

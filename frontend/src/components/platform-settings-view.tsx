@@ -46,6 +46,7 @@ interface PlatformDraft {
   compaction: {
     model: string;
     keepTurns: string;
+    verbatimTurns: string;
     toolFloor: string;
     maxParallel: string;
   };
@@ -257,6 +258,7 @@ function draftFromSettings(response: PlatformSettingsResponseInfo): PlatformDraf
     compaction: {
       model: compaction.model ?? "",
       keepTurns: String(compaction.keep_turns),
+      verbatimTurns: String(compaction.verbatim_tool_turns),
       toolFloor: String(compaction.tool_output_floor_tokens),
       maxParallel: String(compaction.max_parallel_summaries),
     },
@@ -378,18 +380,19 @@ export function buildPlatformSettingsPatch(draft: PlatformDraft, t: Translate): 
     default_budget: budgetFromDraft(draft, t),
     compaction: {
       model: compactionModel || null,
-      keep_turns: positiveInt(draft.compaction.keepTurns, t("compaction.keepTurns"), t),
-      tool_output_floor_tokens: positiveInt(draft.compaction.toolFloor, t("compaction.toolFloor"), t),
-      max_parallel_summaries: positiveInt(draft.compaction.maxParallel, t("compaction.maxParallel"), t),
+      keep_turns: boundedInt(draft.compaction.keepTurns, t("compaction.keepTurns"), 1, t),
+      verbatim_tool_turns: boundedInt(draft.compaction.verbatimTurns, t("compaction.verbatimTurns"), 0, t),
+      tool_output_floor_tokens: boundedInt(draft.compaction.toolFloor, t("compaction.toolFloor"), 1, t),
+      max_parallel_summaries: boundedInt(draft.compaction.maxParallel, t("compaction.maxParallel"), 1, t),
     },
     available_models: availableModels,
   };
 }
 
-function positiveInt(value: string, field: string, t: Translate): number {
+function boundedInt(value: string, field: string, min: number, t: Translate): number {
   const normalized = value.trim();
-  if (!/^\d+$/.test(normalized) || Number(normalized) < 1) {
-    throw new Error(t("errors.positiveInt", { field }));
+  if (!/^\d+$/.test(normalized) || Number(normalized) < min) {
+    throw new Error(t("errors.minInt", { field, min }));
   }
   return Number(normalized);
 }
@@ -584,6 +587,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
               <ModelPicker value={draft.compaction.model} entries={compactionOptions} onChange={(model) => updateDraft({ compaction: { ...draft.compaction, model: model ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("compaction.modelDefault")} />
             </Field>
             <TextInput label={t("compaction.keepTurns")} value={draft.compaction.keepTurns} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, keepTurns: value } })} />
+            <TextInput label={t("compaction.verbatimTurns")} value={draft.compaction.verbatimTurns} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, verbatimTurns: value } })} />
             <TextInput label={t("compaction.toolFloor")} value={draft.compaction.toolFloor} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, toolFloor: value } })} />
             <TextInput label={t("compaction.maxParallel")} value={draft.compaction.maxParallel} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, maxParallel: value } })} />
           </div>
