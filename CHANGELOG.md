@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.143.1 (2026-06-20)
+
+
+### Other
+
+
+- Merge pull request #228 from thiesgerken/renovate/pnpm-11.x
+  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
+
+- Merge pull request #232 from thiesgerken/renovate/actions-checkout-7.x
+  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.7.0
+  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
+
+- ⬆️ chore: upgrade pnpm to 11.7.0
+  ([`3e358a7`](https://github.com/thiesgerken/carapace/commit/3e358a759f94a259de99fd32e606201abf6a5d71))
+
+- ⬆️ chore: upgrade actions/checkout action to v7.0.0
+  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
+
+- ⬆️ chore: upgrade actions/checkout action to v7.0.0
+  ([`c31da8e`](https://github.com/thiesgerken/carapace/commit/c31da8e3312e9f84ede8b9d154a5b67b9f5c8542))
+
 ## v0.143.0 (2026-06-19)
 
 
