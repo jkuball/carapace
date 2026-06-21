@@ -557,7 +557,7 @@ function latestCompletedTurnStartMessageIndex(messages: ChatMessage[]): number {
 }
 
 function eventIndexForMessage(message: ChatMessage): number | undefined {
-  if (message.kind === "assistant" || message.kind === "error") {
+  if (message.kind === "assistant" || message.kind === "error" || message.kind === "user") {
     return typeof message.eventIndex === "number" ? message.eventIndex : undefined;
   }
   return undefined;
@@ -672,6 +672,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
         compaction: entry.compaction,
         timestamp: entry.timestamp,
         turnIndex: turn,
+        eventIndex: typeof entry.event_index === "number" ? entry.event_index : undefined,
       });
       continue;
     }
@@ -1724,41 +1725,31 @@ export function ChatView({
 
   async function resolveTurnTargetEventIndex(messageIndex: number): Promise<number | undefined> {
     const currentMessages = messages;
-    // Snap any message (user prompt, intermediate bubble) to the terminal of its enclosing turn —
-    // reset/fork operate at turn boundaries, never mid-turn.
-    const terminalIndex = enclosingTurnTerminalMessageIndex(currentMessages, messageIndex);
-    if (terminalIndex == null) return undefined;
-    const localTerminalIndices = completedTurnMessageIndices(currentMessages);
-    const localTurnOrdinal = localTerminalIndices.indexOf(terminalIndex);
-    if (localTurnOrdinal === -1) return undefined;
+    // Event-granular: each message carries its own event index, so reset/fork cut exactly here
+    // (the backend keeps the older turns compacted and rebuilds the cut turn verbatim).
+    const own = eventIndexForMessage(currentMessages[messageIndex]);
+    if (own != null) return own;
 
-    let targetEventIndex = eventIndexForMessage(currentMessages[terminalIndex]);
-
-    if (targetEventIndex == null) {
-      const history = await fetchHistory(server, token, sessionId);
-      const canonicalMessages = projectHistoryToMessages(history);
-      const canonicalTerminalIndices = completedTurnMessageIndices(canonicalMessages);
-      const canonicalMessageIndex = canonicalTerminalIndices[localTurnOrdinal];
-      if (canonicalMessageIndex != null) {
-        targetEventIndex = eventIndexForMessage(canonicalMessages[canonicalMessageIndex]);
-      }
+    // Live message not yet persisted (no event index): refetch and align by position — once the
+    // turn is on disk the reprojection has the same shape, so the same index resolves.
+    const history = await fetchHistory(server, token, sessionId);
+    const canonicalMessages = projectHistoryToMessages(history);
+    const candidate = canonicalMessages[messageIndex];
+    if (candidate != null && candidate.kind === currentMessages[messageIndex].kind) {
+      return eventIndexForMessage(candidate);
     }
-
-    return targetEventIndex;
+    return undefined;
   }
 
   async function handleReset(messageIndex: number) {
     if (waiting || status !== "connected") return;
 
     const currentMessages = messages;
-    // Reset keeps the whole enclosing turn, so the optimistic slice ends at its terminal, not at
-    // the clicked (possibly mid-turn) message.
-    const terminalIndex = enclosingTurnTerminalMessageIndex(currentMessages, messageIndex);
     setTurnActionBusyIndex(messageIndex);
     try {
       const targetEventIndex = await resolveTurnTargetEventIndex(messageIndex);
 
-      if (targetEventIndex == null || terminalIndex == null) {
+      if (targetEventIndex == null) {
         setMessages((prev) => [
           ...prev,
           { kind: "error", detail: t("errors.resetTarget") },
@@ -1768,7 +1759,8 @@ export function ChatView({
 
       resetRollbackRef.current = currentMessages;
       send({ type: "reset_to_turn", event_index: targetEventIndex });
-      setMessages((prev) => prev.slice(0, terminalIndex + 1));
+      // Cut exactly at the clicked message — mid-turn resets keep the bubbles up to here.
+      setMessages((prev) => prev.slice(0, messageIndex + 1));
     } finally {
       setTurnActionBusyIndex(null);
     }
@@ -2714,15 +2706,18 @@ export function ChatView({
               {(() => {
                 const renderMessage = (i: number) => {
                   const msg = messages[i];
-                  // Expose actions on every conversational bubble; fork/reset snap to the enclosing
-                  // turn boundary, retry re-runs the latest turn.
-                  const terminalIdx = enclosingTurnTerminalMessageIndex(messages, i);
-                  const inCompletedTurn = terminalIdx != null;
-                  const isLatestTurn = inCompletedTurn && terminalIdx === latestTerminalIndex;
+                  // Event-granular: fork/reset cut exactly at this message (mid-turn included).
+                  // Retry still re-runs the latest turn.
                   const actionable = msg.kind === "user" || msg.kind === "assistant";
-                  const canFork = actionable && inCompletedTurn;
-                  const canReset = actionable && inCompletedTurn && !isLatestTurn;
-                  const canRetry = actionable && isLatestTurn;
+                  const enclosingTerminal = enclosingTurnTerminalMessageIndex(messages, i);
+                  // A persisted/completed message can be a cut target; its event index is resolved
+                  // (refetched if a freshly-finished turn hasn't been reprojected) when acted on.
+                  const inHistory =
+                    typeof eventIndexForMessage(msg) === "number" || enclosingTerminal != null;
+                  const canFork = actionable && inHistory;
+                  // Resetting the very last bubble removes nothing — offer it only with a tail to drop.
+                  const canReset = canFork && i < messages.length - 1;
+                  const canRetry = actionable && enclosingTerminal === latestTerminalIndex;
                   return (
                     <Message
                       key={i}

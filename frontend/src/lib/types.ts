@@ -527,6 +527,7 @@ export type ChatMessage =
       compaction?: CompactionAnnotation;
       timestamp?: string;
       turnIndex?: number;
+      eventIndex?: number;
     }
   | {
       kind: "assistant";
