@@ -283,6 +283,20 @@ export function CommandResultView({
     return <CompactView data={data} />;
   }
 
+  if (command === "uncompact" && isRecord(data)) {
+    // Payload carries restored/token counts alongside a human-readable `message`; the strict
+    // plain-message decoder rejects the extra keys, so render the message directly here.
+    const error = typeof data.error === "string" ? data.error : undefined;
+    const message = typeof data.message === "string" ? data.message : "";
+    if (error || message) {
+      return (
+        <p className={`my-1 text-sm whitespace-pre-wrap ${error ? "text-destructive" : "text-muted-foreground"}`}>
+          {error ?? message}
+        </p>
+      );
+    }
+  }
+
   const plainMessage = decodePlainMessagePayload(data);
   if (plainMessage) {
     if (plainMessage.error) {

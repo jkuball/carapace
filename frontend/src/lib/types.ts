@@ -611,6 +611,7 @@ export type ChatMessage =
         loading?: boolean;
         toolId?: string;
         parentToolId?: string;
+        compaction?: CompactionAnnotation;
       }>;
     }
   | { kind: "approval"; request: ApprovalRequest }
