@@ -60,7 +60,7 @@ from ..ws_models import (
 )
 from .approvals import SessionApprovalMixin
 from .commands import SessionCommandMixin
-from .compaction import slice_compacted_history
+from .compaction import slice_compacted_history, split_lead_folds
 from .compaction_engine import (
     SessionCompactionMixin,
     fold_survival_for_events,
@@ -683,7 +683,22 @@ class SessionEngine(
         """
         fold_ids, folded_turns = fold_survival_for_events(truncated_events)
         turn_count = len(self._completed_event_turns(truncated_events))
-        sliced = slice_compacted_history(history, keep_lead_folds=len(fold_ids), tail_turns=turn_count - folded_turns)
+        tail_turns = turn_count - folded_turns
+
+        # Guard against a desynced source: if the model history holds fewer completed turns than the
+        # event transcript, the slice silently truncates and the copy/reset loses real turns. That is
+        # a data-integrity anomaly (the two stores should track each other) — surface it loudly rather
+        # than shipping a quietly-truncated history.
+        _lead, rest = split_lead_folds(history)
+        available_tail = len(completed_model_turn_end_indexes(rest))
+        if tail_turns > available_tail:
+            logger.warning(
+                f"Session {session_id}: model history has fewer completed turns than its events "
+                f"(need {tail_turns} verbatim, have {available_tail}); fork/reset will truncate to "
+                f"the available turns — history is out of sync with the event transcript."
+            )
+
+        sliced = slice_compacted_history(history, keep_lead_folds=len(fold_ids), tail_turns=tail_turns)
         tree = trim_compaction_tree(self._session_mgr.load_compaction(session_id), fold_ids)
         return sliced, tree
 

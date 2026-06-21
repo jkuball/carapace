@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from loguru import logger
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
@@ -42,6 +43,31 @@ def _seed(engine, sid: str, n: int, *, tool_output: str | None = None) -> None:
         events.append({"role": "assistant", "content": f"answer {i}"})
     engine.session_mgr.save_history(sid, history)
     engine.session_mgr.save_events(sid, events)
+
+
+def test_reset_warns_when_history_desynced_from_events(tmp_path: Path, db_factory) -> None:
+    """A source whose model history lags its events must log a loud truncation warning, not silently cut."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        engine.get_or_activate(sid)
+        # 6 full event turns, but a model history with only the first turn (desynced source).
+        _seed(engine, sid, 6)
+        full = engine.session_mgr.load_history(sid)
+        engine.session_mgr.save_history(sid, full[:2])  # turn 0 only (user-prompt + response)
+
+        logs: list[str] = []
+        sink_id = logger.add(lambda m: logs.append(m.record["message"]), level="WARNING")
+        try:
+            assert await engine.reset_to_turn(sid, 11) is True  # reset to turn 5
+        finally:
+            logger.remove(sink_id)
+
+        assert any("out of sync with the event transcript" in m for m in logs)
+
+    asyncio.run(_run())
 
 
 def test_compaction_model_precedence(tmp_path: Path, db_factory) -> None:
