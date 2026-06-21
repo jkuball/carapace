@@ -225,14 +225,19 @@ export interface HistoryMessage {
 
 /**
  * Compaction annotation attached to a history event:
- * - `{ folded_into }` on a user/assistant/tool event folded into a summary node
- * - `{ method, orig_tokens, summary_tokens }` on a compacted tool_result
+ * - `{ folded_into, summary }` on a user/assistant/tool event folded into a summary node
+ * - `{ method, orig_tokens, summary_tokens, model_text }` on a compacted tool_result
+ *
+ * `summary` / `model_text` carry the model-facing text so the main (uncompacted) view can show,
+ * on demand, exactly what the model sees for a folded run or a shortened tool output.
  */
 export interface CompactionAnnotation {
   folded_into?: string;
+  summary?: string;
   method?: "truncate" | "summarize" | "drop";
   orig_tokens?: number;
   summary_tokens?: number;
+  model_text?: string;
 }
 
 export interface AgentHistoryRow {
@@ -529,6 +534,12 @@ export type ChatMessage =
       kind: "compaction_summary";
       nodeId: string;
       foldedCount: number;
+      /** Turns (not raw messages) the fold covers, for the rail header label. */
+      turnCount: number;
+      /** Model-facing summary text shown when the rail header is expanded. */
+      summary?: string;
+      origTokens?: number;
+      summaryTokens?: number;
       children: ChatMessage[];
     }
   | { kind: "streaming"; content: string }

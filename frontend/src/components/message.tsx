@@ -306,43 +306,53 @@ function CompactionSummaryBlock({
 }) {
   const t = useTranslations("compaction");
   const [open, setOpen] = useState(false);
+  const savings =
+    message.origTokens != null && message.summaryTokens != null
+      ? t("tokenDelta", { from: message.origTokens, to: message.summaryTokens })
+      : null;
   return (
-    <div className="my-1 w-full min-w-0">
+    <div className="my-1 w-full min-w-0 border-l-2 border-amber-500/40 pl-2.5">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-left",
-          "border border-dashed border-border/70 bg-muted/40 text-muted-foreground",
-          "hover:bg-accent transition-colors",
+          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-left",
+          "text-muted-foreground/80 hover:bg-accent transition-colors",
         )}
         title={t("foldTitle")}
+        aria-expanded={open}
       >
-        <ChevronRight
-          className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-90")}
-        />
-        <Archive className="h-3 w-3 shrink-0" />
+        <Archive className="h-3 w-3 shrink-0 text-amber-600/70" />
         <span className="font-medium">
-          {t("foldedCount", { count: message.foldedCount })}
+          {t("railHeader", { count: message.turnCount })}
         </span>
-        <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide opacity-70">
-          {t("badge")}
+        {savings ? <span className="opacity-70">· {savings}</span> : null}
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-80">
+          {t("modelSees")}
+          <ChevronRight
+            className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
+          />
         </span>
       </button>
-      {open ? (
-        <div className="ml-5 mt-1.5 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
-          <p className="text-[11px] text-muted-foreground">{t("foldExplainer")}</p>
-          {message.children.map((child, idx) => (
-            <Message
-              key={idx}
-              message={child}
-              server={server}
-              sessionId={sessionId}
-              activeLlmActivity={activeLlmActivity}
-            />
-          ))}
+      {open && message.summary ? (
+        <div className="mb-1.5 ml-5 mt-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-muted-foreground">
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-70">
+            {t("modelSummaryLabel")}
+          </p>
+          <div className="whitespace-pre-wrap break-words">{message.summary}</div>
         </div>
       ) : null}
+      <div className="space-y-1">
+        {message.children.map((child, idx) => (
+          <Message
+            key={idx}
+            message={child}
+            server={server}
+            sessionId={sessionId}
+            activeLlmActivity={activeLlmActivity}
+          />
+        ))}
+      </div>
     </div>
   );
 }

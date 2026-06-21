@@ -752,6 +752,20 @@ export function ToolCallBadge({
 
       {open && (
         <div className="tool-row-details ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-xs">
+          {compaction?.model_text && (
+            <details className="rounded-md border border-amber-500/30 bg-amber-500/5">
+              <summary className="flex cursor-pointer list-none items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent/50">
+                <Archive className="h-3 w-3 text-amber-600/70" />
+                <span className="font-medium">{tc("modelSees")}</span>
+                <span className="opacity-70">
+                  · {tc("tokenDelta", { from: compaction.orig_tokens ?? 0, to: compaction.summary_tokens ?? 0 })}
+                </span>
+              </summary>
+              <div className="whitespace-pre-wrap break-words border-t border-amber-500/20 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                {compaction.model_text}
+              </div>
+            </details>
+          )}
           {isUseSkillTool && (
             <div className="text-muted-foreground">
               {t("details.activateSkillPromptPrefix")}{" "}

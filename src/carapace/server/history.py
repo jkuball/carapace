@@ -19,7 +19,7 @@ from ..auth import UserIdentity
 from ..models.compaction import FOLD_MARKER
 from ..models.tooling import SentFileInfo, normalize_tool_call_args
 from ..security.context import ApprovalSource, ApprovalVerdict
-from ..session.compaction import is_fold_message, tool_return_compaction_info
+from ..session.compaction import is_fold_message, tool_return_compaction_info, tool_return_is_compacted
 from ..ws_models import Attachment, FinalStatus
 from .auth import require
 from .state import server_module
@@ -128,9 +128,47 @@ async def get_session_history(
         ]
     )
 
+    _enrich_compaction_annotations(session_id, result)
+
     if limit > 0:
         result = result[-limit:]
     return result
+
+
+def _enrich_compaction_annotations(session_id: str, messages: list[HistoryMessage]) -> None:
+    """Fold/tool annotations carry only ids + token counts; attach the model-facing summary text.
+
+    Lets the main (uncompacted) view show, inline and on demand, exactly what the model sees for a
+    folded run (the node summary) or a compacted tool output (the shortened return) — without a
+    second round-trip to the agent-history endpoint.
+    """
+    if not any(m.compaction for m in messages):
+        return
+
+    tree = server._engine.session_mgr.load_compaction(session_id)
+    nodes = {n.id: n for n in tree.nodes}
+    model_tool_text: dict[str, str] = {}
+    for msg in server._engine.session_mgr.load_history(session_id):
+        if not isinstance(msg, ModelRequest):
+            continue
+        for part in msg.parts:
+            if isinstance(part, ToolReturnPart) and part.tool_call_id and tool_return_is_compacted(part):
+                model_tool_text[part.tool_call_id] = (
+                    part.content if isinstance(part.content, str) else str(part.content)
+                )
+
+    for m in messages:
+        if not m.compaction:
+            continue
+        ann = dict(m.compaction)
+        node_id = ann.get("folded_into")
+        if isinstance(node_id, str) and (node := nodes.get(node_id)) is not None:
+            ann.setdefault("summary", node.summary)
+            ann.setdefault("orig_tokens", node.orig_tokens)
+            ann.setdefault("summary_tokens", node.summary_tokens)
+        if m.role == "tool_result" and isinstance(m.tool_id, str) and (text := model_tool_text.get(m.tool_id)):
+            ann.setdefault("model_text", text)
+        m.compaction = ann
 
 
 class AgentHistoryRow(BaseModel):

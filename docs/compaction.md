@@ -71,12 +71,20 @@ other roles with `/model compaction NAME` (and `/model NAME` switches all four r
 
 ## Viewing compaction in the UI
 
-- **Tool rows** that were compacted show a `compacted` badge with the method and token savings.
-- **Folded turns** collapse into an expandable "N earlier messages compacted" block — expand it to
-  read the original messages.
+The main view always shows the **original, uncompacted** conversation — compaction is surfaced as a
+subtle marker plus an on-demand peek at what the model actually sees, never by hiding the originals.
+
+- **Compacted tool rows** show a `compacted` badge; expanding the row reveals a **"Model sees"**
+  disclosure with the shortened tool output and token savings, alongside the full original output.
+- **Folded turns** stay inline and expanded, wrapped in a left **margin rail** with a header chip
+  (`N turns condensed for the model`). The chip expands to the model-facing summary text; the
+  original turns render normally inside the rail.
 - **Agent view** (the eye icon in the session inspector) opens a read-only overlay rendering the
-  model history exactly as the agent sees it: fold summaries in place of collapsed turns and
-  short-form compacted tool returns. Useful for debugging what the model actually receives.
+  model history exactly as the agent sees it: fold summaries in place of folded turns and short-form
+  compacted tool returns. Useful for debugging what the model actually receives.
+
+The `/history` API enriches each compaction annotation with the model-facing text (`summary` for a
+fold node, `model_text` for a compacted tool return) so the main view needs no second request.
 
 ## Data model
 

@@ -634,7 +634,21 @@ function foldNodeOf(message: ChatMessage): string | undefined {
   return undefined;
 }
 
-/** Collapse consecutive folded messages (same node) into one expandable summary block. */
+function foldAnnotationOf(message: ChatMessage): CompactionAnnotation | undefined {
+  if (
+    message.kind === "user"
+    || message.kind === "assistant"
+    || message.kind === "tool_call"
+  ) {
+    return message.compaction;
+  }
+  return undefined;
+}
+
+/**
+ * Wrap each run of folded messages (same node) in a rail group. Originals stay inline and
+ * expanded — the rail just marks the span and exposes the model-facing summary on demand.
+ */
 function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
   const out: ChatMessage[] = [];
   let i = 0;
@@ -646,7 +660,9 @@ function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
       continue;
     }
     const children: ChatMessage[] = [];
+    let annotation: CompactionAnnotation | undefined;
     while (i < messages.length && foldNodeOf(messages[i]) === node) {
+      annotation = annotation ?? foldAnnotationOf(messages[i]);
       children.push(messages[i]);
       i++;
     }
@@ -654,6 +670,10 @@ function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
       kind: "compaction_summary",
       nodeId: node,
       foldedCount: children.length,
+      turnCount: children.filter((c) => c.kind === "user").length || 1,
+      summary: annotation?.summary,
+      origTokens: annotation?.orig_tokens,
+      summaryTokens: annotation?.summary_tokens,
       children,
     });
   }

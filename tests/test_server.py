@@ -3549,6 +3549,58 @@ def test_agent_history_reflects_compacted_cut(auth_headers):
     assert summarized and summarized[0]["compaction"]["method"] == "summarize"
 
 
+def test_history_annotations_carry_model_facing_text(auth_headers):
+    """The main (uncompacted) /history view exposes the model summary + shortened tool text inline."""
+    from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
+
+    from carapace.models.compaction import CompactionNode, SessionCompaction
+    from carapace.session.compaction import AppliedToolReturn, apply_tool_return_compaction, make_fold_message
+
+    sid = _create_session(auth_headers)
+    mgr = srv._engine.session_mgr
+
+    # Model history: a fold block + a compacted tool return for call-1.
+    history: list = [
+        make_fold_message("SUMMARY OF EARLY TURNS"),
+        ModelResponse(parts=[ToolCallPart(tool_name="exec", args={}, tool_call_id="call-1")]),
+        ModelRequest(parts=[ToolReturnPart(tool_name="exec", content="full output " * 50, tool_call_id="call-1")]),
+        ModelResponse(parts=[TextPart(content="done")]),
+    ]
+    history = apply_tool_return_compaction(
+        history,
+        {"call-1": AppliedToolReturn(new_content="3 lines", method="summarize", orig_tokens=200, summary_tokens=3)},
+    )
+    mgr.save_history(sid, history)
+    mgr.save_compaction(
+        sid, SessionCompaction(nodes=[CompactionNode(id="n1", kind="fold", summary="SUMMARY OF EARLY TURNS")])
+    )
+
+    # Events (what the UI renders): a folded user turn + a compacted tool_result.
+    mgr.save_events(
+        sid,
+        [
+            {"role": "user", "content": "early question", "compaction": {"folded_into": "n1"}},
+            {"role": "assistant", "content": "early answer", "compaction": {"folded_into": "n1"}},
+            {"role": "user", "content": "recent question"},
+            {"role": "tool_call", "tool": "exec", "tool_id": "call-1"},
+            {
+                "role": "tool_result",
+                "tool": "exec",
+                "tool_id": "call-1",
+                "result": "full output",
+                "compaction": {"method": "summarize", "orig_tokens": 200, "summary_tokens": 3},
+            },
+            {"role": "assistant", "content": "done"},
+        ],
+    )
+
+    rows = TestClient(app).get(f"/api/sessions/{sid}/history", headers=auth_headers).json()
+    folded = [r for r in rows if r.get("compaction", {}).get("folded_into") == "n1"]
+    assert folded and all(r["compaction"]["summary"] == "SUMMARY OF EARLY TURNS" for r in folded)
+    tool = next(r for r in rows if r["role"] == "tool_result" and r.get("compaction"))
+    assert "3 lines" in tool["compaction"]["model_text"]
+
+
 def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_headers):
     # GET exposes compaction with current (default) values.
     initial = client.get("/api/admin/platform/settings", headers=admin_auth_headers).json()
