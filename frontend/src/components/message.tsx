@@ -73,6 +73,7 @@ function TurnMeta({
   model,
   inputTokens,
   outputTokens,
+  hideWhenRecent,
   className,
 }: {
   timestamp?: string;
@@ -82,14 +83,15 @@ function TurnMeta({
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  hideWhenRecent?: boolean;
   className?: string;
 }) {
   const { locale } = useAppLocale();
   const t = useTranslations("turnMeta");
   if (!timestamp && turnIndex == null) return null;
-  // Keep the freshest turns clean: a timestamp only earns its place once the turn is ~10min old,
-  // so a reload never decorates messages a live session would have left bare.
-  if (timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
+  // User turns stay bare for ~10min so a reload never decorates a message a live session left
+  // blank; assistant turns always show (the work is done, the timing is the point).
+  if (hideWhenRecent && timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
   const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
   const abs = timestamp
     ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
@@ -538,8 +540,7 @@ export function Message({
   switch (message.kind) {
     case "user":
       return (
-        <div className="group flex items-center justify-end gap-2">
-          <TurnMeta timestamp={message.timestamp} turnIndex={message.turnIndex} />
+        <div className="group flex flex-col items-end">
           <div
             className={cn(
               "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
@@ -580,6 +581,12 @@ export function Message({
               </div>
             ) : null}
           </div>
+          <TurnMeta
+            timestamp={message.timestamp}
+            turnIndex={message.turnIndex}
+            hideWhenRecent
+            className="mt-1"
+          />
         </div>
       );
 
