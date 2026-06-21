@@ -226,6 +226,40 @@ def _text(content: Any) -> str:
     return "" if content is None else str(content)
 
 
+def fold_survival_for_events(events: list[dict[str, Any]]) -> tuple[list[str], int]:
+    """Return ``(ordered surviving fold-node ids, count of folded event-turns)`` for *events*.
+
+    Drives fold-aware reset/fork slicing: the ids appear oldest-first (matching the order of the
+    leading fold messages in the model history), and the count is how many completed event-turns
+    are represented by a fold rather than a verbatim turn.
+    """
+    fold_ids: list[str] = []
+    folded_turns = 0
+    for turn in completed_event_turns(events):
+        span = events[turn.start_event_index : turn.end_event_index + 1]
+        node_id = next(
+            (
+                e["compaction"]["folded_into"]
+                for e in span
+                if isinstance(e.get("compaction"), dict) and "folded_into" in e["compaction"]
+            ),
+            None,
+        )
+        if node_id is None:
+            continue
+        folded_turns += 1
+        if node_id not in fold_ids:
+            fold_ids.append(node_id)
+    return fold_ids, folded_turns
+
+
+def trim_compaction_tree(tree: SessionCompaction, surviving_fold_ids: list[str]) -> SessionCompaction:
+    """Drop fold nodes (and consolidate nodes orphaned by them) no longer present after a rewind."""
+    keep = set(surviving_fold_ids)
+    nodes = [n for n in tree.nodes if n.id in keep or (n.kind == "consolidate" and set(n.children) <= keep)]
+    return SessionCompaction(nodes=nodes)
+
+
 def _annotate_folded_events(events: list[dict[str, Any]], count: int, node_id: str) -> None:
     """Tag the oldest *count* not-yet-folded event-turns with the fold node id (for UI badges)."""
     if count <= 0:

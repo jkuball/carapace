@@ -227,6 +227,27 @@ def split_lead_folds(messages: list[ModelMessage]) -> tuple[list[ModelMessage], 
     return messages[:i], messages[i:]
 
 
+def slice_compacted_history(
+    messages: list[ModelMessage], *, keep_lead_folds: int, tail_turns: int
+) -> list[ModelMessage]:
+    """Slice a (possibly folded) history to its leading folds plus *tail_turns* verbatim turns.
+
+    Fold-aware counterpart to ``history_for_completed_turn_count``: the leading fold blocks
+    summarize the oldest turns and are atomic, so they are kept as a prefix (``keep_lead_folds``
+    of them) and only the verbatim tail is sliced by completed-turn count. Used by reset/fork so
+    the kept model history stays in sync with the truncated event transcript after compaction.
+    """
+    lead, rest = split_lead_folds(messages)
+    kept_lead = lead[: max(0, keep_lead_folds)]
+    if tail_turns <= 0:
+        return kept_lead
+    ends = completed_model_turn_end_indexes(rest)
+    if not ends:
+        return kept_lead
+    capped = min(tail_turns, len(ends))
+    return kept_lead + rest[: ends[capped - 1] + 1]
+
+
 def make_fold_message(summary: str) -> ModelRequest:
     body = f"{FOLD_MARKER} Summary of earlier conversation, compacted to save context:\n\n{summary}"
     return ModelRequest(parts=[UserPromptPart(content=body)])

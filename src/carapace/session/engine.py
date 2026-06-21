@@ -30,6 +30,7 @@ from ..agent.loop import run_agent_turn as _run_agent_turn
 from ..credentials import SessionCredentialRegistry
 from ..git.store import GitStore
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
+from ..models.compaction import SessionCompaction
 from ..models.config import Config
 from ..models.credentials import CredentialRegistryProtocol
 from ..models.session import SessionAttributes, SessionState
@@ -59,7 +60,12 @@ from ..ws_models import (
 )
 from .approvals import SessionApprovalMixin
 from .commands import SessionCommandMixin
-from .compaction_engine import SessionCompactionMixin
+from .compaction import slice_compacted_history
+from .compaction_engine import (
+    SessionCompactionMixin,
+    fold_survival_for_events,
+    trim_compaction_tree,
+)
 from .manager import SessionManager
 from .model_selection import SessionModelMixin
 from .titler import generate_title
@@ -572,9 +578,8 @@ class SessionEngine(
             raise ValueError(msg)
 
         forked_events = events[: target.end_event_index + 1]
-        turn_count = len(self._completed_event_turns(forked_events))
         history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        forked_history = self._history_for_completed_turn_count(history, turn_count)
+        forked_history, forked_tree = self._compacted_history_and_tree_for_events(session_id, forked_events, history)
         target_unattended = source_state.attributes.unattended if unattended is None else unattended
         target_ask_mode = source_state.attributes.ask_mode if ask_mode is None else ask_mode
         target_yolo_mode = source_state.attributes.yolo_mode if yolo_mode is None else yolo_mode
@@ -609,6 +614,7 @@ class SessionEngine(
         self._session_mgr.save_meta(forked_session_id, source_meta.model_copy(deep=True))
         self._session_mgr.save_events(forked_session_id, forked_events)
         self._session_mgr.save_history(forked_session_id, forked_history)
+        self._session_mgr.save_compaction(forked_session_id, forked_tree)
         self._session_mgr.clear_llm_request_state(forked_session_id)
         self._session_mgr.clear_sandbox_snapshot(forked_session_id)
 
@@ -666,14 +672,29 @@ class SessionEngine(
     def _task_output_text(self, part: ToolCallPart) -> str | None:
         return task_output_text(part)
 
+    def _compacted_history_and_tree_for_events(
+        self, session_id: str, truncated_events: list[dict[str, Any]], history: list[ModelMessage]
+    ) -> tuple[list[ModelMessage], SessionCompaction]:
+        """Fold-aware slice of *history* + matching compaction tree for a truncated event prefix.
+
+        Folds collapse old turns, so the model-history turn count diverges from the event-turn
+        count. Slice via the surviving ``folded_into`` annotations instead, and trim the tree so no
+        fold node survives without its turns (and a fork never inherits fold messages without a tree).
+        """
+        fold_ids, folded_turns = fold_survival_for_events(truncated_events)
+        turn_count = len(self._completed_event_turns(truncated_events))
+        sliced = slice_compacted_history(history, keep_lead_folds=len(fold_ids), tail_turns=turn_count - folded_turns)
+        tree = trim_compaction_tree(self._session_mgr.load_compaction(session_id), fold_ids)
+        return sliced, tree
+
     def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
         truncated_events = self._truncate_incomplete_events(events)
-        turn_count = len(self._completed_event_turns(truncated_events))
         history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        truncated_history = self._history_for_completed_turn_count(history, turn_count)
+        truncated_history, tree = self._compacted_history_and_tree_for_events(session_id, truncated_events, history)
 
         self._session_mgr.save_events(session_id, truncated_events)
         self._session_mgr.save_history(session_id, truncated_history)
+        self._session_mgr.save_compaction(session_id, tree)
         self._session_mgr.clear_llm_request_state(session_id)
 
         active = self._active.get(session_id)

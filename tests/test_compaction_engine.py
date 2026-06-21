@@ -70,6 +70,54 @@ def test_compact_fold_collapses_old_turns(tmp_path: Path, db_factory) -> None:
     asyncio.run(_run())
 
 
+def test_reset_after_fold_keeps_history_in_sync(tmp_path: Path, db_factory) -> None:
+    """Reset past the verbatim tail must slice folded history by events, not raw model-turn count."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 10)
+        await engine.run_compaction(active, mode="fold", keep_turns=3)
+
+        # Reset to turn 8 (assistant event index 17): drops turn 9, keeps the fold + turns 7,8.
+        assert await engine.reset_to_turn(sid, 17) is True
+
+        history = engine.session_mgr.load_history(sid)
+        lead, rest = split_lead_folds(history)
+        assert len(lead) == 1 and is_fold_message(lead[0])
+        # Only the two surviving verbatim turns remain — not the stale turn 9.
+        assert len(completed_model_turn_end_indexes(rest)) == 2
+        # Tree still references the surviving fold; no dangling nodes.
+        tree = engine.session_mgr.load_compaction(sid)
+        assert len(tree.nodes) == 1
+
+    asyncio.run(_run())
+
+
+def test_fork_after_fold_carries_trimmed_tree(tmp_path: Path, db_factory) -> None:
+    """A fork of a folded session inherits matching folds + a compaction tree (not a dangling one)."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 10)
+        await engine.run_compaction(active, mode="fold", keep_turns=3)
+
+        forked = engine.fork_session(sid, event_index=17, channel_type="cli")
+        history = engine.session_mgr.load_history(forked.session_id)
+        lead, rest = split_lead_folds(history)
+        assert len(lead) == 1 and is_fold_message(lead[0])
+        assert len(completed_model_turn_end_indexes(rest)) == 2
+        # The fork carries the fold's tree node so fold UI / agent-view render.
+        assert len(engine.session_mgr.load_compaction(forked.session_id).nodes) == 1
+
+    asyncio.run(_run())
+
+
 def test_compact_tools_summarizes_large_returns(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
