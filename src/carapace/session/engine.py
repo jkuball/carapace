@@ -42,7 +42,9 @@ from ..security.context import SessionSecurity
 from ..security.sentinel import Sentinel
 from ..skills import SkillRegistry
 from ..usage import (
+    LlmRequestLog,
     LlmRequestState,
+    last_record_for_source,
 )
 from ..usage import (
     note_llm_request_text as _note_llm_request_text,
@@ -609,6 +611,15 @@ class SessionEngine(
         self._session_mgr.save_history(forked_session_id, forked_history)
         self._session_mgr.clear_llm_request_state(forked_session_id)
         self._session_mgr.clear_sandbox_snapshot(forked_session_id)
+
+        # Seed the context-distribution gauge from the source's last agent request, but only when
+        # forking at the tip: for an earlier turn the source's shape reflects more context than the
+        # fork actually holds. Cost/usage still start empty — no billing is carried over.
+        if target is turns[-1]:
+            source_rec = last_record_for_source(self._session_mgr.load_llm_request_log(session_id), "agent")
+            if source_rec is not None:
+                self._session_mgr.save_llm_request_log(forked_session_id, LlmRequestLog(records=[source_rec]))
+
         return forked_state
 
     async def submit_cancel(self, session_id: str) -> None:

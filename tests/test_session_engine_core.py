@@ -23,7 +23,7 @@ import carapace.usage as usage_mod
 from carapace.models.credentials import CredentialRegistryProtocol
 from carapace.models.skills import ContextGrant, SkillCredentialDecl
 from carapace.sandbox.state import SessionSandboxSnapshot
-from carapace.usage import LlmRequestState, ModelUsage
+from carapace.usage import InputShapeRatios, LlmRequestLog, LlmRequestRecord, LlmRequestState, ModelUsage
 from tests.session_helpers import _FakeSubscriber, _make_engine, _patch_sentinel, _without_timestamps
 
 
@@ -283,6 +283,67 @@ def test_fork_session_copies_transcript_and_security_context(tmp_path: Path, db_
     assert engine.session_mgr.load_usage(forked.session_id).models == {}
     assert engine.session_mgr.load_sandbox_snapshot(forked.session_id) is None
     assert len(engine.session_mgr.load_events(sid)) == 5
+
+
+def _seed_two_turn_session(engine: Any) -> str:
+    sid = engine.session_mgr.create_session(user="thies").session_id
+    engine.get_or_activate(sid)
+    engine.session_mgr.append_events(
+        sid,
+        [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "reply one"},
+            {"role": "user", "content": "second"},
+            {"role": "assistant", "content": "reply two"},
+        ],
+    )
+    engine.session_mgr.save_history(
+        sid,
+        [
+            ModelRequest(parts=[UserPromptPart(content="first")]),
+            ModelResponse(parts=[TextPart(content="reply one")]),
+            ModelRequest(parts=[UserPromptPart(content="second")]),
+            ModelResponse(parts=[TextPart(content="reply two")]),
+        ],
+    )
+    engine.session_mgr.save_llm_request_log(
+        sid,
+        LlmRequestLog(
+            records=[
+                LlmRequestRecord(
+                    ts=datetime.now(tz=UTC),
+                    source="agent",
+                    input_tokens=4321,
+                    input_shape=InputShapeRatios(system=0.5, user=0.3, assistant=0.2),
+                )
+            ]
+        ),
+    )
+    return sid
+
+
+def test_fork_at_tip_copies_context_distribution(tmp_path: Path, db_factory) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+    sid = _seed_two_turn_session(engine)
+
+    forked = engine.fork_session(sid, event_index=3, channel_type="web")
+
+    log = engine.session_mgr.load_llm_request_log(forked.session_id)
+    assert [r.input_tokens for r in log.records] == [4321]
+    assert log.records[0].input_shape is not None
+    # Usage/cost stay empty — only the context shape is inherited.
+    assert engine.session_mgr.load_usage(forked.session_id).models == {}
+
+
+def test_fork_before_tip_leaves_context_distribution_empty(tmp_path: Path, db_factory) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+    sid = _seed_two_turn_session(engine)
+
+    forked = engine.fork_session(sid, event_index=1, channel_type="web")
+
+    assert engine.session_mgr.load_llm_request_log(forked.session_id).records == []
 
 
 def test_fork_session_normalizes_unattended_history_when_becoming_attended(tmp_path: Path, db_factory) -> None:
