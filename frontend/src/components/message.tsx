@@ -311,7 +311,12 @@ function CompactionSummaryBlock({
       ? t("tokenDelta", { from: message.origTokens, to: message.summaryTokens })
       : null;
   return (
-    <div className="my-1 w-full min-w-0 border-l-2 border-amber-500/40 pl-2.5">
+    <div className="relative my-1 w-full min-w-0">
+      {/* Rail lives in the gutter (negative offset) so the originals are not shifted. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-3 bottom-1 top-1 w-0.5 rounded bg-amber-500/40"
+      />
       <button
         type="button"
         onClick={() => setOpen(!open)}
