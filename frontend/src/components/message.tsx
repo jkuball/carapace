@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ChatMessage, EscalationDecision, LlmActivity } from "@/lib/types";
+import { ToolCallGroup, groupRenderItems } from "./tool-call-group";
 import { useAppLocale } from "@/components/locale-provider";
 import { MarkdownContent } from "./markdown-content";
 import { FilePreview } from "./file-preview";
@@ -348,15 +349,32 @@ function CompactionSummaryBlock({
         </div>
       ) : null}
       <div className="space-y-1">
-        {message.children.map((child, idx) => (
-          <Message
-            key={idx}
-            message={child}
-            server={server}
-            sessionId={sessionId}
-            activeLlmActivity={activeLlmActivity}
-          />
-        ))}
+        {(() => {
+          const children = message.children;
+          const renderChild = (idx: number) => (
+            <Message
+              key={idx}
+              message={children[idx]}
+              server={server}
+              sessionId={sessionId}
+              activeLlmActivity={activeLlmActivity}
+            />
+          );
+          // Collapse runs of tool rows into a group, exactly like the live transcript.
+          return groupRenderItems(children).map((item) =>
+            item.type === "message" ? (
+              renderChild(item.index)
+            ) : (
+              <ToolCallGroup
+                key={`g-${item.start}`}
+                items={item.indices.map((j) => children[j])}
+                inProgress={false}
+              >
+                {item.indices.map((j) => renderChild(j))}
+              </ToolCallGroup>
+            ),
+          );
+        })()}
       </div>
     </div>
   );
