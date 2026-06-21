@@ -32,6 +32,11 @@ function formatDuration(ms: number, locale: string, precise = true): string {
   return `${Math.round(ms / 1_000)}s`;
 }
 
+function turnAgeMs(iso: string): number {
+  const age = Date.now() - new Date(iso).getTime();
+  return Number.isNaN(age) ? Infinity : age;
+}
+
 function formatRelativeTime(iso: string, locale: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -61,6 +66,9 @@ function TurnMeta({
   const { locale } = useAppLocale();
   const t = useTranslations("turnMeta");
   if (!timestamp && turnIndex == null) return null;
+  // Keep the freshest turns clean: a timestamp only earns its place once the turn is ~10min old,
+  // so a reload never decorates messages a live session would have left bare.
+  if (timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
   const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
   const abs = timestamp
     ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
