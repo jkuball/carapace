@@ -807,7 +807,12 @@ def test_admin_platform_settings_updates_db_and_runtime(client, admin_auth_heade
 
     assert resp.status_code == 200
     body = resp.json()["settings"]
-    assert body["default_models"] == {"agent": "local:test", "sentinel": "local:test", "title": "local:test"}
+    assert body["default_models"] == {
+        "agent": "local:test",
+        "sentinel": "local:test",
+        "title": "local:test",
+        "compaction": None,
+    }
     assert srv._config.agent.model == "local:test"
     assert srv._engine.config.agent.model == "local:test"
     # Persisted to the DB model catalog, not config.yaml.
@@ -3496,3 +3501,165 @@ def test_upload_sandbox_file_rejected_for_other_user(client, admin_auth_headers,
         files={"file": ("abc.png", b"data", "image/png")},
     )
     assert resp.status_code == 404
+
+
+def test_agent_history_reflects_compacted_cut(auth_headers):
+    from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+
+    from carapace.models.compaction import CompactionNode, SessionCompaction
+    from carapace.session.compaction import AppliedToolReturn, apply_fold, apply_tool_return_compaction, plan_fold
+
+    sid = _create_session(auth_headers)
+    mgr = srv._engine.session_mgr
+
+    history: list = []
+    for i in range(8):
+        cid = f"call-{i}"
+        history.append(ModelRequest(parts=[UserPromptPart(content=f"q{i}")]))
+        history.append(ModelResponse(parts=[ToolCallPart(tool_name="exec", args={}, tool_call_id=cid)]))
+        history.append(ModelRequest(parts=[ToolReturnPart(tool_name="exec", content="out\n" * 50, tool_call_id=cid)]))
+        history.append(ModelResponse(parts=[TextPart(content=f"a{i}")]))
+
+    plan = plan_fold(history, keep_turns=3)
+    history = apply_fold(plan, "OLD SUMMARY TEXT")
+    # compact a tool return in the kept region
+    from carapace.session.compaction import find_tool_return_candidates, split_lead_folds
+
+    _lead, rest = split_lead_folds(history)
+    cands = find_tool_return_candidates(
+        history, floor_tokens=10, within_indexes=set(range(len(history) - len(rest), len(history)))
+    )
+    applied = {
+        cands[0].tool_call_id: AppliedToolReturn(
+            new_content="3 lines", method="summarize", orig_tokens=200, summary_tokens=3
+        )
+    }
+    history = apply_tool_return_compaction(history, applied)
+    mgr.save_history(sid, history)
+    mgr.save_compaction(
+        sid, SessionCompaction(nodes=[CompactionNode(id="n1", kind="fold", summary="OLD SUMMARY TEXT")])
+    )
+
+    body = TestClient(app).get(f"/api/sessions/{sid}/agent-history", headers=auth_headers).json()
+    assert body["node_count"] == 1
+    roles = [r["role"] for r in body["rows"]]
+    assert roles[0] == "compaction_summary"
+    assert "OLD SUMMARY TEXT" in body["rows"][0]["content"]
+    summarized = [r for r in body["rows"] if r["role"] == "tool_result" and r.get("compaction")]
+    assert summarized and summarized[0]["compaction"]["method"] == "summarize"
+
+
+def test_history_annotations_carry_model_facing_text(auth_headers):
+    """The main (uncompacted) /history view exposes the model summary + shortened tool text inline."""
+    from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart
+
+    from carapace.models.compaction import CompactionNode, SessionCompaction
+    from carapace.session.compaction import AppliedToolReturn, apply_tool_return_compaction, make_fold_message
+
+    sid = _create_session(auth_headers)
+    mgr = srv._engine.session_mgr
+
+    # Model history: a fold block + a compacted tool return for call-1.
+    history: list = [
+        make_fold_message("SUMMARY OF EARLY TURNS"),
+        ModelResponse(parts=[ToolCallPart(tool_name="exec", args={}, tool_call_id="call-1")]),
+        ModelRequest(parts=[ToolReturnPart(tool_name="exec", content="full output " * 50, tool_call_id="call-1")]),
+        ModelResponse(parts=[TextPart(content="done")]),
+    ]
+    history = apply_tool_return_compaction(
+        history,
+        {"call-1": AppliedToolReturn(new_content="3 lines", method="summarize", orig_tokens=200, summary_tokens=3)},
+    )
+    mgr.save_history(sid, history)
+    mgr.save_compaction(
+        sid, SessionCompaction(nodes=[CompactionNode(id="n1", kind="fold", summary="SUMMARY OF EARLY TURNS")])
+    )
+
+    # Events (what the UI renders): a folded user turn + a compacted tool_result.
+    mgr.save_events(
+        sid,
+        [
+            {"role": "user", "content": "early question", "compaction": {"folded_into": "n1"}},
+            {"role": "assistant", "content": "early answer", "compaction": {"folded_into": "n1"}},
+            {"role": "user", "content": "recent question"},
+            {"role": "tool_call", "tool": "exec", "tool_id": "call-1"},
+            {
+                "role": "tool_result",
+                "tool": "exec",
+                "tool_id": "call-1",
+                "result": "full output",
+                "compaction": {"method": "summarize", "orig_tokens": 200, "summary_tokens": 3},
+            },
+            {"role": "assistant", "content": "done"},
+        ],
+    )
+
+    rows = TestClient(app).get(f"/api/sessions/{sid}/history", headers=auth_headers).json()
+    folded = [r for r in rows if r.get("compaction", {}).get("folded_into") == "n1"]
+    assert folded and all(r["compaction"]["summary"] == "SUMMARY OF EARLY TURNS" for r in folded)
+    tool = next(r for r in rows if r["role"] == "tool_result" and r.get("compaction"))
+    assert "3 lines" in tool["compaction"]["model_text"]
+
+
+def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_headers):
+    # GET exposes compaction with current (default) values.
+    initial = client.get("/api/admin/platform/settings", headers=admin_auth_headers).json()
+    assert "compaction" in initial["settings"]
+
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-sonnet-4-6",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+                "compaction": "anthropic:claude-haiku-4-5",
+            },
+            "default_budget": {},
+            "compaction": {
+                "keep_turns": 4,
+                "verbatim_tool_turns": 1,
+                "tool_output_floor_tokens": 800,
+            },
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-sonnet-4-6"},
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    settings = resp.json()["settings"]
+    assert settings["default_models"]["compaction"] == "anthropic:claude-haiku-4-5"
+    assert settings["compaction"] == {
+        "keep_turns": 4,
+        "verbatim_tool_turns": 1,
+        "tool_output_floor_tokens": 800,
+    }
+    # Applied to runtime config and persisted to the DB scalar row.
+    assert srv._config.agent.compaction.keep_turns == 4
+    assert srv._config.agent.compaction.verbatim_tool_turns == 1
+    assert srv._config.agent.compaction_model == "anthropic:claude-haiku-4-5"
+    assert srv._platform_store.load_section("agent")["compaction_model"] == "anthropic:claude-haiku-4-5"
+
+
+def test_admin_platform_settings_rejects_unknown_compaction_model(client, admin_auth_headers):
+    resp = client.patch(
+        "/api/admin/platform/settings",
+        headers=admin_auth_headers,
+        json={
+            "default_models": {
+                "agent": "anthropic:claude-sonnet-4-6",
+                "sentinel": "anthropic:claude-haiku-4-5",
+                "title": "anthropic:claude-haiku-4-5",
+                "compaction": "anthropic:not-in-catalog",
+            },
+            "default_budget": {},
+            "available_models": [
+                {"provider": "anthropic", "name": "claude-sonnet-4-6"},
+                {"provider": "anthropic", "name": "claude-haiku-4-5"},
+            ],
+        },
+    )
+    assert resp.status_code >= 400

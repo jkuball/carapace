@@ -333,7 +333,7 @@ def usage_limits_for_remaining_budget(
     return UsageLimits(output_tokens_limit=remaining_output, request_limit=request_limit)
 
 
-LlmSource = Literal["agent", "sentinel", "titler"]
+LlmSource = Literal["agent", "sentinel", "titler", "compaction"]
 LlmRequestPhase = Literal["processing_prompt", "thinking", "generating"]
 LlmRequestOutcome = Literal["completed", "interrupted"]
 
@@ -621,11 +621,7 @@ def _accumulate_response_part(part: ModelResponsePart, buckets: dict[str, str]) 
         assert_never(part)
 
 
-def input_shape_ratios_from_messages(
-    messages: list[ModelMessage],
-    *,
-    model_name: str | None,
-) -> InputShapeRatios | None:
+def _message_text_buckets(messages: list[ModelMessage]) -> dict[str, str]:
     buckets = {k: "" for k in ("system", "user", "assistant", "tool_calls", "tool_returns", "other")}
     for msg in messages:
         if isinstance(msg, ModelRequest):
@@ -636,7 +632,26 @@ def input_shape_ratios_from_messages(
         elif isinstance(msg, ModelResponse):
             for p in msg.parts:
                 _accumulate_response_part(p, buckets)
+    return buckets
 
+
+def count_text_tokens(text: str, *, model_name: str | None = None) -> int:
+    """Token estimate for a raw string, using the model's tiktoken encoding."""
+    return _count_text(_encoding_for_model(model_name), text)
+
+
+def count_message_tokens(messages: list[ModelMessage], *, model_name: str | None = None) -> int:
+    """Token estimate for a slice of pydantic-ai history (approximate; tiktoken-based)."""
+    enc = _encoding_for_model(model_name)
+    return sum(_count_text(enc, v) for v in _message_text_buckets(messages).values())
+
+
+def input_shape_ratios_from_messages(
+    messages: list[ModelMessage],
+    *,
+    model_name: str | None,
+) -> InputShapeRatios | None:
+    buckets = _message_text_buckets(messages)
     enc = _encoding_for_model(model_name)
     counts = {k: _count_text(enc, v) for k, v in buckets.items()}
     total = sum(counts.values())

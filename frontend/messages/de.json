@@ -143,12 +143,14 @@
             "rawSecretRequired": "Füge einen API-Key für {id} ein oder wähle eine andere Secret-Quelle.",
             "secretValueRequired": "Secret-Referenz ist für {id} erforderlich.",
             "defaultRequired": "{field}-Standardmodell ist erforderlich.",
-            "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog."
+            "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog.",
+            "minInt": "{field} muss eine ganze Zahl ≥ {min} sein."
         },
         "sections": {
             "defaultModels": "Standardmodelle",
             "defaultBudgets": "Standardbudgets",
-            "catalog": "Modellkatalog"
+            "catalog": "Modellkatalog",
+            "compaction": "Compaction"
         },
         "fields": {
             "agent": "Agent",
@@ -169,7 +171,8 @@
             "visionHint": "Akzeptiert Bildeingaben",
             "apiKeySource": "API-Key-Quelle",
             "apiKey": "API-Key",
-            "secretReference": "Secret-Referenz"
+            "secretReference": "Secret-Referenz",
+            "compaction": "Compaction"
         },
         "placeholders": {
             "selectModel": "Modell auswählen",
@@ -203,7 +206,13 @@
         "units": {
             "tokens": "Tokens"
         },
-        "modelRow": "Modell {index}"
+        "modelRow": "Modell {index}",
+        "compaction": {
+            "modelDefault": "Standard (Titelmodell)",
+            "keepTurns": "Letzte Runden behalten",
+            "verbatimTurns": "Tool-Runden wörtlich behalten",
+            "toolFloor": "Tool-Ausgabe-Schwelle (Tokens)"
+        }
     },
     "home": {
         "empty": {
@@ -656,6 +665,14 @@
                 "used": "Verwendet",
                 "blocked": "blockiert"
             }
+        },
+        "compact": {
+            "title": "Compaction",
+            "nothing": "Nichts zu komprimieren.",
+            "saved": "{saved} Tokens gespart ({before}→{after}).",
+            "folded": "{count} Runden gefaltet",
+            "tools": "{count} Tool-Ausgaben zusammengefasst",
+            "thinking": "{count} Denk-Teile verworfen"
         }
     },
     "chatView": {
@@ -681,7 +698,8 @@
         "errors": {
             "unexpected": "Unerwarteter Fehler",
             "resetTarget": "Ziel zum Zurücksetzen konnte nicht aufgelöst werden.",
-            "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden."
+            "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden.",
+            "compactRefresh": "Compaction erfolgreich, aber das Aktualisieren des Verlaufs ist fehlgeschlagen. Neu laden, um die komprimierte Ansicht zu sehen."
         },
         "confirm": {
             "wipeSandbox": "Sandbox und ihren Speicher für diese Sitzung löschen? Der Chatverlauf bleibt erhalten.",
@@ -836,6 +854,11 @@
             },
             "notice": "Der Agent hat die Aufgabe mit einer Meldung vom Typ {status} beendet. Die Sitzung ist jetzt schreibgeschützt, du kannst sie aber forken um weiter zu chatten."
         }
+    },
+    "turnMeta": {
+        "turn": "Runde {n}",
+        "tools": "{count, plural, one {# Tool} other {# Tools}}",
+        "tokens": "{in} rein, {out} raus"
     },
     "jobs": {
         "settingsSections": "Einstellungsbereiche",
@@ -1070,5 +1093,25 @@
             "revoke": "API-Schlüssel konnte nicht widerrufen werden.",
             "noScopes": "Wähle mindestens eine Berechtigung."
         }
+    },
+    "compaction": {
+        "badge": "komprimiert",
+        "railHeader": "{count, plural, one {# Runde} other {# Runden}} für das Modell verdichtet",
+        "modelSees": "Modell sieht",
+        "modelSummaryLabel": "Zusammenfassung im Modell-Kontext",
+        "tokenDelta": "{from}→{to} Tok",
+        "foldTitle": "Diese Runden sind im Modell-Kontext zu einer Zusammenfassung verdichtet — Originale hier angezeigt",
+        "toolTitle": "Tool-Ausgabe {method}, um Kontext zu sparen ({orig}→{summary} Tokens)",
+        "methods": {
+            "summarize": "zusammengefasst",
+            "truncate": "gekürzt",
+            "drop": "entfernt"
+        },
+        "agentView": "Agent-Ansicht",
+        "agentViewOff": "Normale Ansicht",
+        "agentViewHint": "Verlauf genau so anzeigen, wie ihn der Agent sieht",
+        "agentSummary": "Komprimierte Zusammenfassung",
+        "agentEmpty": "Noch kein Verlauf.",
+        "agentError": "Agent-Ansicht konnte nicht geladen werden. Verbindung oder Berechtigungen prüfen."
     }
 }

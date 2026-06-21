@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from ..models.compaction import SessionCompaction
 from ..models.jobs import JobDefinition
 from ..models.session import SessionState
 from ..models.user import UserConfig
@@ -140,6 +141,16 @@ class SessionLlmRequestRow(Base):
         String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
     )
     log: Mapped[LlmRequestLog] = mapped_column(PydanticJson(LlmRequestLog))
+
+
+class SessionCompactionRow(Base):
+    __tablename__ = "session_compaction"
+
+    session_id: Mapped[str] = mapped_column(
+        String(256), ForeignKey("sessions.session_id", ondelete="CASCADE"), primary_key=True
+    )
+    # Compaction summary tree (folded-turn summaries + consolidation nodes).
+    tree: Mapped[SessionCompaction] = mapped_column(PydanticJson(SessionCompaction))
 
 
 class SessionAuditRow(Base):

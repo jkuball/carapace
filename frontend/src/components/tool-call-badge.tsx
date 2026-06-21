@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
+  Archive,
   ChevronRight,
   FileText,
   FilePen,
@@ -29,7 +30,7 @@ import {
   languageFromFilePath,
   splitReadToolResult,
 } from "@/lib/sandbox-read";
-import type { SentFile } from "@/lib/types";
+import type { CompactionAnnotation, SentFile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ToolCallBadgeProps {
@@ -45,6 +46,7 @@ interface ToolCallBadgeProps {
   files?: SentFile[];
   exitCode?: number;
   loading?: boolean;
+  compaction?: CompactionAnnotation;
   childCalls?: ToolCallBadgeProps[];
   server?: string;
   sessionId?: string;
@@ -508,11 +510,13 @@ export function ToolCallBadge({
   files,
   exitCode,
   loading,
+  compaction,
   childCalls,
   server,
   sessionId,
 }: ToolCallBadgeProps) {
   const t = useTranslations("toolCallBadge");
+  const tc = useTranslations("compaction");
   const isSendFileTool = tool === "send_file";
   const [open, setOpen] = useState(isSendFileTool);
   const [skillInstructionsOpen, setSkillInstructionsOpen] = useState(false);
@@ -727,6 +731,18 @@ export function ToolCallBadge({
             );
           })()}
           {source && <ApprovalBadge source={source} verdict={verdict} tooltip={finalDecisionMessage || sentinelExplanation || undefined} />}
+          {compaction?.method && (
+            <span
+              className="inline-flex items-center rounded bg-amber-500/15 p-0.5 text-amber-700 dark:text-amber-400"
+              title={tc("toolTitle", {
+                method: tc(`methods.${compaction.method}`),
+                orig: compaction.orig_tokens ?? 0,
+                summary: compaction.summary_tokens ?? 0,
+              })}
+            >
+              <Archive className="h-2.5 w-2.5" />
+            </span>
+          )}
           {loading && (
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
           )}
@@ -735,6 +751,20 @@ export function ToolCallBadge({
 
       {open && (
         <div className="tool-row-details ml-5 mt-1.5 rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-xs">
+          {compaction?.model_text && (
+            <details className="rounded-md border border-amber-500/30 bg-amber-500/5">
+              <summary className="flex cursor-pointer list-none items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent/50">
+                <Archive className="h-3 w-3 text-amber-600/70" />
+                <span className="font-medium">{tc("modelSees")}</span>
+                <span className="opacity-70">
+                  · {tc("tokenDelta", { from: compaction.orig_tokens ?? 0, to: compaction.summary_tokens ?? 0 })}
+                </span>
+              </summary>
+              <div className="whitespace-pre-wrap break-words border-t border-amber-500/20 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                {compaction.model_text}
+              </div>
+            </details>
+          )}
           {isUseSkillTool && (
             <div className="text-muted-foreground">
               {t("details.activateSkillPromptPrefix")}{" "}

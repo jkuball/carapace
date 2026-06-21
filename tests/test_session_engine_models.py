@@ -12,7 +12,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic_ai import ApprovalRequired
 from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
@@ -380,11 +388,12 @@ def test_handle_slash_command_model_sets_all_three(tmp_path: Path, db_factory):
             assert result is not None
             assert result["command"] == "model"
             assert "models" in result["data"]
-            for key in ("agent", "sentinel", "title"):
+            for key in ("agent", "sentinel", "title", "compaction"):
                 assert result["data"]["models"][key]["current"] == "openai:gpt-4o"
             assert active.agent_model_name == "openai:gpt-4o"
             assert active.sentinel_model_name == "openai:gpt-4o"
             assert active.title_model_name == "openai:gpt-4o"
+            assert active.compaction_model_name == "openai:gpt-4o"
 
         asyncio.run(_run())
 
@@ -409,6 +418,27 @@ def test_handle_slash_command_model_target_sets_only_requested_role(tmp_path: Pa
         asyncio.run(_run())
 
 
+def test_handle_slash_command_model_compaction_target(tmp_path: Path, db_factory):
+    """``/model compaction NAME`` overrides only the compaction model and feeds the engine."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        state = engine.session_mgr.create_session(user="thies")
+        sid = state.session_id
+        active = engine.get_or_activate(sid)
+
+        async def _run() -> None:
+            result = await engine.handle_slash_command(sid, "/model compaction openai:gpt-4o")
+            assert result is not None
+            assert result["command"] == "model-compaction"
+            assert result["data"]["current"] == "openai:gpt-4o"
+            assert active.agent_model_name is None
+            assert active.compaction_model_name == "openai:gpt-4o"
+            # The compaction engine resolves the per-session override.
+            assert engine._compaction_model(active) == "openai:gpt-4o"
+
+        asyncio.run(_run())
+
+
 def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path, db_factory):
     """``/model all NAME`` explicitly targets the all-model path."""
     with _patch_sentinel():
@@ -421,11 +451,12 @@ def test_handle_slash_command_model_all_alias_sets_all_three(tmp_path: Path, db_
             result = await engine.handle_slash_command(sid, "/model all openai:gpt-4o")
             assert result is not None
             assert result["command"] == "model"
-            for key in ("agent", "sentinel", "title"):
+            for key in ("agent", "sentinel", "title", "compaction"):
                 assert result["data"]["models"][key]["current"] == "openai:gpt-4o"
             assert active.agent_model_name == "openai:gpt-4o"
             assert active.sentinel_model_name == "openai:gpt-4o"
             assert active.title_model_name == "openai:gpt-4o"
+            assert active.compaction_model_name == "openai:gpt-4o"
 
         asyncio.run(_run())
 
@@ -683,6 +714,24 @@ def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path, 
         assert truncated == messages
 
 
+def test_truncate_incomplete_model_history_retry_resolves_tool_call(tmp_path: Path, db_factory) -> None:
+    # A tool call answered by a RetryPromptPart (validation retry) is resolved, not pending —
+    # otherwise every later turn is stranded and the history collapses to the first turn.
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="hello")]),
+            ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
+            ModelRequest(parts=[RetryPromptPart(content="bad args", tool_name="cmd", tool_call_id="call-1")]),
+            ModelResponse(parts=[TextPart(content="done")]),
+            ModelRequest(parts=[UserPromptPart(content="again")]),
+            ModelResponse(parts=[TextPart(content="ok")]),
+        ]
+
+        truncated = engine._truncate_incomplete_model_history(messages)
+        assert truncated == messages
+
+
 def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path, session_factory=db_factory)
@@ -698,6 +747,29 @@ def test_truncate_incomplete_events_drops_dangling_tool_tail(tmp_path: Path, db_
 
         assert len(truncated) == 4
         assert truncated[-1]["role"] == "assistant"
+
+
+def test_truncate_incomplete_events_keeps_completed_turn_after_resultless_call(tmp_path: Path, db_factory) -> None:
+    """A mid-conversation tool call that never emits a paired result (credential_access,
+    imported sessions, ...) must not truncate away a later fully completed turn — else fork/reset
+    on that turn fails with "Unknown fork target"."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        events: list[dict[str, Any]] = [
+            {"role": "user", "content": "first"},
+            {"role": "tool_call", "tool": "exec", "args": {"command": "ls"}, "detail": "run", "tool_id": "c1"},
+            {"role": "tool_result", "tool": "exec", "result": "ok", "exit_code": 0, "tool_id": "c1"},
+            {"role": "assistant", "content": "done one"},
+            {"role": "user", "content": "second"},
+            # credential_access is issued but emits no paired tool_result event:
+            {"role": "tool_call", "tool": "credential_access", "args": {}, "detail": "grant", "tool_id": "c2"},
+            {"role": "assistant", "content": "done two"},
+        ]
+
+        truncated = engine._truncate_incomplete_events(events)
+
+        assert len(truncated) == 7
+        assert engine._completed_event_turns(truncated)[-1].end_event_index == 6
 
 
 def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path, db_factory) -> None:

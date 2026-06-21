@@ -299,6 +299,7 @@ def _notify_result(
                 output=result,
                 exit_code=exit_code,
                 tool_id=ctx.deps.security.current_parent_tool_id,
+                model_tool_call_id=getattr(ctx, "tool_call_id", None),
                 files=files,
             )
         )

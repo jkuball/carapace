@@ -30,6 +30,7 @@ from ..agent.loop import run_agent_turn as _run_agent_turn
 from ..credentials import SessionCredentialRegistry
 from ..git.store import GitStore
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoResolver
+from ..models.compaction import SessionCompaction
 from ..models.config import Config
 from ..models.credentials import CredentialRegistryProtocol
 from ..models.session import SessionAttributes, SessionState
@@ -42,7 +43,9 @@ from ..security.context import SessionSecurity
 from ..security.sentinel import Sentinel
 from ..skills import SkillRegistry
 from ..usage import (
+    LlmRequestLog,
     LlmRequestState,
+    last_record_for_source,
 )
 from ..usage import (
     note_llm_request_text as _note_llm_request_text,
@@ -57,6 +60,12 @@ from ..ws_models import (
 )
 from .approvals import SessionApprovalMixin
 from .commands import SessionCommandMixin
+from .compaction import slice_compacted_history, split_lead_folds
+from .compaction_engine import (
+    SessionCompactionMixin,
+    fold_survival_for_events,
+    trim_compaction_tree,
+)
 from .manager import SessionManager
 from .model_selection import SessionModelMixin
 from .titler import generate_title
@@ -93,6 +102,7 @@ class SessionEngine(
     SessionUsageBudgetMixin,
     SessionApprovalMixin,
     SessionTurnMixin,
+    SessionCompactionMixin,
 ):
     """Central session lifecycle manager.
 
@@ -255,6 +265,7 @@ class SessionEngine(
             agent_model_name=state.agent_model_name,
             sentinel_model_name=state.sentinel_model_name,
             title_model_name=state.title_model_name,
+            compaction_model_name=state.compaction_model_name,
         )
         self._restore_persisted_model_overrides(active)
         self._active[session_id] = active
@@ -567,9 +578,8 @@ class SessionEngine(
             raise ValueError(msg)
 
         forked_events = events[: target.end_event_index + 1]
-        turn_count = len(self._completed_event_turns(forked_events))
         history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        forked_history = self._history_for_completed_turn_count(history, turn_count)
+        forked_history, forked_tree = self._compacted_history_and_tree_for_events(session_id, forked_events, history)
         target_unattended = source_state.attributes.unattended if unattended is None else unattended
         target_ask_mode = source_state.attributes.ask_mode if ask_mode is None else ask_mode
         target_yolo_mode = source_state.attributes.yolo_mode if yolo_mode is None else yolo_mode
@@ -604,8 +614,18 @@ class SessionEngine(
         self._session_mgr.save_meta(forked_session_id, source_meta.model_copy(deep=True))
         self._session_mgr.save_events(forked_session_id, forked_events)
         self._session_mgr.save_history(forked_session_id, forked_history)
+        self._session_mgr.save_compaction(forked_session_id, forked_tree)
         self._session_mgr.clear_llm_request_state(forked_session_id)
         self._session_mgr.clear_sandbox_snapshot(forked_session_id)
+
+        # Seed the context-distribution gauge from the source's last agent request, but only when
+        # forking at the tip: for an earlier turn the source's shape reflects more context than the
+        # fork actually holds. Cost/usage still start empty — no billing is carried over.
+        if target is turns[-1]:
+            source_rec = last_record_for_source(self._session_mgr.load_llm_request_log(session_id), "agent")
+            if source_rec is not None:
+                self._session_mgr.save_llm_request_log(forked_session_id, LlmRequestLog(records=[source_rec]))
+
         return forked_state
 
     async def submit_cancel(self, session_id: str) -> None:
@@ -652,14 +672,44 @@ class SessionEngine(
     def _task_output_text(self, part: ToolCallPart) -> str | None:
         return task_output_text(part)
 
+    def _compacted_history_and_tree_for_events(
+        self, session_id: str, truncated_events: list[dict[str, Any]], history: list[ModelMessage]
+    ) -> tuple[list[ModelMessage], SessionCompaction]:
+        """Fold-aware slice of *history* + matching compaction tree for a truncated event prefix.
+
+        Folds collapse old turns, so the model-history turn count diverges from the event-turn
+        count. Slice via the surviving ``folded_into`` annotations instead, and trim the tree so no
+        fold node survives without its turns (and a fork never inherits fold messages without a tree).
+        """
+        fold_ids, folded_turns = fold_survival_for_events(truncated_events)
+        turn_count = len(self._completed_event_turns(truncated_events))
+        tail_turns = turn_count - folded_turns
+
+        # Guard against a desynced source: if the model history holds fewer completed turns than the
+        # event transcript, the slice silently truncates and the copy/reset loses real turns. That is
+        # a data-integrity anomaly (the two stores should track each other) — surface it loudly rather
+        # than shipping a quietly-truncated history.
+        _lead, rest = split_lead_folds(history)
+        available_tail = len(completed_model_turn_end_indexes(rest))
+        if tail_turns > available_tail:
+            logger.warning(
+                f"Session {session_id}: model history has fewer completed turns than its events "
+                f"(need {tail_turns} verbatim, have {available_tail}); fork/reset will truncate to "
+                f"the available turns — history is out of sync with the event transcript."
+            )
+
+        sliced = slice_compacted_history(history, keep_lead_folds=len(fold_ids), tail_turns=tail_turns)
+        tree = trim_compaction_tree(self._session_mgr.load_compaction(session_id), fold_ids)
+        return sliced, tree
+
     def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
         truncated_events = self._truncate_incomplete_events(events)
-        turn_count = len(self._completed_event_turns(truncated_events))
         history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        truncated_history = self._history_for_completed_turn_count(history, turn_count)
+        truncated_history, tree = self._compacted_history_and_tree_for_events(session_id, truncated_events, history)
 
         self._session_mgr.save_events(session_id, truncated_events)
         self._session_mgr.save_history(session_id, truncated_history)
+        self._session_mgr.save_compaction(session_id, tree)
         self._session_mgr.clear_llm_request_state(session_id)
 
         active = self._active.get(session_id)

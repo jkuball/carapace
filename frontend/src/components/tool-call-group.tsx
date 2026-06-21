@@ -16,6 +16,44 @@ interface ToolCallGroupProps {
   inProgress: boolean;
 }
 
+export type RenderItem =
+  | { type: "message"; index: number }
+  | { type: "group"; start: number; indices: number[]; inProgress: boolean };
+
+function isToolish(m: ChatMessage): boolean {
+  return m.kind === "tool_call" || m.kind === "thinking" || m.kind === "thinking_streaming";
+}
+
+/**
+ * Group maximal runs of tool/thinking messages. A run becomes a collapsible group only when it has
+ * ≥2 items and contains ≥1 tool_call; otherwise its items render individually. A group that reaches
+ * the end of the list is still in progress (rendered expanded).
+ */
+export function groupRenderItems(messages: ChatMessage[]): RenderItem[] {
+  const items: RenderItem[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    if (!isToolish(messages[i])) {
+      items.push({ type: "message", index: i });
+      i++;
+      continue;
+    }
+    const start = i;
+    const indices: number[] = [];
+    while (i < messages.length && isToolish(messages[i])) {
+      indices.push(i);
+      i++;
+    }
+    const hasToolCall = indices.some((j) => messages[j].kind === "tool_call");
+    if (indices.length >= 2 && hasToolCall) {
+      items.push({ type: "group", start, indices, inProgress: i >= messages.length });
+    } else {
+      for (const j of indices) items.push({ type: "message", index: j });
+    }
+  }
+  return items;
+}
+
 interface ToolCallLike {
   tool: string;
   args: Record<string, unknown>;

@@ -165,6 +165,7 @@ See [docs/architecture.md](docs/architecture.md) for the diagrams and fuller arc
 | [docs/persistent-context.md](docs/persistent-context.md)       | Persistent context, workspace files, and archived session snapshots        |
 | [docs/sandbox.md](docs/sandbox.md)                             | Docker/Kubernetes sandboxes, proxy behavior, and exec-scoped tunnels       |
 | [docs/sessions-and-channels.md](docs/sessions-and-channels.md) | Session lifecycle, session controls, Matrix behavior, and approvals        |
+| [docs/compaction.md](docs/compaction.md)                       | Session compaction: `/compact`, fold/tool strategies, agent view           |
 | [docs/kubernetes.md](docs/kubernetes.md)                       | Kubernetes runtime, StatefulSet sandboxes, and Helm deployment             |
 
 ## Kubernetes Deployment

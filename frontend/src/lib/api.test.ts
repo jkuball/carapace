@@ -498,6 +498,11 @@ test("platform settings helpers parse model secrets and send patches", async () 
     {
       default_models: settings.settings.default_models,
       default_budget: { cost_usd: "2.50" },
+      compaction: {
+        keep_turns: 6,
+        verbatim_tool_turns: 2,
+        tool_output_floor_tokens: 500,
+      },
       available_models: [
         {
           provider: "openai",

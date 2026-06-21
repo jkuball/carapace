@@ -26,6 +26,10 @@ class ToolResult:
     output: str
     exit_code: int = 0
     tool_id: str | None = None
+    # Provider tool-call id from the model history (``ctx.tool_call_id``). Distinct from ``tool_id``
+    # (a carapace UUID), it is the only reliable link back to the model's ToolReturnPart — used to
+    # surface compaction annotations on the right tool row.
+    model_tool_call_id: str | None = None
     files: tuple[SentFileInfo, ...] = field(default_factory=tuple)
 
 

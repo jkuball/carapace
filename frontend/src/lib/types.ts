@@ -178,6 +178,8 @@ export interface HistoryMessage {
   attachments?: Attachment[];
   final_status?: "success" | "warning";
   event_index?: number;
+  timestamp?: string;
+  usage?: { model?: string | null; input_tokens?: number; output_tokens?: number };
   reasoning_duration_ms?: number;
   reasoning_tokens?: number;
   tool?: string;
@@ -220,6 +222,56 @@ export interface HistoryMessage {
   skill_name?: string;
   tool_id?: string;
   parent_tool_id?: string;
+  compaction?: CompactionAnnotation;
+}
+
+/**
+ * Compaction annotation attached to a history event:
+ * - `{ folded_into, summary }` on a user/assistant/tool event folded into a summary node
+ * - `{ method, orig_tokens, summary_tokens, model_text }` on a compacted tool_result
+ *
+ * `summary` / `model_text` carry the model-facing text so the main (uncompacted) view can show,
+ * on demand, exactly what the model sees for a folded run or a shortened tool output.
+ */
+export interface CompactionAnnotation {
+  folded_into?: string;
+  summary?: string;
+  method?: "truncate" | "summarize" | "drop";
+  orig_tokens?: number;
+  summary_tokens?: number;
+  model_text?: string;
+}
+
+export interface AgentHistoryRow {
+  role:
+    | "user"
+    | "assistant"
+    | "thinking"
+    | "tool_call"
+    | "tool_result"
+    | "compaction_summary";
+  content: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  tool_id?: string;
+  compaction?: CompactionAnnotation;
+}
+
+export interface AgentHistoryResponse {
+  rows: AgentHistoryRow[];
+  node_count: number;
+}
+
+export interface CompactionReport {
+  mode: "all" | "fold" | "tools";
+  before_tokens: number;
+  after_tokens: number;
+  thinking_dropped: number;
+  turns_folded: number;
+  tool_returns_compacted: number;
+  consolidated: boolean;
+  message: string;
+  error?: string;
 }
 
 // WebSocket protocol — Server → Client
@@ -467,12 +519,39 @@ export type ClientMessage =
 // Chat UI messages
 
 export type ChatMessage =
-  | { kind: "user"; content: string; attachments?: Attachment[] }
+  | {
+      kind: "user";
+      content: string;
+      attachments?: Attachment[];
+      compaction?: CompactionAnnotation;
+      timestamp?: string;
+      turnIndex?: number;
+    }
   | {
       kind: "assistant";
       content: string;
       eventIndex?: number;
       finalStatus?: "success" | "warning";
+      compaction?: CompactionAnnotation;
+      timestamp?: string;
+      turnIndex?: number;
+      turnDurationMs?: number;
+      toolCount?: number;
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+    }
+  | {
+      kind: "compaction_summary";
+      nodeId: string;
+      foldedCount: number;
+      /** Turns (not raw messages) the fold covers, for the rail header label. */
+      turnCount: number;
+      /** Model-facing summary text shown when the rail header is expanded. */
+      summary?: string;
+      origTokens?: number;
+      summaryTokens?: number;
+      children: ChatMessage[];
     }
   | { kind: "streaming"; content: string }
   | {
@@ -509,6 +588,7 @@ export type ChatMessage =
       loading?: boolean;
       toolId?: string;
       parentToolId?: string;
+      compaction?: CompactionAnnotation;
       children?: Array<{
         kind: "tool_call";
         tool: string;
@@ -531,6 +611,7 @@ export type ChatMessage =
         loading?: boolean;
         toolId?: string;
         parentToolId?: string;
+        compaction?: CompactionAnnotation;
       }>;
     }
   | { kind: "approval"; request: ApprovalRequest }

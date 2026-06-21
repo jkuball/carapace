@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertTriangle, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, Paperclip, RotateCcw, Undo2 } from "lucide-react";
+import { AlertTriangle, Archive, Brain, Check, ChevronRight, Copy, GitBranch, Info, Loader2, Paperclip, RotateCcw, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ChatMessage, EscalationDecision, LlmActivity } from "@/lib/types";
+import { ToolCallGroup, groupRenderItems } from "./tool-call-group";
 import { useAppLocale } from "@/components/locale-provider";
 import { MarkdownContent } from "./markdown-content";
 import { FilePreview } from "./file-preview";
@@ -29,6 +30,97 @@ function formatDuration(ms: number, locale: string, precise = true): string {
     return `${seconds}s`;
   }
   return `${Math.round(ms / 1_000)}s`;
+}
+
+function turnAgeMs(iso: string): number {
+  const age = Date.now() - new Date(iso).getTime();
+  return Number.isNaN(age) ? Infinity : age;
+}
+
+function formatRelativeTime(iso: string, locale: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const sec = Math.round((Date.now() - then) / 1_000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (sec < 60) return rtf.format(-sec, "second");
+  const min = Math.round(sec / 60);
+  if (min < 60) return rtf.format(-min, "minute");
+  const hr = Math.round(min / 60);
+  if (hr < 24) return rtf.format(-hr, "hour");
+  return rtf.format(-Math.round(hr / 24), "day");
+}
+
+function formatTokens(n: number, locale: string): string {
+  if (n < 1_000) return new Intl.NumberFormat(locale).format(n);
+  const k = n / 1_000;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: k < 10 ? 1 : 0 }).format(k)}k`;
+}
+
+function shortModel(model: string): string {
+  return model.includes(":") ? model.slice(model.indexOf(":") + 1) : model;
+}
+
+/**
+ * Turn/timestamp metadata. A muted relative time is always shown (small, low-contrast); the
+ * absolute time, turn number, duration, tool count and model/token usage sit behind its tooltip
+ * so the resting line stays unintrusive.
+ */
+function TurnMeta({
+  timestamp,
+  turnIndex,
+  turnDurationMs,
+  toolCount,
+  model,
+  inputTokens,
+  outputTokens,
+  hideWhenRecent,
+  className,
+}: {
+  timestamp?: string;
+  turnIndex?: number;
+  turnDurationMs?: number;
+  toolCount?: number;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  hideWhenRecent?: boolean;
+  className?: string;
+}) {
+  const { locale } = useAppLocale();
+  const t = useTranslations("turnMeta");
+  if (!timestamp && turnIndex == null) return null;
+  // User turns stay bare for ~10min so a reload never decorates a message a live session left
+  // blank; assistant turns always show (the work is done, the timing is the point).
+  if (hideWhenRecent && timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
+  const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
+  const abs = timestamp
+    ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
+    : "";
+  const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
+  const tipParts = [turnLabel, abs];
+  if (typeof turnDurationMs === "number") tipParts.push(formatDuration(turnDurationMs, locale, false));
+  if (typeof toolCount === "number" && toolCount > 0) tipParts.push(t("tools", { count: toolCount }));
+  if (model) tipParts.push(shortModel(model));
+  if (typeof inputTokens === "number" && typeof outputTokens === "number") {
+    tipParts.push(
+      t("tokens", {
+        in: formatTokens(inputTokens, locale),
+        out: formatTokens(outputTokens, locale),
+      }),
+    );
+  }
+  const tip = tipParts.filter(Boolean).join(" · ");
+  return (
+    <span
+      title={tip}
+      className={cn(
+        "select-none whitespace-nowrap text-[10px] tabular-nums text-muted-foreground/50",
+        className,
+      )}
+    >
+      {rel || turnLabel}
+    </span>
+  );
 }
 
 function MessageCopyButton({
@@ -224,6 +316,13 @@ function MessageActions({
   onFork,
   onRetry,
   onReset,
+  timestamp,
+  turnIndex,
+  turnDurationMs,
+  toolCount,
+  model,
+  inputTokens,
+  outputTokens,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -233,10 +332,18 @@ function MessageActions({
   onFork?: () => void;
   onRetry?: () => void;
   onReset?: () => void;
+  timestamp?: string;
+  turnIndex?: number;
+  turnDurationMs?: number;
+  toolCount?: number;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
-  if (!hasCopy && !canFork && !canRetry && !canReset) return null;
+  const hasMeta = Boolean(timestamp) || turnIndex != null;
+  if (!hasCopy && !canFork && !canRetry && !canReset && !hasMeta) return null;
 
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -258,6 +365,16 @@ function MessageActions({
         icon={<Undo2 className="size-3.5" />}
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
+      />
+      <TurnMeta
+        timestamp={timestamp}
+        turnIndex={turnIndex}
+        turnDurationMs={turnDurationMs}
+        toolCount={toolCount}
+        model={model}
+        inputTokens={inputTokens}
+        outputTokens={outputTokens}
+        className="ml-auto"
       />
     </div>
   );
@@ -288,6 +405,92 @@ function FinalStatusNotice({ status }: { status: "success" | "warning" }) {
         <p>
           {t("finalStatus.notice", { status: statusLabel })}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function CompactionSummaryBlock({
+  message,
+  server,
+  sessionId,
+  activeLlmActivity,
+}: {
+  message: Extract<ChatMessage, { kind: "compaction_summary" }>;
+  server?: string;
+  sessionId?: string;
+  activeLlmActivity?: LlmActivity | null;
+}) {
+  const t = useTranslations("compaction");
+  const [open, setOpen] = useState(false);
+  const savings =
+    message.origTokens != null && message.summaryTokens != null
+      ? t("tokenDelta", { from: message.origTokens, to: message.summaryTokens })
+      : null;
+  return (
+    <div className="relative my-1 w-full min-w-0">
+      {/* Rail lives in the gutter (negative offset) so the originals are not shifted. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-3 bottom-1 top-1 w-0.5 rounded bg-amber-500/40"
+      />
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-left",
+          "text-muted-foreground/80 hover:bg-accent transition-colors",
+        )}
+        title={t("foldTitle")}
+        aria-expanded={open}
+      >
+        <Archive className="h-3 w-3 shrink-0 text-amber-600/70" />
+        <span className="font-medium">
+          {t("railHeader", { count: message.turnCount })}
+        </span>
+        {savings ? <span className="opacity-70">· {savings}</span> : null}
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-80">
+          {t("modelSees")}
+          <ChevronRight
+            className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
+          />
+        </span>
+      </button>
+      {open && message.summary ? (
+        <div className="mb-1.5 ml-5 mt-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-muted-foreground">
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide opacity-70">
+            {t("modelSummaryLabel")}
+          </p>
+          <div className="whitespace-pre-wrap break-words">{message.summary}</div>
+        </div>
+      ) : null}
+      <div className="space-y-1">
+        {(() => {
+          const children = message.children;
+          const renderChild = (idx: number) => (
+            <Message
+              key={idx}
+              message={children[idx]}
+              server={server}
+              sessionId={sessionId}
+              activeLlmActivity={activeLlmActivity}
+            />
+          );
+          // Collapse runs of tool rows into a group, exactly like the live transcript.
+          return groupRenderItems(children).map((item) =>
+            item.type === "message" ? (
+              renderChild(item.index)
+            ) : (
+              <ToolCallGroup
+                key={`g-${item.start}`}
+                items={item.indices.map((j) => children[j])}
+                inProgress={false}
+              >
+                {item.indices.map((j) => renderChild(j))}
+              </ToolCallGroup>
+            ),
+          );
+        })()}
       </div>
     </div>
   );
@@ -337,7 +540,7 @@ export function Message({
   switch (message.kind) {
     case "user":
       return (
-        <div className="flex justify-end">
+        <div className="group flex flex-col items-end">
           <div
             className={cn(
               "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
@@ -378,6 +581,12 @@ export function Message({
               </div>
             ) : null}
           </div>
+          <TurnMeta
+            timestamp={message.timestamp}
+            turnIndex={message.turnIndex}
+            hideWhenRecent
+            className="mt-1"
+          />
         </div>
       );
 
@@ -397,6 +606,13 @@ export function Message({
             onFork={onFork}
             onRetry={onRetry}
             onReset={onReset}
+            timestamp={message.timestamp}
+            turnIndex={message.turnIndex}
+            turnDurationMs={message.turnDurationMs}
+            toolCount={message.toolCount}
+            model={message.model}
+            inputTokens={message.inputTokens}
+            outputTokens={message.outputTokens}
           />
         </div>
       );
@@ -446,6 +662,7 @@ export function Message({
           files={message.files}
           exitCode={message.exitCode}
           loading={message.loading}
+          compaction={message.compaction}
           server={server}
           sessionId={sessionId}
           childCalls={message.children?.map((c) => ({
@@ -461,6 +678,7 @@ export function Message({
             files: c.files,
             exitCode: c.exitCode,
             loading: c.loading,
+            compaction: c.compaction,
           }))}
         />
       );
@@ -509,6 +727,16 @@ export function Message({
               responseMessage,
             )
           }
+        />
+      );
+
+    case "compaction_summary":
+      return (
+        <CompactionSummaryBlock
+          message={message}
+          server={server}
+          sessionId={sessionId}
+          activeLlmActivity={activeLlmActivity}
         />
       );
 

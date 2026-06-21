@@ -1,4 +1,5 @@
 import type {
+  AgentHistoryResponse,
   HistoryMessage,
   JobDefinition,
   JobRunResult,
@@ -765,6 +766,19 @@ export async function fetchHistory(
   return res.json();
 }
 
+export async function fetchAgentHistory(
+  server: string,
+  token: string,
+  sessionId: string,
+): Promise<AgentHistoryResponse> {
+  const res = await fetch(
+    `${server}/api/sessions/${sessionId}/agent-history`,
+    { headers: headers(token) },
+  );
+  if (!res.ok) throw new Error(`Failed to fetch agent history: ${res.status}`);
+  return res.json();
+}
+
 export async function postInteractivePresence(
   server: string,
   token: string,
@@ -1084,13 +1098,21 @@ export interface UserSettingsPatchInput {
   }> | null;
 }
 
+export interface PlatformCompactionSettings {
+  keep_turns: number;
+  verbatim_tool_turns: number;
+  tool_output_floor_tokens: number;
+}
+
 export interface PlatformSettingsInfo {
   default_models: {
     agent: string;
     sentinel: string;
     title: string;
+    compaction: string | null;
   };
   default_budget: SessionBudgetSettings;
+  compaction: PlatformCompactionSettings;
   available_models: PlatformModelEntryInfo[];
 }
 
@@ -1122,8 +1144,10 @@ export interface PlatformSettingsPatchInput {
     agent: string;
     sentinel: string;
     title: string;
+    compaction: string | null;
   };
   default_budget: SessionBudgetSettings;
+  compaction: PlatformCompactionSettings;
   available_models: PlatformModelEntryPatchInput[];
 }
 
@@ -1308,10 +1332,21 @@ function decodePlatformSettingsResponse(
         agent: readString(defaults, "agent") ?? "",
         sentinel: readString(defaults, "sentinel") ?? "",
         title: readString(defaults, "title") ?? "",
+        compaction: readString(defaults, "compaction") ?? null,
       },
       default_budget: decodeBudget(settings.default_budget),
+      compaction: decodeCompaction(settings.compaction),
       available_models: models,
     },
+  };
+}
+
+function decodeCompaction(raw: unknown): PlatformCompactionSettings {
+  const r = isRecord(raw) ? raw : {};
+  return {
+    keep_turns: readNumber(r, "keep_turns") ?? 8,
+    verbatim_tool_turns: readNumber(r, "verbatim_tool_turns") ?? 4,
+    tool_output_floor_tokens: readNumber(r, "tool_output_floor_tokens") ?? 500,
   };
 }
 

@@ -19,6 +19,8 @@ def apply_user_model_defaults(state: SessionState, user_config: UserConfig) -> N
         state.sentinel_model_name = defaults.sentinel
     if defaults.title is not None:
         state.title_model_name = defaults.title
+    if defaults.compaction is not None:
+        state.compaction_model_name = defaults.compaction
 
 
 def apply_job_model_defaults(
@@ -33,3 +35,4 @@ def apply_job_model_defaults(
     state.agent_model_name = agent_model_name or defaults.agent
     state.sentinel_model_name = sentinel_model_name or defaults.sentinel
     state.title_model_name = title_model_name or defaults.title
+    state.compaction_model_name = defaults.compaction

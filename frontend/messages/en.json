@@ -143,12 +143,14 @@
             "rawSecretRequired": "Paste an API key for {id}, or choose another secret source.",
             "secretValueRequired": "Secret reference is required for {id}.",
             "defaultRequired": "{field} default model is required.",
-            "defaultUnknown": "{field} default model {id} is not in the catalog."
+            "defaultUnknown": "{field} default model {id} is not in the catalog.",
+            "minInt": "{field} must be a whole number of at least {min}."
         },
         "sections": {
             "defaultModels": "Default models",
             "defaultBudgets": "Default budgets",
-            "catalog": "Model catalog"
+            "catalog": "Model catalog",
+            "compaction": "Compaction"
         },
         "fields": {
             "agent": "Agent",
@@ -169,7 +171,8 @@
             "visionHint": "Accepts image input",
             "apiKeySource": "API key source",
             "apiKey": "API key",
-            "secretReference": "Secret reference"
+            "secretReference": "Secret reference",
+            "compaction": "Compaction"
         },
         "placeholders": {
             "selectModel": "Select model",
@@ -203,7 +206,13 @@
         "units": {
             "tokens": "tokens"
         },
-        "modelRow": "Model {index}"
+        "modelRow": "Model {index}",
+        "compaction": {
+            "modelDefault": "Default (title model)",
+            "keepTurns": "Keep recent turns",
+            "verbatimTurns": "Verbatim tool turns",
+            "toolFloor": "Tool-output floor (tokens)"
+        }
     },
     "home": {
         "empty": {
@@ -656,6 +665,14 @@
                 "used": "Used",
                 "blocked": "blocked"
             }
+        },
+        "compact": {
+            "title": "Compaction",
+            "nothing": "Nothing to compact.",
+            "saved": "Saved {saved} tokens ({before}→{after}).",
+            "folded": "Folded {count} turns",
+            "tools": "Summarized {count} tool outputs",
+            "thinking": "Dropped {count} thinking parts"
         }
     },
     "chatView": {
@@ -681,7 +698,8 @@
         "errors": {
             "unexpected": "Unexpected error",
             "resetTarget": "Could not resolve reset target.",
-            "forkTarget": "Could not resolve fork target."
+            "forkTarget": "Could not resolve fork target.",
+            "compactRefresh": "Compaction succeeded, but refreshing the transcript failed. Reload to see the compacted view."
         },
         "confirm": {
             "wipeSandbox": "Wipe the sandbox and its storage for this session? Chat history will stay.",
@@ -836,6 +854,11 @@
             },
             "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
         }
+    },
+    "turnMeta": {
+        "turn": "turn {n}",
+        "tools": "{count, plural, one {# tool} other {# tools}}",
+        "tokens": "{in} in, {out} out"
     },
     "jobs": {
         "settingsSections": "Settings sections",
@@ -1070,5 +1093,25 @@
             "revoke": "Failed to revoke API key.",
             "noScopes": "Select at least one scope."
         }
+    },
+    "compaction": {
+        "badge": "compacted",
+        "railHeader": "{count, plural, one {# turn} other {# turns}} condensed for the model",
+        "modelSees": "Model sees",
+        "modelSummaryLabel": "Summary in the model's context",
+        "tokenDelta": "{from}→{to} tok",
+        "foldTitle": "These turns are condensed to a summary in the model's context — originals shown here",
+        "toolTitle": "Tool output {method} to save context ({orig}→{summary} tokens)",
+        "methods": {
+            "summarize": "summarized",
+            "truncate": "truncated",
+            "drop": "dropped"
+        },
+        "agentView": "Agent view",
+        "agentViewOff": "Normal view",
+        "agentViewHint": "Show the history exactly as the agent sees it",
+        "agentSummary": "Compacted summary",
+        "agentEmpty": "No history yet.",
+        "agentError": "Could not load agent view. Check your connection or permissions."
     }
 }

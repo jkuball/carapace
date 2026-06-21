@@ -25,7 +25,8 @@ SLASH_COMMANDS: list[dict[str, str]] = [
     },
     {
         "command": "/model",
-        "description": "View models, switch all with /model all NAME, or target one with /model sentinel NAME",
+        "description": "View models, switch all with /model all NAME, or target one role "
+        + "(agent/sentinel/title/compaction) with /model sentinel NAME",
     },
     {
         "command": "/budget",
@@ -33,6 +34,14 @@ SLASH_COMMANDS: list[dict[str, str]] = [
         + "/budget cost N, or /budget tools N",
     },
     {"command": "/usage", "description": "Show token usage for this session"},
+    {
+        "command": "/compact",
+        "description": "Compact history to save context. /compact [K], /compact fold [K], or /compact tools [N]",
+    },
+    {
+        "command": "/uncompact",
+        "description": "Undo compaction: rebuild the full history from the transcript (debug aid)",
+    },
     {"command": "/quit", "description": "Disconnect"},
     {"command": "/help", "description": "Show this help"},
 ]

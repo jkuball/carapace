@@ -16,6 +16,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from ..ws_models import Attachment
+from .attachments import augment_prompt
+
 
 @dataclass(frozen=True, slots=True)
 class CompletedEventTurn:
@@ -96,6 +99,69 @@ def history_for_completed_turn_count(messages: list[ModelMessage], turn_count: i
 
     capped_turn_count = min(turn_count, len(turn_end_indexes))
     return messages[: turn_end_indexes[capped_turn_count - 1] + 1]
+
+
+def rebuild_model_history_from_events(events: list[dict[str, Any]]) -> list[ModelMessage]:
+    """Reconstruct an uncompacted model history from the (append-only) event transcript.
+
+    The inverse of the message→event projection, used by ``/uncompact``. Faithful in content and
+    order, pairing tool calls to returns by ``tool_id``. Lossy only where events do not record the
+    detail: thinking parts are dropped (events never stored them; compaction drops them anyway) and
+    each part becomes its own message rather than regrouping into the original turn. Slash-command
+    user lines and non-conversational events (approvals, commands, …) are skipped.
+    """
+    paired_tool_ids = {e.get("tool_id") for e in events if e.get("role") == "tool_result"}
+    # Provider tool-call ids ride only on tool_result events; map them back onto the paired call so
+    # both the call and the return carry the model's id (not the carapace UUID), keeping tool pairing
+    # intact on the next agent turn after /uncompact.
+    provider_id_by_tool = {
+        e["tool_id"]: e["model_tool_call_id"]
+        for e in events
+        if e.get("role") == "tool_result" and e.get("tool_id") and e.get("model_tool_call_id")
+    }
+    messages: list[ModelMessage] = []
+    for event in events:
+        role = event.get("role")
+        if role == "user":
+            content = event.get("content")
+            if isinstance(content, str) and not content.startswith("/"):
+                # Live history feeds the model the augmented prompt (attachment preamble + text);
+                # the event stores only the raw text, so re-augment from persisted attachments.
+                attachments = event.get("attachments")
+                if isinstance(attachments, list) and attachments:
+                    content = augment_prompt(content, [Attachment.model_validate(a) for a in attachments])
+                messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            content = event.get("content")
+            if isinstance(content, str) and content:
+                messages.append(ModelResponse(parts=[TextPart(content=content)]))
+        elif role == "tool_call":
+            tool_id = event.get("tool_id")
+            if not isinstance(tool_id, str) or tool_id not in paired_tool_ids:
+                continue  # unpaired (denied / incomplete) call — skip to keep call/return matched
+            args = event.get("args") if isinstance(event.get("args"), dict) else {}
+            call_id = provider_id_by_tool.get(tool_id, tool_id)
+            messages.append(
+                ModelResponse(parts=[ToolCallPart(tool_name=event.get("tool") or "", args=args, tool_call_id=call_id)])
+            )
+        elif role == "tool_result":
+            tool_id = event.get("tool_id")
+            if not isinstance(tool_id, str):
+                continue
+            result = event.get("result")
+            call_id = provider_id_by_tool.get(tool_id, tool_id)
+            messages.append(
+                ModelRequest(
+                    parts=[
+                        ToolReturnPart(
+                            tool_name=event.get("tool") or "",
+                            content=result if isinstance(result, str) else str(result),
+                            tool_call_id=call_id,
+                        )
+                    ]
+                )
+            )
+    return messages
 
 
 def normalize_unattended_output_history(messages: list[ModelMessage]) -> list[ModelMessage]:

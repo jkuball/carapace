@@ -41,8 +41,14 @@ interface PlatformDraft {
     agent: string;
     sentinel: string;
     title: string;
+    compaction: string;
   };
   budget: Record<keyof Required<SessionBudgetSettings>, string>;
+  compaction: {
+    keepTurns: string;
+    verbatimTurns: string;
+    toolFloor: string;
+  };
   models: ModelDraft[];
 }
 
@@ -244,9 +250,20 @@ function modelDraftFromSettings(model: PlatformModelEntryInfo): ModelDraft {
 }
 
 function draftFromSettings(response: PlatformSettingsResponseInfo): PlatformDraft {
+  const { default_models, compaction } = response.settings;
   return {
-    defaultModels: { ...response.settings.default_models },
+    defaultModels: {
+      agent: default_models.agent,
+      sentinel: default_models.sentinel,
+      title: default_models.title,
+      compaction: default_models.compaction ?? "",
+    },
     budget: budgetDraftFromSettings(response.settings.default_budget),
+    compaction: {
+      keepTurns: String(compaction.keep_turns),
+      verbatimTurns: String(compaction.verbatim_tool_turns),
+      toolFloor: String(compaction.tool_output_floor_tokens),
+    },
     models: sortModelDrafts(response.settings.available_models.map(modelDraftFromSettings)),
   };
 }
@@ -347,20 +364,38 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
 export function buildPlatformSettingsPatch(draft: PlatformDraft, t: Translate): PlatformSettingsPatchInput {
   const availableModels = modelsFromDraft(draft.models, t);
   const ids = new Set(availableModels.map((model) => model.id ?? `${model.provider}:${model.name}`));
-  for (const [key, value] of Object.entries(draft.defaultModels)) {
-    const normalized = value.trim();
+  for (const key of ["agent", "sentinel", "title"] as const) {
+    const normalized = draft.defaultModels[key].trim();
     if (!normalized) throw new Error(t("errors.defaultRequired", { field: t(`fields.${key}`) }));
     if (!ids.has(normalized)) throw new Error(t("errors.defaultUnknown", { field: t(`fields.${key}`), id: normalized }));
+  }
+  const compactionModel = draft.defaultModels.compaction.trim();
+  if (compactionModel && !ids.has(compactionModel)) {
+    throw new Error(t("errors.defaultUnknown", { field: t("fields.compaction"), id: compactionModel }));
   }
   return {
     default_models: {
       agent: draft.defaultModels.agent.trim(),
       sentinel: draft.defaultModels.sentinel.trim(),
       title: draft.defaultModels.title.trim(),
+      compaction: compactionModel || null,
     },
     default_budget: budgetFromDraft(draft, t),
+    compaction: {
+      keep_turns: boundedInt(draft.compaction.keepTurns, t("compaction.keepTurns"), 1, t),
+      verbatim_tool_turns: boundedInt(draft.compaction.verbatimTurns, t("compaction.verbatimTurns"), 0, t),
+      tool_output_floor_tokens: boundedInt(draft.compaction.toolFloor, t("compaction.toolFloor"), 1, t),
+    },
     available_models: availableModels,
   };
+}
+
+function boundedInt(value: string, field: string, min: number, t: Translate): number {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized) || Number(normalized) < min) {
+    throw new Error(t("errors.minInt", { field, min }));
+  }
+  return Number(normalized);
 }
 
 function comparableDraft(draft: PlatformDraft | null): unknown {
@@ -368,6 +403,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
   return {
     defaultModels: draft.defaultModels,
     budget: draft.budget,
+    compaction: draft.compaction,
     models: draft.models.map((model) => ({
       provider: model.provider,
       name: model.name,
@@ -455,6 +491,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   const agentOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.agent), [draft?.defaultModels.agent, modelOptions]);
   const sentinelOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.sentinel), [draft?.defaultModels.sentinel, modelOptions]);
   const titleOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.title), [draft?.defaultModels.title, modelOptions]);
+  const compactionOptions = useMemo(() => withSelectedModelOption(modelOptions, draft?.defaultModels.compaction), [draft?.defaultModels.compaction, modelOptions]);
 
   function updateDraft(patch: Partial<PlatformDraft>): void {
     setNotice(null);
@@ -523,7 +560,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
         </div>
 
         <Section title={t("sections.defaultModels")}>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={t("fields.agent")}>
               <ModelPicker value={draft.defaultModels.agent} entries={agentOptions} onChange={(agent) => updateDraft({ defaultModels: { ...draft.defaultModels, agent: agent ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("placeholders.selectModel")} />
             </Field>
@@ -532,6 +569,9 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
             </Field>
             <Field label={t("fields.title")}>
               <ModelPicker value={draft.defaultModels.title} entries={titleOptions} onChange={(title) => updateDraft({ defaultModels: { ...draft.defaultModels, title: title ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("placeholders.selectModel")} />
+            </Field>
+            <Field label={t("fields.compaction")}>
+              <ModelPicker value={draft.defaultModels.compaction} entries={compactionOptions} onChange={(model) => updateDraft({ defaultModels: { ...draft.defaultModels, compaction: model ?? "" } })} disabled={fieldsDisabled} defaultLabel={t("compaction.modelDefault")} />
             </Field>
           </div>
         </Section>
@@ -542,6 +582,14 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
             <TextInput label={t("fields.outputTokens")} value={draft.budget.output_tokens} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, output_tokens: value } })} />
             <TextInput label={t("fields.costUsd")} value={draft.budget.cost_usd} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onBlur={() => updateDraft({ budget: { ...draft.budget, cost_usd: budgetCostValue(draft.budget.cost_usd) } })} onChange={(value) => updateDraft({ budget: { ...draft.budget, cost_usd: value } })} />
             <TextInput label={t("fields.toolCalls")} value={draft.budget.tool_calls} disabled={fieldsDisabled} placeholder={t("placeholders.unlimited")} onChange={(value) => updateDraft({ budget: { ...draft.budget, tool_calls: value } })} />
+          </div>
+        </Section>
+
+        <Section title={t("sections.compaction")}>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <TextInput label={t("compaction.keepTurns")} value={draft.compaction.keepTurns} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, keepTurns: value } })} />
+            <TextInput label={t("compaction.verbatimTurns")} value={draft.compaction.verbatimTurns} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, verbatimTurns: value } })} />
+            <TextInput label={t("compaction.toolFloor")} value={draft.compaction.toolFloor} disabled={fieldsDisabled} onChange={(value) => updateDraft({ compaction: { ...draft.compaction, toolFloor: value } })} />
           </div>
         </Section>
 

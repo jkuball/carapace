@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Eye, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
 import { SandboxGitControls } from "@/components/git-sync";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
@@ -31,6 +31,7 @@ import type {
   Attachment,
   ChatMessage,
   ClientMessage,
+  CompactionAnnotation,
   EscalationDecision,
   HistoryMessage,
   LlmActivity,
@@ -53,8 +54,9 @@ import {
   sessionHasKnowledgeChanges,
 } from "@/lib/utils";
 import { Message } from "./message";
-import { ToolCallGroup } from "./tool-call-group";
+import { ToolCallGroup, groupRenderItems } from "./tool-call-group";
 import { ChatInput } from "./chat-input";
+import { AgentHistoryView } from "./agent-history-view";
 
 interface ChatViewProps {
   server: string;
@@ -310,56 +312,6 @@ function argsMatch(
 }
 
 /** A run of consecutive tool/thinking messages, collapsed into one summary. */
-type RenderItem =
-  | { type: "message"; index: number }
-  | { type: "group"; start: number; indices: number[]; inProgress: boolean };
-
-function isToolish(m: ChatMessage): boolean {
-  return (
-    m.kind === "tool_call" ||
-    m.kind === "thinking" ||
-    m.kind === "thinking_streaming"
-  );
-}
-
-/**
- * Group maximal runs of tool/thinking messages. A run becomes a collapsible
- * group only when it has ≥2 items and contains ≥1 tool_call; otherwise its
- * items render individually. A group that reaches the end of the list is still
- * in progress (rendered expanded).
- */
-function groupRenderItems(messages: ChatMessage[]): RenderItem[] {
-  const items: RenderItem[] = [];
-  let i = 0;
-  while (i < messages.length) {
-    if (!isToolish(messages[i])) {
-      items.push({ type: "message", index: i });
-      i++;
-      continue;
-    }
-    const start = i;
-    const indices: number[] = [];
-    while (i < messages.length && isToolish(messages[i])) {
-      indices.push(i);
-      i++;
-    }
-    const hasToolCall = indices.some(
-      (j) => messages[j].kind === "tool_call",
-    );
-    if (indices.length >= 2 && hasToolCall) {
-      items.push({
-        type: "group",
-        start,
-        indices,
-        inProgress: i >= messages.length,
-      });
-    } else {
-      for (const j of indices) items.push({ type: "message", index: j });
-    }
-  }
-  return items;
-}
-
 function applyDeniedApprovalToMessages(
   messages: ChatMessage[],
   request: {
@@ -507,7 +459,12 @@ function updateToolCallMessageById(
 function updateToolResultById(
   messages: ChatMessage[],
   toolId: string,
-  result: { result: string; exitCode?: number; files?: SentFile[] },
+  result: {
+    result: string;
+    exitCode?: number;
+    files?: SentFile[];
+    compaction?: CompactionAnnotation;
+  },
 ): { messages: ChatMessage[]; found: boolean } {
   return updateToolCallMessageById(messages, toolId, (entry) => ({
     ...entry,
@@ -515,6 +472,9 @@ function updateToolResultById(
     files: result.files,
     exitCode: result.exitCode,
     loading: false,
+    compaction:
+      result.compaction
+      ?? (entry as { compaction?: CompactionAnnotation }).compaction,
   }));
 }
 
@@ -613,21 +573,90 @@ function groupChildToolCalls(messages: ChatMessage[]): ChatMessage[] {
     : messages;
 }
 
+function foldNodeOf(message: ChatMessage): string | undefined {
+  if (
+    message.kind === "user"
+    || message.kind === "assistant"
+    || message.kind === "tool_call"
+  ) {
+    return message.compaction?.folded_into;
+  }
+  return undefined;
+}
+
+function foldAnnotationOf(message: ChatMessage): CompactionAnnotation | undefined {
+  if (
+    message.kind === "user"
+    || message.kind === "assistant"
+    || message.kind === "tool_call"
+  ) {
+    return message.compaction;
+  }
+  return undefined;
+}
+
+/**
+ * Wrap each run of folded messages (same node) in a rail group. Originals stay inline and
+ * expanded — the rail just marks the span and exposes the model-facing summary on demand.
+ */
+function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  let i = 0;
+  while (i < messages.length) {
+    const node = foldNodeOf(messages[i]);
+    if (!node) {
+      out.push(messages[i]);
+      i++;
+      continue;
+    }
+    const children: ChatMessage[] = [];
+    let annotation: CompactionAnnotation | undefined;
+    while (i < messages.length && foldNodeOf(messages[i]) === node) {
+      annotation = annotation ?? foldAnnotationOf(messages[i]);
+      children.push(messages[i]);
+      i++;
+    }
+    out.push({
+      kind: "compaction_summary",
+      nodeId: node,
+      foldedCount: children.length,
+      turnCount: children.filter((c) => c.kind === "user").length || 1,
+      summary: annotation?.summary,
+      origTokens: annotation?.orig_tokens,
+      summaryTokens: annotation?.summary_tokens,
+      children,
+    });
+  }
+  return out;
+}
+
 function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   const pendingToolCallIndices = new Map<string, number[]>();
+  // Turn = one submitted (non-slash) user prompt plus the agent work that follows it.
+  let turn = 0;
+  let turnStartTs: string | undefined;
+  let turnToolCount = 0;
 
   for (let index = 0; index < history.length; index++) {
     const entry = history[index];
 
     if (entry.role === "user") {
+      if (!entry.content.startsWith("/")) turn++;
+      turnStartTs = entry.timestamp;
+      turnToolCount = 0;
       messages.push({
         kind: "user",
         content: entry.content,
         attachments: entry.attachments,
+        compaction: entry.compaction,
+        timestamp: entry.timestamp,
+        turnIndex: turn,
       });
       continue;
     }
+
+    if (entry.role === "tool_call") turnToolCount++;
 
     if (entry.role === "tool_call") {
       const tool = entry.tool ?? "";
@@ -668,6 +697,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
         loading,
         toolId: normalizeOptionalString(entry.tool_id),
         parentToolId: normalizeOptionalString(entry.parent_tool_id),
+        compaction: entry.compaction,
       });
 
       const queue = pendingToolCallIndices.get(tool) ?? [];
@@ -683,6 +713,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
           result: entry.result ?? "",
           files: entry.files,
           exitCode: entry.exit_code,
+          compaction: entry.compaction,
         });
         if (updated.found) {
           messages.length = 0;
@@ -702,6 +733,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
           files: entry.files,
           exitCode: entry.exit_code,
           loading: false,
+          compaction: entry.compaction ?? toolCall.compaction,
         };
       }
       if (queue && queue.length === 0) {
@@ -861,15 +893,28 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       continue;
     }
 
+    const durationMs =
+      turnStartTs && entry.timestamp
+        ? new Date(entry.timestamp).getTime() - new Date(turnStartTs).getTime()
+        : undefined;
     messages.push({
       kind: "assistant",
       content: entry.content,
       finalStatus: entry.final_status,
       eventIndex: typeof entry.event_index === "number" ? entry.event_index : undefined,
+      compaction: entry.compaction,
+      timestamp: entry.timestamp,
+      turnIndex: turn,
+      turnDurationMs:
+        typeof durationMs === "number" && durationMs >= 0 ? durationMs : undefined,
+      toolCount: turnToolCount || undefined,
+      model: entry.usage?.model ?? undefined,
+      inputTokens: entry.usage?.input_tokens,
+      outputTokens: entry.usage?.output_tokens,
     });
   }
 
-  return groupChildToolCalls(messages);
+  return groupFoldedMessages(groupChildToolCalls(messages));
 }
 
 export function countSubmittedUserMessages(messages: ChatMessage[]): number {
@@ -931,6 +976,7 @@ export function ChatView({
   onDeleteSession,
 }: ChatViewProps) {
   const t = useTranslations("chatView");
+  const tc = useTranslations("compaction");
   const tRoot = useTranslations();
   const { locale } = useAppLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -939,6 +985,7 @@ export function ChatView({
   const [usage, setUsage] = useState<TurnUsage | null>(null);
   const [llmActivity, setLlmActivity] = useState<LlmActivity | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [agentViewOpen, setAgentViewOpen] = useState(false);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [availableModelEntries, setAvailableModelEntries] = useState<
     AvailableModelInfo[]
@@ -1397,10 +1444,35 @@ export function ChatView({
           if (msg.command === "reset_to_turn") {
             break;
           }
-          setMessages((prev) => [
-            ...prev,
-            { kind: "command", command: msg.command, data: msg.data, live: true },
-          ]);
+          let compactBaselineLen = 0;
+          setMessages((prev) => {
+            const next: ChatMessage[] = [
+              ...prev,
+              { kind: "command", command: msg.command, data: msg.data, live: true },
+            ];
+            compactBaselineLen = next.length;
+            return next;
+          });
+          if (msg.command === "compact" || msg.command === "uncompact") {
+            // History was rewritten server-side; re-project so folds/badges render.
+            // The refetched transcript already includes this command event. Preserve any live
+            // messages that arrived during the async fetch (the tail past the command result) so
+            // the refetch does not clobber them with an older snapshot.
+            fetchHistory(server, token, sessionId)
+              .then((history) =>
+                setMessages((prev) => [
+                  ...projectHistoryToMessages(history),
+                  ...prev.slice(compactBaselineLen),
+                ]),
+              )
+              .catch(() => {
+                // Refetch failed — the transcript is stale vs the server's compacted state.
+                setMessages((prev) => [
+                  ...prev,
+                  { kind: "error", detail: t("errors.compactRefresh") },
+                ]);
+              });
+          }
           setLlmActivity(null);
           lastThinkingStartedAtRef.current = null;
           finishWaiting();
@@ -1509,7 +1581,7 @@ export function ChatView({
           break;
       }
     },
-    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox],
+    [applySandboxSnapshot, finalizeThinkingMessages, finishWaiting, onTitleUpdate, refreshSandbox, server, token, sessionId, t],
   );
 
   const onWsDisconnect = useCallback(() => {
@@ -2135,6 +2207,14 @@ export function ChatView({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-1">
           <button
+            onClick={() => setAgentViewOpen(true)}
+            disabled={!session}
+            title={tc("agentViewHint")}
+            className="rounded-md p-1.5 text-foreground/70 transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+          <button
             onClick={() => void handleTogglePinned()}
             disabled={!session || !!updatingSessionAttribute || deletingSession || !onUpdateSessionAttributes}
             title={sessionPinned ? t("actions.unpin") : t("actions.pin")}
@@ -2658,6 +2738,15 @@ export function ChatView({
           <div className="h-full overflow-y-auto p-3">{inspectorContent}</div>
         </aside>
       </div>
+
+      {agentViewOpen ? (
+        <AgentHistoryView
+          server={server}
+          token={token}
+          sessionId={sessionId}
+          onClose={() => setAgentViewOpen(false)}
+        />
+      ) : null}
 
       {mobileInspectorOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">

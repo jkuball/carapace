@@ -26,6 +26,7 @@ from pydantic_ai.messages import (
     ModelResponse,
     NativeToolCallPart,
     NativeToolReturnPart,
+    RetryPromptPart,
     TextPart,
     ToolCallPart,
     ToolReturnPart,
@@ -43,6 +44,7 @@ from ..usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, in
 from ..ws_models import ApprovalRequest, ApprovalResponse, Attachment, FinalStatus, TurnUsage
 from .attachments import augment_prompt
 from .manager import SessionManager
+from .transcript import completed_event_turns
 from .types import ActiveSession, SessionSubscriber, TurnExecutionResult
 
 _TURN_CANCELLED_TOOL_MESSAGE = "Tool call was canceled because the turn ended before it completed."
@@ -253,6 +255,7 @@ class SessionTurnMixin(SessionTurnHost):
                         "result": tr.output,
                         "exit_code": tr.exit_code,
                         "tool_id": tr.tool_id,
+                        "model_tool_call_id": tr.model_tool_call_id,
                         "files": [f.model_dump() for f in tr.files] if tr.files else None,
                     }
                 ],
@@ -553,9 +556,17 @@ class SessionTurnMixin(SessionTurnHost):
         self._session_mgr.save_state(active.state)
         self._save_turn_progress(session_id, active)
         await self._refresh_sandbox_snapshot_after_turn(session_id)
+        usage_payload = self._turn_usage_payload(active) or TurnUsage()
         assistant_event: dict[str, Any] = {"role": "assistant", "content": output}
         if final_status is not None:
             assistant_event["final_status"] = final_status
+        # Persist the bits the turn tooltip shows after reload (live TurnUsage is broadcast, not stored).
+        if usage_payload.model or usage_payload.input_tokens or usage_payload.output_tokens:
+            assistant_event["usage"] = {
+                "model": usage_payload.model,
+                "input_tokens": usage_payload.input_tokens,
+                "output_tokens": usage_payload.output_tokens,
+            }
         self._session_mgr.append_events(session_id, [assistant_event])
         assistant_event_index = len(self._session_mgr.load_events(session_id)) - 1
 
@@ -577,7 +588,6 @@ class SessionTurnMixin(SessionTurnHost):
         if output.startswith("Unexpected agent output type:"):
             await self._broadcast(active, "on_error", output, turn_terminal=True)
         else:
-            usage_payload = self._turn_usage_payload(active) or TurnUsage()
             logger.info(
                 f"Turn done session={session_id} "
                 + f"model={usage_payload.model or active.agent_model_name or self._config.agent.model} "
@@ -738,7 +748,10 @@ class SessionTurnMixin(SessionTurnHost):
                             pending_tool_calls.add(tool_call_id)
             elif isinstance(message, ModelRequest):
                 for part in message.parts:
-                    if isinstance(part, ToolReturnPart | NativeToolReturnPart):
+                    # A RetryPromptPart with a tool_call_id resolves the call too: the model got a
+                    # validation retry instead of a result, but the call is answered and the turn
+                    # continues. Treating it as pending strands every later turn (history collapses).
+                    if isinstance(part, ToolReturnPart | NativeToolReturnPart | RetryPromptPart):
                         tool_call_id = getattr(part, "tool_call_id", None)
                         if isinstance(tool_call_id, str) and tool_call_id in pending_tool_calls:
                             pending_tool_calls.remove(tool_call_id)
@@ -828,5 +841,13 @@ class SessionTurnMixin(SessionTurnHost):
 
             if not pending_by_tool:
                 safe_prefix_end = index + 1
+
+        # Tool-name pairing above mistakes calls that never emit a paired result (e.g.
+        # credential_access, proxy_domain, or imported sessions with id-less results) for an
+        # interrupted turn and truncates past them. Never cut before the last fully completed
+        # turn: its terminal assistant proves every event up to it is intact and forkable.
+        turns = completed_event_turns(events)
+        if turns:
+            safe_prefix_end = max(safe_prefix_end, turns[-1].end_event_index + 1)
 
         return events[:safe_prefix_end]

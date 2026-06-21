@@ -19,12 +19,18 @@ function draftWithModel(model: PlatformDraft["models"][number]): PlatformDraft {
       agent: id,
       sentinel: id,
       title: id,
+      compaction: "",
     },
     budget: {
       input_tokens: "",
       output_tokens: "",
       cost_usd: "",
       tool_calls: "",
+    },
+    compaction: {
+      keepTurns: "6",
+      verbatimTurns: "2",
+      toolFloor: "500",
     },
     models: [model],
   };

@@ -91,6 +91,7 @@ class SessionState(BaseModel):
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None
     title_model_name: str | None = None
+    compaction_model_name: str | None = None
     attributes: Annotated[SessionAttributes, Field(default_factory=SessionAttributes)]
     approved_operations: Annotated[list[str], Field(default_factory=list)]
     activated_skills: Annotated[list[str], Field(default_factory=list)]
