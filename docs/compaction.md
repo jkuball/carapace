@@ -64,6 +64,11 @@ default); leaving it on "Default" reuses the title model. Its usage is tracked u
 the shared `agent.max_parallel_llm` limit. Code defaults live in `agent.compaction_model` and
 `agent.compaction` (`AgentConfig` / `CompactionConfig`).
 
+The platform default is just a default: each session can override the compaction model like the
+other roles with `/model compaction NAME` (and `/model NAME` switches all four roles at once, while
+`/model compaction reset` returns to the default). Per-user defaults live under
+`default_models.compaction` in the user config.
+
 ## Viewing compaction in the UI
 
 - **Tool rows** that were compacted show a `compacted` badge with the method and token savings.

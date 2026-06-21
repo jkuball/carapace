@@ -38,8 +38,9 @@ class UserDefaultModelsConfig(UserConfigModel):
     agent: str | None = None
     sentinel: str | None = None
     title: str | None = None
+    compaction: str | None = None
 
-    @field_validator("agent", "sentinel", "title", mode="before")
+    @field_validator("agent", "sentinel", "title", "compaction", mode="before")
     @classmethod
     def _normalize_model_name(cls, value: str | None) -> str | None:
         if value is None:

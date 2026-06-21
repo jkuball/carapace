@@ -217,7 +217,8 @@ export function CommandResultView({
   if (
     (command === "model-agent" ||
       command === "model-sentinel" ||
-      command === "model-title") &&
+      command === "model-title" ||
+      command === "model-compaction") &&
     modelData
   ) {
     if (modelData.error)

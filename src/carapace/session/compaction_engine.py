@@ -57,8 +57,8 @@ class SessionCompactionMixin:
             self, active: ActiveSession, *, track_activity: bool = True
         ) -> AbstractContextManager[Any, bool | None]: ...
 
-    def _compaction_model(self) -> str:
-        return self._config.agent.compaction_model or self._config.agent.title_model
+    def _compaction_model(self, active: ActiveSession) -> str:
+        return active.compaction_model_name or self._config.agent.compaction_model or self._config.agent.title_model
 
     async def run_compaction(
         self,
@@ -204,7 +204,7 @@ class SessionCompactionMixin:
             async with self._llm_semaphore:
                 with self.llm_request_recording(active, track_activity=False):
                     self._assert_llm_budget_available(active)
-                    model = self._compaction_model()
+                    model = self._compaction_model(active)
                     return await call(
                         model=model,
                         usage_tracker=active.usage_tracker,

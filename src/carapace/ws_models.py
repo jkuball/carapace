@@ -25,7 +25,8 @@ SLASH_COMMANDS: list[dict[str, str]] = [
     },
     {
         "command": "/model",
-        "description": "View models, switch all with /model all NAME, or target one with /model sentinel NAME",
+        "description": "View models, switch all with /model all NAME, or target one role "
+        + "(agent/sentinel/title/compaction) with /model sentinel NAME",
     },
     {
         "command": "/budget",

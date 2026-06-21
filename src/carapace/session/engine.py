@@ -257,6 +257,7 @@ class SessionEngine(
             agent_model_name=state.agent_model_name,
             sentinel_model_name=state.sentinel_model_name,
             title_model_name=state.title_model_name,
+            compaction_model_name=state.compaction_model_name,
         )
         self._restore_persisted_model_overrides(active)
         self._active[session_id] = active

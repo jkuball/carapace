@@ -23,7 +23,7 @@ class _UnsetType:
 
 _UNSET = _UnsetType()
 
-ModelType = Literal["agent", "sentinel", "title"]
+ModelType = Literal["agent", "sentinel", "title", "compaction"]
 
 
 class SessionModelHost(Protocol):
@@ -43,7 +43,11 @@ def _logger() -> Any:
 
 
 class SessionModelMixin(SessionModelHost):
-    _MODEL_TYPES: tuple[ModelType, ...] = ("agent", "sentinel", "title")
+    _MODEL_TYPES: tuple[ModelType, ...] = ("agent", "sentinel", "title", "compaction")
+
+    def _compaction_model_default(self) -> str:
+        """Resolved platform default for the compaction model (falls back to the title model)."""
+        return self._config.agent.compaction_model or self._config.agent.title_model
 
     @property
     def available_models(self) -> list[str]:
@@ -145,6 +149,18 @@ class SessionModelMixin(SessionModelHost):
                 self._apply_model_override(active, "title", None, None)
                 state_changed = True
 
+        if active.compaction_model_name is not None:
+            try:
+                self._resolve_model(active.compaction_model_name)
+            except Exception as exc:
+                _logger().warning(
+                    f"Persisted compaction model override {active.compaction_model_name!r} for session "
+                    + f"{active.state.session_id} is no longer valid: {exc}. Falling back to "
+                    + f"{self._compaction_model_default()!r}."
+                )
+                self._apply_model_override(active, "compaction", None, None)
+                state_changed = True
+
         if state_changed:
             self._session_mgr.save_state(active.state)
 
@@ -189,11 +205,13 @@ class SessionModelMixin(SessionModelHost):
             "agent": self._config.agent.model,
             "sentinel": self._config.agent.sentinel_model,
             "title": self._config.agent.title_model,
+            "compaction": self._compaction_model_default(),
         }
         overrides = {
             "agent": active.agent_model_name,
             "sentinel": active.sentinel_model_name,
             "title": active.title_model_name,
+            "compaction": active.compaction_model_name,
         }
         return {t: {"current": overrides[t] or defaults[t], "default": defaults[t]} for t in self._MODEL_TYPES}
 
@@ -209,6 +227,7 @@ class SessionModelMixin(SessionModelHost):
             "agent": "agent",
             "sentinel": "sentinel",
             "title": "title",
+            "compaction": "compaction",
         }
         args = arg.split(maxsplit=1)
         target = target_aliases.get(args[0].lower())
@@ -226,6 +245,7 @@ class SessionModelMixin(SessionModelHost):
             "agent": self._config.agent.model,
             "sentinel": self._config.agent.sentinel_model,
             "title": self._config.agent.title_model,
+            "compaction": self._compaction_model_default(),
         }
         models_view = self._models_slash_view(active)
 
@@ -250,13 +270,14 @@ class SessionModelMixin(SessionModelHost):
         self._apply_model_override(active, "agent", arg, new_model)
         self._apply_model_override(active, "sentinel", arg, None)
         self._apply_model_override(active, "title", arg, None)
+        self._apply_model_override(active, "compaction", arg, None)
         self._session_mgr.save_state(active.state)
         switched = {t: {"current": arg, "default": defaults[t]} for t in self._MODEL_TYPES}
         return {
             "command": "model",
             "data": {
                 "models": switched,
-                "message": f"Switched agent, sentinel, and title to: {arg}",
+                "message": f"Switched agent, sentinel, title, and compaction to: {arg}",
             },
         }
 
@@ -264,16 +285,23 @@ class SessionModelMixin(SessionModelHost):
         self, active: ActiveSession, model_type: ModelType, arg: str, *, slash_line: str
     ) -> dict[str, Any]:
         """Process ``/model ROLE [MODEL | reset]`` for one model role."""
-        cmd_name = {"agent": "model-agent", "sentinel": "model-sentinel", "title": "model-title"}[model_type]
+        cmd_name = {
+            "agent": "model-agent",
+            "sentinel": "model-sentinel",
+            "title": "model-title",
+            "compaction": "model-compaction",
+        }[model_type]
         defaults = {
             "agent": self._config.agent.model,
             "sentinel": self._config.agent.sentinel_model,
             "title": self._config.agent.title_model,
+            "compaction": self._compaction_model_default(),
         }
         overrides = {
             "agent": active.agent_model_name,
             "sentinel": active.sentinel_model_name,
             "title": active.title_model_name,
+            "compaction": active.compaction_model_name,
         }
         default = defaults[model_type]
         current = overrides[model_type] or default
@@ -320,6 +348,9 @@ class SessionModelMixin(SessionModelHost):
         elif model_type == "title":
             active.title_model_name = name
             active.state.title_model_name = name
+        elif model_type == "compaction":
+            active.compaction_model_name = name
+            active.state.compaction_model_name = name
 
     async def _regenerate_title(self, active: ActiveSession, *, pending_user_line: str | None = None) -> None:
         """Regenerate the session title using the current title model.

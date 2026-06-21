@@ -95,7 +95,7 @@ interface SpeechRecognitionInstance {
 
 const MODEL_COMMANDS = ["/model"];
 
-const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title"]);
+const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title", "compaction"]);
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: Attachment[]) => void;

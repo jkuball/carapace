@@ -43,6 +43,7 @@ from ..usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, in
 from ..ws_models import ApprovalRequest, ApprovalResponse, Attachment, FinalStatus, TurnUsage
 from .attachments import augment_prompt
 from .manager import SessionManager
+from .transcript import completed_event_turns
 from .types import ActiveSession, SessionSubscriber, TurnExecutionResult
 
 _TURN_CANCELLED_TOOL_MESSAGE = "Tool call was canceled because the turn ended before it completed."
@@ -828,5 +829,13 @@ class SessionTurnMixin(SessionTurnHost):
 
             if not pending_by_tool:
                 safe_prefix_end = index + 1
+
+        # Tool-name pairing above mistakes calls that never emit a paired result (e.g.
+        # credential_access, proxy_domain, or imported sessions with id-less results) for an
+        # interrupted turn and truncates past them. Never cut before the last fully completed
+        # turn: its terminal assistant proves every event up to it is intact and forkable.
+        turns = completed_event_turns(events)
+        if turns:
+            safe_prefix_end = max(safe_prefix_end, turns[-1].end_event_index + 1)
 
         return events[:safe_prefix_end]

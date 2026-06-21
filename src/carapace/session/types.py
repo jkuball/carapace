@@ -122,6 +122,7 @@ class ActiveSession:
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None
     title_model_name: str | None = None
+    compaction_model_name: str | None = None
     pending_approval_requests: list[dict[str, Any]] = field(default_factory=list)
     pending_escalations: list[dict[str, Any]] = field(default_factory=list)
     pending_notifications: dict[str, set[str]] = field(default_factory=dict)
