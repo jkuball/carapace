@@ -12,7 +12,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic_ai import ApprovalRequired
 from pydantic_ai.exceptions import UsageLimitExceeded
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import RunUsage
 
@@ -700,6 +708,24 @@ def test_truncate_incomplete_model_history_keeps_complete_pairs(tmp_path: Path, 
             ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
             ModelRequest(parts=[ToolReturnPart(tool_name="cmd", content="ok", tool_call_id="call-1")]),
             ModelResponse(parts=[TextPart(content="done")]),
+        ]
+
+        truncated = engine._truncate_incomplete_model_history(messages)
+        assert truncated == messages
+
+
+def test_truncate_incomplete_model_history_retry_resolves_tool_call(tmp_path: Path, db_factory) -> None:
+    # A tool call answered by a RetryPromptPart (validation retry) is resolved, not pending —
+    # otherwise every later turn is stranded and the history collapses to the first turn.
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        messages = [
+            ModelRequest(parts=[UserPromptPart(content="hello")]),
+            ModelResponse(parts=[ToolCallPart(tool_name="cmd", args={}, tool_call_id="call-1")]),
+            ModelRequest(parts=[RetryPromptPart(content="bad args", tool_name="cmd", tool_call_id="call-1")]),
+            ModelResponse(parts=[TextPart(content="done")]),
+            ModelRequest(parts=[UserPromptPart(content="again")]),
+            ModelResponse(parts=[TextPart(content="ok")]),
         ]
 
         truncated = engine._truncate_incomplete_model_history(messages)

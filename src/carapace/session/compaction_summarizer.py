@@ -25,22 +25,31 @@ Write a chronological narrative — a story of what happened, in past tense — 
 NOT just the final outcome. Walk through the conversation in order: what the user asked for, what
 the assistant did (commands run, tools used, files and resources touched, searches performed), what
 the results were, which decisions and trade-offs were made, errors hit and how they were handled,
-and any pivots in direction. Preserve concrete specifics that may be needed later: names,
-identifiers, paths, counts, key values, URLs, and unresolved threads.
+and any pivots in direction. Err on the side of detail: it is better to keep a step the assistant
+might need again than to drop it.
 
-Be much shorter than the original conversation, but do not over-compress to a few lines — keep the
-meaningful steps. Stay strictly faithful; never invent details or outcomes. Omit only true filler
-(greetings, acknowledgements, verbatim repetition).
+Always preserve, woven into the narrative, the concrete sources and tools the work relied on:
+  - Files read, written, or edited (with their paths).
+  - URLs and web sources consulted (with enough of the title/topic to recognize them).
+  - Skills activated and what they were used for.
+  - Important identifiers, names, counts, key values, and any unresolved threads or open questions.
+Do not collapse these into vague phrases like "some files" or "a few sources" — name them.
+
+Be much shorter than the original conversation, but do not over-compress — keep the meaningful
+steps and the specifics above. Stay strictly faithful; never invent details or outcomes. Omit only
+true filler (greetings, acknowledgements, verbatim repetition).
 
 Format: flowing prose in the third person ("the user", "the assistant"), split into a few short
 paragraphs when the topic shifts.
 
 Example of the desired style:
-"Initially the user wanted research on gummy bears. The assistant searched the web and found three
-sources — a history of Haribo, a sugar-content comparison, and a manufacturing overview — and
-summarized the key facts from each. The user then pivoted to ask about other snacks instead, so the
-assistant dropped the gummy-bear thread and began comparing licorice and dark chocolate, noting the
-user cared most about sugar content and flagging that price data was still missing."
+"Initially the user wanted research on gummy bears. The assistant activated the `web` skill and
+searched, finding three sources — Haribo's company history (wikipedia.org/wiki/Haribo), a
+sugar-content comparison on healthline.com, and a manufacturing overview on candyindustry.com — and
+summarized the key facts from each into /workspace/research/gummy-bears.md. The user then pivoted to
+ask about other snacks instead, so the assistant dropped the gummy-bear thread and began comparing
+licorice and dark chocolate, reading the existing notes in /workspace/research/snacks.md first. It
+noted the user cared most about sugar content and flagged that price data was still missing."
 
 Reply with ONLY the summary.
 """
