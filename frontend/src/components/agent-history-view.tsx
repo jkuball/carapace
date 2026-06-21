@@ -86,6 +86,7 @@ function AgentHistoryRowView({
   row: AgentHistoryRow;
   summaryLabel: string;
 }) {
+  const t = useTranslations("compaction");
   if (row.role === "compaction_summary") {
     return (
       <div className="rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-3">
@@ -112,7 +113,7 @@ function AgentHistoryRowView({
         {row.compaction?.method ? (
           <div className="mb-1 inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
             <Archive className="h-2.5 w-2.5" />
-            {row.compaction.method}
+            {t(`methods.${row.compaction.method}`)}
           </div>
         ) : null}
         <pre className="whitespace-pre-wrap font-mono text-[11px] text-muted-foreground">

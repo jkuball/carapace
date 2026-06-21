@@ -735,7 +735,7 @@ export function ToolCallBadge({
             <span
               className="inline-flex items-center rounded bg-amber-500/15 p-0.5 text-amber-700 dark:text-amber-400"
               title={tc("toolTitle", {
-                method: compaction.method,
+                method: tc(`methods.${compaction.method}`),
                 orig: compaction.orig_tokens ?? 0,
                 summary: compaction.summary_tokens ?? 0,
               })}
