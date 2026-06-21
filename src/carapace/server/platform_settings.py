@@ -68,8 +68,8 @@ class PublicPlatformModelEntry(PlatformSettingsModel):
 class PlatformCompaction(PlatformSettingsModel):
     """Compaction tuning exposed in the admin UI (mirrors ``agent.compaction``)."""
 
-    keep_turns: int = Field(default=6, ge=1)
-    verbatim_tool_turns: int = Field(default=2, ge=0)
+    keep_turns: int = Field(default=8, ge=1)
+    verbatim_tool_turns: int = Field(default=4, ge=0)
     tool_output_floor_tokens: int = Field(default=500, ge=1)
 
 

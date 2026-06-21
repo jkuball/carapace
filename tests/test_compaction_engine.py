@@ -165,6 +165,44 @@ def test_compact_fold_collapses_old_turns(tmp_path: Path, db_factory) -> None:
     asyncio.run(_run())
 
 
+def test_rebuild_uses_provider_tool_call_id() -> None:
+    """Uncompact must restore the model's provider call id on both the call and the return.
+
+    Pairing events by the carapace UUID is correct, but the rebuilt parts have to carry
+    ``model_tool_call_id`` (recorded only on the result event) so the next agent turn pairs
+    the call to its return as the provider does. A legacy event without it falls back to the UUID.
+    """
+    from carapace.session.transcript import rebuild_model_history_from_events
+
+    events = [
+        {"role": "tool_call", "tool": "exec", "args": {"cmd": "ls"}, "tool_id": "uuid-aaa"},
+        {"role": "tool_result", "tool": "exec", "result": "ok", "tool_id": "uuid-aaa", "model_tool_call_id": "call_x"},
+        {"role": "tool_call", "tool": "exec", "args": {}, "tool_id": "uuid-legacy"},
+        {"role": "tool_result", "tool": "exec", "result": "ok", "tool_id": "uuid-legacy"},
+    ]
+    msgs = rebuild_model_history_from_events(events)
+    ids = [p.tool_call_id for m in msgs for p in m.parts if isinstance(p, (ToolCallPart, ToolReturnPart))]
+    # Provider id on both call+return for the modern event; UUID fallback for the legacy one.
+    assert ids == ["call_x", "call_x", "uuid-legacy", "uuid-legacy"]
+
+
+def test_rebuild_restores_attachment_preamble() -> None:
+    """User events store only the typed text; rebuild must re-augment from persisted attachments."""
+    from carapace.session.transcript import rebuild_model_history_from_events
+
+    events = [
+        {
+            "role": "user",
+            "content": "summarize this",
+            "attachments": [{"name": "report.pdf", "path": "/work/report.pdf"}],
+        }
+    ]
+    [msg] = rebuild_model_history_from_events(events)
+    text = msg.parts[0].content
+    assert "report.pdf" in text and "/work/report.pdf" in text
+    assert text.endswith("summarize this")
+
+
 def test_uncompact_restores_history_from_events(tmp_path: Path, db_factory) -> None:
     """/uncompact rebuilds the full history from the transcript and clears all compaction state."""
 

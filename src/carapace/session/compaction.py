@@ -26,8 +26,10 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    NativeToolCallPart,
     TextPart,
     ThinkingPart,
+    ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
 )
@@ -298,7 +300,7 @@ def fold_render_text(messages: list[ModelMessage]) -> str:
             for part in msg.parts:
                 if isinstance(part, TextPart):
                     lines.append(f"Assistant: {part.content}")
-                elif part.__class__.__name__ == "ToolCallPart":
+                elif isinstance(part, ToolCallPart | NativeToolCallPart):
                     lines.append(f"Assistant called {getattr(part, 'tool_name', '?')}")
     return "\n".join(lines)
 

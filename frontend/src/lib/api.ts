@@ -1344,8 +1344,8 @@ function decodePlatformSettingsResponse(
 function decodeCompaction(raw: unknown): PlatformCompactionSettings {
   const r = isRecord(raw) ? raw : {};
   return {
-    keep_turns: readNumber(r, "keep_turns") ?? 6,
-    verbatim_tool_turns: readNumber(r, "verbatim_tool_turns") ?? 2,
+    keep_turns: readNumber(r, "keep_turns") ?? 8,
+    verbatim_tool_turns: readNumber(r, "verbatim_tool_turns") ?? 4,
     tool_output_floor_tokens: readNumber(r, "tool_output_floor_tokens") ?? 500,
   };
 }

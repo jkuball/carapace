@@ -56,8 +56,8 @@ the DB-backed platform settings (the `agent` scalar row), not a config file:
 | Setting | Where | Default | Meaning |
 | --- | --- | --- | --- |
 | Compaction | Default models | Default (title model) | Model used for fold/tool summaries (a first-level default model alongside agent/sentinel/title) |
-| Keep recent turns | Compaction | 6 | Completed turns kept verbatim; also the default `K` for `/compact` |
-| Verbatim tool turns | Compaction | 2 | Newest turns whose tool outputs are never summarized (`0` disables) |
+| Keep recent turns | Compaction | 8 | Completed turns kept verbatim; also the default `K` for `/compact` |
+| Verbatim tool turns | Compaction | 4 | Newest turns whose tool outputs are never summarized (`0` disables) |
 | Tool-output floor (tokens) | Compaction | 500 | Tool outputs smaller than this are left alone |
 
 The compaction model is a separate, configurable default model (a cheap/haiku-class model is a good

@@ -704,6 +704,7 @@ export function Message({
             files: c.files,
             exitCode: c.exitCode,
             loading: c.loading,
+            compaction: c.compaction,
           }))}
         />
       );

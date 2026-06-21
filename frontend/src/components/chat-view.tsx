@@ -1491,15 +1491,27 @@ export function ChatView({
           if (msg.command === "reset_to_turn") {
             break;
           }
-          setMessages((prev) => [
-            ...prev,
-            { kind: "command", command: msg.command, data: msg.data, live: true },
-          ]);
+          let compactBaselineLen = 0;
+          setMessages((prev) => {
+            const next: ChatMessage[] = [
+              ...prev,
+              { kind: "command", command: msg.command, data: msg.data, live: true },
+            ];
+            compactBaselineLen = next.length;
+            return next;
+          });
           if (msg.command === "compact" || msg.command === "uncompact") {
             // History was rewritten server-side; re-project so folds/badges render.
-            // The refetched transcript already includes this command event.
+            // The refetched transcript already includes this command event. Preserve any live
+            // messages that arrived during the async fetch (the tail past the command result) so
+            // the refetch does not clobber them with an older snapshot.
             fetchHistory(server, token, sessionId)
-              .then((history) => setMessages(projectHistoryToMessages(history)))
+              .then((history) =>
+                setMessages((prev) => [
+                  ...projectHistoryToMessages(history),
+                  ...prev.slice(compactBaselineLen),
+                ]),
+              )
               .catch(() => {
                 // Refetch failed — the transcript is stale vs the server's compacted state.
                 setMessages((prev) => [
