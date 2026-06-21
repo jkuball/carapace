@@ -807,7 +807,12 @@ def test_admin_platform_settings_updates_db_and_runtime(client, admin_auth_heade
 
     assert resp.status_code == 200
     body = resp.json()["settings"]
-    assert body["default_models"] == {"agent": "local:test", "sentinel": "local:test", "title": "local:test"}
+    assert body["default_models"] == {
+        "agent": "local:test",
+        "sentinel": "local:test",
+        "title": "local:test",
+        "compaction": None,
+    }
     assert srv._config.agent.model == "local:test"
     assert srv._engine.config.agent.model == "local:test"
     # Persisted to the DB model catalog, not config.yaml.
@@ -3557,14 +3562,13 @@ def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_header
                 "agent": "anthropic:claude-sonnet-4-6",
                 "sentinel": "anthropic:claude-haiku-4-5",
                 "title": "anthropic:claude-haiku-4-5",
+                "compaction": "anthropic:claude-haiku-4-5",
             },
             "default_budget": {},
             "compaction": {
-                "model": "anthropic:claude-haiku-4-5",
                 "keep_turns": 4,
                 "verbatim_tool_turns": 1,
                 "tool_output_floor_tokens": 800,
-                "max_parallel_summaries": 3,
             },
             "available_models": [
                 {"provider": "anthropic", "name": "claude-sonnet-4-6"},
@@ -3574,19 +3578,18 @@ def test_admin_platform_settings_roundtrips_compaction(client, admin_auth_header
     )
 
     assert resp.status_code == 200
-    comp = resp.json()["settings"]["compaction"]
-    assert comp == {
-        "model": "anthropic:claude-haiku-4-5",
+    settings = resp.json()["settings"]
+    assert settings["default_models"]["compaction"] == "anthropic:claude-haiku-4-5"
+    assert settings["compaction"] == {
         "keep_turns": 4,
         "verbatim_tool_turns": 1,
         "tool_output_floor_tokens": 800,
-        "max_parallel_summaries": 3,
     }
     # Applied to runtime config and persisted to the DB scalar row.
     assert srv._config.agent.compaction.keep_turns == 4
     assert srv._config.agent.compaction.verbatim_tool_turns == 1
-    assert srv._config.agent.compaction.model == "anthropic:claude-haiku-4-5"
-    assert srv._platform_store.load_section("agent")["compaction"]["keep_turns"] == 4
+    assert srv._config.agent.compaction_model == "anthropic:claude-haiku-4-5"
+    assert srv._platform_store.load_section("agent")["compaction_model"] == "anthropic:claude-haiku-4-5"
 
 
 def test_admin_platform_settings_rejects_unknown_compaction_model(client, admin_auth_headers):
@@ -3598,9 +3601,9 @@ def test_admin_platform_settings_rejects_unknown_compaction_model(client, admin_
                 "agent": "anthropic:claude-sonnet-4-6",
                 "sentinel": "anthropic:claude-haiku-4-5",
                 "title": "anthropic:claude-haiku-4-5",
+                "compaction": "anthropic:not-in-catalog",
             },
             "default_budget": {},
-            "compaction": {"model": "anthropic:not-in-catalog"},
             "available_models": [
                 {"provider": "anthropic", "name": "claude-sonnet-4-6"},
                 {"provider": "anthropic", "name": "claude-haiku-4-5"},

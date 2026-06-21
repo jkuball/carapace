@@ -58,7 +58,7 @@ class SessionCompactionMixin:
         ) -> AbstractContextManager[Any, bool | None]: ...
 
     def _compaction_model(self) -> str:
-        return self._config.agent.compaction.model or self._config.agent.title_model
+        return self._config.agent.compaction_model or self._config.agent.title_model
 
     async def run_compaction(
         self,
@@ -176,13 +176,11 @@ class SessionCompactionMixin:
         if not candidates:
             return history
 
-        sem = asyncio.Semaphore(self._config.agent.compaction.max_parallel_summaries)
-
+        # Concurrency is bounded by the shared LLM semaphore acquired inside _summarize.
         async def _one(cand: Any) -> tuple[str, AppliedToolReturn] | None:
-            async with sem:
-                summary = await self._summarize(
-                    active, lambda **kw: summarize_tool_output(cand.tool_name, _text(cand.content), **kw)
-                )
+            summary = await self._summarize(
+                active, lambda **kw: summarize_tool_output(cand.tool_name, _text(cand.content), **kw)
+            )
             if not summary or cand.tool_call_id is None:
                 return None
             return cand.tool_call_id, AppliedToolReturn(

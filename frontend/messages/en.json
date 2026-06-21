@@ -171,7 +171,8 @@
             "visionHint": "Accepts image input",
             "apiKeySource": "API key source",
             "apiKey": "API key",
-            "secretReference": "Secret reference"
+            "secretReference": "Secret reference",
+            "compaction": "Compaction"
         },
         "placeholders": {
             "selectModel": "Select model",
@@ -207,12 +208,10 @@
         },
         "modelRow": "Model {index}",
         "compaction": {
-            "model": "Compaction model",
             "modelDefault": "Default (title model)",
-            "keepTurns": "Keep recent turns (K)",
+            "keepTurns": "Keep recent turns",
             "verbatimTurns": "Verbatim tool turns",
-            "toolFloor": "Tool-output floor (tokens)",
-            "maxParallel": "Max parallel summaries"
+            "toolFloor": "Tool-output floor (tokens)"
         }
     },
     "home": {

@@ -150,7 +150,7 @@
             "defaultModels": "Standardmodelle",
             "defaultBudgets": "Standardbudgets",
             "catalog": "Modellkatalog",
-            "compaction": "Komprimierung"
+            "compaction": "Compaction"
         },
         "fields": {
             "agent": "Agent",
@@ -171,7 +171,8 @@
             "visionHint": "Akzeptiert Bildeingaben",
             "apiKeySource": "API-Key-Quelle",
             "apiKey": "API-Key",
-            "secretReference": "Secret-Referenz"
+            "secretReference": "Secret-Referenz",
+            "compaction": "Compaction"
         },
         "placeholders": {
             "selectModel": "Modell auswählen",
@@ -207,12 +208,10 @@
         },
         "modelRow": "Modell {index}",
         "compaction": {
-            "model": "Komprimierungsmodell",
             "modelDefault": "Standard (Titelmodell)",
-            "keepTurns": "Letzte Runden behalten (K)",
+            "keepTurns": "Letzte Runden behalten",
             "verbatimTurns": "Tool-Runden wörtlich behalten",
-            "toolFloor": "Tool-Ausgabe-Schwelle (Tokens)",
-            "maxParallel": "Max. parallele Zusammenfassungen"
+            "toolFloor": "Tool-Ausgabe-Schwelle (Tokens)"
         }
     },
     "home": {
@@ -668,7 +667,7 @@
             }
         },
         "compact": {
-            "title": "Komprimierung",
+            "title": "Compaction",
             "nothing": "Nichts zu komprimieren.",
             "saved": "{saved} Tokens gespart ({before}→{after}).",
             "folded": "{count} Runden gefaltet",
@@ -700,7 +699,7 @@
             "unexpected": "Unerwarteter Fehler",
             "resetTarget": "Ziel zum Zurücksetzen konnte nicht aufgelöst werden.",
             "forkTarget": "Ziel zum Forken konnte nicht aufgelöst werden.",
-            "compactRefresh": "Komprimierung erfolgreich, aber das Aktualisieren des Verlaufs ist fehlgeschlagen. Neu laden, um die komprimierte Ansicht zu sehen."
+            "compactRefresh": "Compaction erfolgreich, aber das Aktualisieren des Verlaufs ist fehlgeschlagen. Neu laden, um die komprimierte Ansicht zu sehen."
         },
         "confirm": {
             "wipeSandbox": "Sandbox und ihren Speicher für diese Sitzung löschen? Der Chatverlauf bleibt erhalten.",

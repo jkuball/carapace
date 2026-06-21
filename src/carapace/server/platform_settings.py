@@ -36,6 +36,15 @@ class PlatformDefaultModels(PlatformSettingsModel):
     agent: str
     sentinel: str
     title: str
+    compaction: str | None = None  # None -> fall back to the title model
+
+    @field_validator("compaction", mode="before")
+    @classmethod
+    def _normalize_compaction(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class PublicModelSecret(PlatformSettingsModel):
@@ -57,21 +66,11 @@ class PublicPlatformModelEntry(PlatformSettingsModel):
 
 
 class PlatformCompaction(PlatformSettingsModel):
-    """Compaction settings exposed in the admin UI (mirrors ``agent.compaction``)."""
+    """Compaction tuning exposed in the admin UI (mirrors ``agent.compaction``)."""
 
-    model: str | None = None
     keep_turns: int = Field(default=6, ge=1)
     verbatim_tool_turns: int = Field(default=2, ge=0)
     tool_output_floor_tokens: int = Field(default=500, ge=1)
-    max_parallel_summaries: int = Field(default=6, ge=1)
-
-    @field_validator("model", mode="before")
-    @classmethod
-    def _normalize_model(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
 
 
 class PlatformSettingsPayload(PlatformSettingsModel):
@@ -188,6 +187,7 @@ def _response() -> PlatformSettingsResponse:
                 agent=server._config.agent.model,
                 sentinel=server._config.agent.sentinel_model,
                 title=server._config.agent.title_model,
+                compaction=server._config.agent.compaction_model,
             ),
             default_budget=server._config.agent.default_session_budget,
             compaction=PlatformCompaction.model_validate(server._config.agent.compaction.model_dump(mode="json")),
@@ -252,12 +252,11 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
         model=body.default_models.agent,
         sentinel_model=body.default_models.sentinel,
         title_model=body.default_models.title,
+        compaction_model=body.default_models.compaction,
         compaction=CompactionConfig(
-            model=body.compaction.model,
             keep_turns=body.compaction.keep_turns,
             verbatim_tool_turns=body.compaction.verbatim_tool_turns,
             tool_output_floor_tokens=body.compaction.tool_output_floor_tokens,
-            max_parallel_summaries=body.compaction.max_parallel_summaries,
         ),
         default_session_budget=body.default_budget,
         available_models=entries,

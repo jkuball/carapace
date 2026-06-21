@@ -1099,11 +1099,9 @@ export interface UserSettingsPatchInput {
 }
 
 export interface PlatformCompactionSettings {
-  model: string | null;
   keep_turns: number;
   verbatim_tool_turns: number;
   tool_output_floor_tokens: number;
-  max_parallel_summaries: number;
 }
 
 export interface PlatformSettingsInfo {
@@ -1111,6 +1109,7 @@ export interface PlatformSettingsInfo {
     agent: string;
     sentinel: string;
     title: string;
+    compaction: string | null;
   };
   default_budget: SessionBudgetSettings;
   compaction: PlatformCompactionSettings;
@@ -1145,6 +1144,7 @@ export interface PlatformSettingsPatchInput {
     agent: string;
     sentinel: string;
     title: string;
+    compaction: string | null;
   };
   default_budget: SessionBudgetSettings;
   compaction: PlatformCompactionSettings;
@@ -1332,6 +1332,7 @@ function decodePlatformSettingsResponse(
         agent: readString(defaults, "agent") ?? "",
         sentinel: readString(defaults, "sentinel") ?? "",
         title: readString(defaults, "title") ?? "",
+        compaction: readString(defaults, "compaction") ?? null,
       },
       default_budget: decodeBudget(settings.default_budget),
       compaction: decodeCompaction(settings.compaction),
@@ -1343,11 +1344,9 @@ function decodePlatformSettingsResponse(
 function decodeCompaction(raw: unknown): PlatformCompactionSettings {
   const r = isRecord(raw) ? raw : {};
   return {
-    model: readString(r, "model") ?? null,
     keep_turns: readNumber(r, "keep_turns") ?? 6,
     verbatim_tool_turns: readNumber(r, "verbatim_tool_turns") ?? 2,
     tool_output_floor_tokens: readNumber(r, "tool_output_floor_tokens") ?? 500,
-    max_parallel_summaries: readNumber(r, "max_parallel_summaries") ?? 6,
   };
 }
 

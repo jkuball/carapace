@@ -148,23 +148,21 @@ def _default_agent_available_models() -> list[AvailableModelEntry]:
 class CompactionConfig(ConfigModel):
     """Session compaction tuning (manual `/compact` in v1)."""
 
-    # Model used to summarize folded turns and large tool outputs. None -> fall back to title_model.
-    model: str | None = None
-    # Default number of recent completed turns kept verbatim when folding (the `K` in `/compact`).
+    # Default number of recent completed turns kept verbatim when folding.
     keep_turns: int = Field(default=6, ge=1)
     # Number of most-recent completed turns whose tool outputs stay fully verbatim (never
     # summarized), so the agent keeps exact fidelity on its latest work. 0 disables the hot zone.
     verbatim_tool_turns: int = Field(default=2, ge=0)
     # Tool returns below this token count are left alone (marker overhead would exceed the saving).
     tool_output_floor_tokens: int = Field(default=500, ge=1)
-    # Concurrency for parallel tool-output summarization on the compaction model.
-    max_parallel_summaries: int = Field(default=6, ge=1)
 
 
 class AgentConfig(ConfigModel):
     model: str = "anthropic:claude-sonnet-4-6"
     sentinel_model: str = "anthropic:claude-haiku-4-5"
     title_model: str = "anthropic:claude-haiku-4-5"
+    # Model used for compaction summaries. None -> fall back to title_model.
+    compaction_model: str | None = None
     compaction: CompactionConfig = Field(default_factory=CompactionConfig)
     default_session_budget: SessionBudget = Field(default_factory=SessionBudget)
 
@@ -198,9 +196,9 @@ class AgentConfig(ConfigModel):
                 raise ValueError(
                     f"agent.{field_name}={mid!r} must match an entry in agent.available_models (as id or provider:name)"
                 )
-        if self.compaction.model is not None and self.compaction.model not in catalog_ids:
+        if self.compaction_model is not None and self.compaction_model not in catalog_ids:
             raise ValueError(
-                f"agent.compaction.model={self.compaction.model!r} must match an entry in "
+                f"agent.compaction_model={self.compaction_model!r} must match an entry in "
                 "agent.available_models (as id or provider:name)"
             )
         return self

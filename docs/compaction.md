@@ -48,21 +48,21 @@ that run only. The reply shows tokens before/after and a breakdown of what was c
 
 ## Configuration
 
-Compaction is configured per platform in **Settings → Platform → Compaction** (admin only). The
-values are stored in the DB-backed platform settings (the `agent` scalar row), not a config file:
+Compaction is configured per platform in **Settings → Platform** (admin only). Values are stored in
+the DB-backed platform settings (the `agent` scalar row), not a config file:
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| Compaction model | Default (title model) | Model used for fold/tool summaries |
-| Keep recent turns (K) | 6 | Completed turns kept verbatim; also the default `K` for `/compact` |
-| Verbatim tool turns | 2 | Newest turns whose tool outputs are never summarized (`0` disables) |
-| Tool-output floor (tokens) | 500 | Tool outputs smaller than this are left alone |
-| Max parallel summaries | 6 | Concurrency for tool-output summarization |
+| Setting | Where | Default | Meaning |
+| --- | --- | --- | --- |
+| Compaction | Default models | Default (title model) | Model used for fold/tool summaries (a first-level default model alongside agent/sentinel/title) |
+| Keep recent turns | Compaction | 6 | Completed turns kept verbatim; also the default `K` for `/compact` |
+| Verbatim tool turns | Compaction | 2 | Newest turns whose tool outputs are never summarized (`0` disables) |
+| Tool-output floor (tokens) | Compaction | 500 | Tool outputs smaller than this are left alone |
 
-The compaction model is a separate, configurable model (a cheap/haiku-class model is a good
+The compaction model is a separate, configurable default model (a cheap/haiku-class model is a good
 default); leaving it on "Default" reuses the title model. Its usage is tracked under the
-`compaction` category, separate from the agent. The code defaults live in `agent.compaction`
-(`AgentConfig` / `CompactionConfig`).
+`compaction` category, separate from the agent. Tool-output summaries run concurrently, bounded by
+the shared `agent.max_parallel_llm` limit. Code defaults live in `agent.compaction_model` and
+`agent.compaction` (`AgentConfig` / `CompactionConfig`).
 
 ## Viewing compaction in the UI
 

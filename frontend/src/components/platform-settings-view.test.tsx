@@ -19,6 +19,7 @@ function draftWithModel(model: PlatformDraft["models"][number]): PlatformDraft {
       agent: id,
       sentinel: id,
       title: id,
+      compaction: "",
     },
     budget: {
       input_tokens: "",
@@ -27,11 +28,9 @@ function draftWithModel(model: PlatformDraft["models"][number]): PlatformDraft {
       tool_calls: "",
     },
     compaction: {
-      model: "",
       keepTurns: "6",
       verbatimTurns: "2",
       toolFloor: "500",
-      maxParallel: "6",
     },
     models: [model],
   };
