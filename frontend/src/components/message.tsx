@@ -46,8 +46,8 @@ function formatRelativeTime(iso: string, locale: string): string {
 }
 
 /**
- * Hover-revealed turn/timestamp metadata. Nothing shows at rest; on row hover a muted relative
- * time appears, with the absolute time + turn number behind its tooltip. Costs no resting layout.
+ * Turn/timestamp metadata. A muted relative time is always shown (small, low-contrast); the
+ * absolute time + turn number sit behind its tooltip so the resting line stays unintrusive.
  */
 function TurnMeta({
   timestamp,
@@ -71,8 +71,7 @@ function TurnMeta({
     <span
       title={tip}
       className={cn(
-        "select-none whitespace-nowrap text-[10px] tabular-nums text-muted-foreground/60",
-        "opacity-0 transition-opacity group-hover:opacity-100",
+        "select-none whitespace-nowrap text-[10px] tabular-nums text-muted-foreground/50",
         className,
       )}
     >
