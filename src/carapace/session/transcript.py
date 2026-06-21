@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from types import SimpleNamespace
 from typing import Any
 
 from pydantic_ai.messages import (
@@ -17,6 +16,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from ..ws_models import Attachment
 from .attachments import augment_prompt
 
 
@@ -129,7 +129,7 @@ def rebuild_model_history_from_events(events: list[dict[str, Any]]) -> list[Mode
                 # the event stores only the raw text, so re-augment from persisted attachments.
                 attachments = event.get("attachments")
                 if isinstance(attachments, list) and attachments:
-                    content = augment_prompt(content, [SimpleNamespace(**a) for a in attachments])
+                    content = augment_prompt(content, [Attachment.model_validate(a) for a in attachments])
                 messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
         elif role == "assistant":
             content = event.get("content")
