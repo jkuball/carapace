@@ -143,6 +143,43 @@ def test_compact_fold_collapses_old_turns(tmp_path: Path, db_factory) -> None:
     asyncio.run(_run())
 
 
+def test_uncompact_restores_history_from_events(tmp_path: Path, db_factory) -> None:
+    """/uncompact rebuilds the full history from the transcript and clears all compaction state."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 8, tool_output="x" * 4000)
+
+        await engine.run_compaction(active, mode="all", keep_turns=3)
+        compacted = engine.session_mgr.load_history(sid)
+        lead, _rest = split_lead_folds(compacted)
+        assert lead and engine.session_mgr.load_compaction(sid).nodes  # actually compacted
+
+        res = await engine.run_uncompaction(active)
+        assert res["restored"] is True
+
+        restored = engine.session_mgr.load_history(sid)
+        # No fold messages left, tree cleared, every turn's tool output back to full length.
+        assert split_lead_folds(restored)[0] == []
+        assert engine.session_mgr.load_compaction(sid).nodes == []
+        assert len(completed_model_turn_end_indexes(restored)) == 8
+        assert not any(
+            tool_return_is_compacted(p)
+            for m in restored
+            for p in getattr(m, "parts", [])
+            if isinstance(p, ToolReturnPart)
+        )
+        assert all("compaction" not in e for e in engine.session_mgr.load_events(sid))
+
+        # Idempotent: nothing left to undo.
+        assert (await engine.run_uncompaction(active))["restored"] is False
+
+    asyncio.run(_run())
+
+
 def test_reset_after_fold_keeps_history_in_sync(tmp_path: Path, db_factory) -> None:
     """Reset past the verbatim tail must slice folded history by events, not raw model-turn count."""
 
@@ -195,6 +232,7 @@ def test_compact_tools_summarizes_large_returns(tmp_path: Path, db_factory) -> N
     async def _run() -> None:
         with _patch_sentinel():
             engine = _make_engine(tmp_path, session_factory=db_factory)
+        engine._config.agent.compaction.verbatim_tool_turns = 1
         sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
         _seed(engine, sid, 3, tool_output="line\n" * 3000)
@@ -275,6 +313,7 @@ def test_compact_all_ladder_end_to_end(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
             engine = _make_engine(tmp_path, session_factory=db_factory)
+        engine._config.agent.compaction.verbatim_tool_turns = 1
         sid = engine.session_mgr.create_session(user="thies").session_id
         active = engine.get_or_activate(sid)
 

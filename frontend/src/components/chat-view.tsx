@@ -1475,7 +1475,7 @@ export function ChatView({
             ...prev,
             { kind: "command", command: msg.command, data: msg.data, live: true },
           ]);
-          if (msg.command === "compact") {
+          if (msg.command === "compact" || msg.command === "uncompact") {
             // History was rewritten server-side; re-project so folds/badges render.
             // The refetched transcript already includes this command event.
             fetchHistory(server, token, sessionId)

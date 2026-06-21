@@ -38,6 +38,10 @@ SLASH_COMMANDS: list[dict[str, str]] = [
         "command": "/compact",
         "description": "Compact history to save context. /compact [K], /compact fold [K], or /compact tools",
     },
+    {
+        "command": "/uncompact",
+        "description": "Undo compaction: rebuild the full history from the transcript (debug aid)",
+    },
     {"command": "/quit", "description": "Disconnect"},
     {"command": "/help", "description": "Show this help"},
 ]

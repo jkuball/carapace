@@ -98,6 +98,54 @@ def history_for_completed_turn_count(messages: list[ModelMessage], turn_count: i
     return messages[: turn_end_indexes[capped_turn_count - 1] + 1]
 
 
+def rebuild_model_history_from_events(events: list[dict[str, Any]]) -> list[ModelMessage]:
+    """Reconstruct an uncompacted model history from the (append-only) event transcript.
+
+    The inverse of the message→event projection, used by ``/uncompact``. Faithful in content and
+    order, pairing tool calls to returns by ``tool_id``. Lossy only where events do not record the
+    detail: thinking parts are dropped (events never stored them; compaction drops them anyway) and
+    each part becomes its own message rather than regrouping into the original turn. Slash-command
+    user lines and non-conversational events (approvals, commands, …) are skipped.
+    """
+    paired_tool_ids = {e.get("tool_id") for e in events if e.get("role") == "tool_result"}
+    messages: list[ModelMessage] = []
+    for event in events:
+        role = event.get("role")
+        if role == "user":
+            content = event.get("content")
+            if isinstance(content, str) and not content.startswith("/"):
+                messages.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            content = event.get("content")
+            if isinstance(content, str) and content:
+                messages.append(ModelResponse(parts=[TextPart(content=content)]))
+        elif role == "tool_call":
+            tool_id = event.get("tool_id")
+            if not isinstance(tool_id, str) or tool_id not in paired_tool_ids:
+                continue  # unpaired (denied / incomplete) call — skip to keep call/return matched
+            args = event.get("args") if isinstance(event.get("args"), dict) else {}
+            messages.append(
+                ModelResponse(parts=[ToolCallPart(tool_name=event.get("tool") or "", args=args, tool_call_id=tool_id)])
+            )
+        elif role == "tool_result":
+            tool_id = event.get("tool_id")
+            if not isinstance(tool_id, str):
+                continue
+            result = event.get("result")
+            messages.append(
+                ModelRequest(
+                    parts=[
+                        ToolReturnPart(
+                            tool_name=event.get("tool") or "",
+                            content=result if isinstance(result, str) else str(result),
+                            tool_call_id=tool_id,
+                        )
+                    ]
+                )
+            )
+    return messages
+
+
 def normalize_unattended_output_history(messages: list[ModelMessage]) -> list[ModelMessage]:
     """Rewrite unattended task output tools into plain assistant text for attended forks."""
     normalized: list[ModelMessage] = []

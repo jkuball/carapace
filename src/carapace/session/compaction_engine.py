@@ -31,7 +31,7 @@ from .compaction import (
 )
 from .compaction_summarizer import summarize_fold, summarize_tool_output
 from .manager import SessionManager
-from .transcript import completed_event_turns, completed_model_turn_end_indexes
+from .transcript import completed_event_turns, completed_model_turn_end_indexes, rebuild_model_history_from_events
 from .types import ActiveSession
 
 if TYPE_CHECKING:
@@ -112,6 +112,36 @@ class SessionCompactionMixin:
 
         logger.info(f"Compaction session={session_id} mode={mode} {report.message}")
         return report
+
+    async def run_uncompaction(self, active: ActiveSession) -> dict[str, Any]:
+        """Debug aid: rebuild the uncompacted model history from events and drop all compaction state.
+
+        Reverses every fold and tool-output compaction by reconstructing the history from the
+        (complete, append-only) event transcript, then clears the compaction tree and per-event
+        annotations. Lossy only on thinking parts (never recorded as events; compaction drops them).
+        """
+        session_id = active.state.session_id
+        model_name = self.agent_model_id_for_gauge(active)
+        events = list(self._session_mgr.load_events(session_id))
+        tree = self._session_mgr.load_compaction(session_id)
+
+        had_annotations = any(isinstance(e.get("compaction"), dict) for e in events)
+        if not tree.nodes and not had_annotations:
+            return {"restored": False, "message": "Nothing to uncompact — this session is not compacted."}
+
+        before = count_message_tokens(self._session_mgr.load_history(session_id), model_name=model_name)
+        rebuilt = rebuild_model_history_from_events(events)
+        after = count_message_tokens(rebuilt, model_name=model_name)
+        for e in events:
+            e.pop("compaction", None)
+
+        self._session_mgr.save_history(session_id, rebuilt)
+        self._session_mgr.save_compaction(session_id, SessionCompaction())
+        self._session_mgr.save_events(session_id, events)
+
+        message = f"Uncompacted {before:,}→{after:,} tokens — restored {len(rebuilt)} messages from the transcript."
+        logger.info(f"Uncompaction session={session_id} {message}")
+        return {"restored": True, "before_tokens": before, "after_tokens": after, "message": message}
 
     async def _do_fold(
         self,
