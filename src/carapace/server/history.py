@@ -77,6 +77,7 @@ class HistoryMessage(BaseModel):
     descriptions: list[str] | None = None
     skill_name: str | None = None
     tool_id: str | None = None
+    model_tool_call_id: str | None = None
     parent_tool_id: str | None = None
     exit_code: int | None = None
     attachments: list[Attachment] | None = None
@@ -166,7 +167,8 @@ def _enrich_compaction_annotations(session_id: str, messages: list[HistoryMessag
             ann.setdefault("summary", node.summary)
             ann.setdefault("orig_tokens", node.orig_tokens)
             ann.setdefault("summary_tokens", node.summary_tokens)
-        if m.role == "tool_result" and isinstance(m.tool_id, str) and (text := model_tool_text.get(m.tool_id)):
+        tool_key = m.model_tool_call_id or m.tool_id
+        if m.role == "tool_result" and isinstance(tool_key, str) and (text := model_tool_text.get(tool_key)):
             ann.setdefault("model_text", text)
         m.compaction = ann
 

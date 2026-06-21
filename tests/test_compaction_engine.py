@@ -70,6 +70,28 @@ def test_reset_warns_when_history_desynced_from_events(tmp_path: Path, db_factor
     asyncio.run(_run())
 
 
+def test_tool_result_annotation_matches_provider_id() -> None:
+    """Events key tools by a carapace UUID; annotation must match the model's provider id instead."""
+    from carapace.session.compaction import AppliedToolReturn
+    from carapace.session.compaction_engine import _annotate_tool_result_events
+
+    events = [
+        # Real-world shape: tool_id is a UUID, model_tool_call_id is the provider call id.
+        {"role": "tool_result", "tool": "exec", "tool_id": "uuid-aaa", "model_tool_call_id": "call_xyz__thought__z"},
+        # Legacy event without model_tool_call_id falls back to tool_id.
+        {"role": "tool_result", "tool": "exec", "tool_id": "call_legacy"},
+    ]
+    applied = {
+        "call_xyz__thought__z": AppliedToolReturn(
+            new_content="s", method="summarize", orig_tokens=100, summary_tokens=2
+        ),
+        "call_legacy": AppliedToolReturn(new_content="s", method="truncate", orig_tokens=80, summary_tokens=1),
+    }
+    _annotate_tool_result_events(events, applied)
+    assert events[0]["compaction"]["method"] == "summarize"
+    assert events[1]["compaction"]["method"] == "truncate"
+
+
 def test_compaction_model_precedence(tmp_path: Path, db_factory) -> None:
     """Resolution order: per-session override → platform compaction_model → title model."""
     with _patch_sentinel():

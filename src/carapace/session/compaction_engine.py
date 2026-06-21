@@ -311,13 +311,16 @@ def _annotate_folded_events(events: list[dict[str, Any]], count: int, node_id: s
 
 
 def _annotate_tool_result_events(events: list[dict[str, Any]], applied: dict[str, AppliedToolReturn]) -> None:
+    # ``applied`` is keyed by the model's provider tool_call_id. Match it to the event's
+    # ``model_tool_call_id`` (recorded alongside the carapace UUID ``tool_id``); fall back to
+    # ``tool_id`` for legacy events / tests where the two ids coincide.
     for e in events:
         if e.get("role") != "tool_result":
             continue
-        tool_id = e.get("tool_id")
-        if not isinstance(tool_id, str):
+        key = e.get("model_tool_call_id") or e.get("tool_id")
+        if not isinstance(key, str):
             continue
-        rep = applied.get(tool_id)
+        rep = applied.get(key)
         if rep is None:
             continue
         e["compaction"] = {
