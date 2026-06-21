@@ -44,6 +44,53 @@ def _seed(engine, sid: str, n: int, *, tool_output: str | None = None) -> None:
     engine.session_mgr.save_events(sid, events)
 
 
+def test_compaction_model_precedence(tmp_path: Path, db_factory) -> None:
+    """Resolution order: per-session override → platform compaction_model → title model."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+    sid = engine.session_mgr.create_session(user="thies").session_id
+    active = engine.get_or_activate(sid)
+
+    agent_cfg = engine.config.agent
+    # No override, no platform compaction model → fall back to the title model.
+    agent_cfg.compaction_model = None
+    active.compaction_model_name = None
+    assert engine._compaction_model(active) == agent_cfg.title_model
+
+    # Platform compaction model wins over the title model.
+    agent_cfg.compaction_model = "openai:gpt-4o-mini"
+    assert engine._compaction_model(active) == "openai:gpt-4o-mini"
+
+    # A per-session override wins over everything.
+    active.compaction_model_name = "anthropic:claude-haiku-4-5"
+    assert engine._compaction_model(active) == "anthropic:claude-haiku-4-5"
+
+
+def test_reset_into_folded_region_collapses_to_lead_fold(tmp_path: Path, db_factory) -> None:
+    """Rewinding to a turn the fold swallowed keeps only the fold summary, consistent with events."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 10)
+        await engine.run_compaction(active, mode="fold", keep_turns=3)  # folds turns 0-6
+
+        # Reset to turn 2 (assistant event index 5) — inside the folded region.
+        assert await engine.reset_to_turn(sid, 5) is True
+
+        history = engine.session_mgr.load_history(sid)
+        lead, rest = split_lead_folds(history)
+        # Tail turns = 0: only the fold summary survives, no dangling verbatim turns.
+        assert len(lead) == 1 and is_fold_message(lead[0])
+        assert completed_model_turn_end_indexes(rest) == []
+        # The fold still has turns in the (truncated) events, so its tree node is retained.
+        assert len(engine.session_mgr.load_compaction(sid).nodes) == 1
+
+    asyncio.run(_run())
+
+
 def test_compact_fold_collapses_old_turns(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
