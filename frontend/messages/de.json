@@ -1097,7 +1097,6 @@
         "tokenDelta": "{from}→{to} Tok",
         "foldTitle": "Diese Runden sind im Modell-Kontext zu einer Zusammenfassung verdichtet — Originale hier angezeigt",
         "toolTitle": "Tool-Ausgabe {method}, um Kontext zu sparen ({orig}→{summary} Tokens)",
-        "toolBadge": "{method}",
         "agentView": "Agent-Ansicht",
         "agentViewOff": "Normale Ansicht",
         "agentViewHint": "Verlauf genau so anzeigen, wie ihn der Agent sieht",

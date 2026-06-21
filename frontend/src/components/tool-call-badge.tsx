@@ -733,7 +733,7 @@ export function ToolCallBadge({
           {source && <ApprovalBadge source={source} verdict={verdict} tooltip={finalDecisionMessage || sentinelExplanation || undefined} />}
           {compaction?.method && (
             <span
-              className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+              className="inline-flex items-center rounded bg-amber-500/15 p-0.5 text-amber-700 dark:text-amber-400"
               title={tc("toolTitle", {
                 method: compaction.method,
                 orig: compaction.orig_tokens ?? 0,
@@ -741,7 +741,6 @@ export function ToolCallBadge({
               })}
             >
               <Archive className="h-2.5 w-2.5" />
-              {tc("toolBadge", { method: compaction.method })}
             </span>
           )}
           {loading && (

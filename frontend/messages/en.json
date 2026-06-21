@@ -1097,7 +1097,6 @@
         "tokenDelta": "{from}→{to} tok",
         "foldTitle": "These turns are condensed to a summary in the model's context — originals shown here",
         "toolTitle": "Tool output {method} to save context ({orig}→{summary} tokens)",
-        "toolBadge": "{method}",
         "agentView": "Agent view",
         "agentViewOff": "Normal view",
         "agentViewHint": "Show the history exactly as the agent sees it",
