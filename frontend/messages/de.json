@@ -855,6 +855,9 @@
             "notice": "Der Agent hat die Aufgabe mit einer Meldung vom Typ {status} beendet. Die Sitzung ist jetzt schreibgeschützt, du kannst sie aber forken um weiter zu chatten."
         }
     },
+    "turnMeta": {
+        "turn": "Runde {n}"
+    },
     "jobs": {
         "settingsSections": "Einstellungsbereiche",
         "savedJobs": "Gespeicherte Jobs",

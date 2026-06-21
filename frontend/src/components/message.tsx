@@ -32,6 +32,55 @@ function formatDuration(ms: number, locale: string, precise = true): string {
   return `${Math.round(ms / 1_000)}s`;
 }
 
+function formatRelativeTime(iso: string, locale: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const sec = Math.round((Date.now() - then) / 1_000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (sec < 60) return rtf.format(-sec, "second");
+  const min = Math.round(sec / 60);
+  if (min < 60) return rtf.format(-min, "minute");
+  const hr = Math.round(min / 60);
+  if (hr < 24) return rtf.format(-hr, "hour");
+  return rtf.format(-Math.round(hr / 24), "day");
+}
+
+/**
+ * Hover-revealed turn/timestamp metadata. Nothing shows at rest; on row hover a muted relative
+ * time appears, with the absolute time + turn number behind its tooltip. Costs no resting layout.
+ */
+function TurnMeta({
+  timestamp,
+  turnIndex,
+  className,
+}: {
+  timestamp?: string;
+  turnIndex?: number;
+  className?: string;
+}) {
+  const { locale } = useAppLocale();
+  const t = useTranslations("turnMeta");
+  if (!timestamp && turnIndex == null) return null;
+  const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
+  const abs = timestamp
+    ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
+    : "";
+  const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
+  const tip = [turnLabel, abs].filter(Boolean).join(" · ");
+  return (
+    <span
+      title={tip}
+      className={cn(
+        "select-none whitespace-nowrap text-[10px] tabular-nums text-muted-foreground/60",
+        "opacity-0 transition-opacity group-hover:opacity-100",
+        className,
+      )}
+    >
+      {rel || turnLabel}
+    </span>
+  );
+}
+
 function MessageCopyButton({
   text,
   className,
@@ -225,6 +274,8 @@ function MessageActions({
   onFork,
   onRetry,
   onReset,
+  timestamp,
+  turnIndex,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -234,10 +285,13 @@ function MessageActions({
   onFork?: () => void;
   onRetry?: () => void;
   onReset?: () => void;
+  timestamp?: string;
+  turnIndex?: number;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
-  if (!hasCopy && !canFork && !canRetry && !canReset) return null;
+  const hasMeta = Boolean(timestamp) || turnIndex != null;
+  if (!hasCopy && !canFork && !canRetry && !canReset && !hasMeta) return null;
 
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -260,6 +314,7 @@ function MessageActions({
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
       />
+      <TurnMeta timestamp={timestamp} turnIndex={turnIndex} className="ml-auto" />
     </div>
   );
 }
@@ -424,7 +479,8 @@ export function Message({
   switch (message.kind) {
     case "user":
       return (
-        <div className="flex justify-end">
+        <div className="group flex items-center justify-end gap-2">
+          <TurnMeta timestamp={message.timestamp} turnIndex={message.turnIndex} />
           <div
             className={cn(
               "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
@@ -484,6 +540,8 @@ export function Message({
             onFork={onFork}
             onRetry={onRetry}
             onReset={onReset}
+            timestamp={message.timestamp}
+            turnIndex={message.turnIndex}
           />
         </div>
       );

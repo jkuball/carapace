@@ -855,6 +855,9 @@
             "notice": "The agent has ended its task with a {status} message. The session is now read-only, but you can fork it to continue chatting."
         }
     },
+    "turnMeta": {
+        "turn": "turn {n}"
+    },
     "jobs": {
         "settingsSections": "Settings sections",
         "savedJobs": "Saved Jobs",

@@ -633,16 +633,21 @@ function groupFoldedMessages(messages: ChatMessage[]): ChatMessage[] {
 function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   const pendingToolCallIndices = new Map<string, number[]>();
+  // Turn = one submitted (non-slash) user prompt plus the agent work that follows it.
+  let turn = 0;
 
   for (let index = 0; index < history.length; index++) {
     const entry = history[index];
 
     if (entry.role === "user") {
+      if (!entry.content.startsWith("/")) turn++;
       messages.push({
         kind: "user",
         content: entry.content,
         attachments: entry.attachments,
         compaction: entry.compaction,
+        timestamp: entry.timestamp,
+        turnIndex: turn,
       });
       continue;
     }
@@ -888,6 +893,8 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       finalStatus: entry.final_status,
       eventIndex: typeof entry.event_index === "number" ? entry.event_index : undefined,
       compaction: entry.compaction,
+      timestamp: entry.timestamp,
+      turnIndex: turn,
     });
   }
 

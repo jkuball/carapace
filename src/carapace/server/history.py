@@ -50,6 +50,7 @@ class HistoryMessage(BaseModel):
     content: str = ""
     final_status: FinalStatus | None = None
     event_index: int | None = None
+    timestamp: str | None = None
     reasoning_duration_ms: int | None = None
     reasoning_tokens: int | None = None
     tool: str | None = None

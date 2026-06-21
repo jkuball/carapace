@@ -178,6 +178,7 @@ export interface HistoryMessage {
   attachments?: Attachment[];
   final_status?: "success" | "warning";
   event_index?: number;
+  timestamp?: string;
   reasoning_duration_ms?: number;
   reasoning_tokens?: number;
   tool?: string;
@@ -522,6 +523,8 @@ export type ChatMessage =
       content: string;
       attachments?: Attachment[];
       compaction?: CompactionAnnotation;
+      timestamp?: string;
+      turnIndex?: number;
     }
   | {
       kind: "assistant";
@@ -529,6 +532,8 @@ export type ChatMessage =
       eventIndex?: number;
       finalStatus?: "success" | "warning";
       compaction?: CompactionAnnotation;
+      timestamp?: string;
+      turnIndex?: number;
     }
   | {
       kind: "compaction_summary";
