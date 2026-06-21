@@ -270,6 +270,16 @@ class SessionTurnMixin(SessionTurnHost):
             active._pending_sends.add(task)
             task.add_done_callback(active._pending_sends.discard)
 
+        async def _assistant_text_cb(text: str) -> None:
+            # Intermediate narration (text the model emitted before a tool call). Persist it as a
+            # partial assistant event so reload renders it between the tool groups; the turn's final
+            # answer is still written once at finalization. ``partial`` keeps turn-boundary detection
+            # (reset/fork/compaction) anchored to the final assistant event only.
+            self._session_mgr.append_events(
+                session_id,
+                [{"role": "assistant", "content": text, "partial": True}],
+            )
+
         try:
             async with active.lock:
                 if active.security:
@@ -300,6 +310,7 @@ class SessionTurnMixin(SessionTurnHost):
                     send_approval_request=_send_approval,
                     collect_approvals=_collect_approvals,
                     on_messages_snapshot=_set_latest_messages,
+                    on_assistant_text=_assistant_text_cb,
                 )
 
                 await self._finalize_successful_turn(
@@ -492,6 +503,7 @@ class SessionTurnMixin(SessionTurnHost):
         send_approval_request: Callable[[ApprovalRequest], Awaitable[None]],
         collect_approvals: Callable[[set[str]], Awaitable[dict[str, bool | ToolDenied]]],
         on_messages_snapshot: Callable[[list[Any]], None],
+        on_assistant_text: Callable[[str], Awaitable[None]],
     ) -> TurnExecutionResult:
         async with self._llm_semaphore:
             with self.llm_request_recording(active):
@@ -504,6 +516,7 @@ class SessionTurnMixin(SessionTurnHost):
                     collect_approvals=collect_approvals,
                     on_token=partial(self._handle_token_chunk, active),
                     on_thinking_token=partial(self._handle_thinking_token_chunk, active),
+                    on_assistant_text=on_assistant_text,
                     on_messages_snapshot=lambda snapshot: on_messages_snapshot(snapshot),
                     before_llm_call=lambda: self._assert_llm_budget_available(active),
                     get_usage_limits=lambda: self._remaining_usage_limits(active),

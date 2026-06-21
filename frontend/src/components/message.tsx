@@ -68,6 +68,8 @@ function shortModel(model: string): string {
 function TurnMeta({
   timestamp,
   turnIndex,
+  messageIndexInTurn,
+  turnMessageCount,
   turnDurationMs,
   toolCount,
   model,
@@ -78,6 +80,8 @@ function TurnMeta({
 }: {
   timestamp?: string;
   turnIndex?: number;
+  messageIndexInTurn?: number;
+  turnMessageCount?: number;
   turnDurationMs?: number;
   toolCount?: number;
   model?: string;
@@ -97,7 +101,11 @@ function TurnMeta({
     ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
     : "";
   const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
-  const tipParts = [turnLabel, abs];
+  const posLabel =
+    messageIndexInTurn != null && turnMessageCount != null && turnMessageCount > 1
+      ? t("messageInTurn", { i: messageIndexInTurn, n: turnMessageCount })
+      : "";
+  const tipParts = [posLabel, turnLabel, abs];
   if (typeof turnDurationMs === "number") tipParts.push(formatDuration(turnDurationMs, locale, false));
   if (typeof toolCount === "number" && toolCount > 0) tipParts.push(t("tools", { count: toolCount }));
   if (model) tipParts.push(shortModel(model));
@@ -318,11 +326,14 @@ function MessageActions({
   onReset,
   timestamp,
   turnIndex,
+  messageIndexInTurn,
+  turnMessageCount,
   turnDurationMs,
   toolCount,
   model,
   inputTokens,
   outputTokens,
+  hideMetaWhenRecent,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -334,11 +345,14 @@ function MessageActions({
   onReset?: () => void;
   timestamp?: string;
   turnIndex?: number;
+  messageIndexInTurn?: number;
+  turnMessageCount?: number;
   turnDurationMs?: number;
   toolCount?: number;
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  hideMetaWhenRecent?: boolean;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
@@ -369,11 +383,14 @@ function MessageActions({
       <TurnMeta
         timestamp={timestamp}
         turnIndex={turnIndex}
+        messageIndexInTurn={messageIndexInTurn}
+        turnMessageCount={turnMessageCount}
         turnDurationMs={turnDurationMs}
         toolCount={toolCount}
         model={model}
         inputTokens={inputTokens}
         outputTokens={outputTokens}
+        hideWhenRecent={hideMetaWhenRecent}
         className="ml-auto"
       />
     </div>
@@ -581,11 +598,18 @@ export function Message({
               </div>
             ) : null}
           </div>
-          <TurnMeta
+          <MessageActions
+            copyText={message.content}
+            canFork={canFork}
+            canRetry={canRetry}
+            canReset={canReset}
+            disabled={actionDisabled}
+            onFork={onFork}
+            onRetry={onRetry}
+            onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
-            hideWhenRecent
-            className="mt-1"
+            hideMetaWhenRecent
           />
         </div>
       );
@@ -608,6 +632,8 @@ export function Message({
             onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
+            messageIndexInTurn={message.messageIndexInTurn}
+            turnMessageCount={message.turnMessageCount}
             turnDurationMs={message.turnDurationMs}
             toolCount={message.toolCount}
             model={message.model}

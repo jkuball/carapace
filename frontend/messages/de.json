@@ -857,6 +857,7 @@
     },
     "turnMeta": {
         "turn": "Runde {n}",
+        "messageInTurn": "Nachricht {i} von {n}",
         "tools": "{count, plural, one {# Tool} other {# Tools}}",
         "tokens": "{in} rein, {out} raus"
     },

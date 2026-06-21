@@ -513,7 +513,27 @@ function findLaterEscalationDecision(
 }
 
 function isTurnTerminalMessage(message: ChatMessage): boolean {
-  return message.kind === "assistant" || (message.kind === "error" && message.turnTerminal === true);
+  // A turn ends at its final assistant answer, never at intermediate narration (partial), so
+  // reset/fork/retry stay anchored to real turn boundaries (matching the backend event log).
+  return (
+    (message.kind === "assistant" && !message.partial)
+    || (message.kind === "error" && message.turnTerminal === true)
+  );
+}
+
+/**
+ * The message index of the assistant answer that terminates the turn enclosing `from` (the nearest
+ * turn-terminal at or after it), or undefined while that turn is still in progress. Lets any message
+ * — a user prompt, an intermediate bubble — drive fork/reset, snapping to its turn boundary.
+ */
+function enclosingTurnTerminalMessageIndex(
+  messages: ChatMessage[],
+  from: number,
+): number | undefined {
+  for (let index = from; index < messages.length; index++) {
+    if (isTurnTerminalMessage(messages[index])) return index;
+  }
+  return undefined;
 }
 
 function completedTurnMessageIndices(messages: ChatMessage[]): number[] {
@@ -893,6 +913,7 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       continue;
     }
 
+    const isPartial = entry.partial === true;
     const durationMs =
       turnStartTs && entry.timestamp
         ? new Date(entry.timestamp).getTime() - new Date(turnStartTs).getTime()
@@ -905,14 +926,35 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       compaction: entry.compaction,
       timestamp: entry.timestamp,
       turnIndex: turn,
+      partial: isPartial || undefined,
+      // Whole-turn stats belong on the final answer, not on intermediate narration.
       turnDurationMs:
-        typeof durationMs === "number" && durationMs >= 0 ? durationMs : undefined,
-      toolCount: turnToolCount || undefined,
-      model: entry.usage?.model ?? undefined,
-      inputTokens: entry.usage?.input_tokens,
-      outputTokens: entry.usage?.output_tokens,
+        !isPartial && typeof durationMs === "number" && durationMs >= 0 ? durationMs : undefined,
+      toolCount: !isPartial ? turnToolCount || undefined : undefined,
+      model: !isPartial ? (entry.usage?.model ?? undefined) : undefined,
+      inputTokens: !isPartial ? entry.usage?.input_tokens : undefined,
+      outputTokens: !isPartial ? entry.usage?.output_tokens : undefined,
     });
   }
+
+  // Number assistant bubbles within each turn ("message 2 of 3") for the metadata tooltip.
+  const assistantIdxByTurn = new Map<number, number[]>();
+  messages.forEach((m, i) => {
+    if (m.kind === "assistant" && m.turnIndex != null) {
+      const arr = assistantIdxByTurn.get(m.turnIndex) ?? [];
+      arr.push(i);
+      assistantIdxByTurn.set(m.turnIndex, arr);
+    }
+  });
+  assistantIdxByTurn.forEach((indices) => {
+    indices.forEach((i, k) => {
+      const m = messages[i];
+      if (m.kind === "assistant") {
+        m.messageIndexInTurn = k + 1;
+        m.turnMessageCount = indices.length;
+      }
+    });
+  });
 
   return groupFoldedMessages(groupChildToolCalls(messages));
 }
@@ -1267,16 +1309,20 @@ export function ChatView({
                 updated.push({ kind: "thinking", content: msg.thinking, ...thinkingMeta });
               }
             }
-            // Replace streaming message with the final content
-            const streamIdx = updated.findLastIndex((m) => m.kind === "streaming");
-            if (streamIdx !== -1) {
-              updated[streamIdx] = {
-                kind: "assistant",
-                content: msg.content,
-                finalStatus: msg.final_status,
-              };
-            } else {
+            // Finalize every streaming bubble. Intermediate segments (text emitted before a tool
+            // call) keep their own content and become partial assistant messages; the last one
+            // carries the authoritative final answer. Matches what reload rebuilds from events.
+            const lastStreamIdx = updated.findLastIndex((m) => m.kind === "streaming");
+            if (lastStreamIdx === -1) {
               updated.push({ kind: "assistant", content: msg.content, finalStatus: msg.final_status });
+            } else {
+              for (let i = 0; i < updated.length; i++) {
+                if (updated[i].kind !== "streaming") continue;
+                updated[i] =
+                  i === lastStreamIdx
+                    ? { kind: "assistant", content: msg.content, finalStatus: msg.final_status }
+                    : { kind: "assistant", content: (updated[i] as { content: string }).content, partial: true };
+              }
             }
             return updated;
           });
@@ -1678,11 +1724,15 @@ export function ChatView({
 
   async function resolveTurnTargetEventIndex(messageIndex: number): Promise<number | undefined> {
     const currentMessages = messages;
+    // Snap any message (user prompt, intermediate bubble) to the terminal of its enclosing turn —
+    // reset/fork operate at turn boundaries, never mid-turn.
+    const terminalIndex = enclosingTurnTerminalMessageIndex(currentMessages, messageIndex);
+    if (terminalIndex == null) return undefined;
     const localTerminalIndices = completedTurnMessageIndices(currentMessages);
-    const localTurnOrdinal = localTerminalIndices.indexOf(messageIndex);
+    const localTurnOrdinal = localTerminalIndices.indexOf(terminalIndex);
     if (localTurnOrdinal === -1) return undefined;
 
-    let targetEventIndex = eventIndexForMessage(currentMessages[messageIndex]);
+    let targetEventIndex = eventIndexForMessage(currentMessages[terminalIndex]);
 
     if (targetEventIndex == null) {
       const history = await fetchHistory(server, token, sessionId);
@@ -1701,11 +1751,14 @@ export function ChatView({
     if (waiting || status !== "connected") return;
 
     const currentMessages = messages;
+    // Reset keeps the whole enclosing turn, so the optimistic slice ends at its terminal, not at
+    // the clicked (possibly mid-turn) message.
+    const terminalIndex = enclosingTurnTerminalMessageIndex(currentMessages, messageIndex);
     setTurnActionBusyIndex(messageIndex);
     try {
       const targetEventIndex = await resolveTurnTargetEventIndex(messageIndex);
 
-      if (targetEventIndex == null) {
+      if (targetEventIndex == null || terminalIndex == null) {
         setMessages((prev) => [
           ...prev,
           { kind: "error", detail: t("errors.resetTarget") },
@@ -1715,7 +1768,7 @@ export function ChatView({
 
       resetRollbackRef.current = currentMessages;
       send({ type: "reset_to_turn", event_index: targetEventIndex });
-      setMessages((prev) => prev.slice(0, messageIndex + 1));
+      setMessages((prev) => prev.slice(0, terminalIndex + 1));
     } finally {
       setTurnActionBusyIndex(null);
     }
@@ -2661,6 +2714,15 @@ export function ChatView({
               {(() => {
                 const renderMessage = (i: number) => {
                   const msg = messages[i];
+                  // Expose actions on every conversational bubble; fork/reset snap to the enclosing
+                  // turn boundary, retry re-runs the latest turn.
+                  const terminalIdx = enclosingTurnTerminalMessageIndex(messages, i);
+                  const inCompletedTurn = terminalIdx != null;
+                  const isLatestTurn = inCompletedTurn && terminalIdx === latestTerminalIndex;
+                  const actionable = msg.kind === "user" || msg.kind === "assistant";
+                  const canFork = actionable && inCompletedTurn;
+                  const canReset = actionable && inCompletedTurn && !isLatestTurn;
+                  const canRetry = actionable && isLatestTurn;
                   return (
                     <Message
                       key={i}
@@ -2668,16 +2730,16 @@ export function ChatView({
                       server={server}
                       sessionId={sessionId}
                       activeLlmActivity={llmActivity}
-                      canFork={msg.kind === "assistant"}
-                      canRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg)}
-                      canReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg)}
+                      canFork={canFork}
+                      canRetry={canRetry}
+                      canReset={canReset}
                       actionDisabled={turnActionsDisabled}
                       onApproval={handleApproval}
                       onEscalation={handleEscalation}
                       onCredentialApproval={handleCredentialEscalation}
-                      onFork={msg.kind === "assistant" ? () => void handleFork(i) : undefined}
-                      onRetry={i === latestTerminalIndex && isTurnTerminalMessage(msg) ? handleRetry : undefined}
-                      onReset={i !== latestTerminalIndex && isTurnTerminalMessage(msg) ? () => void handleReset(i) : undefined}
+                      onFork={canFork ? () => void handleFork(i) : undefined}
+                      onRetry={canRetry ? handleRetry : undefined}
+                      onReset={canReset ? () => void handleReset(i) : undefined}
                     />
                   );
                 };

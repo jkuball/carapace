@@ -180,6 +180,7 @@ export interface HistoryMessage {
   event_index?: number;
   timestamp?: string;
   usage?: { model?: string | null; input_tokens?: number; output_tokens?: number };
+  partial?: boolean;
   reasoning_duration_ms?: number;
   reasoning_tokens?: number;
   tool?: string;
@@ -540,6 +541,11 @@ export type ChatMessage =
       model?: string;
       inputTokens?: number;
       outputTokens?: number;
+      /** Intermediate narration emitted before a tool call, not the turn's final answer. */
+      partial?: boolean;
+      /** 1-based position of this assistant bubble within its turn, and the turn's total. */
+      messageIndexInTurn?: number;
+      turnMessageCount?: number;
     }
   | {
       kind: "compaction_summary";
