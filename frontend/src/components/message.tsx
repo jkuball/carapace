@@ -334,6 +334,8 @@ function MessageActions({
   inputTokens,
   outputTokens,
   hideMetaWhenRecent,
+  mirrored,
+  className,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -353,14 +355,17 @@ function MessageActions({
   inputTokens?: number;
   outputTokens?: number;
   hideMetaWhenRecent?: boolean;
+  /** Mirror layout for right-aligned (user) messages: meta on the left, buttons on the right. */
+  mirrored?: boolean;
+  className?: string;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
   const hasMeta = Boolean(timestamp) || turnIndex != null;
   if (!hasCopy && !canFork && !canRetry && !canReset && !hasMeta) return null;
 
-  return (
-    <div className="mt-2 flex items-center gap-2">
+  const buttons = (
+    <div className="flex items-center gap-2">
       <MessageCopyButton text={copyText ?? ""} className="border border-border/70 p-1.5" />
       <MessageActionButton
         label={t("actions.fork")}
@@ -380,19 +385,38 @@ function MessageActions({
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
       />
-      <TurnMeta
-        timestamp={timestamp}
-        turnIndex={turnIndex}
-        messageIndexInTurn={messageIndexInTurn}
-        turnMessageCount={turnMessageCount}
-        turnDurationMs={turnDurationMs}
-        toolCount={toolCount}
-        model={model}
-        inputTokens={inputTokens}
-        outputTokens={outputTokens}
-        hideWhenRecent={hideMetaWhenRecent}
-        className="ml-auto"
-      />
+    </div>
+  );
+  const meta = (
+    <TurnMeta
+      timestamp={timestamp}
+      turnIndex={turnIndex}
+      messageIndexInTurn={messageIndexInTurn}
+      turnMessageCount={turnMessageCount}
+      turnDurationMs={turnDurationMs}
+      toolCount={toolCount}
+      model={model}
+      inputTokens={inputTokens}
+      outputTokens={outputTokens}
+      hideWhenRecent={hideMetaWhenRecent}
+    />
+  );
+
+  // Buttons and meta sit at opposite ends; the spacer between them spans the row width. Mirrored
+  // (user) rows put meta first / buttons last so the controls stay under the right-aligned bubble.
+  return (
+    <div className={cn("mt-2 flex items-center gap-2", className)}>
+      {mirrored ? (
+        <>
+          {meta}
+          <div className="ml-auto">{buttons}</div>
+        </>
+      ) : (
+        <>
+          {buttons}
+          <div className="ml-auto">{meta}</div>
+        </>
+      )}
     </div>
   );
 }
@@ -558,9 +582,10 @@ export function Message({
     case "user":
       return (
         <div className="group flex flex-col items-end">
+          <div className="flex w-fit max-w-full flex-col items-end md:max-w-[85%]">
           <div
             className={cn(
-              "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
+              "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground",
             )}
           >
             {message.content ? <MarkdownContent content={message.content} /> : null}
@@ -610,7 +635,10 @@ export function Message({
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
             hideMetaWhenRecent
+            mirrored
+            className="w-full"
           />
+          </div>
         </div>
       );
 
