@@ -89,3 +89,4 @@ build/
 .cursor/plans/
 /plans
 .pnpm-store
+.claude/worktrees
