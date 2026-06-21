@@ -858,7 +858,7 @@
     "turnMeta": {
         "turn": "turn {n}",
         "tools": "{count, plural, one {# tool} other {# tools}}",
-        "tokens": "{in}→{out} tok"
+        "tokens": "{in} in, {out} out"
     },
     "jobs": {
         "settingsSections": "Settings sections",
