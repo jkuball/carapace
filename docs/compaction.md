@@ -40,11 +40,13 @@ re-running the tool.
 /compact fold       Only fold old turns (default K)
 /compact fold 8     Only fold, keeping the last 8 turns
 /compact tools      Only summarize large tool outputs in the kept region
+/compact tools 1    Same, but keep only the newest 1 turn's tool outputs verbatim
 ```
 
 `K` is a count of completed turns to keep verbatim. When omitted, `/compact` (and `/compact fold`)
 use the configured default `keep_turns` (see Configuration below); passing a number overrides it for
-that run only. The reply shows tokens before/after and a breakdown of what was compacted.
+that run only. For `/compact tools [N]`, `N` overrides `verbatim_tool_turns` (the hot-zone size) for
+that run instead. The reply shows tokens before/after and a breakdown of what was compacted.
 
 ## Configuration
 

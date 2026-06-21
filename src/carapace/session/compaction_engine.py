@@ -66,6 +66,7 @@ class SessionCompactionMixin:
         *,
         mode: CompactionMode = "all",
         keep_turns: int | None = None,
+        verbatim_tool_turns: int | None = None,
     ) -> CompactionReport:
         session_id = active.state.session_id
         cfg = self._config.agent.compaction
@@ -88,7 +89,9 @@ class SessionCompactionMixin:
             )
 
         if mode in ("all", "tools"):
-            history = await self._do_tool_returns(active, history, events, model_name=model_name, report=report)
+            history = await self._do_tool_returns(
+                active, history, events, model_name=model_name, report=report, verbatim_tool_turns=verbatim_tool_turns
+            )
 
         report.after_tokens = count_message_tokens(history, model_name=model_name)
 
@@ -186,19 +189,22 @@ class SessionCompactionMixin:
         *,
         model_name: str,
         report: CompactionReport,
+        verbatim_tool_turns: int | None = None,
     ) -> list[Any]:
         # Only compact tool returns in the kept region, never inside a fold block, and never inside
-        # the verbatim hot zone (the newest `verbatim_tool_turns` completed turns).
+        # the verbatim hot zone (the newest `verbatim_tool_turns` completed turns). The hot-zone size
+        # comes from the config unless the caller overrides it (e.g. `/compact tools N`).
         cfg = self._config.agent.compaction
+        verbatim = cfg.verbatim_tool_turns if verbatim_tool_turns is None else max(0, verbatim_tool_turns)
         _lead, rest = split_lead_folds(history)
         rest_offset = len(history) - len(rest)
         turn_ends = completed_model_turn_end_indexes(rest)
-        if cfg.verbatim_tool_turns <= 0:
+        if verbatim <= 0:
             cut = len(rest)
-        elif len(turn_ends) <= cfg.verbatim_tool_turns:
+        elif len(turn_ends) <= verbatim:
             return history  # the entire kept region is within the verbatim hot zone
         else:
-            cut = turn_ends[len(turn_ends) - cfg.verbatim_tool_turns - 1] + 1
+            cut = turn_ends[len(turn_ends) - verbatim - 1] + 1
         eligible_indexes = set(range(rest_offset, rest_offset + cut))
         candidates = find_tool_return_candidates(
             history, floor_tokens=cfg.tool_output_floor_tokens, model_name=model_name, within_indexes=eligible_indexes

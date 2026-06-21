@@ -36,7 +36,7 @@ SLASH_COMMANDS: list[dict[str, str]] = [
     {"command": "/usage", "description": "Show token usage for this session"},
     {
         "command": "/compact",
-        "description": "Compact history to save context. /compact [K], /compact fold [K], or /compact tools",
+        "description": "Compact history to save context. /compact [K], /compact fold [K], or /compact tools [N]",
     },
     {
         "command": "/uncompact",

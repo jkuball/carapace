@@ -310,6 +310,33 @@ def test_compact_tools_keeps_verbatim_hot_zone(tmp_path: Path, db_factory) -> No
     asyncio.run(_run())
 
 
+def test_compact_tools_verbatim_override(tmp_path: Path, db_factory) -> None:
+    """`/compact tools N` overrides the configured hot zone for that run."""
+
+    async def _run() -> None:
+        with _patch_sentinel():
+            engine = _make_engine(tmp_path, session_factory=db_factory)
+        engine._config.agent.compaction.verbatim_tool_turns = 4  # config would shield everything
+        sid = engine.session_mgr.create_session(user="thies").session_id
+        active = engine.get_or_activate(sid)
+        _seed(engine, sid, 5, tool_output="line\n" * 3000)
+
+        # Override to 1: only the newest turn stays verbatim, so call-0..call-3 compact.
+        await engine.run_compaction(active, mode="tools", verbatim_tool_turns=1)
+
+        compacted_ids = {
+            p.tool_call_id
+            for m in engine.session_mgr.load_history(sid)
+            if isinstance(m, ModelRequest)
+            for p in m.parts
+            if isinstance(p, ToolReturnPart) and tool_return_is_compacted(p)
+        }
+        assert "call-4" not in compacted_ids
+        assert {"call-0", "call-1", "call-2", "call-3"} <= compacted_ids
+
+    asyncio.run(_run())
+
+
 def test_compact_command_parsing(tmp_path: Path, db_factory) -> None:
     async def _run() -> None:
         with _patch_sentinel():
@@ -323,7 +350,12 @@ def test_compact_command_parsing(tmp_path: Path, db_factory) -> None:
         assert res["data"]["mode"] == "fold"
         assert res["data"]["turns_folded"] == 6
 
-        bad = await engine.handle_slash_command(sid, "/compact tools 5")
+        # `/compact tools N` is valid — N is the verbatim hot-zone size.
+        ok = await engine.handle_slash_command(sid, "/compact tools 5")
+        assert ok is not None and ok["command"] == "compact"
+        assert ok["data"]["mode"] == "tools" and "error" not in ok["data"]
+
+        bad = await engine.handle_slash_command(sid, "/compact tools xyz")
         assert "error" in bad["data"]
 
     asyncio.run(_run())

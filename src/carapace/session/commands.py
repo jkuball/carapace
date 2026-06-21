@@ -26,7 +26,12 @@ class SessionCommandHost(Protocol):
         self, active: ActiveSession, arg: str, *, slash_line: str
     ) -> dict[str, Any]: ...
     async def run_compaction(
-        self, active: ActiveSession, *, mode: Literal["all", "fold", "tools"], keep_turns: int | None
+        self,
+        active: ActiveSession,
+        *,
+        mode: Literal["all", "fold", "tools"],
+        keep_turns: int | None,
+        verbatim_tool_turns: int | None = None,
     ) -> Any: ...
     async def run_uncompaction(self, active: ActiveSession) -> dict[str, Any]: ...
     def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]: ...
@@ -61,7 +66,12 @@ class SessionCommandMixin:
             self, active: ActiveSession, arg: str, *, slash_line: str
         ) -> dict[str, Any]: ...
         async def run_compaction(
-            self, active: ActiveSession, *, mode: Literal["all", "fold", "tools"], keep_turns: int | None
+            self,
+            active: ActiveSession,
+            *,
+            mode: Literal["all", "fold", "tools"],
+            keep_turns: int | None,
+            verbatim_tool_turns: int | None = None,
         ) -> Any: ...
         async def run_uncompaction(self, active: ActiveSession) -> dict[str, Any]: ...
         def _skill_catalog_for_session(self, session_id: str) -> list[SkillInfo]: ...
@@ -178,18 +188,21 @@ class SessionCommandMixin:
     async def _handle_compact_command(self, active: ActiveSession, arg: str) -> dict[str, Any]:
         mode: Literal["all", "fold", "tools"] = "all"
         keep: int | None = None
+        verbatim: int | None = None
+        usage = "Usage: /compact [K], /compact fold [K], or /compact tools [N]"
         tokens = arg.split()
         if tokens and tokens[0].lower() in ("fold", "tools"):
             mode = tokens[0].lower()  # type: ignore[assignment]
             tokens = tokens[1:]
         if tokens:
-            if mode == "tools" or not tokens[0].isdigit():
-                return {
-                    "command": "compact",
-                    "data": {"error": "Usage: /compact [K], /compact fold [K], or /compact tools"},
-                }
-            keep = int(tokens[0])
-        report = await self.run_compaction(active, mode=mode, keep_turns=keep)
+            if not tokens[0].isdigit():
+                return {"command": "compact", "data": {"error": usage}}
+            # For `tools` the count is the verbatim hot-zone size; otherwise it is keep-turns.
+            if mode == "tools":
+                verbatim = int(tokens[0])
+            else:
+                keep = int(tokens[0])
+        report = await self.run_compaction(active, mode=mode, keep_turns=keep, verbatim_tool_turns=verbatim)
         return {"command": "compact", "data": report.model_dump(mode="json")}
 
     def _handle_budget_command(self, active: ActiveSession, parts: list[str]) -> dict[str, Any]:
