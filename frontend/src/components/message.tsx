@@ -334,7 +334,6 @@ function MessageActions({
   inputTokens,
   outputTokens,
   hideMetaWhenRecent,
-  mirrored,
   className,
 }: {
   copyText?: string;
@@ -355,8 +354,6 @@ function MessageActions({
   inputTokens?: number;
   outputTokens?: number;
   hideMetaWhenRecent?: boolean;
-  /** Mirror layout for right-aligned (user) messages: meta on the left, buttons on the right. */
-  mirrored?: boolean;
   className?: string;
 }) {
   const t = useTranslations("message");
@@ -364,8 +361,9 @@ function MessageActions({
   const hasMeta = Boolean(timestamp) || turnIndex != null;
   if (!hasCopy && !canFork && !canRetry && !canReset && !hasMeta) return null;
 
-  const buttons = (
-    <div className="flex items-center gap-2">
+  // Controls first, then the meta pushed to the far end of the row (spacer between spans the width).
+  return (
+    <div className={cn("mt-2 flex items-center gap-2", className)}>
       <MessageCopyButton text={copyText ?? ""} className="border border-border/70 p-1.5" />
       <MessageActionButton
         label={t("actions.fork")}
@@ -385,38 +383,19 @@ function MessageActions({
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
       />
-    </div>
-  );
-  const meta = (
-    <TurnMeta
-      timestamp={timestamp}
-      turnIndex={turnIndex}
-      messageIndexInTurn={messageIndexInTurn}
-      turnMessageCount={turnMessageCount}
-      turnDurationMs={turnDurationMs}
-      toolCount={toolCount}
-      model={model}
-      inputTokens={inputTokens}
-      outputTokens={outputTokens}
-      hideWhenRecent={hideMetaWhenRecent}
-    />
-  );
-
-  // Buttons and meta sit at opposite ends; the spacer between them spans the row width. Mirrored
-  // (user) rows put meta first / buttons last so the controls stay under the right-aligned bubble.
-  return (
-    <div className={cn("mt-2 flex items-center gap-2", className)}>
-      {mirrored ? (
-        <>
-          {meta}
-          <div className="ml-auto">{buttons}</div>
-        </>
-      ) : (
-        <>
-          {buttons}
-          <div className="ml-auto">{meta}</div>
-        </>
-      )}
+      <TurnMeta
+        timestamp={timestamp}
+        turnIndex={turnIndex}
+        messageIndexInTurn={messageIndexInTurn}
+        turnMessageCount={turnMessageCount}
+        turnDurationMs={turnDurationMs}
+        toolCount={toolCount}
+        model={model}
+        inputTokens={inputTokens}
+        outputTokens={outputTokens}
+        hideWhenRecent={hideMetaWhenRecent}
+        className="ml-auto"
+      />
     </div>
   );
 }
@@ -635,7 +614,6 @@ export function Message({
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
             hideMetaWhenRecent
-            mirrored
             className="w-full"
           />
           </div>
