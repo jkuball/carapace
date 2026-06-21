@@ -32,11 +32,6 @@ function formatDuration(ms: number, locale: string, precise = true): string {
   return `${Math.round(ms / 1_000)}s`;
 }
 
-function turnAgeMs(iso: string): number {
-  const age = Date.now() - new Date(iso).getTime();
-  return Number.isNaN(age) ? Infinity : age;
-}
-
 function formatRelativeTime(iso: string, locale: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -75,7 +70,6 @@ function TurnMeta({
   model,
   inputTokens,
   outputTokens,
-  hideWhenRecent,
   className,
 }: {
   timestamp?: string;
@@ -87,15 +81,11 @@ function TurnMeta({
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
-  hideWhenRecent?: boolean;
   className?: string;
 }) {
   const { locale } = useAppLocale();
   const t = useTranslations("turnMeta");
   if (!timestamp && turnIndex == null) return null;
-  // User turns stay bare for ~10min so a reload never decorates a message a live session left
-  // blank; assistant turns always show (the work is done, the timing is the point).
-  if (hideWhenRecent && timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
   const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
   const abs = timestamp
     ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
@@ -333,7 +323,6 @@ function MessageActions({
   model,
   inputTokens,
   outputTokens,
-  hideMetaWhenRecent,
   className,
 }: {
   copyText?: string;
@@ -353,7 +342,6 @@ function MessageActions({
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
-  hideMetaWhenRecent?: boolean;
   className?: string;
 }) {
   const t = useTranslations("message");
@@ -393,7 +381,6 @@ function MessageActions({
         model={model}
         inputTokens={inputTokens}
         outputTokens={outputTokens}
-        hideWhenRecent={hideMetaWhenRecent}
         className="ml-auto"
       />
     </div>
@@ -613,7 +600,6 @@ export function Message({
             onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
-            hideMetaWhenRecent
             className="w-full"
           />
           </div>
