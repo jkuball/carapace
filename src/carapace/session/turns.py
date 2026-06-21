@@ -556,9 +556,17 @@ class SessionTurnMixin(SessionTurnHost):
         self._session_mgr.save_state(active.state)
         self._save_turn_progress(session_id, active)
         await self._refresh_sandbox_snapshot_after_turn(session_id)
+        usage_payload = self._turn_usage_payload(active) or TurnUsage()
         assistant_event: dict[str, Any] = {"role": "assistant", "content": output}
         if final_status is not None:
             assistant_event["final_status"] = final_status
+        # Persist the bits the turn tooltip shows after reload (live TurnUsage is broadcast, not stored).
+        if usage_payload.model or usage_payload.input_tokens or usage_payload.output_tokens:
+            assistant_event["usage"] = {
+                "model": usage_payload.model,
+                "input_tokens": usage_payload.input_tokens,
+                "output_tokens": usage_payload.output_tokens,
+            }
         self._session_mgr.append_events(session_id, [assistant_event])
         assistant_event_index = len(self._session_mgr.load_events(session_id)) - 1
 
@@ -580,7 +588,6 @@ class SessionTurnMixin(SessionTurnHost):
         if output.startswith("Unexpected agent output type:"):
             await self._broadcast(active, "on_error", output, turn_terminal=True)
         else:
-            usage_payload = self._turn_usage_payload(active) or TurnUsage()
             logger.info(
                 f"Turn done session={session_id} "
                 + f"model={usage_payload.model or active.agent_model_name or self._config.agent.model} "

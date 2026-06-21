@@ -50,17 +50,38 @@ function formatRelativeTime(iso: string, locale: string): string {
   return rtf.format(-Math.round(hr / 24), "day");
 }
 
+function formatTokens(n: number, locale: string): string {
+  if (n < 1_000) return new Intl.NumberFormat(locale).format(n);
+  const k = n / 1_000;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: k < 10 ? 1 : 0 }).format(k)}k`;
+}
+
+function shortModel(model: string): string {
+  return model.includes(":") ? model.slice(model.indexOf(":") + 1) : model;
+}
+
 /**
  * Turn/timestamp metadata. A muted relative time is always shown (small, low-contrast); the
- * absolute time + turn number sit behind its tooltip so the resting line stays unintrusive.
+ * absolute time, turn number, duration, tool count and model/token usage sit behind its tooltip
+ * so the resting line stays unintrusive.
  */
 function TurnMeta({
   timestamp,
   turnIndex,
+  turnDurationMs,
+  toolCount,
+  model,
+  inputTokens,
+  outputTokens,
   className,
 }: {
   timestamp?: string;
   turnIndex?: number;
+  turnDurationMs?: number;
+  toolCount?: number;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
   className?: string;
 }) {
   const { locale } = useAppLocale();
@@ -74,7 +95,19 @@ function TurnMeta({
     ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
     : "";
   const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
-  const tip = [turnLabel, abs].filter(Boolean).join(" · ");
+  const tipParts = [turnLabel, abs];
+  if (typeof turnDurationMs === "number") tipParts.push(formatDuration(turnDurationMs, locale, false));
+  if (typeof toolCount === "number" && toolCount > 0) tipParts.push(t("tools", { count: toolCount }));
+  if (model) tipParts.push(shortModel(model));
+  if (typeof inputTokens === "number" && typeof outputTokens === "number") {
+    tipParts.push(
+      t("tokens", {
+        in: formatTokens(inputTokens, locale),
+        out: formatTokens(outputTokens, locale),
+      }),
+    );
+  }
+  const tip = tipParts.filter(Boolean).join(" · ");
   return (
     <span
       title={tip}
@@ -283,6 +316,11 @@ function MessageActions({
   onReset,
   timestamp,
   turnIndex,
+  turnDurationMs,
+  toolCount,
+  model,
+  inputTokens,
+  outputTokens,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -294,6 +332,11 @@ function MessageActions({
   onReset?: () => void;
   timestamp?: string;
   turnIndex?: number;
+  turnDurationMs?: number;
+  toolCount?: number;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
@@ -321,7 +364,16 @@ function MessageActions({
         disabled={disabled}
         onClick={canReset ? onReset : undefined}
       />
-      <TurnMeta timestamp={timestamp} turnIndex={turnIndex} className="ml-auto" />
+      <TurnMeta
+        timestamp={timestamp}
+        turnIndex={turnIndex}
+        turnDurationMs={turnDurationMs}
+        toolCount={toolCount}
+        model={model}
+        inputTokens={inputTokens}
+        outputTokens={outputTokens}
+        className="ml-auto"
+      />
     </div>
   );
 }
@@ -549,6 +601,11 @@ export function Message({
             onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
+            turnDurationMs={message.turnDurationMs}
+            toolCount={message.toolCount}
+            model={message.model}
+            inputTokens={message.inputTokens}
+            outputTokens={message.outputTokens}
           />
         </div>
       );

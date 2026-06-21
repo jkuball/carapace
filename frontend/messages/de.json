@@ -856,7 +856,9 @@
         }
     },
     "turnMeta": {
-        "turn": "Runde {n}"
+        "turn": "Runde {n}",
+        "tools": "{count, plural, one {# Tool} other {# Tools}}",
+        "tokens": "{in}→{out} Tok"
     },
     "jobs": {
         "settingsSections": "Einstellungsbereiche",

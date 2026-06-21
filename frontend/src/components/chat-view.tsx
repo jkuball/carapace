@@ -635,12 +635,16 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
   const pendingToolCallIndices = new Map<string, number[]>();
   // Turn = one submitted (non-slash) user prompt plus the agent work that follows it.
   let turn = 0;
+  let turnStartTs: string | undefined;
+  let turnToolCount = 0;
 
   for (let index = 0; index < history.length; index++) {
     const entry = history[index];
 
     if (entry.role === "user") {
       if (!entry.content.startsWith("/")) turn++;
+      turnStartTs = entry.timestamp;
+      turnToolCount = 0;
       messages.push({
         kind: "user",
         content: entry.content,
@@ -651,6 +655,8 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       });
       continue;
     }
+
+    if (entry.role === "tool_call") turnToolCount++;
 
     if (entry.role === "tool_call") {
       const tool = entry.tool ?? "";
@@ -887,6 +893,10 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       continue;
     }
 
+    const durationMs =
+      turnStartTs && entry.timestamp
+        ? new Date(entry.timestamp).getTime() - new Date(turnStartTs).getTime()
+        : undefined;
     messages.push({
       kind: "assistant",
       content: entry.content,
@@ -895,6 +905,12 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       compaction: entry.compaction,
       timestamp: entry.timestamp,
       turnIndex: turn,
+      turnDurationMs:
+        typeof durationMs === "number" && durationMs >= 0 ? durationMs : undefined,
+      toolCount: turnToolCount || undefined,
+      model: entry.usage?.model ?? undefined,
+      inputTokens: entry.usage?.input_tokens,
+      outputTokens: entry.usage?.output_tokens,
     });
   }
 

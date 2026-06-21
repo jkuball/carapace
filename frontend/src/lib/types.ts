@@ -179,6 +179,7 @@ export interface HistoryMessage {
   final_status?: "success" | "warning";
   event_index?: number;
   timestamp?: string;
+  usage?: { model?: string | null; input_tokens?: number; output_tokens?: number };
   reasoning_duration_ms?: number;
   reasoning_tokens?: number;
   tool?: string;
@@ -534,6 +535,11 @@ export type ChatMessage =
       compaction?: CompactionAnnotation;
       timestamp?: string;
       turnIndex?: number;
+      turnDurationMs?: number;
+      toolCount?: number;
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
     }
   | {
       kind: "compaction_summary";
