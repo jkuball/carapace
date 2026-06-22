@@ -1279,8 +1279,9 @@ export function ChatView({
   const onMessage = useCallback(
     (msg: ServerMessage) => {
       switch (msg.type) {
-        case "done":
+        case "done": {
           resetRollbackRef.current = null;
+          let doneBaselineLen = 0;
           setMessages((prev) => {
             const updated = [...prev];
             const thinkingMeta = thinkingUsageMeta(msg.usage);
@@ -1334,14 +1335,29 @@ export function ChatView({
               // unconditionally to keep the live transcript in step with the reloaded event log.
               updated.push({ kind: "assistant", content: msg.content, finalStatus: msg.final_status });
             }
+            doneBaselineLen = updated.length;
             return updated;
           });
+          // The live transcript can't carry persisted-only metadata (timestamps, event indices,
+          // per-turn numbering, usage / tok-s). Re-project from the now-persisted event log so the
+          // finished turn shows the same data as a reload, preserving any tail that arrived since.
+          fetchHistory(server, token, sessionId)
+            .then((history) =>
+              setMessages((prev) => [
+                ...projectHistoryToMessages(history),
+                ...prev.slice(doneBaselineLen),
+              ]),
+            )
+            .catch(() => {
+              // Refetch failed — keep the live transcript; metadata fills in on the next reload.
+            });
           if (msg.usage) setUsage(msg.usage);
           void refreshSandbox();
           setLlmActivity(null);
           lastThinkingStartedAtRef.current = null;
           finishWaiting();
           break;
+        }
         case "tool_call": {
           const isGitPush = msg.tool === "git_push";
           if (!isGitPush) setWaiting(true); // agent is active (may restore after reconnect)
