@@ -1329,7 +1329,9 @@ export function ChatView({
                   ? { kind: "assistant", content: msg.content, finalStatus: msg.final_status }
                   : { kind: "assistant", content: (updated[i] as { content: string }).content, partial: true };
             }
-            if (!finalWasStreamed && (msg.content || lastStreamIdx === -1)) {
+            if (!finalWasStreamed) {
+              // The backend always persists a final assistant event (even empty), so append it
+              // unconditionally to keep the live transcript in step with the reloaded event log.
               updated.push({ kind: "assistant", content: msg.content, finalStatus: msg.final_status });
             }
             return updated;
