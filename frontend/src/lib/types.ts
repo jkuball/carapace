@@ -179,7 +179,13 @@ export interface HistoryMessage {
   final_status?: "success" | "warning";
   event_index?: number;
   timestamp?: string;
-  usage?: { model?: string | null; input_tokens?: number; output_tokens?: number };
+  usage?: {
+    model?: string | null;
+    input_tokens?: number;
+    output_tokens?: number;
+    ttft_ms?: number | null;
+    generation_ms?: number | null;
+  };
   partial?: boolean;
   reasoning_duration_ms?: number;
   reasoning_tokens?: number;
@@ -542,6 +548,8 @@ export type ChatMessage =
       model?: string;
       inputTokens?: number;
       outputTokens?: number;
+      ttftMs?: number;
+      generationMs?: number;
       /** Intermediate narration emitted before a tool call, not the turn's final answer. */
       partial?: boolean;
       /** 1-based position of this assistant bubble within its turn, and the turn's total. */

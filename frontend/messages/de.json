@@ -859,7 +859,9 @@
         "turn": "Runde {n}",
         "messageInTurn": "Nachricht {i} von {n}",
         "tools": "{count, plural, one {# Tool} other {# Tools}}",
-        "tokens": "{in} rein, {out} raus"
+        "tokens": "{in} rein, {out} raus",
+        "tps": "{n} Tok/s",
+        "ttft": "{value} TTFT"
     },
     "jobs": {
         "settingsSections": "Einstellungsbereiche",

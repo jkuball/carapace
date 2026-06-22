@@ -70,6 +70,8 @@ function TurnMeta({
   model,
   inputTokens,
   outputTokens,
+  ttftMs,
+  generationMs,
   className,
 }: {
   timestamp?: string;
@@ -81,6 +83,8 @@ function TurnMeta({
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  ttftMs?: number;
+  generationMs?: number;
   className?: string;
 }) {
   const { locale } = useAppLocale();
@@ -95,6 +99,12 @@ function TurnMeta({
     messageIndexInTurn != null && turnMessageCount != null && turnMessageCount > 1
       ? t("messageInTurn", { i: messageIndexInTurn, n: turnMessageCount })
       : "";
+  // tok/s = provider output tokens / generation seconds (tool waits excluded) — shown inline.
+  const tps =
+    typeof outputTokens === "number" && typeof generationMs === "number" && generationMs > 0
+      ? Math.round((outputTokens / generationMs) * 1000)
+      : undefined;
+
   const tipParts = [posLabel, turnLabel, abs];
   if (typeof turnDurationMs === "number") tipParts.push(formatDuration(turnDurationMs, locale, false));
   if (typeof toolCount === "number" && toolCount > 0) tipParts.push(t("tools", { count: toolCount }));
@@ -107,7 +117,10 @@ function TurnMeta({
       }),
     );
   }
+  if (typeof ttftMs === "number") tipParts.push(t("ttft", { value: formatDuration(ttftMs, locale, true) }));
   const tip = tipParts.filter(Boolean).join(" · ");
+
+  const visible = [rel || turnLabel, tps != null ? t("tps", { n: tps }) : ""].filter(Boolean).join(" · ");
   return (
     <span
       title={tip}
@@ -116,7 +129,7 @@ function TurnMeta({
         className,
       )}
     >
-      {rel || turnLabel}
+      {visible}
     </span>
   );
 }
@@ -323,6 +336,8 @@ function MessageActions({
   model,
   inputTokens,
   outputTokens,
+  ttftMs,
+  generationMs,
   className,
 }: {
   copyText?: string;
@@ -342,6 +357,8 @@ function MessageActions({
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  ttftMs?: number;
+  generationMs?: number;
   className?: string;
 }) {
   const t = useTranslations("message");
@@ -381,6 +398,8 @@ function MessageActions({
         model={model}
         inputTokens={inputTokens}
         outputTokens={outputTokens}
+        ttftMs={ttftMs}
+        generationMs={generationMs}
         className="ml-auto"
       />
     </div>
@@ -631,6 +650,8 @@ export function Message({
             model={message.model}
             inputTokens={message.inputTokens}
             outputTokens={message.outputTokens}
+            ttftMs={message.ttftMs}
+            generationMs={message.generationMs}
           />
         </div>
       );

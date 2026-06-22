@@ -859,7 +859,9 @@
         "turn": "turn {n}",
         "messageInTurn": "message {i} of {n}",
         "tools": "{count, plural, one {# tool} other {# tools}}",
-        "tokens": "{in} in, {out} out"
+        "tokens": "{in} in, {out} out",
+        "tps": "{n} tok/s",
+        "ttft": "{value} TTFT"
     },
     "jobs": {
         "settingsSections": "Settings sections",

@@ -935,6 +935,8 @@ function projectHistoryToMessages(history: HistoryMessage[]): ChatMessage[] {
       model: !isPartial ? (entry.usage?.model ?? undefined) : undefined,
       inputTokens: !isPartial ? entry.usage?.input_tokens : undefined,
       outputTokens: !isPartial ? entry.usage?.output_tokens : undefined,
+      ttftMs: !isPartial ? (entry.usage?.ttft_ms ?? undefined) : undefined,
+      generationMs: !isPartial ? (entry.usage?.generation_ms ?? undefined) : undefined,
     });
   }
 
