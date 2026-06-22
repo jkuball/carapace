@@ -178,7 +178,10 @@ async def run_agent_turn(
         if before_llm_call is not None:
             before_llm_call()
         current_thinking_parts.clear()
-        current_text_parts.clear()
+        # The just-finished sub-run ended in a deferred-tool request, not the final answer, so any
+        # text it buffered is intermediate narration (e.g. emitted after its last tool call) — flush
+        # it before the next run instead of dropping it.
+        await _flush_text_segment()
         usage_limits = get_usage_limits() if get_usage_limits is not None else None
         result = await agent.run(
             deps=deps,

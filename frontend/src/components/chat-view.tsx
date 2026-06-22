@@ -1312,20 +1312,25 @@ export function ChatView({
                 updated.push({ kind: "thinking", content: msg.thinking, ...thinkingMeta });
               }
             }
-            // Finalize every streaming bubble. Intermediate segments (text emitted before a tool
-            // call) keep their own content and become partial assistant messages; the last one
-            // carries the authoritative final answer. Matches what reload rebuilds from events.
+            // Finalize every streaming bubble (intermediate text emitted before a tool call) into a
+            // partial assistant message. The final answer was streamed only if the last streaming
+            // bubble is the tail — no tool call after it. Otherwise the answer arrived only in the
+            // done payload (e.g. a structured/unattended output that never streamed tokens); the
+            // streamed bubbles are all narration, so append the answer as its own message. Matches
+            // what reload rebuilds from events.
             const lastStreamIdx = updated.findLastIndex((m) => m.kind === "streaming");
-            if (lastStreamIdx === -1) {
+            const finalWasStreamed =
+              lastStreamIdx !== -1
+              && !updated.slice(lastStreamIdx + 1).some((m) => m.kind === "tool_call");
+            for (let i = 0; i < updated.length; i++) {
+              if (updated[i].kind !== "streaming") continue;
+              updated[i] =
+                finalWasStreamed && i === lastStreamIdx
+                  ? { kind: "assistant", content: msg.content, finalStatus: msg.final_status }
+                  : { kind: "assistant", content: (updated[i] as { content: string }).content, partial: true };
+            }
+            if (!finalWasStreamed && (msg.content || lastStreamIdx === -1)) {
               updated.push({ kind: "assistant", content: msg.content, finalStatus: msg.final_status });
-            } else {
-              for (let i = 0; i < updated.length; i++) {
-                if (updated[i].kind !== "streaming") continue;
-                updated[i] =
-                  i === lastStreamIdx
-                    ? { kind: "assistant", content: msg.content, finalStatus: msg.final_status }
-                    : { kind: "assistant", content: (updated[i] as { content: string }).content, partial: true };
-              }
             }
             return updated;
           });
