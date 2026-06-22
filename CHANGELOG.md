@@ -1,6 +1,103 @@
 # CHANGELOG
 
 
+## v0.145.0 (2026-06-22)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #235 from thiesgerken/feature/interleave-assistant-text
+  ([`f187e1f`](https://github.com/thiesgerken/carapace/commit/f187e1f531de2cbb29cbb81d96bd441b3901d939))
+
+- ✨ Interleave intermediate assistant text with tool calls
+  ([`f187e1f`](https://github.com/thiesgerken/carapace/commit/f187e1f531de2cbb29cbb81d96bd441b3901d939))
+
+- ✨ fix(chat): re-project transcript on turn done so metadata shows live
+  ([`7b26361`](https://github.com/thiesgerken/carapace/commit/7b26361be03b7eb6d84ebe14f570026bc7aca689))
+
+  The live WS path can't carry persisted-only metadata (timestamps, event indices, per-turn message numbering, usage/TTFT/tok-s), so the new stats only appeared after a manual reload. Re-fetch and re-project the event log when a turn completes — same pattern as the compact handler — preserving any tail that arrived during the async fetch.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(chat): per-turn tok/s, TTFT and provider token totals
+  ([`51ec671`](https://github.com/thiesgerken/carapace/commit/51ec6719e6a70ff0f87aa3d99a7554958b9ffd87))
+
+  Show generation speed (tok/s) next to the timestamp on the turn's final answer; TTFT and provider token totals (in/out) go in the tooltip.
+
+  aggregate_turn_generation sums the turn's completed agent requests using the model's reported token counts (never tiktoken surrogates). Generation time is the sum of per-request decode windows (first token → completion), so the gaps between requests — tool execution — are excluded; tok/s reflects decode speed, not tool latency. ttft_ms is the turn's first request's prompt→first-token wait. Persisted onto the assistant event so it survives reload.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(chat): guard overlapping on-done history refetches
+  ([`233e96d`](https://github.com/thiesgerken/carapace/commit/233e96dca155d51f6883cd1640ff260eecff3b39))
+
+  Sequence-guard the on-done re-projection so only the newest turn's refetch applies; a slower earlier response no longer merges against a newer messages state (which could duplicate or drop bubbles when turns finish close together).
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix(chat): always append final assistant bubble on done
+  ([`4d61ff3`](https://github.com/thiesgerken/carapace/commit/4d61ff3c3b56727da8b0a4dbf09532d1e00e3480))
+
+  The backend persists a final assistant event even when its content is empty, so the live done handler must append it unconditionally (when not streamed) — the earlier truthiness guard dropped it, diverging from the reloaded event log.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix(chat): don't lose pre-tool narration on done / in approval loop
+  ([`6f8c047`](https://github.com/thiesgerken/carapace/commit/6f8c0476364f9c0d53865157a89577e8c2fb9328))
+
+  Two Bugbot findings:
+
+  - Live `done` handler overwrote a pre-tool narration bubble with the final
+    answer when the answer never streamed (structured/unattended output). Now the
+    final answer replaces a streamed bubble only if it is the tail (no tool call
+    after it); otherwise narration stays partial and the answer is appended —
+    matching the persisted events on reload.
+  - The deferred-tool approval loop cleared buffered assistant text without
+    flushing, dropping narration emitted after a sub-run's last tool call. Flush
+    before clearing for the next sub-run.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 💄 UI/UX
+
+
+- 💄 fix(chat): drop comma between date and time in turn tooltip
+  ([`4081f70`](https://github.com/thiesgerken/carapace/commit/4081f70085106c076ccc4bddb4ebf49b50855193))
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 💄 fix(chat): always show user message timestamp
+  ([`78fa35f`](https://github.com/thiesgerken/carapace/commit/78fa35f2cf5608e73cf369decb98013744911020))
+
+  Drop the <10min hide rule; user timestamps now show like assistant ones.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 💄 fix(chat): user controls before timestamp (match assistant order)
+  ([`b70ae58`](https://github.com/thiesgerken/carapace/commit/b70ae580f66fefb1a3739adbfdc62cc563336d95))
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 💄 fix(chat): align user message controls like the assistant row
+  ([`0d9aaa3`](https://github.com/thiesgerken/carapace/commit/0d9aaa3347dd8ab9f54ec2913aac0e1efa5f2eab))
+
+  The user actions row shrink-wrapped inside the right-aligned column, so the buttons and timestamp clustered side by side instead of spanning the message. Wrap the bubble + actions in a bubble-width container and mirror the layout (timestamp left, controls right under the bubble), matching the assistant row.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- Merge remote-tracking branch 'origin' into feature/interleave-assistant-text
+  ([`e3abdcf`](https://github.com/thiesgerken/carapace/commit/e3abdcf82390112de75abe347a217289490ce0e8))
+
+- remove worktree gitlink
+  ([`43b8695`](https://github.com/thiesgerken/carapace/commit/43b869551aafbfff88ec844930ad392ac767bed8))
+
 ## v0.144.0 (2026-06-21)
 
 
@@ -12,6 +109,123 @@
 
 - ✨ Session compaction (manual /compact)
   ([`fb573e8`](https://github.com/thiesgerken/carapace/commit/fb573e8c0c54c51853e2287c5e0450e6900ac1b0))
+
+### 🗑️ Deprecations
+
+
+- 🗑️ chore(roadmap): remove completed compaction tasks from roadmap
+  ([`4dc962c`](https://github.com/thiesgerken/carapace/commit/4dc962c6a3b9d9680aff2609fb85c8e07f3a9179))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(compaction): satisfy pyrefly in uncompact attachment restore
+  ([`eb5eef7`](https://github.com/thiesgerken/carapace/commit/eb5eef7b8f95c772d34e08a0f708ba1d04de4084))
+
+  Reconstruct Attachment via model_validate instead of SimpleNamespace, which doesn't statically satisfy the AttachmentLike protocol (dynamic attrs).
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix(compaction): address PR review findings on /compact + /uncompact
+  ([`c6594bd`](https://github.com/thiesgerken/carapace/commit/c6594bdcab4460a2884f947520b4745c4fe4c1e7))
+
+  - transcript: restore provider tool_call_id (model_tool_call_id) on rebuilt
+    call+return so tool pairing survives /uncompact (fall back to carapace UUID)
+  - transcript: re-augment user prompts from persisted attachments on uncompact
+  - compaction: include NativeToolCallPart in fold-summary text (isinstance,
+    not exact class-name match)
+  - align platform/UI/docs compaction defaults to config (keep_turns 8,
+    verbatim_tool_turns 4)
+  - chat-view: preserve live messages arriving during the post-compact refetch
+    instead of clobbering them with an older snapshot
+  - command-result: render /uncompact's human-readable message instead of a
+    raw JSON blob
+  - message: pass compaction annotation to nested child tool calls so they show
+    the compacted badge
+  - tests: provider-id restore + attachment-preamble restore on rebuild
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+## v0.143.1 (2026-06-20)
+
+
+### Other
+
+
+- Merge pull request #228 from thiesgerken/renovate/pnpm-11.x
+  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
+
+- Merge pull request #232 from thiesgerken/renovate/actions-checkout-7.x
+  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
+
+- increase default values for keep_turns and verbatim_tool_turns
+  ([`8ee5f94`](https://github.com/thiesgerken/carapace/commit/8ee5f941c2e1b9821007774b6e591276311d7edd))
+
+- 🛡️ fix(session): warn when fork/reset truncates a desynced history
+  ([`ab704a6`](https://github.com/thiesgerken/carapace/commit/ab704a6351c81285ecefb4becddf649071a3f86a))
+
+  fork/reset slice the model history by the event-turn count and silently cap to whatever the history holds (min(turn_count, available)). If a session's model history ever lags its events, the copy/reset is quietly truncated to fewer turns with no signal — exactly the failure that produced a 1-turn copy of a 23-turn session. Log a loud warning when the model history has fewer completed turns than the event transcript so the anomaly is visible instead of silent.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✅ test(compaction): model precedence + reset into folded region
+  ([`10c156d`](https://github.com/thiesgerken/carapace/commit/10c156d220ae3b608904da911e172bd0349e6abf))
+
+  Two gaps with no direct coverage: the compaction model resolution order (session override → platform compaction_model → title) and rewinding to a turn the fold already swallowed (tail_turns=0 → history collapses to the lead fold, tree node retained). Brings the suite to 1000.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🎨 refactor(compaction): hoist agent-history imports to module top
+  ([`3258e82`](https://github.com/thiesgerken/carapace/commit/3258e824abb95aa20decd8730d8511ba40a377eb))
+
+  Move the in-function imports in get_agent_history (ToolReturnPart, FOLD_MARKER, is_fold_message, tool_return_compaction_info) to the top of history.py — no circular import.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- Merge remote-tracking branch 'origin/main' into feature/session-compaction
+  ([`310561b`](https://github.com/thiesgerken/carapace/commit/310561b9b0d47a0693a0eb084684ba2faeeae910))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.7.0
+  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
+
+- ⬆️ chore: upgrade pnpm to 11.7.0
+  ([`3e358a7`](https://github.com/thiesgerken/carapace/commit/3e358a759f94a259de99fd32e606201abf6a5d71))
+
+- ⬆️ chore: upgrade actions/checkout action to v7.0.0
+  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
+
+- ⬆️ chore: upgrade actions/checkout action to v7.0.0
+  ([`c31da8e`](https://github.com/thiesgerken/carapace/commit/c31da8e3312e9f84ede8b9d154a5b67b9f5c8542))
+
+### ✨ Features
+
+
+- ✨ feat(chat): event-level fork & reset (phase 3)
+  ([`5601e10`](https://github.com/thiesgerken/carapace/commit/5601e10e4c311716e884ca4106f552b44f2efd49))
+
+  Fork/reset now cut at any message, not just turn boundaries. Each user prompt and assistant bubble (intermediate or final) is a valid branch point.
+
+  Backend: _sliced_transcript_for_event_cut handles three cases — a final-assistant cut reuses the fold-aware turn slice; a mid-turn (partial) or user-prompt cut keeps the older turns compacted and rebuilds only the cut turn verbatim from its events (safe: the newest turn is never folded/tool-compacted). reset_to_turn and fork_session route through it; retry stays turn-level.
+
+  Resetting/forking at a user prompt keeps the conversation through that prompt and drops its response, so you can amend and re-run with a follow-up message.
+
+  Frontend: messages carry their own event index; fork/reset use it directly (no turn snapping); reset slices optimistically at the clicked message.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(chat): persist & interleave intermediate assistant text
+  ([`b412f20`](https://github.com/thiesgerken/carapace/commit/b412f20ee3f674e418e64998842d374441593946))
+
+  Previously only a turn's final assistant text was saved (one event at turn end), so narration the model emitted between tool calls was swallowed — on reload all tools collapsed into one group with the text dumped after them.
+
+  Now text emitted before a tool call is flushed as its own `partial` assistant event at its real position (agent/loop.py stream handler → on_assistant_text → turns.py). Turn-boundary detection (completed_event_turns) ignores partial events so reset/fork/retry/compaction stay anchored to the final answer. The live `done` handler finalizes every streaming segment, matching reload.
+
+  Also (phase 2): metadata tooltip gains "message i of n", and copy/fork/reset actions are exposed on all conversational messages (fork/reset snap to the enclosing turn boundary; retry re-runs the latest turn).
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
 - ✨ feat(chat): enrich turn tooltip with duration, tools, model, tokens
   ([`ae79ff6`](https://github.com/thiesgerken/carapace/commit/ae79ff69af72adea242f98a6eb98b9efeae15a69))
@@ -109,163 +323,6 @@
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
-- ✨ feat(compaction): phase 4 — e2e ladder test + docs
-  ([`3cd82f7`](https://github.com/thiesgerken/carapace/commit/3cd82f7ece443b8c813461f65abf6c0d04f73311))
-
-  - end-to-end test: /compact all drops thinking, folds 7 turns, summarizes
-    kept-region tool outputs, attributes usage to the compaction category,
-    and is idempotent on a second run
-  - docs/compaction.md + README index entry + ROADMAP tick
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✨ feat(compaction): phase 3b — compaction UI (badges, folds, agent view)
-  ([`82ff4b4`](https://github.com/thiesgerken/carapace/commit/82ff4b4bcc5b4bf6fbee4dd72957146b9e77c465))
-
-  - HistoryMessage/ChatMessage carry compaction annotations; tool-result merge
-    threads the badge through
-  - tool rows show a method-aware "compacted" badge (orig→summary tokens)
-  - consecutive folded messages collapse into an expandable summary block
-  - /compact CommandResultView shows tokens saved + per-strategy counts;
-    client refetches history on the compact result so folds/badges render
-  - Agent-view overlay: read-only render of the model history exactly as the
-    agent sees it (fold summaries + short-form tool returns), toggled from the
-    session inspector; backed by GET /agent-history
-  - en/de i18n keys at parity
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✨ feat(compaction): phase 3a — agent-view endpoint + history passthrough
-  ([`afc4135`](https://github.com/thiesgerken/carapace/commit/afc413566527b672af88925ee24612d122900c57))
-
-  - HistoryMessage.compaction passthrough so the transcript carries fold/tool badges
-  - GET /sessions/{id}/agent-history: serialize the model history verbatim
-    (fold summaries + compacted tool returns) for the agent-view toggle
-  - tool_return_compaction_info accessor
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✨ feat(compaction): phase 2 — /compact command + orchestration
-  ([`545dd01`](https://github.com/thiesgerken/carapace/commit/545dd01bf5cc9e4d98aaaa7d135b1d46ba4f1f5a))
-
-  - compaction_summarizer: aux LLM calls (fold + tool-output) logged under the
-    "compaction" source, structured DevOps-aware prompts
-  - SessionCompactionMixin.run_compaction: ladder (thinking-drop → fold(K) →
-    tool-return compact within kept region), parallel tool summaries under the
-    shared LLM semaphore + budget guard
-  - persists rewritten history, summary tree, and transcript annotations
-    (fold node id on folded events; method/tokens on tool_result events)
-  - /compact [K], /compact fold [K], /compact tools parsing + help entry
-  - CompactionReport returned to the client; on_compaction broadcast
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✨ feat(compaction): phase 1 — pure strategy core
-  ([`54df986`](https://github.com/thiesgerken/carapace/commit/54df98672fc9590b772d31e1e47fc3196213b650))
-
-  Provider-agnostic, LLM-free strategy functions over pydantic-ai history:
-  - apply_thinking_drop: shed stale ThinkingParts, keep the newest turn's
-  - find/apply tool-return compaction: shrink large outputs in place, stamp
-    metadata as a re-compaction guard, mark with re-run hint; truncate helper
-  - plan/apply fold: collapse turns older than keep-window K into a synthetic
-    FOLD_MARKER message; append-only blocks (no drift), pairing preserved
-  - plan/apply consolidate: merge adjacent fold blocks
-
-  Planning vs apply split so the engine injects the model later; fully unit-tested.
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✨ feat(compaction): phase 0 — config, token helpers, persistence
-  ([`f8764ca`](https://github.com/thiesgerken/carapace/commit/f8764cabdb3353c7bfb22d10afea62a86b41865b))
-
-  - agent.compaction config (model, keep_turns, tool_output_floor_tokens, max_parallel_summaries)
-  - count_text_tokens / count_message_tokens helpers (reuse tiktoken bucket accumulation)
-  - "compaction" LlmSource for request logging
-  - SessionCompaction tree model + SessionCompactionRow + migration 0004
-  - manager load_compaction / save_compaction
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-### 🗑️ Deprecations
-
-
-- 🗑️ chore(roadmap): remove completed compaction tasks from roadmap
-  ([`4dc962c`](https://github.com/thiesgerken/carapace/commit/4dc962c6a3b9d9680aff2609fb85c8e07f3a9179))
-
-### 🐛 Bug Fixes
-
-
-- 🐛 fix(compaction): satisfy pyrefly in uncompact attachment restore
-  ([`eb5eef7`](https://github.com/thiesgerken/carapace/commit/eb5eef7b8f95c772d34e08a0f708ba1d04de4084))
-
-  Reconstruct Attachment via model_validate instead of SimpleNamespace, which doesn't statically satisfy the AttachmentLike protocol (dynamic attrs).
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- 🐛 fix(compaction): address PR review findings on /compact + /uncompact
-  ([`c6594bd`](https://github.com/thiesgerken/carapace/commit/c6594bdcab4460a2884f947520b4745c4fe4c1e7))
-
-  - transcript: restore provider tool_call_id (model_tool_call_id) on rebuilt
-    call+return so tool pairing survives /uncompact (fall back to carapace UUID)
-  - transcript: re-augment user prompts from persisted attachments on uncompact
-  - compaction: include NativeToolCallPart in fold-summary text (isinstance,
-    not exact class-name match)
-  - align platform/UI/docs compaction defaults to config (keep_turns 8,
-    verbatim_tool_turns 4)
-  - chat-view: preserve live messages arriving during the post-compact refetch
-    instead of clobbering them with an older snapshot
-  - command-result: render /uncompact's human-readable message instead of a
-    raw JSON blob
-  - message: pass compaction annotation to nested child tool calls so they show
-    the compacted badge
-  - tests: provider-id restore + attachment-preamble restore on rebuild
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- 🐛 fix(compaction): tool annotations matched the wrong id namespace
-  ([`d31bd6b`](https://github.com/thiesgerken/carapace/commit/d31bd6b6342df07ee33ebaae590f7ac45e3a843a))
-
-  Tool-compaction indicators never showed in the UI: events key tools by a carapace-generated UUID (tool_id), but compaction keys by the model's provider tool_call_id. The two never match, so _annotate_tool_result_events (and the /history model_text enrichment) annotated nothing for real sessions — it only worked in tests that reused one id.
-
-  Record the provider id (ctx.tool_call_id) on the tool_result event as model_tool_call_id and match on it, falling back to tool_id for legacy/test events. Fixes future compactions; existing sessions can't be backfilled (no id link was stored).
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- 🐛 fix(compaction): keep reset/fork in sync with folded history
-  ([`3a3c1a1`](https://github.com/thiesgerken/carapace/commit/3a3c1a14a4fab3737412d7df571f6e760f929fa0))
-
-  Reset and fork sliced model history by completed event-turn count, but folds collapse old turns so the model-turn count diverges — truncation could leave turns the events no longer contain (or under-trim), and the persisted compaction tree was never trimmed (fork inherited fold messages with no tree).
-
-  Slice fold-aware via the surviving `folded_into` event annotations (keep the leading fold prefix + the matching verbatim tail) and trim/carry the compaction tree to match. Addresses two Bugbot findings on the per-session-model commit.
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- 🐛 fix(compaction): address PR review threads
-  ([`23bb2c6`](https://github.com/thiesgerken/carapace/commit/23bb2c6e1bee5c6ba91def51cf438f7024cacab4))
-
-  - honor agent.compaction.max_parallel_summaries: bound tool-output
-    summarization with a semaphore instead of an unbounded asyncio.gather
-  - surface compact refetch failures: append an error row + reload hint
-    instead of swallowing the catch, so the transcript isn't silently stale
-  - agent view: distinct error copy (agentError) vs the empty-history copy
-    so a fetch/permission failure is no longer shown as "No history yet"
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- 🐛 fix(compaction): pyrefly errors + fold/tool annotation ordering
-  ([`8bfde64`](https://github.com/thiesgerken/carapace/commit/8bfde6492d8c25f5ca3a40595e605ebd67f4efdc))
-
-  backend-lint (pyrefly):
-  - stub run_compaction on SessionCommandMixin; type llm_request_recording
-    stub as AbstractContextManager (fixes inconsistent-inheritance + with-None)
-  - rebuild compacted tool returns as a base ToolReturnPart (str content),
-    restricted to exact type so capability-return subclasses are never touched
-  - guard non-str tool_id before dict.get in _annotate_tool_result_events
-
-  Bugbot: _annotate_folded_events skipped turns that only carried a tool-output annotation, so `/compact tools` then `/compact fold` left folded turns unbadged. Skip only already-folded turns and merge annotations.
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
 ### 💄 UI/UX
 
 
@@ -354,62 +411,38 @@
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
-### Other
+### 🐛 Bug Fixes
 
 
-- increase default values for keep_turns and verbatim_tool_turns
-  ([`8ee5f94`](https://github.com/thiesgerken/carapace/commit/8ee5f941c2e1b9821007774b6e591276311d7edd))
+- 🐛 fix(compaction): tool annotations matched the wrong id namespace
+  ([`d31bd6b`](https://github.com/thiesgerken/carapace/commit/d31bd6b6342df07ee33ebaae590f7ac45e3a843a))
 
-- 🛡️ fix(session): warn when fork/reset truncates a desynced history
-  ([`ab704a6`](https://github.com/thiesgerken/carapace/commit/ab704a6351c81285ecefb4becddf649071a3f86a))
+  Tool-compaction indicators never showed in the UI: events key tools by a carapace-generated UUID (tool_id), but compaction keys by the model's provider tool_call_id. The two never match, so _annotate_tool_result_events (and the /history model_text enrichment) annotated nothing for real sessions — it only worked in tests that reused one id.
 
-  fork/reset slice the model history by the event-turn count and silently cap to whatever the history holds (min(turn_count, available)). If a session's model history ever lags its events, the copy/reset is quietly truncated to fewer turns with no signal — exactly the failure that produced a 1-turn copy of a 23-turn session. Log a loud warning when the model history has fewer completed turns than the event transcript so the anomaly is visible instead of silent.
-
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
-
-- ✅ test(compaction): model precedence + reset into folded region
-  ([`10c156d`](https://github.com/thiesgerken/carapace/commit/10c156d220ae3b608904da911e172bd0349e6abf))
-
-  Two gaps with no direct coverage: the compaction model resolution order (session override → platform compaction_model → title) and rewinding to a turn the fold already swallowed (tail_turns=0 → history collapses to the lead fold, tree node retained). Brings the suite to 1000.
+  Record the provider id (ctx.tool_call_id) on the tool_result event as model_tool_call_id and match on it, falling back to tool_id for legacy/test events. Fixes future compactions; existing sessions can't be backfilled (no id link was stored).
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
-- 🎨 refactor(compaction): hoist agent-history imports to module top
-  ([`3258e82`](https://github.com/thiesgerken/carapace/commit/3258e824abb95aa20decd8730d8511ba40a377eb))
+- 🐛 fix(compaction): keep reset/fork in sync with folded history
+  ([`3a3c1a1`](https://github.com/thiesgerken/carapace/commit/3a3c1a14a4fab3737412d7df571f6e760f929fa0))
 
-  Move the in-function imports in get_agent_history (ToolReturnPart, FOLD_MARKER, is_fold_message, tool_return_compaction_info) to the top of history.py — no circular import.
+  Reset and fork sliced model history by completed event-turn count, but folds collapse old turns so the model-turn count diverges — truncation could leave turns the events no longer contain (or under-trim), and the persisted compaction tree was never trimmed (fork inherited fold messages with no tree).
+
+  Slice fold-aware via the surviving `folded_into` event annotations (keep the leading fold prefix + the matching verbatim tail) and trim/carry the compaction tree to match. Addresses two Bugbot findings on the per-session-model commit.
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
-- Merge remote-tracking branch 'origin/main' into feature/session-compaction
-  ([`310561b`](https://github.com/thiesgerken/carapace/commit/310561b9b0d47a0693a0eb084684ba2faeeae910))
+- 🐛 fix(compaction): address PR review threads
+  ([`23bb2c6`](https://github.com/thiesgerken/carapace/commit/23bb2c6e1bee5c6ba91def51cf438f7024cacab4))
 
-## v0.143.1 (2026-06-20)
+  - honor agent.compaction.max_parallel_summaries: bound tool-output
+    summarization with a semaphore instead of an unbounded asyncio.gather
+  - surface compact refetch failures: append an error row + reload hint
+    instead of swallowing the catch, so the transcript isn't silently stale
+  - agent view: distinct error copy (agentError) vs the empty-history copy
+    so a fetch/permission failure is no longer shown as "No history yet"
 
-
-### Other
-
-
-- Merge pull request #228 from thiesgerken/renovate/pnpm-11.x
-  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
-
-- Merge pull request #232 from thiesgerken/renovate/actions-checkout-7.x
-  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
-
-### ⬆️ Dependencies
-
-
-- ⬆️ chore: upgrade pnpm to 11.7.0
-  ([`67d25e5`](https://github.com/thiesgerken/carapace/commit/67d25e51d4a2c8742661e0b706a3b7f1e534f4d8))
-
-- ⬆️ chore: upgrade pnpm to 11.7.0
-  ([`3e358a7`](https://github.com/thiesgerken/carapace/commit/3e358a759f94a259de99fd32e606201abf6a5d71))
-
-- ⬆️ chore: upgrade actions/checkout action to v7.0.0
-  ([`87f0194`](https://github.com/thiesgerken/carapace/commit/87f019493bfcab575711e80ab5bd8973631e0bcf))
-
-- ⬆️ chore: upgrade actions/checkout action to v7.0.0
-  ([`c31da8e`](https://github.com/thiesgerken/carapace/commit/c31da8e3312e9f84ede8b9d154a5b67b9f5c8542))
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
 ## v0.143.0 (2026-06-19)
 
@@ -429,6 +462,83 @@
   Consecutive tool_call/thinking messages now collapse into a single ToolCallGroup row showing a summary ("Ran 4 commands, read 7 files, edited 3 files"). Finished runs collapse by default; in-progress runs stay expanded with present-tense wording and a spinner, then auto-collapse when the turn ends (unless the user toggled). Grouping is render-only, no backend or type changes.
 
   Also drop a redundant trailing "geschrieben" in the German write summary.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 4 — e2e ladder test + docs
+  ([`3cd82f7`](https://github.com/thiesgerken/carapace/commit/3cd82f7ece443b8c813461f65abf6c0d04f73311))
+
+  - end-to-end test: /compact all drops thinking, folds 7 turns, summarizes
+    kept-region tool outputs, attributes usage to the compaction category,
+    and is idempotent on a second run
+  - docs/compaction.md + README index entry + ROADMAP tick
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 3b — compaction UI (badges, folds, agent view)
+  ([`82ff4b4`](https://github.com/thiesgerken/carapace/commit/82ff4b4bcc5b4bf6fbee4dd72957146b9e77c465))
+
+  - HistoryMessage/ChatMessage carry compaction annotations; tool-result merge
+    threads the badge through
+  - tool rows show a method-aware "compacted" badge (orig→summary tokens)
+  - consecutive folded messages collapse into an expandable summary block
+  - /compact CommandResultView shows tokens saved + per-strategy counts;
+    client refetches history on the compact result so folds/badges render
+  - Agent-view overlay: read-only render of the model history exactly as the
+    agent sees it (fold summaries + short-form tool returns), toggled from the
+    session inspector; backed by GET /agent-history
+  - en/de i18n keys at parity
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 3a — agent-view endpoint + history passthrough
+  ([`afc4135`](https://github.com/thiesgerken/carapace/commit/afc413566527b672af88925ee24612d122900c57))
+
+  - HistoryMessage.compaction passthrough so the transcript carries fold/tool badges
+  - GET /sessions/{id}/agent-history: serialize the model history verbatim
+    (fold summaries + compacted tool returns) for the agent-view toggle
+  - tool_return_compaction_info accessor
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 2 — /compact command + orchestration
+  ([`545dd01`](https://github.com/thiesgerken/carapace/commit/545dd01bf5cc9e4d98aaaa7d135b1d46ba4f1f5a))
+
+  - compaction_summarizer: aux LLM calls (fold + tool-output) logged under the
+    "compaction" source, structured DevOps-aware prompts
+  - SessionCompactionMixin.run_compaction: ladder (thinking-drop → fold(K) →
+    tool-return compact within kept region), parallel tool summaries under the
+    shared LLM semaphore + budget guard
+  - persists rewritten history, summary tree, and transcript annotations
+    (fold node id on folded events; method/tokens on tool_result events)
+  - /compact [K], /compact fold [K], /compact tools parsing + help entry
+  - CompactionReport returned to the client; on_compaction broadcast
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 1 — pure strategy core
+  ([`54df986`](https://github.com/thiesgerken/carapace/commit/54df98672fc9590b772d31e1e47fc3196213b650))
+
+  Provider-agnostic, LLM-free strategy functions over pydantic-ai history:
+  - apply_thinking_drop: shed stale ThinkingParts, keep the newest turn's
+  - find/apply tool-return compaction: shrink large outputs in place, stamp
+    metadata as a re-compaction guard, mark with re-run hint; truncate helper
+  - plan/apply fold: collapse turns older than keep-window K into a synthetic
+    FOLD_MARKER message; append-only blocks (no drift), pairing preserved
+  - plan/apply consolidate: merge adjacent fold blocks
+
+  Planning vs apply split so the engine injects the model later; fully unit-tested.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(compaction): phase 0 — config, token helpers, persistence
+  ([`f8764ca`](https://github.com/thiesgerken/carapace/commit/f8764cabdb3353c7bfb22d10afea62a86b41865b))
+
+  - agent.compaction config (model, keep_turns, tool_output_floor_tokens, max_parallel_summaries)
+  - count_text_tokens / count_message_tokens helpers (reuse tiktoken bucket accumulation)
+  - "compaction" LlmSource for request logging
+  - SessionCompaction tree model + SessionCompactionRow + migration 0004
+  - manager load_compaction / save_compaction
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
@@ -455,6 +565,20 @@
   Flatten message.children into the summary counts so commands/reads spawned as child rows (e.g. under a skill) are no longer under-reported.
 
   Addresses Cursor Bugbot review.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix(compaction): pyrefly errors + fold/tool annotation ordering
+  ([`8bfde64`](https://github.com/thiesgerken/carapace/commit/8bfde6492d8c25f5ca3a40595e605ebd67f4efdc))
+
+  backend-lint (pyrefly):
+  - stub run_compaction on SessionCommandMixin; type llm_request_recording
+    stub as AbstractContextManager (fixes inconsistent-inheritance + with-None)
+  - rebuild compacted tool returns as a base ToolReturnPart (str content),
+    restricted to exact type so capability-return subclasses are never touched
+  - guard non-str tool_id before dict.get in _annotate_tool_result_events
+
+  Bugbot: _annotate_folded_events skipped turns that only carried a tool-output annotation, so `/compact tools` then `/compact fold` left folded turns unbadged. Skip only already-folded turns and merge annotations.
 
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
