@@ -1063,6 +1063,9 @@ export function ChatView({
   const queueRef = useRef<string | null>(null);
   const queuedAttachmentsRef = useRef<Attachment[]>([]);
   const resetRollbackRef = useRef<ChatMessage[] | null>(null);
+  // Monotonic id for the on-done history re-projection so only the newest turn's refetch applies
+  // (older async responses are dropped, preventing duplicate/missing bubbles when turns overlap).
+  const doneRefetchSeqRef = useRef(0);
   const sendRef = useRef<(msg: ClientMessage) => void>(() => {});
   const onSandboxUpdateRef = useRef(onSandboxUpdate);
   const sandboxRef = useRef(sandbox);
@@ -1341,13 +1344,16 @@ export function ChatView({
           // The live transcript can't carry persisted-only metadata (timestamps, event indices,
           // per-turn numbering, usage / tok-s). Re-project from the now-persisted event log so the
           // finished turn shows the same data as a reload, preserving any tail that arrived since.
+          // Sequence-guard so a slower earlier refetch can't clobber a newer turn's projection.
+          const refetchSeq = ++doneRefetchSeqRef.current;
           fetchHistory(server, token, sessionId)
-            .then((history) =>
+            .then((history) => {
+              if (refetchSeq !== doneRefetchSeqRef.current) return;
               setMessages((prev) => [
                 ...projectHistoryToMessages(history),
                 ...prev.slice(doneBaselineLen),
-              ]),
-            )
+              ]);
+            })
             .catch(() => {
               // Refetch failed — keep the live transcript; metadata fills in on the next reload.
             });
