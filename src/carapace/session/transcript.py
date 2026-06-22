@@ -37,7 +37,12 @@ def completed_event_turns(events: list[dict[str, Any]]) -> list[CompletedEventTu
         if role == "user" and isinstance(content := event.get("content"), str) and not content.startswith("/"):
             start_event_index = index
             user_content = content
-        elif role == "assistant" and start_event_index is not None and user_content is not None:
+        elif (
+            role == "assistant"
+            and not event.get("partial")
+            and start_event_index is not None
+            and user_content is not None
+        ):
             turns.append(
                 CompletedEventTurn(
                     start_event_index=start_event_index,

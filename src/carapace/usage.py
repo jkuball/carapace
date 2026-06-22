@@ -489,6 +489,38 @@ def _duration_ms(start: datetime | None, end: datetime | None) -> int | None:
     return max(0, int((end - start).total_seconds() * 1000))
 
 
+class TurnGenerationStats(TypedDict):
+    input_tokens: int
+    output_tokens: int
+    ttft_ms: int | None
+    generation_ms: int | None
+
+
+def aggregate_turn_generation(records: list[LlmRequestRecord]) -> TurnGenerationStats:
+    """Turn-level generation stats over the turn's completed agent requests (all provider-reported).
+
+    Token totals are summed across requests (the model bills each round's input + output). ``ttft_ms``
+    is the turn's first request's prompt→first-token wait. ``generation_ms`` sums each request's decode
+    window (first token → completion); the gaps between requests are tool execution and are excluded,
+    so a tok/s derived from it reflects decode speed, not how long tools ran.
+    """
+    agent = [r for r in records if r.source == "agent" and r.outcome == "completed"]
+    input_tokens = sum(r.input_tokens for r in agent)
+    output_tokens = sum(r.output_tokens for r in agent)
+    ttft_ms = _duration_ms(agent[0].started_at, agent[0].first_text_at) if agent else None
+    generation_ms: int | None = None
+    for rec in agent:
+        decode = _duration_ms(rec.first_text_at, rec.completed_at)
+        if decode is not None:
+            generation_ms = (generation_ms or 0) + decode
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "ttft_ms": ttft_ms,
+        "generation_ms": generation_ms,
+    }
+
+
 def _normalize_reasoning_tokens(details: dict[str, int]) -> int | None:
     exact = details.get("reasoning_tokens")
     if isinstance(exact, int):
