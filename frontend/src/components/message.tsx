@@ -91,8 +91,11 @@ function TurnMeta({
   const t = useTranslations("turnMeta");
   if (!timestamp && turnIndex == null) return null;
   const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
+  // Date and time formatted separately and joined with a space, so there's no comma between them.
   const abs = timestamp
-    ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
+    ? `${new Date(timestamp).toLocaleDateString(locale, { dateStyle: "medium" })} ${new Date(
+        timestamp,
+      ).toLocaleTimeString(locale, { timeStyle: "short" })}`
     : "";
   const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
   const posLabel =
