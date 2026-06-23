@@ -9,11 +9,53 @@ from carapace.usage import (
     InputShapeRatios,
     LlmRequestLog,
     LlmRequestRecord,
+    aggregate_turn_generation,
     gauge_breakdown_pct_dict,
     input_shape_ratios_from_messages,
     last_record_for_source,
     usage_last_request_row,
 )
+
+
+def test_aggregate_turn_generation_excludes_tool_time() -> None:
+    base = datetime(2026, 6, 22, 12, 0, 0, tzinfo=UTC)
+
+    def _rec(start_s: int, ttft_ms: int, decode_ms: int, out: int, inp: int) -> LlmRequestRecord:
+        started = base + timedelta(seconds=start_s)
+        first_text = started + timedelta(milliseconds=ttft_ms)
+        return LlmRequestRecord(
+            ts=started,
+            source="agent",
+            input_tokens=inp,
+            output_tokens=out,
+            started_at=started,
+            first_text_at=first_text,
+            completed_at=first_text + timedelta(milliseconds=decode_ms),
+        )
+
+    # Two agent requests with a long tool gap between them (request 2 starts 100s later).
+    records = [
+        _rec(start_s=0, ttft_ms=200, decode_ms=1000, out=100, inp=5000),
+        _rec(start_s=100, ttft_ms=400, decode_ms=3000, out=300, inp=8000),
+    ]
+
+    stats = aggregate_turn_generation(records)
+
+    assert stats["input_tokens"] == 13000  # provider input billed across rounds
+    assert stats["output_tokens"] == 400  # provider output summed
+    assert stats["ttft_ms"] == 200  # the turn's first request
+    assert stats["generation_ms"] == 4000  # decode only (1000 + 3000), tool gap excluded
+
+
+def test_aggregate_turn_generation_ignores_non_agent_and_interrupted() -> None:
+    base = datetime(2026, 6, 22, 12, 0, 0, tzinfo=UTC)
+    records = [
+        LlmRequestRecord(ts=base, source="sentinel", output_tokens=999),
+        LlmRequestRecord(ts=base, source="agent", outcome="interrupted", output_tokens=50),
+    ]
+    stats = aggregate_turn_generation(records)
+    assert stats["output_tokens"] == 0
+    assert stats["generation_ms"] is None
 
 
 def test_input_shape_ratios_single_user_only() -> None:

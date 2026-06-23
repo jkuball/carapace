@@ -155,7 +155,8 @@ class SessionArchiveCommitResponse(BaseModel):
 def _session_message_count(session_id: str) -> int:
     events = server._engine.session_mgr.load_events(session_id)
     if events:
-        return sum(1 for event in events if event.get("role") in {"user", "assistant"})
+        # Partial assistant events are intermediate narration within a turn, not standalone turns.
+        return sum(1 for event in events if event.get("role") in {"user", "assistant"} and not event.get("partial"))
 
     history = _history_from_messages(session_id)
     return sum(1 for message in history if message.role in {"user", "assistant"})

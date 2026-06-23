@@ -32,11 +32,6 @@ function formatDuration(ms: number, locale: string, precise = true): string {
   return `${Math.round(ms / 1_000)}s`;
 }
 
-function turnAgeMs(iso: string): number {
-  const age = Date.now() - new Date(iso).getTime();
-  return Number.isNaN(age) ? Infinity : age;
-}
-
 function formatRelativeTime(iso: string, locale: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -68,36 +63,52 @@ function shortModel(model: string): string {
 function TurnMeta({
   timestamp,
   turnIndex,
+  messageIndexInTurn,
+  turnMessageCount,
   turnDurationMs,
   toolCount,
   model,
   inputTokens,
   outputTokens,
-  hideWhenRecent,
+  ttftMs,
+  generationMs,
   className,
 }: {
   timestamp?: string;
   turnIndex?: number;
+  messageIndexInTurn?: number;
+  turnMessageCount?: number;
   turnDurationMs?: number;
   toolCount?: number;
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
-  hideWhenRecent?: boolean;
+  ttftMs?: number;
+  generationMs?: number;
   className?: string;
 }) {
   const { locale } = useAppLocale();
   const t = useTranslations("turnMeta");
   if (!timestamp && turnIndex == null) return null;
-  // User turns stay bare for ~10min so a reload never decorates a message a live session left
-  // blank; assistant turns always show (the work is done, the timing is the point).
-  if (hideWhenRecent && timestamp && turnAgeMs(timestamp) < 10 * 60 * 1_000) return null;
   const rel = timestamp ? formatRelativeTime(timestamp, locale) : "";
+  // Date and time formatted separately and joined with a space, so there's no comma between them.
   const abs = timestamp
-    ? new Date(timestamp).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })
+    ? `${new Date(timestamp).toLocaleDateString(locale, { dateStyle: "medium" })} ${new Date(
+        timestamp,
+      ).toLocaleTimeString(locale, { timeStyle: "short" })}`
     : "";
   const turnLabel = turnIndex != null ? t("turn", { n: turnIndex }) : "";
-  const tipParts = [turnLabel, abs];
+  const posLabel =
+    messageIndexInTurn != null && turnMessageCount != null && turnMessageCount > 1
+      ? t("messageInTurn", { i: messageIndexInTurn, n: turnMessageCount })
+      : "";
+  // tok/s = provider output tokens / generation seconds (tool waits excluded) — shown inline.
+  const tps =
+    typeof outputTokens === "number" && typeof generationMs === "number" && generationMs > 0
+      ? Math.round((outputTokens / generationMs) * 1000)
+      : undefined;
+
+  const tipParts = [posLabel, turnLabel, abs];
   if (typeof turnDurationMs === "number") tipParts.push(formatDuration(turnDurationMs, locale, false));
   if (typeof toolCount === "number" && toolCount > 0) tipParts.push(t("tools", { count: toolCount }));
   if (model) tipParts.push(shortModel(model));
@@ -109,7 +120,10 @@ function TurnMeta({
       }),
     );
   }
+  if (typeof ttftMs === "number") tipParts.push(t("ttft", { value: formatDuration(ttftMs, locale, true) }));
   const tip = tipParts.filter(Boolean).join(" · ");
+
+  const visible = [rel || turnLabel, tps != null ? t("tps", { n: tps }) : ""].filter(Boolean).join(" · ");
   return (
     <span
       title={tip}
@@ -118,7 +132,7 @@ function TurnMeta({
         className,
       )}
     >
-      {rel || turnLabel}
+      {visible}
     </span>
   );
 }
@@ -318,11 +332,16 @@ function MessageActions({
   onReset,
   timestamp,
   turnIndex,
+  messageIndexInTurn,
+  turnMessageCount,
   turnDurationMs,
   toolCount,
   model,
   inputTokens,
   outputTokens,
+  ttftMs,
+  generationMs,
+  className,
 }: {
   copyText?: string;
   canFork?: boolean;
@@ -334,19 +353,25 @@ function MessageActions({
   onReset?: () => void;
   timestamp?: string;
   turnIndex?: number;
+  messageIndexInTurn?: number;
+  turnMessageCount?: number;
   turnDurationMs?: number;
   toolCount?: number;
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  ttftMs?: number;
+  generationMs?: number;
+  className?: string;
 }) {
   const t = useTranslations("message");
   const hasCopy = typeof copyText === "string" && copyText.length > 0;
   const hasMeta = Boolean(timestamp) || turnIndex != null;
   if (!hasCopy && !canFork && !canRetry && !canReset && !hasMeta) return null;
 
+  // Controls first, then the meta pushed to the far end of the row (spacer between spans the width).
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className={cn("mt-2 flex items-center gap-2", className)}>
       <MessageCopyButton text={copyText ?? ""} className="border border-border/70 p-1.5" />
       <MessageActionButton
         label={t("actions.fork")}
@@ -369,11 +394,15 @@ function MessageActions({
       <TurnMeta
         timestamp={timestamp}
         turnIndex={turnIndex}
+        messageIndexInTurn={messageIndexInTurn}
+        turnMessageCount={turnMessageCount}
         turnDurationMs={turnDurationMs}
         toolCount={toolCount}
         model={model}
         inputTokens={inputTokens}
         outputTokens={outputTokens}
+        ttftMs={ttftMs}
+        generationMs={generationMs}
         className="ml-auto"
       />
     </div>
@@ -541,9 +570,10 @@ export function Message({
     case "user":
       return (
         <div className="group flex flex-col items-end">
+          <div className="flex w-fit max-w-full flex-col items-end md:max-w-[85%]">
           <div
             className={cn(
-              "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground md:max-w-[85%]",
+              "chat-copy-serif max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/30 px-3.5 py-2 text-sm text-foreground",
             )}
           >
             {message.content ? <MarkdownContent content={message.content} /> : null}
@@ -581,12 +611,20 @@ export function Message({
               </div>
             ) : null}
           </div>
-          <TurnMeta
+          <MessageActions
+            copyText={message.content}
+            canFork={canFork}
+            canRetry={canRetry}
+            canReset={canReset}
+            disabled={actionDisabled}
+            onFork={onFork}
+            onRetry={onRetry}
+            onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
-            hideWhenRecent
-            className="mt-1"
+            className="w-full"
           />
+          </div>
         </div>
       );
 
@@ -608,11 +646,15 @@ export function Message({
             onReset={onReset}
             timestamp={message.timestamp}
             turnIndex={message.turnIndex}
+            messageIndexInTurn={message.messageIndexInTurn}
+            turnMessageCount={message.turnMessageCount}
             turnDurationMs={message.turnDurationMs}
             toolCount={message.toolCount}
             model={message.model}
             inputTokens={message.inputTokens}
             outputTokens={message.outputTokens}
+            ttftMs={message.ttftMs}
+            generationMs={message.generationMs}
           />
         </div>
       );

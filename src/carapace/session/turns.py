@@ -40,7 +40,13 @@ from ..models.tooling import ToolCallCallback, ToolResult
 from ..notifications.router import NotificationRouter, build_turn_outcome_notification_id
 from ..sandbox.manager import SandboxManager
 from ..security.context import ApprovalSource, ApprovalVerdict, format_denial_message, normalize_optional_message
-from ..usage import BudgetGauge, LlmRequestState, SessionBudgetExceededError, interrupted_request_record
+from ..usage import (
+    BudgetGauge,
+    LlmRequestState,
+    SessionBudgetExceededError,
+    aggregate_turn_generation,
+    interrupted_request_record,
+)
 from ..ws_models import ApprovalRequest, ApprovalResponse, Attachment, FinalStatus, TurnUsage
 from .attachments import augment_prompt
 from .manager import SessionManager
@@ -189,6 +195,9 @@ class SessionTurnMixin(SessionTurnHost):
         # gets a hidden preamble describing any uploaded files.
         agent_input = augment_prompt(user_input, attachments)
         latest_messages: list[ModelMessage] | None = None
+        # Mark where this turn's LLM-request records begin so the turn's generation stats (tok/s,
+        # TTFT, provider token totals) can be aggregated over just this turn's requests.
+        turn_record_start = len(active.llm_request_log.records)
 
         def _set_latest_messages(snapshot: list[Any]) -> None:
             nonlocal latest_messages
@@ -270,6 +279,16 @@ class SessionTurnMixin(SessionTurnHost):
             active._pending_sends.add(task)
             task.add_done_callback(active._pending_sends.discard)
 
+        async def _assistant_text_cb(text: str) -> None:
+            # Intermediate narration (text the model emitted before a tool call). Persist it as a
+            # partial assistant event so reload renders it between the tool groups; the turn's final
+            # answer is still written once at finalization. ``partial`` keeps turn-boundary detection
+            # (reset/fork/compaction) anchored to the final assistant event only.
+            self._session_mgr.append_events(
+                session_id,
+                [{"role": "assistant", "content": text, "partial": True}],
+            )
+
         try:
             async with active.lock:
                 if active.security:
@@ -300,6 +319,7 @@ class SessionTurnMixin(SessionTurnHost):
                     send_approval_request=_send_approval,
                     collect_approvals=_collect_approvals,
                     on_messages_snapshot=_set_latest_messages,
+                    on_assistant_text=_assistant_text_cb,
                 )
 
                 await self._finalize_successful_turn(
@@ -309,6 +329,7 @@ class SessionTurnMixin(SessionTurnHost):
                     turn_result.output,
                     turn_result.thinking,
                     final_status=turn_result.final_status,
+                    turn_record_start=turn_record_start,
                 )
 
         except asyncio.CancelledError:
@@ -492,6 +513,7 @@ class SessionTurnMixin(SessionTurnHost):
         send_approval_request: Callable[[ApprovalRequest], Awaitable[None]],
         collect_approvals: Callable[[set[str]], Awaitable[dict[str, bool | ToolDenied]]],
         on_messages_snapshot: Callable[[list[Any]], None],
+        on_assistant_text: Callable[[str], Awaitable[None]],
     ) -> TurnExecutionResult:
         async with self._llm_semaphore:
             with self.llm_request_recording(active):
@@ -504,6 +526,7 @@ class SessionTurnMixin(SessionTurnHost):
                     collect_approvals=collect_approvals,
                     on_token=partial(self._handle_token_chunk, active),
                     on_thinking_token=partial(self._handle_thinking_token_chunk, active),
+                    on_assistant_text=on_assistant_text,
                     on_messages_snapshot=lambda snapshot: on_messages_snapshot(snapshot),
                     before_llm_call=lambda: self._assert_llm_budget_available(active),
                     get_usage_limits=lambda: self._remaining_usage_limits(active),
@@ -551,21 +574,27 @@ class SessionTurnMixin(SessionTurnHost):
         output: str,
         thinking: str,
         final_status: FinalStatus | None = None,
+        turn_record_start: int = 0,
     ) -> None:
         self._session_mgr.save_history(session_id, messages)
         self._session_mgr.save_state(active.state)
         self._save_turn_progress(session_id, active)
         await self._refresh_sandbox_snapshot_after_turn(session_id)
         usage_payload = self._turn_usage_payload(active) or TurnUsage()
+        # Aggregate this turn's agent requests for the reload tooltip: provider token totals, the
+        # turn's TTFT, and generation time summed across requests (tool waits between them excluded,
+        # so tok/s reflects decode speed, not tool latency). Live TurnUsage is broadcast, not stored.
+        stats = aggregate_turn_generation(active.llm_request_log.records[turn_record_start:])
         assistant_event: dict[str, Any] = {"role": "assistant", "content": output}
         if final_status is not None:
             assistant_event["final_status"] = final_status
-        # Persist the bits the turn tooltip shows after reload (live TurnUsage is broadcast, not stored).
-        if usage_payload.model or usage_payload.input_tokens or usage_payload.output_tokens:
+        if usage_payload.model or stats["input_tokens"] or stats["output_tokens"]:
             assistant_event["usage"] = {
                 "model": usage_payload.model,
-                "input_tokens": usage_payload.input_tokens,
-                "output_tokens": usage_payload.output_tokens,
+                "input_tokens": stats["input_tokens"],
+                "output_tokens": stats["output_tokens"],
+                "ttft_ms": stats["ttft_ms"],
+                "generation_ms": stats["generation_ms"],
             }
         self._session_mgr.append_events(session_id, [assistant_event])
         assistant_event_index = len(self._session_mgr.load_events(session_id)) - 1

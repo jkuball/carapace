@@ -772,6 +772,26 @@ def test_truncate_incomplete_events_keeps_completed_turn_after_resultless_call(t
         assert engine._completed_event_turns(truncated)[-1].end_event_index == 6
 
 
+def test_completed_event_turns_ignores_partial_assistant_events(tmp_path: Path, db_factory) -> None:
+    """Intermediate narration (partial assistant events) sits inside a turn — the turn must end at
+    its final assistant answer, so reset/fork/compaction stay anchored to real turn boundaries."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        events: list[dict[str, Any]] = [
+            {"role": "user", "content": "do it"},
+            {"role": "assistant", "content": "let me check the file", "partial": True},
+            {"role": "tool_call", "tool": "exec", "args": {"command": "ls"}, "detail": "run", "tool_id": "c1"},
+            {"role": "tool_result", "tool": "exec", "result": "ok", "exit_code": 0, "tool_id": "c1"},
+            {"role": "assistant", "content": "all done"},
+        ]
+
+        turns = engine._completed_event_turns(events)
+
+        assert len(turns) == 1
+        assert turns[0].start_event_index == 0
+        assert turns[0].end_event_index == 4  # final assistant, not the partial at index 1
+
+
 def test_save_user_message_on_failure_appends_cancelled_parallel_tool_returns(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path, session_factory=db_factory)

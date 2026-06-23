@@ -76,6 +76,7 @@ from .transcript import (
     history_for_completed_turn_count,
     is_terminal_history_message,
     normalize_unattended_output_history,
+    rebuild_model_history_from_events,
     task_output_text,
 )
 from .turns import SessionTurnMixin
@@ -543,13 +544,13 @@ class SessionEngine(
             return False
 
         events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
-        turns = self._completed_event_turns(events)
-        target = next((turn for turn in turns if turn.end_event_index == event_index), None)
-        if target is None:
+        result = self._sliced_transcript_for_event_cut(session_id, events, event_index)
+        if result is None:
             await self._broadcast(active, "on_error", "Unknown reset target")
             return False
 
-        self._rewrite_session_transcript(session_id, events[: target.end_event_index + 1])
+        prefix_events, history, tree = result
+        self._save_rewound_transcript(session_id, prefix_events, history, tree)
         return True
 
     def fork_session(
@@ -571,15 +572,13 @@ class SessionEngine(
         source_meta = self._session_mgr.load_meta(session_id)
         source_state = active.state.model_copy(deep=True)
         events = self._truncate_incomplete_events(self._session_mgr.load_events(session_id))
-        turns = self._completed_event_turns(events)
-        target = next((turn for turn in turns if turn.end_event_index == event_index), None)
-        if target is None:
+        result = self._sliced_transcript_for_event_cut(session_id, events, event_index)
+        if result is None:
             msg = "Unknown fork target"
             raise ValueError(msg)
 
-        forked_events = events[: target.end_event_index + 1]
-        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        forked_history, forked_tree = self._compacted_history_and_tree_for_events(session_id, forked_events, history)
+        forked_events, forked_history, forked_tree = result
+        forked_at_tip = event_index == len(events) - 1
         target_unattended = source_state.attributes.unattended if unattended is None else unattended
         target_ask_mode = source_state.attributes.ask_mode if ask_mode is None else ask_mode
         target_yolo_mode = source_state.attributes.yolo_mode if yolo_mode is None else yolo_mode
@@ -621,7 +620,7 @@ class SessionEngine(
         # Seed the context-distribution gauge from the source's last agent request, but only when
         # forking at the tip: for an earlier turn the source's shape reflects more context than the
         # fork actually holds. Cost/usage still start empty — no billing is carried over.
-        if target is turns[-1]:
+        if forked_at_tip:
             source_rec = last_record_for_source(self._session_mgr.load_llm_request_log(session_id), "agent")
             if source_rec is not None:
                 self._session_mgr.save_llm_request_log(forked_session_id, LlmRequestLog(records=[source_rec]))
@@ -702,13 +701,62 @@ class SessionEngine(
         tree = trim_compaction_tree(self._session_mgr.load_compaction(session_id), fold_ids)
         return sliced, tree
 
-    def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
-        truncated_events = self._truncate_incomplete_events(events)
-        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
-        truncated_history, tree = self._compacted_history_and_tree_for_events(session_id, truncated_events, history)
+    def _first_user_event_index(self, events: list[dict[str, Any]], *, start: int) -> int | None:
+        """Index of the first non-slash user event at or after *start* (a turn's prompt)."""
+        for index in range(start, len(events)):
+            event = events[index]
+            content = event.get("content")
+            if event.get("role") == "user" and isinstance(content, str) and not content.startswith("/"):
+                return index
+        return None
 
-        self._session_mgr.save_events(session_id, truncated_events)
-        self._session_mgr.save_history(session_id, truncated_history)
+    def _sliced_transcript_for_event_cut(
+        self, session_id: str, events: list[dict[str, Any]], cut_index: int
+    ) -> tuple[list[dict[str, Any]], list[ModelMessage], SessionCompaction] | None:
+        """Event-granular slice for reset/fork: keep the transcript through *cut_index* inclusive.
+
+        Cuts land on a user prompt or an assistant answer (final or intermediate ``partial``). A
+        final-assistant cut is a turn boundary and reuses the fold-aware turn slice. A mid-turn cut
+        (partial assistant, or a user prompt to rewind to) keeps the compacted older turns verbatim
+        and rebuilds only the *cut turn* from its events — safe because the newest turn is never
+        folded or tool-compacted (compaction runs between turns).
+        """
+        events = self._truncate_incomplete_events(events)
+        if not 0 <= cut_index < len(events):
+            return None
+        cut_event = events[cut_index]
+        role = cut_event.get("role")
+        content = cut_event.get("content")
+        if role not in {"user", "assistant"}:
+            return None
+        if role == "user" and isinstance(content, str) and content.startswith("/"):
+            return None  # slash commands are not branch points
+
+        prefix = events[: cut_index + 1]
+        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
+
+        if role == "assistant" and not cut_event.get("partial"):
+            sliced, tree = self._compacted_history_and_tree_for_events(session_id, prefix, history)
+            return prefix, sliced, tree
+
+        completed = self._completed_event_turns(prefix)
+        head_end = completed[-1].end_event_index + 1 if completed else 0
+        head_history, tree = self._compacted_history_and_tree_for_events(session_id, events[:head_end], history)
+        turn_start = self._first_user_event_index(prefix, start=head_end)
+        if turn_start is None:
+            return prefix, head_history, tree
+        tail_history = rebuild_model_history_from_events(prefix[turn_start : cut_index + 1])
+        return prefix, head_history + tail_history, tree
+
+    def _save_rewound_transcript(
+        self,
+        session_id: str,
+        events: list[dict[str, Any]],
+        history: list[ModelMessage],
+        tree: SessionCompaction,
+    ) -> None:
+        self._session_mgr.save_events(session_id, events)
+        self._session_mgr.save_history(session_id, history)
         self._session_mgr.save_compaction(session_id, tree)
         self._session_mgr.clear_llm_request_state(session_id)
 
@@ -716,6 +764,12 @@ class SessionEngine(
         if active is not None:
             active.llm_request_state = None
             active.llm_request_thinking.clear()
+
+    def _rewrite_session_transcript(self, session_id: str, events: list[dict[str, Any]]) -> None:
+        truncated_events = self._truncate_incomplete_events(events)
+        history = self._truncate_incomplete_model_history(self._session_mgr.load_history(session_id))
+        truncated_history, tree = self._compacted_history_and_tree_for_events(session_id, truncated_events, history)
+        self._save_rewound_transcript(session_id, truncated_events, truncated_history, tree)
 
     async def _generate_title(
         self, active: ActiveSession, events: list[dict[str, Any]], *, track_activity: bool = True

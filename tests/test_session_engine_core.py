@@ -285,6 +285,55 @@ def test_fork_session_copies_transcript_and_security_context(tmp_path: Path, db_
     assert len(engine.session_mgr.load_events(sid)) == 5
 
 
+def test_fork_at_partial_assistant_rebuilds_cut_turn(tmp_path: Path, db_factory) -> None:
+    """Forking at an intermediate (partial) assistant keeps the turn's events up to the cut and
+    rebuilds a model history ending on that narration — the basis for continuing mid-turn."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+    sid = engine.session_mgr.create_session(user="thies").session_id
+    engine.get_or_activate(sid)
+    engine.session_mgr.append_events(
+        sid,
+        [
+            {"role": "user", "content": "do it"},
+            {"role": "tool_call", "tool": "read", "args": {"path": "a.txt"}, "detail": "reading", "tool_id": "c1"},
+            {"role": "tool_result", "tool": "read", "result": "contents", "exit_code": 0, "tool_id": "c1"},
+            {"role": "assistant", "content": "let me look closer", "partial": True},
+            {"role": "tool_call", "tool": "exec", "args": {"command": "ls"}, "detail": "run", "tool_id": "c2"},
+            {"role": "tool_result", "tool": "exec", "result": "ok", "exit_code": 0, "tool_id": "c2"},
+            {"role": "assistant", "content": "all done"},
+        ],
+    )
+    engine.session_mgr.save_history(
+        sid,
+        [
+            ModelRequest(parts=[UserPromptPart(content="do it")]),
+            ModelResponse(parts=[ToolCallPart(tool_name="read", args={"path": "a.txt"}, tool_call_id="c1")]),
+            ModelRequest(parts=[ToolReturnPart(tool_name="read", content="contents", tool_call_id="c1")]),
+            ModelResponse(parts=[TextPart(content="let me look closer")]),
+            ModelResponse(parts=[ToolCallPart(tool_name="exec", args={"command": "ls"}, tool_call_id="c2")]),
+            ModelRequest(parts=[ToolReturnPart(tool_name="exec", content="ok", tool_call_id="c2")]),
+            ModelResponse(parts=[TextPart(content="all done")]),
+        ],
+    )
+
+    forked = engine.fork_session(sid, event_index=3, channel_type="web")
+
+    assert _without_timestamps(engine.session_mgr.load_events(forked.session_id)) == [
+        {"role": "user", "content": "do it"},
+        {"role": "tool_call", "tool": "read", "args": {"path": "a.txt"}, "detail": "reading", "tool_id": "c1"},
+        {"role": "tool_result", "tool": "read", "result": "contents", "exit_code": 0, "tool_id": "c1"},
+        {"role": "assistant", "content": "let me look closer", "partial": True},
+    ]
+    history = engine.session_mgr.load_history(forked.session_id)
+    # user prompt, the read tool call/return pair, then the intermediate narration — ending here.
+    assert len(history) == 4
+    assert isinstance(history[0], ModelRequest) and history[0].parts[0].content == "do it"
+    last = history[-1]
+    assert isinstance(last, ModelResponse)
+    assert isinstance(last.parts[0], TextPart) and last.parts[0].content == "let me look closer"
+
+
 def _seed_two_turn_session(engine: Any) -> str:
     sid = engine.session_mgr.create_session(user="thies").session_id
     engine.get_or_activate(sid)
@@ -320,6 +369,30 @@ def _seed_two_turn_session(engine: Any) -> str:
         ),
     )
     return sid
+
+
+@pytest.mark.anyio
+async def test_reset_to_user_message_cuts_after_prompt(tmp_path: Path, db_factory) -> None:
+    """Resetting at a user message keeps the conversation through that prompt (dropping its
+    response), so the user can amend and re-run by sending a follow-up."""
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+    sid = _seed_two_turn_session(engine)
+
+    ok = await engine.reset_to_turn(sid, 2)  # the "second" user prompt
+
+    assert ok is True
+    assert _without_timestamps(engine.session_mgr.load_events(sid)) == [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "reply one"},
+        {"role": "user", "content": "second"},
+    ]
+    history = engine.session_mgr.load_history(sid)
+    assert len(history) == 3
+    last = history[-1]
+    assert isinstance(last, ModelRequest)
+    assert isinstance(last.parts[0], UserPromptPart)
+    assert last.parts[0].content == "second"
 
 
 def test_fork_at_tip_copies_context_distribution(tmp_path: Path, db_factory) -> None:

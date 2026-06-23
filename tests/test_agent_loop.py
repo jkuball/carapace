@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic_ai.messages import PartStartEvent, TextPart, ToolCallPart
 from pydantic_ai.models import Model
 from pydantic_ai.usage import RunUsage
 
@@ -91,3 +92,46 @@ async def test_run_agent_turn_decodes_unattended_structured_outputs(
     assert thinking == ""
     assert final_status == expected_status
     assert isinstance(deps.security.action_log[-1], AgentResponseEntry)
+
+
+@pytest.mark.anyio
+async def test_run_agent_turn_flushes_intermediate_text_before_tool_calls(tmp_path: Path) -> None:
+    """Text emitted before a tool call is flushed as an intermediate segment; the final answer
+    (text with no tool after it) is returned as output, never double-flushed."""
+    deps = _make_deps(tmp_path, unattended=False)
+    fake_agent = MagicMock()
+
+    async def _events() -> Any:
+        yield PartStartEvent(index=0, part=TextPart(content="Let me check the file. "))
+        yield PartStartEvent(index=1, part=ToolCallPart(tool_name="read", args={}, tool_call_id="c1"))
+        yield PartStartEvent(index=2, part=TextPart(content="All done."))
+
+    async def _run(*_args: Any, **kwargs: Any) -> _FakeResult:
+        await kwargs["event_stream_handler"](None, _events())
+        return _FakeResult("All done.")
+
+    fake_agent.run = _run
+
+    segments: list[str] = []
+
+    async def _on_assistant_text(text: str) -> None:
+        segments.append(text)
+
+    async def _send_approval_request(_req: Any) -> None:
+        raise AssertionError("approval loop should not run")
+
+    async def _collect_approvals(_pending: set[str]) -> dict[str, bool]:
+        raise AssertionError("approval loop should not run")
+
+    with patch("carapace.agent.loop.create_agent", return_value=fake_agent):
+        _messages, output_text, _thinking, _status = await run_agent_turn(
+            "read the file",
+            deps,
+            [],
+            _send_approval_request,
+            _collect_approvals,
+            on_assistant_text=_on_assistant_text,
+        )
+
+    assert segments == ["Let me check the file. "]
+    assert output_text == "All done."

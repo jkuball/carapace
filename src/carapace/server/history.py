@@ -52,6 +52,7 @@ class HistoryMessage(BaseModel):
     event_index: int | None = None
     timestamp: str | None = None
     usage: dict[str, Any] | None = None
+    partial: bool | None = None
     reasoning_duration_ms: int | None = None
     reasoning_tokens: int | None = None
     tool: str | None = None

@@ -24,6 +24,7 @@ from pydantic_ai.messages import (
     TextPartDelta,
     ThinkingPart,
     ThinkingPartDelta,
+    ToolCallPart,
 )
 from pydantic_ai.usage import UsageLimits
 
@@ -48,6 +49,7 @@ async def run_agent_turn(
     collect_approvals: Callable[[set[str]], Awaitable[dict[str, bool | ToolDenied]]],
     on_token: Callable[[str], Awaitable[None]] | None = None,
     on_thinking_token: Callable[[str], Awaitable[None]] | None = None,
+    on_assistant_text: Callable[[str], Awaitable[None]] | None = None,
     on_messages_snapshot: Callable[[list[Any]], None] | None = None,
     before_llm_call: Callable[[], None] | None = None,
     get_usage_limits: Callable[[], UsageLimits | None] | None = None,
@@ -63,11 +65,26 @@ async def run_agent_turn(
     agent = create_agent(deps)
     usage_model_key = deps.agent_model_id
     current_thinking_parts: list[str] = []
+    # Text the model emits before a tool call is intermediate narration; we flush it as its own
+    # assistant segment so it persists at its real position (between tool groups), not lumped into
+    # the final answer at turn end. Trailing text (no tool after it) is the final output and is
+    # handled by the caller — it is never flushed here.
+    current_text_parts: list[str] = []
     last_thinking = ""
+
+    async def _flush_text_segment() -> None:
+        if not current_text_parts:
+            return
+        segment = "".join(current_text_parts)
+        current_text_parts.clear()
+        if segment.strip() and on_assistant_text is not None:
+            await on_assistant_text(segment)
 
     async def _stream_handler(_ctx: Any, events: Any) -> None:
         async for event in events:
-            if isinstance(event, PartStartEvent) and isinstance(event.part, ThinkingPart) and event.part.content:
+            if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
+                await _flush_text_segment()
+            elif isinstance(event, PartStartEvent) and isinstance(event.part, ThinkingPart) and event.part.content:
                 current_thinking_parts.append(event.part.content)
                 if on_thinking_token is not None:
                     await on_thinking_token(event.part.content)
@@ -80,15 +97,18 @@ async def run_agent_turn(
                 if on_thinking_token is not None:
                     await on_thinking_token(event.delta.content_delta)
             elif isinstance(event, PartStartEvent) and isinstance(event.part, TextPart) and event.part.content:
+                current_text_parts.append(event.part.content)
                 if on_token is not None:
                     await on_token(event.part.content)
             elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                current_text_parts.append(event.delta.content_delta)
                 if on_token is not None:
                     await on_token(event.delta.content_delta)
 
     if before_llm_call is not None:
         before_llm_call()
     current_thinking_parts.clear()
+    current_text_parts.clear()
     usage_limits = get_usage_limits() if get_usage_limits is not None else None
     result = await agent.run(
         user_input,
@@ -158,6 +178,10 @@ async def run_agent_turn(
         if before_llm_call is not None:
             before_llm_call()
         current_thinking_parts.clear()
+        # The just-finished sub-run ended in a deferred-tool request, not the final answer, so any
+        # text it buffered is intermediate narration (e.g. emitted after its last tool call) — flush
+        # it before the next run instead of dropping it.
+        await _flush_text_segment()
         usage_limits = get_usage_limits() if get_usage_limits is not None else None
         result = await agent.run(
             deps=deps,
