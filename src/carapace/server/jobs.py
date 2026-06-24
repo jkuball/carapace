@@ -15,7 +15,7 @@ from ..models.jobs import JobDefinition, JobDefinitionInput, JobsFile
 from ..models.session import SessionJobRunContext
 from ..user_defaults import apply_job_model_defaults, effective_user_budget
 from .auth import require
-from .sessions import SessionInfo, _session_info_from_state
+from .sessions import SessionInfo, _session_info_from_state, archive_session
 from .state import server_module
 
 server = server_module()
@@ -85,6 +85,11 @@ async def _run_job_definition(
         job_user = server._auth_store.get_user(job.user)
         if job_user is None:
             raise_job_conflict("Job owner was not found")
+        # Snapshot prior-run sessions before creating the new one, so a concurrent run's
+        # freshly-created session can't end up in the archive set.
+        previous_session_ids = (
+            server._engine.session_mgr.find_sessions("job", f"job:{job.id}") if job.archive_previous_sessions else []
+        )
         state = server._engine.session_mgr.create_session(
             channel_type="job",
             channel_ref=f"job:{job.id}",
@@ -103,6 +108,12 @@ async def _run_job_definition(
             title_model_name=job.title_model_name,
         )
         created_new_session = True
+
+        for previous_id in previous_session_ids:
+            try:
+                await archive_session(previous_id)
+            except Exception as exc:
+                logger.warning(f"Job {job.id} failed to archive previous session {previous_id}: {exc}")
     else:
         state = server._engine.session_mgr.load_state(job.persistent_session_id)
         if state is None or not server._engine.session_mgr.is_owned_by(state.session_id, job.user):

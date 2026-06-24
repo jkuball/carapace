@@ -2034,6 +2034,54 @@ def test_run_job_creates_fresh_session_and_submits_message(client, auth_headers,
     assert '{"source":"calendar","items":3}' in message
 
 
+def test_run_job_archives_previous_sessions(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(srv._engine, "submit_message", AsyncMock())
+
+    create_resp = client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "morning-digest",
+            "name": "Morning Digest",
+            "prompt": "Summarize overnight.",
+            "archive_previous_sessions": True,
+            "triggers": [],
+        },
+    )
+    assert create_resp.status_code == 201
+
+    first = client.post("/api/jobs/morning-digest/run", headers=auth_headers).json()
+    second = client.post("/api/jobs/morning-digest/run", headers=auth_headers).json()
+
+    assert first["session_id"] != second["session_id"]
+    assert srv._engine.session_mgr.load_state(first["session_id"]).attributes.archived is True
+    assert srv._engine.session_mgr.load_state(second["session_id"]).attributes.archived is False
+    srv._engine.sandbox_mgr.destroy_session.assert_any_await(first["session_id"])
+
+
+def test_run_job_archive_rolls_back_flag_on_commit_failure(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(srv._engine, "submit_message", AsyncMock())
+    monkeypatch.setattr(srv._session_archive, "commit_session", AsyncMock(side_effect=RuntimeError("boom")))
+
+    client.post(
+        "/api/jobs",
+        headers=auth_headers,
+        json={
+            "id": "morning-digest",
+            "name": "Morning Digest",
+            "prompt": "Summarize overnight.",
+            "archive_previous_sessions": True,
+            "triggers": [],
+        },
+    )
+
+    first = client.post("/api/jobs/morning-digest/run", headers=auth_headers).json()
+    client.post("/api/jobs/morning-digest/run", headers=auth_headers)
+
+    # Commit failed, so the flag is rolled back and the session is left for a later retry.
+    assert srv._engine.session_mgr.load_state(first["session_id"]).attributes.archived is False
+
+
 def test_run_job_uses_existing_persistent_session(client, auth_headers, monkeypatch):
     submit_message = AsyncMock()
     monkeypatch.setattr(srv._engine, "submit_message", submit_message)

@@ -211,6 +211,18 @@ class SessionManager:
         with self._session_factory() as db:
             return db.scalars(stmt).first()
 
+    def find_sessions(self, channel_type: str, channel_ref: str) -> list[str]:
+        stmt = (
+            select(SessionRow.session_id)
+            .where(
+                SessionRow.channel_type == channel_type,
+                SessionRow.channel_ref == channel_ref,
+            )
+            .order_by(SessionRow.last_active.desc())
+        )
+        with self._session_factory() as db:
+            return list(db.scalars(stmt).all())
+
     def delete_session(self, session_id: str) -> bool:
         with self._session_factory.begin() as db:
             row = db.get(SessionRow, session_id)

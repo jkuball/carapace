@@ -958,7 +958,9 @@
             "prompt": "Prompt",
             "expression": "Ausdruck",
             "timeZone": "Zeitzone",
-            "inputOptional": "Eingabe (optional)"
+            "inputOptional": "Eingabe (optional)",
+            "archivePreviousSessions": "Vorherige Sitzungen archivieren",
+            "archivePreviousSessionsHelp": "Beim Start einer neuen Sitzung alle noch offenen früheren Sitzungen dieses Jobs archivieren."
         },
         "placeholders": {
             "name": "Nächtliche Inbox-Prüfung",
