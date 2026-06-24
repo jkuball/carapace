@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ..notifications.models import NotificationsConfig
 from .session import SessionBudget
 
-OPENAI_COMPATIBLE_PROVIDERS = {"openai", "openai-chat"}
+OPENAI_COMPATIBLE_PROVIDERS = {"openai", "openai-chat", "openai-responses"}
 PROVIDERS_WITH_MODEL_API_KEYS = OPENAI_COMPATIBLE_PROVIDERS | {"openrouter"}
 
 
@@ -77,7 +77,10 @@ class AvailableModelEntry(ConfigModel):
     """One row in ``agent.available_models``: shorthand ``provider:name`` string or a mapping."""
 
     provider: str = Field(
-        description="API kind used to access the model, such as anthropic, openai, openai-chat, or openrouter.",
+        description=(
+            "API kind used to access the model, such as anthropic, openai, "
+            "openai-chat, openai-responses, or openrouter."
+        ),
     )
     name: str = Field(
         description="Provider-specific model name sent to that API.",
@@ -98,7 +101,7 @@ class AvailableModelEntry(ConfigModel):
     )
     base_url: str | None = Field(
         default=None,
-        description="OpenAI-compatible API base URL (openai / openai-chat rows only).",
+        description="OpenAI-compatible API base URL (openai / openai-chat / openai-responses rows only).",
     )
     vision: bool = Field(
         default=False,
@@ -120,11 +123,15 @@ class AvailableModelEntry(ConfigModel):
     @model_validator(mode="after")
     def _validate_openai_compatible_fields(self) -> AvailableModelEntry:
         if self.base_url is not None and self.provider not in OPENAI_COMPATIBLE_PROVIDERS:
-            raise ValueError("base_url is only supported for provider 'openai' or 'openai-chat'")
+            raise ValueError("base_url is only supported for provider 'openai', 'openai-chat', or 'openai-responses'")
         if self.thinking_budget_tokens is not None and self.provider not in OPENAI_COMPATIBLE_PROVIDERS:
-            raise ValueError("thinking_budget_tokens is only supported for provider 'openai' or 'openai-chat'")
+            raise ValueError(
+                "thinking_budget_tokens is only supported for provider 'openai', 'openai-chat', or 'openai-responses'"
+            )
         if self.api_key is not None and self.provider not in PROVIDERS_WITH_MODEL_API_KEYS:
-            raise ValueError("api_key is only supported for provider 'openai', 'openai-chat', or 'openrouter'")
+            raise ValueError(
+                "api_key is only supported for provider 'openai', 'openai-chat', 'openai-responses', or 'openrouter'"
+            )
         return self
 
     @property

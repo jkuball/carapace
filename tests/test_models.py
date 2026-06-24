@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from carapace.llm import make_model_factory, model_settings_for_config
+from carapace.llm import make_model_factory, model_settings_for_config, normalize_provider_prefix
 from carapace.models.config import (
     AgentConfig,
     AvailableModelEntry,
@@ -377,6 +377,31 @@ def test_make_model_factory_openai_compatible_row():
     assert isinstance(m, OpenAIChatModel)
 
 
+def test_make_model_factory_openai_responses_row_forces_responses_api():
+    cfg = Config.model_validate(
+        {
+            "agent": {
+                "model": "anthropic:claude-sonnet-4-6",
+                "sentinel_model": "anthropic:claude-sonnet-4-6",
+                "title_model": "anthropic:claude-sonnet-4-6",
+                "available_models": [
+                    "anthropic:claude-sonnet-4-6",
+                    {
+                        "provider": "openai-responses",
+                        "name": "custom",
+                        "id": "on-prem:custom",
+                        "base_url": "http://llm/v1",
+                        "api_key": {"raw": "x"},
+                    },
+                ],
+            }
+        }
+    )
+    factory = make_model_factory(cfg)
+    m = factory("on-prem:custom")
+    assert isinstance(m, OpenAIResponsesModel)
+
+
 def test_make_model_factory_openrouter_row():
     cfg = Config.model_validate(
         {
@@ -621,3 +646,13 @@ def test_audit_entry():
     entry = AuditEntry.now(kind="tool_call", tool="exec", final_decision="auto_allowed")
     assert entry.kind == "tool_call"
     assert entry.sentinel_verdict is None
+
+
+def test_normalize_provider_prefix():
+    # Legacy v1 google prefixes rewrite to their v2 names.
+    assert normalize_provider_prefix("google-gla:gemini-2.0-flash") == "google:gemini-2.0-flash"
+    assert normalize_provider_prefix("google-vertex:gemini-2.0-flash") == "google-cloud:gemini-2.0-flash"
+    # Everything else (including current names and colons in the model name) is untouched.
+    assert normalize_provider_prefix("anthropic:claude-opus-4-8") == "anthropic:claude-opus-4-8"
+    assert normalize_provider_prefix("google:gemini-2.0-flash") == "google:gemini-2.0-flash"
+    assert normalize_provider_prefix("openai:gpt-4o") == "openai:gpt-4o"

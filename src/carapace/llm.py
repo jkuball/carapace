@@ -8,7 +8,7 @@ from typing import Literal, cast
 
 from httpx import AsyncClient, HTTPStatusError, Timeout
 from pydantic_ai.models import Model, infer_model
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.profiles.anthropic import ANTHROPIC_THINKING_BUDGET_MAP
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
@@ -41,8 +41,21 @@ def retry_http_client() -> AsyncClient:
     return AsyncClient(transport=transport, timeout=Timeout(connect=15.0, read=300.0, write=15.0, pool=60.0))
 
 
+# pydantic-ai v2 renamed the Google provider prefixes; keep pre-v2 configs working.
+_PROVIDER_ALIASES = {"google-gla": "google", "google-vertex": "google-cloud"}
+
+
+def normalize_provider_prefix(model_name: str) -> str:
+    """Rewrite legacy ``provider:name`` prefixes (e.g. ``google-gla``) to their v2 names."""
+    prefix, sep, rest = model_name.partition(":")
+    if sep and prefix in _PROVIDER_ALIASES:
+        return f"{_PROVIDER_ALIASES[prefix]}:{rest}"
+    return model_name
+
+
 def infer_model_with_retry_transport(model_name: str) -> Model:
     """Create a Pydantic AI model with retry-capable HTTP transport."""
+    model_name = normalize_provider_prefix(model_name)
     http_client = retry_http_client()
 
     def _provider_factory(name: str) -> Provider:
@@ -118,18 +131,20 @@ def make_model_factory(config: Config) -> Callable[[str], Model]:
                 api_key = entry.api_key.resolve().get_secret_value()
             provider = OpenRouterProvider(api_key=api_key, http_client=retry_http_client())
             return OpenRouterModel(entry.name, provider=provider)
-        if entry.provider in ("openai", "openai-chat"):
+        if entry.provider in ("openai", "openai-chat", "openai-responses"):
             api_key: str | None = None
             if entry.api_key is not None:
                 api_key = entry.api_key.resolve().get_secret_value()
             if entry.base_url is not None or entry.api_key is not None:
-                http_client = retry_http_client()
                 provider = OpenAIProvider(
                     base_url=entry.base_url,
                     api_key=api_key,
-                    http_client=http_client,
+                    http_client=retry_http_client(),
                 )
-                return OpenAIChatModel(entry.name, provider=provider)
+                # openai-responses forces the Responses API even on a custom endpoint; openai and
+                # openai-chat both use Chat Completions for OpenAI-compatible servers (llama.cpp etc.).
+                model_cls = OpenAIResponsesModel if entry.provider == "openai-responses" else OpenAIChatModel
+                return model_cls(entry.name, provider=provider)
         return infer_model_with_retry_transport(resolved_model_name)
 
     return factory
