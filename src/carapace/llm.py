@@ -12,7 +12,6 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.profiles.anthropic import ANTHROPIC_THINKING_BUDGET_MAP
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
-from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
@@ -49,8 +48,6 @@ def infer_model_with_retry_transport(model_name: str) -> Model:
     def _provider_factory(name: str) -> Provider:
         if name.startswith("gateway/"):
             return infer_provider(name)
-        if name in ("google-vertex", "google-gla"):
-            return GoogleProvider(vertexai=name == "google-vertex", http_client=http_client)
         cls = infer_provider_class(name)
         if "http_client" in inspect.signature(cls).parameters:
             return cls(http_client=http_client)  # type: ignore
