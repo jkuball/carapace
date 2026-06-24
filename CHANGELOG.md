@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.146.0 (2026-06-24)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️Merge pull request #237 from thiesgerken/feature/pydantic-ai-v2
+  ([`8e988e0`](https://github.com/thiesgerken/carapace/commit/8e988e06b0b0a77a2b08bdfb95b6647330601c15))
+
+- ⬆️ Upgrade pydantic-ai to v2
+  ([`8e988e0`](https://github.com/thiesgerken/carapace/commit/8e988e06b0b0a77a2b08bdfb95b6647330601c15))
+
+- ⬆️ build(deps): upgrade pydantic-ai to v2
+  ([`a3eb87e`](https://github.com/thiesgerken/carapace/commit/a3eb87e1c8a6fae678700e33c4b437ee2d201fb4))
+
+  Bump pydantic-ai pin from >=1.59,<2 to >=2,<3.
+
+  The codebase already tracked v1's latest naming (RunUsage, OpenAIChatModel, input/output_tokens, capabilities, DeferredToolRequests), so the only code change is the Google provider split: v2 replaces the single GoogleProvider + vertexai flag with GoogleProvider (Gemini API) and GoogleCloudProvider (Vertex), both resolved via infer_provider_class and both accepting http_client. Drop the special-case branch and let the generic factory path handle them.
+
+  BREAKING (user config): the google-gla / google-vertex provider prefixes are gone in v2 — use google: / google-cloud: instead. Default install is also slimmer; bedrock/groq/mistral/cohere/xai/huggingface/temporal extras are no longer bundled.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### ✨ Features
+
+
+- ✨ feat(llm): alias legacy google prefixes and add openai-responses provider
+  ([`3502b12`](https://github.com/thiesgerken/carapace/commit/3502b124eb69747c3ccdf7098ca6c83dc6924042))
+
+  - normalize_provider_prefix rewrites pre-v2 google-gla → google and
+    google-vertex → google-cloud at the resolution boundary, so existing
+    configs and persisted model ids keep working without a DB migration.
+  - New openai-responses provider forces the Responses API even on a custom
+    base_url (openai / openai-chat stay on Chat Completions for OpenAI-compatible
+    servers). Added to OPENAI_COMPATIBLE_PROVIDERS so base_url/api_key/
+    thinking_budget_tokens validation accepts it.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.145.1 (2026-06-24)
 
 
