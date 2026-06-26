@@ -54,6 +54,7 @@ class JobDefinitionInput(BaseModel):
     unattended: bool = True
     ask_mode: bool = False
     yolo_mode: bool = False
+    archive_previous_sessions: bool = False
     persistent_session_id: str | None = None
     agent_model_name: str | None = None
     sentinel_model_name: str | None = None
@@ -98,6 +99,8 @@ class JobDefinitionInput(BaseModel):
             raise ValueError("job session mode overrides cannot be used with persistent_session_id")
         if any((self.agent_model_name, self.sentinel_model_name, self.title_model_name)):
             raise ValueError("job model overrides cannot be used with persistent_session_id")
+        if self.archive_previous_sessions:
+            raise ValueError("job archive_previous_sessions cannot be used with persistent_session_id")
         self.persistent_session_id = persistent_session_id
         return self
 

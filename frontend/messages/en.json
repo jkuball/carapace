@@ -958,7 +958,9 @@
             "prompt": "Prompt",
             "expression": "Expression",
             "timeZone": "Time Zone",
-            "inputOptional": "Input (Optional)"
+            "inputOptional": "Input (Optional)",
+            "archivePreviousSessions": "Archive previous sessions",
+            "archivePreviousSessionsHelp": "When a new session starts, archive any earlier sessions still open from this job."
         },
         "placeholders": {
             "name": "Nightly inbox review",

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from pydantic import ValidationError
+
 from carapace.jobs import JobsScheduler, JobsStore, build_job_run_message
 from carapace.models.jobs import JobDefinition
 
@@ -14,6 +17,19 @@ def test_jobs_store_roundtrip(db_factory):
 
     loaded = store.load()
     assert [entry.id for entry in loaded.jobs] == ["daily"]
+
+
+def test_archive_previous_sessions_conflicts_with_persistent_session():
+    with pytest.raises(ValidationError, match="archive_previous_sessions"):
+        JobDefinition(
+            user="thies",
+            id="daily",
+            name="Daily",
+            prompt="Summarize.",
+            unattended=False,
+            persistent_session_id="sess-1",
+            archive_previous_sessions=True,
+        )
 
 
 def test_build_job_run_message_includes_trigger_context_and_payload():

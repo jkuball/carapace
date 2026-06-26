@@ -84,6 +84,7 @@ function createEmptyJob(): JobDefinition {
     unattended: true,
     ask_mode: false,
     yolo_mode: false,
+    archive_previous_sessions: false,
     persistent_session_id: null,
     agent_model_name: null,
     sentinel_model_name: null,
@@ -808,7 +809,11 @@ export function JobsView({
                     label={t("fields.persistentSession")}
                     description={draft.unattended ? t("fields.persistentSessionDisabled") : t("fields.persistentSessionToggleHelp")}
                     disabled={saving || running || draft.unattended}
-                    onCheckedChange={(enabled) => updateDraft({ persistent_session_id: enabled ? "" : null })}
+                    onCheckedChange={(enabled) =>
+                      updateDraft({
+                        persistent_session_id: enabled ? "" : null,
+                        archive_previous_sessions: enabled ? false : draft.archive_previous_sessions,
+                      })}
                     className="rounded-xl border border-border/70 bg-background px-3 py-3"
                   />
                 </div>
@@ -825,6 +830,15 @@ export function JobsView({
                         onClick: () => toggleJobSessionOption(key),
                       }))}
                     />
+
+                    <SwitchRow
+                      checked={draft.archive_previous_sessions}
+                      label={t("fields.archivePreviousSessions")}
+                      description={t("fields.archivePreviousSessionsHelp")}
+                      disabled={saving || running}
+                      onCheckedChange={(archive_previous_sessions) => updateDraft({ archive_previous_sessions })}
+                      className="rounded-xl border border-border/70 bg-background px-3 py-3"
+                    />
                   </div>
                 ) : null}
 
@@ -840,6 +854,7 @@ export function JobsView({
                           updateDraft({
                             persistent_session_id: persistentSessionId,
                             unattended: persistentSessionId.trim() ? false : draft.unattended,
+                            archive_previous_sessions: persistentSessionId.trim() ? false : draft.archive_previous_sessions,
                             private: persistentSessionId.trim() ? false : draft.private,
                             ask_mode: persistentSessionId.trim() ? false : draft.ask_mode,
                             yolo_mode: persistentSessionId.trim() ? false : draft.yolo_mode,

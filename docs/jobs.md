@@ -34,6 +34,7 @@ jobs:
     unattended: true
     ask_mode: false
     yolo_mode: false
+    archive_previous_sessions: false
     persistent_session_id: null
     agent_model_name: null
     sentinel_model_name: null
@@ -53,6 +54,7 @@ jobs:
 | `unattended`            | Whether a fresh session created for this job runs without a user approval path                             |
 | `ask_mode`              | Restrict a fresh session to read-only operations outside the sandbox while keeping sentinel review enabled |
 | `yolo_mode`             | Bypass sentinel review for a fresh session                                                                 |
+| `archive_previous_sessions` | When a fresh session is created, archive earlier still-open sessions from this job (fresh-session jobs only) |
 | `persistent_session_id` | Reuse an existing attended session instead of creating a fresh one                                         |
 | `agent_model_name`      | Optional agent model override for fresh sessions                                                           |
 | `sentinel_model_name`   | Optional sentinel model override for fresh sessions                                                        |
@@ -91,6 +93,8 @@ If `persistent_session_id` is not set, each run creates a new session with:
 
 This is the usual pattern for unattended automation.
 
+If `archive_previous_sessions` is set, the run archives any earlier sessions created by this job (`channel_ref: "job:<job-id>"`) that are not already archived: each is committed to knowledge, marked archived, and has its sandbox torn down. Sessions with an agent turn still running are skipped. This keeps a recurring job (e.g. a daily digest) from accumulating idle sessions and sandboxes. It only applies to fresh-session jobs and is rejected together with `persistent_session_id`.
+
 ### Persistent session job
 
 If `persistent_session_id` is set, the run reuses an existing session instead of creating a new one.
@@ -102,6 +106,7 @@ Restrictions enforced by validation:
 - it must not be archived
 - job-level session mode overrides are not allowed
 - job-level model overrides are not allowed
+- `archive_previous_sessions` is not allowed
 
 Use this when you want recurring work to accumulate in one long-lived session thread.
 

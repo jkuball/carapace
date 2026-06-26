@@ -310,6 +310,43 @@ async def get_session(
     )
 
 
+async def archive_session(session_id: str) -> None:
+    """Mark a session archived, commit it to knowledge (unless private), and tear down its sandbox.
+
+    Mirrors the archive branch of update_session. No-ops if the session is missing,
+    already archived, or has an agent turn running.
+    """
+    state = server._engine.session_mgr.load_state(session_id)
+    if state is None or state.attributes.archived:
+        return
+    if server._engine.is_agent_running(session_id):
+        return
+
+    previous_attributes = state.attributes
+    next_attributes = state.attributes.model_copy(update={"archived": True})
+    state.attributes = next_attributes
+    server._engine.session_mgr.save_state(state)
+    server._engine.update_active_state(session_id, attributes=next_attributes)
+
+    try:
+        if server._session_archive.enabled and not next_attributes.private:
+            await server._session_archive.commit_session(
+                session_id,
+                trigger="archive",
+                is_agent_running=lambda: server._engine.is_agent_running(session_id),
+            )
+    except Exception:
+        # Roll back the archived flag so a transient commit failure doesn't strand
+        # the session as archived-but-not-committed (archive_session would no-op next run).
+        state.attributes = previous_attributes
+        server._engine.session_mgr.save_state(state)
+        server._engine.update_active_state(session_id, attributes=previous_attributes)
+        raise
+
+    server._engine.deactivate(session_id)
+    await server._engine.sandbox_mgr.destroy_session(session_id)
+
+
 @router.patch("/sessions/{session_id}", response_model=SessionInfo)
 async def update_session(
     session_id: str,
