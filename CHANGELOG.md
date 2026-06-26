@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v0.147.0 (2026-06-26)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #238 from thiesgerken/feature/job-archive-previous-sessions
+  ([`921aae6`](https://github.com/thiesgerken/carapace/commit/921aae6d071a0adca1a1f19b686586ec2e6b2dfc))
+
+- ✨ feat(jobs): archive previous sessions on new run
+  ([`921aae6`](https://github.com/thiesgerken/carapace/commit/921aae6d071a0adca1a1f19b686586ec2e6b2dfc))
+
+- ✨ feat(jobs): archive previous sessions on new run
+  ([`ce37512`](https://github.com/thiesgerken/carapace/commit/ce375127b35b5a7816d42af75b7159a5527c1b79))
+
+  Add an `archive_previous_sessions` option to job definitions. When a fresh-session job runs, earlier sessions it created (channel_ref `job:<id>`) that are still open get committed to knowledge, marked archived, and have their sandboxes torn down. Sessions with a running agent turn are skipped. Rejected together with `persistent_session_id`.
+
+  Keeps recurring jobs (e.g. a daily digest) from piling up idle sessions and sandboxes.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.146.0 (2026-06-24)
 
 
