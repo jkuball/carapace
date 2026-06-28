@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.147.1 (2026-06-28)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(frontend): wrap long unbroken strings in chat messages
+  ([`94737b4`](https://github.com/thiesgerken/carapace/commit/94737b4bc3c521f689072ca4a0d2a22728f6b689))
+
+  Add overflow-wrap: anywhere to .chat-copy-serif so long URIs without whitespace wrap instead of causing horizontal scrolling. Covers both user and assistant messages.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.147.0 (2026-06-26)
 
 
