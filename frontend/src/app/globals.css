@@ -55,6 +55,7 @@ body {
 
 .chat-copy-serif {
   font-family: var(--font-source-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  overflow-wrap: anywhere;
 }
 
 @media (hover: none), (pointer: coarse) {
