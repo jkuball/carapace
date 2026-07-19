@@ -19,6 +19,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { useAppShell } from "@/components/app-shell-context";
+import { useAppLocale } from "@/components/locale-provider";
 import { GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
@@ -30,6 +31,7 @@ import {
   type KnowledgeSkill,
 } from "@/lib/api";
 import { entryIcon } from "@/lib/file-icons";
+import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-time";
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +94,21 @@ function rowIcon(entry: KnowledgeEntry, atRoot: boolean): ReactNode {
  * a trailing link of their own (a session's title opens the chat), so the row is a
  * container rather than a single anchor — anchors cannot nest.
  */
-function EntryRow({ path, entry, untitledLabel }: { path: string; entry: KnowledgeEntry; untitledLabel: string }) {
+function EntryRow({
+  path,
+  entry,
+  untitledLabel,
+  justNowLabel,
+  locale,
+  now,
+}: {
+  path: string;
+  entry: KnowledgeEntry;
+  untitledLabel: string;
+  justNowLabel: string;
+  locale: string;
+  now: number;
+}) {
   const entryPath = path ? `${path}/${entry.name}` : entry.name;
   return (
     <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
@@ -111,9 +127,21 @@ function EntryRow({ path, entry, untitledLabel }: { path: string; entry: Knowled
         >
           {entry.label ?? untitledLabel}
         </Link>
-      ) : entry.size != null ? (
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatSize(entry.size)}</span>
-      ) : null}
+      ) : (
+        <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted-foreground">
+          {entry.modified ? (
+            <span
+              className="hidden tabular-nums sm:inline"
+              title={formatAbsoluteTime(entry.modified, locale)}
+            >
+              {formatRelativeTime(entry.modified, locale, now, justNowLabel)}
+            </span>
+          ) : null}
+          {entry.size != null ? (
+            <span className="w-16 text-right tabular-nums">{formatSize(entry.size)}</span>
+          ) : null}
+        </span>
+      )}
     </div>
   );
 }
@@ -257,6 +285,8 @@ function FileContent({
 export function KnowledgeView() {
   const t = useTranslations("knowledge");
   const tApp = useTranslations("app");
+  const tSidebar = useTranslations("sidebar");
+  const { locale } = useAppLocale();
   const { server, token } = useAppShell();
   const git = useGlobalGit(server, token);
   const searchParams = useSearchParams();
@@ -265,6 +295,9 @@ export function KnowledgeView() {
   const [result, setResult] = useState<KnowledgeBrowseResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Reference point for relative times, refreshed whenever a listing loads. No ticking
+  // timer: rows are re-read on every navigation, so drift only shows on an idle page.
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     document.title = `${t("title")} • ${tApp("name")}`;
@@ -277,7 +310,10 @@ export function KnowledgeView() {
       setError(null);
       try {
         const browsed = await browseKnowledge(server, path);
-        if (!cancelled) setResult(browsed);
+        if (!cancelled) {
+          setResult(browsed);
+          setNow(Date.now());
+        }
       } catch (browseError) {
         if (!cancelled) {
           setResult(null);
@@ -344,6 +380,9 @@ export function KnowledgeView() {
                     path={result.path}
                     entry={entry}
                     untitledLabel={t("untitledSession")}
+                    justNowLabel={tSidebar("time.justNow")}
+                    locale={locale}
+                    now={now}
                   />
                 ))}
               </div>

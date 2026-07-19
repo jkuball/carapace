@@ -1556,6 +1556,8 @@ export interface KnowledgeEntry {
   name: string;
   type: "file" | "dir";
   size: number | null;
+  /** Working-tree mtime, ISO 8601. Files only. */
+  modified: string | null;
   /** Recognized directory convention: a session archive or a skill dir. */
   kind: "session" | "skill" | null;
   /** Human label shown in place of a file's size (a session's title). */

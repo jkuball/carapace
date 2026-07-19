@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -53,6 +54,9 @@ class KnowledgeEntry(BaseModel):
     name: str
     type: Literal["file", "dir"]
     size: int | None = None
+    # Files only: mtime of the working-tree file, which is when it last changed on
+    # disk (a checkout or pull rewrites it), not the authoring commit date.
+    modified: datetime | None = None
     # Recognized directory conventions get a `kind` plus a human label the client
     # renders where a file would show its size.
     kind: Literal["session", "skill"] | None = None
@@ -134,7 +138,13 @@ def resolve_target(root: Path, raw_path: str) -> Path:
 
 def build_entry(child: Path) -> KnowledgeEntry:
     if not child.is_dir():
-        return KnowledgeEntry(name=child.name, type="file", size=child.stat().st_size)
+        stat = child.stat()
+        return KnowledgeEntry(
+            name=child.name,
+            type="file",
+            size=stat.st_size,
+            modified=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+        )
     archive = session_archive_entry(child)
     if archive is not None:
         title, session_id = archive

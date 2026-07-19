@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -316,3 +318,15 @@ def test_build_entry_session_wins_over_skill(tmp_path: Path) -> None:
     (directory / "SKILL.md").write_text("---\nname: odd\n---\n")
 
     assert build_entry(directory).kind == "session"
+
+
+def test_build_entry_reports_file_mtime(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    target = root / "SOUL.md"
+    os.utime(target, (1_780_000_000, 1_780_000_000))
+
+    entry = build_entry(target)
+
+    assert entry.modified == datetime.fromtimestamp(1_780_000_000, tz=UTC)
+    # Directories carry no mtime: the client shows a title or nothing for them.
+    assert build_entry(root / "skills").modified is None
