@@ -144,7 +144,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
     <section className="rounded-lg border border-border bg-muted/30 p-4">
       <div className="flex items-baseline gap-2">
         <Puzzle className="h-4 w-4 shrink-0 self-center text-accent-foreground/70" />
-        <h2 className="truncate font-mono text-sm font-semibold">{skill.name}</h2>
+        <h2 className="min-w-0 break-all font-mono text-sm font-semibold">{skill.name}</h2>
       </div>
       {skill.description ? (
         <p className="mt-1.5 text-sm text-muted-foreground">{skill.description}</p>
@@ -156,10 +156,8 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
             <SkillSection label={t("commands")}>
               {commands.map((command) => (
                 <div key={command.name} className="flex min-w-0 flex-col gap-0.5">
-                  <code className="font-mono text-xs font-semibold">{command.name}</code>
-                  <code className="truncate font-mono text-xs text-muted-foreground" title={command.command}>
-                    {command.command}
-                  </code>
+                  <code className="break-all font-mono text-xs font-semibold">{command.name}</code>
+                  <code className="break-all font-mono text-xs text-muted-foreground">{command.command}</code>
                 </div>
               ))}
             </SkillSection>
@@ -168,7 +166,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           {domains.length ? (
             <SkillSection label={t("domains")}>
               {domains.map((domain) => (
-                <code key={domain} className="truncate font-mono text-xs">{domain}</code>
+                <code key={domain} className="break-all font-mono text-xs">{domain}</code>
               ))}
             </SkillSection>
           ) : null}
@@ -177,11 +175,11 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
             <SkillSection label={t("tunnels")}>
               {tunnels.map((tunnel) => (
                 <div key={`${tunnel.host}:${tunnel.remote_port}`} className="min-w-0">
-                  <code className="font-mono text-xs">
+                  <code className="break-all font-mono text-xs">
                     localhost:{tunnel.local_port} → {tunnel.host}:{tunnel.remote_port}
                   </code>
                   {tunnel.description ? (
-                    <span className="ml-2 text-xs text-muted-foreground">{tunnel.description}</span>
+                    <span className="ml-2 break-words text-xs text-muted-foreground">{tunnel.description}</span>
                   ) : null}
                 </div>
               ))}
@@ -192,17 +190,15 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
             <SkillSection label={t("credentials")}>
               {credentials.map((credential) => (
                 <div key={credential.vault_path} className="flex min-w-0 flex-col gap-0.5">
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <code className="shrink-0 font-mono text-xs font-semibold">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                    <code className="break-all font-mono text-xs font-semibold">
                       {credential.env_var ?? credential.file ?? t("credential")}
                     </code>
                     {credential.description ? (
-                      <span className="truncate text-xs text-muted-foreground">{credential.description}</span>
+                      <span className="break-words text-xs text-muted-foreground">{credential.description}</span>
                     ) : null}
                   </div>
-                  <code className="truncate font-mono text-xs text-muted-foreground" title={credential.vault_path}>
-                    {credential.vault_path}
-                  </code>
+                  <code className="break-all font-mono text-xs text-muted-foreground">{credential.vault_path}</code>
                 </div>
               ))}
             </SkillSection>
@@ -211,8 +207,8 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           {hints.length ? (
             <SkillSection label={t("hints")}>
               {hints.map(([key, value]) => (
-                <div key={key} className="min-w-0 text-xs">
-                  <code className="font-mono font-semibold">{key}</code>
+                <div key={key} className="min-w-0 break-words text-xs">
+                  <code className="break-all font-mono font-semibold">{key}</code>
                   <span className="ml-2 text-muted-foreground">{value}</span>
                 </div>
               ))}
