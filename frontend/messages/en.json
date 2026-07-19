@@ -29,6 +29,7 @@
         "copyHash": "Copy full commit hash",
         "copiedHash": "Copied",
         "largeFileNotice": "Syntax highlighting is off for this file — it is too large.",
+        "tooLarge": "This file is too large to preview — download it instead.",
         "skill": {
             "commands": "Commands",
             "domains": "Domains",

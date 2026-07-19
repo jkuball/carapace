@@ -30,6 +30,10 @@ router = APIRouter()
 # listing response, and huge blobs would bloat it for no benefit.
 MAX_INLINE_TEXT_BYTES = 1024 * 1024
 
+# Types safe to render inline on the app origin. SVG is deliberately absent: it
+# carries script.
+INLINE_MIME_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"})
+
 # Markers for the directory conventions the browser renders specially.
 SKILL_DOC = "SKILL.md"
 README_NAMES = frozenset({"readme.md", "readme"})
@@ -78,9 +82,12 @@ def session_archive_entry(directory: Path, root: Path) -> tuple[str | None, str]
     archive = contained_target(directory / "conversation.json", root)
     if archive is None or not archive.is_file():
         return None
-    # ponytail: parses the whole archive (up to ~1 MB) for one field, since
-    # "session" sorts last in the JSON. Cache by (path, mtime) if listing a month
-    # of sessions ever gets slow.
+    # ponytail: parses the whole archive (up to MAX_INLINE_TEXT_BYTES) for one field,
+    # since "session" sorts last in the JSON. Cache by (path, mtime) if listing a
+    # month of sessions ever gets slow. The cap matters: this runs for every subdir
+    # of a listing, on files a pushing client controls the size of.
+    if archive.stat().st_size > MAX_INLINE_TEXT_BYTES:
+        return None
     try:
         payload = json.loads(archive.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -130,29 +137,29 @@ class KnowledgeFileInfo(BaseModel):
 
 
 def contained_target(child: Path, root: Path) -> Path | None:
-    """Resolve *child*, or return None if it is unreadable or escapes *root*.
+    """Resolve *child*, or return None if it is unreadable or out of bounds.
 
     Listing a directory means reading through its entries (a SKILL.md, a README, a
-    session's conversation.json), and a symlink committed into the repo can point at
-    any host path. Every such read resolves through here first, so the containment
-    check that ``resolve_target`` applies to the browsed path also covers the reads
-    the listing does on its own.
+    session's conversation.json), and a symlink committed into the repo can point
+    anywhere. Every such read resolves through here first, so the guards that
+    ``resolve_target`` applies to the browsed path also cover the reads the listing
+    does on its own: outside the repo, and inside ``.git`` (which holds the remote
+    URL with its access token).
     """
     try:
         target = child.resolve(strict=True)
     except (OSError, RuntimeError):
         # Broken symlink, symlink loop, or an unreadable parent: nothing to read.
         return None
-    return target if target.is_relative_to(root) else None
+    if not target.is_relative_to(root):
+        return None
+    return None if ".git" in target.relative_to(root).parts else target
 
 
 def resolve_target(root: Path, raw_path: str) -> Path:
-    """Resolve *raw_path* inside *root*, rejecting traversal and ``.git``."""
-    root = root.resolve()
-    target = (root / raw_path).resolve() if raw_path else root
-    if target != root and not target.is_relative_to(root):
-        raise HTTPException(status_code=404, detail="Not found")
-    if ".git" in target.relative_to(root).parts:
+    """Resolve *raw_path* inside an already-resolved *root*, rejecting traversal and ``.git``."""
+    target = contained_target(root / raw_path, root) if raw_path else root
+    if target is None:
         raise HTTPException(status_code=404, detail="Not found")
     return target
 
@@ -219,7 +226,8 @@ def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDi
 
 
 def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
-    root = root.resolve()
+    # `.git` is filtered by name here rather than left to contained_target, which would
+    # report it as an unreadable entry instead of hiding it.
     entries = [build_entry(child, root) for child in target.iterdir() if child.name != ".git"]
     entries.sort(key=lambda e: (e.type != "dir", e.name.casefold()))
     rel = target.relative_to(root)
@@ -271,11 +279,16 @@ async def browse_knowledge(
         raise HTTPException(status_code=404, detail="Not found")
     rel = target.relative_to(root).as_posix()
     if raw or download:
+        mime = guess_mime(target.name)
+        # Repo contents come from a sandboxed agent's `git push`, and this is served
+        # from the app origin under a cookie session. Only images render inline (the
+        # browser's <img>); a pushed .html or .svg would otherwise run script here.
+        inline = raw and mime in INLINE_MIME_TYPES
         return FileResponse(
             target,
-            media_type=guess_mime(target.name),
+            media_type=mime if inline else "application/octet-stream",
             filename=target.name,
-            content_disposition_type="attachment" if download else "inline",
+            content_disposition_type="inline" if inline else "attachment",
         )
     size = target.stat().st_size
     mime = guess_mime(target.name)
@@ -284,5 +297,7 @@ async def browse_knowledge(
         name=target.name,
         size=size,
         mime=mime,
-        content=None if mime.startswith("image/") else read_text_content(target, size),
+        # Only the types the client renders as an <img> skip their contents; anything
+        # else it cannot display (an SVG, say) is still worth showing as source.
+        content=None if mime in INLINE_MIME_TYPES else read_text_content(target, size),
     )

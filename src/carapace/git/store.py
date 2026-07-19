@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import socket
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,15 +11,19 @@ from loguru import logger
 
 from ..models.git import FileCommit
 
-# Record separator for the ``git log`` walk in last_commits: a byte that cannot appear
-# in a commit subject, so records stay distinguishable from the NUL-separated paths.
+# Record separator for the ``git log`` walk in last_commits, keeping records
+# distinguishable from the NUL-separated paths. Git does accept a subject containing
+# this byte, so split only where a commit header follows: otherwise a single
+# `git commit -m "$(printf 'a\001b')"` splits its own record, every path in it is
+# dropped, and those entries silently show an older commit.
 _LOG_RECORD_SEP = "%x01"
+_LOG_RECORD_SPLIT = re.compile(r"\x01(?=[0-9a-f]{40}\x00)")
 
 
 def _parse_last_commits(out: str, prefix: str) -> dict[str, FileCommit]:
     """Fold a ``git log -z --name-only`` walk into one commit per immediate child."""
     found: dict[str, FileCommit] = {}
-    for record in out.split("\x01"):
+    for record in _LOG_RECORD_SPLIT.split(out):
         if not record:
             continue
         fields = record.split("\x00")

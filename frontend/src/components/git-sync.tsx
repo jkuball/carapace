@@ -316,18 +316,17 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
       setOutcome(null);
       try {
         const result = await fn();
-        await refresh();
         setOutcome({ ok: result.ok, errorLabel: t(`errors.${action}`), detail: result.message });
-        if (result.ok) {
-          window.dispatchEvent(new Event(KNOWLEDGE_GIT_CHANGED_EVENT));
-        }
+        // Every mounted panel re-reads status off this, the acting one included, so
+        // there is no refresh() call here — it would fetch the same status twice.
+        window.dispatchEvent(new Event(KNOWLEDGE_GIT_CHANGED_EVENT));
       } catch {
         setOutcome({ ok: false, errorLabel: t(`errors.${action}`), detail: "" });
       } finally {
         setBusy(null);
       }
     },
-    [refresh, t],
+    [t],
   );
 
   return {

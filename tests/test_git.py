@@ -592,6 +592,15 @@ class TestParseLastCommits:
         out = self._record("aaa1111", 1_780_000_000, "root", ["SOUL.md", "skills/weather/SKILL.md"])
         assert sorted(_parse_last_commits(out, "")) == ["SOUL.md", "skills"]
 
+    def test_a_record_separator_in_the_subject_does_not_split_the_record(self):
+        """Git accepts \\x01 in a subject. Splitting on it blindly drops every path in
+        that commit, so those entries silently fall back to an older one."""
+        out = self._record("aaa1111", 1_780_000_000, "pwn\x01deadbeef", ["skills/weather/SKILL.md"])
+
+        found = _parse_last_commits(out, "skills/")
+
+        assert found["weather"].subject == "pwn\x01deadbeef"
+
     def test_paths_outside_the_prefix_are_ignored(self):
         out = self._record("aaa1111", 1_780_000_000, "other", ["sessions/2026/06/x/conversation.json"])
         assert _parse_last_commits(out, "skills/") == {}

@@ -36,26 +36,18 @@ import { entryIcon } from "@/lib/file-icons";
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-time";
 import { knowledgeBrowseHref } from "@/lib/knowledge-links";
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 function isMarkdown(name: string): boolean {
   return /\.(md|markdown)$/i.test(name);
 }
-
-function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-const browseHref = knowledgeBrowseHref;
 
 function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
   const segments = path ? path.split("/") : [];
   return (
     <nav aria-label={rootLabel} className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
       <Link
-        href={browseHref("")}
+        href={knowledgeBrowseHref("")}
         className="shrink-0 rounded-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {rootLabel}
@@ -70,7 +62,7 @@ function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
               <span className="truncate font-medium text-foreground">{segment}</span>
             ) : (
               <Link
-                href={browseHref(segmentPath)}
+                href={knowledgeBrowseHref(segmentPath)}
                 className="truncate rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {segment}
@@ -171,44 +163,41 @@ function EntryRow({
     <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
       {rowIcon(entry)}
       <Link
-        href={browseHref(entryPath)}
+        href={knowledgeBrowseHref(entryPath)}
         className="min-w-0 flex-1 truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {entry.name}
       </Link>
+      {/* Flexible middle column, the first thing to go as the row narrows: the session
+          title where there is one, the commit otherwise. A session's commit subject
+          only ever restates the archiving, so the title is the better use of it. */}
       {entry.session_id ? (
         <Link
           href={`/?session=${encodeURIComponent(entry.session_id)}`}
           title={entry.label ?? undefined}
-          className="max-w-[55%] shrink truncate rounded-sm text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="hidden min-w-0 max-w-[40%] shrink basis-[40%] truncate rounded-sm text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:block"
         >
           {entry.label ?? untitledLabel}
         </Link>
-      ) : (
-        <>
-          {/* Commit column: the first thing to go as the row narrows, since the
-              filename and size stay useful at any width. */}
-          {entry.commit ? (
-            <span className="group/commit hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex">
-              <CopyHash commit={entry.commit} copyLabel={copyHashLabel} copiedLabel={copiedLabel} />
-              <span className="truncate" title={entry.commit.subject}>
-                {entry.commit.subject}
-              </span>
-            </span>
-          ) : null}
-          {/* Both slots keep their width when empty, so directories (no size) line up
-              with files instead of shifting the whole row right. */}
-          <span className="flex shrink-0 items-baseline gap-2 text-xs tabular-nums text-muted-foreground">
-            <span
-              className="hidden w-28 truncate text-right sm:block"
-              title={changedAt ? formatAbsoluteTime(changedAt, locale) : undefined}
-            >
-              {changedAt ? formatRelativeTime(changedAt, locale, now, justNowLabel) : null}
-            </span>
-            <span className="w-16 text-right">{entry.size != null ? formatSize(entry.size) : null}</span>
+      ) : entry.commit ? (
+        <span className="group/commit hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex">
+          <CopyHash commit={entry.commit} copyLabel={copyHashLabel} copiedLabel={copiedLabel} />
+          <span className="truncate" title={entry.commit.subject}>
+            {entry.commit.subject}
           </span>
-        </>
-      )}
+        </span>
+      ) : null}
+      {/* Both slots keep their width when empty, so directories (no size) line up
+          with files instead of shifting the whole row right. */}
+      <span className="flex shrink-0 items-baseline gap-2 text-xs tabular-nums text-muted-foreground">
+        <span
+          className="hidden w-28 truncate text-right sm:block"
+          title={changedAt ? formatAbsoluteTime(changedAt, locale) : undefined}
+        >
+          {changedAt ? formatRelativeTime(changedAt, locale, now, justNowLabel) : null}
+        </span>
+        <span className="w-16 text-right">{entry.size != null ? formatBytes(entry.size) : null}</span>
+      </span>
     </div>
   );
 }
@@ -321,18 +310,28 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
 
 const MAX_HIGHLIGHTED_CHARS = 128 * 1024;
 
+// Kept in step with INLINE_MIME_TYPES on the server, which serves everything else as
+// an attachment — an <img> pointing at those would just break. SVG is not among them:
+// it carries script, and repo contents come from a sandboxed agent's push.
+const INLINE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"]);
+
+// MAX_INLINE_TEXT_BYTES on the server: past it, contents are not sent at all.
+const MAX_INLINE_BYTES = 1024 * 1024;
+
 function FileContent({
   server,
   file,
   noPreviewLabel,
   largeFileLabel,
+  tooLargeLabel,
 }: {
   server: string;
   file: KnowledgeFileInfo;
   noPreviewLabel: string;
   largeFileLabel: string;
+  tooLargeLabel: string;
 }) {
-  if (file.mime.startsWith("image/")) {
+  if (INLINE_IMAGE_TYPES.has(file.mime)) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -345,11 +344,9 @@ function FileContent({
   // The server inlines contents for anything that decodes as text, so extensionless
   // files (.gitignore, Dockerfile) still render; only binaries fall through.
   if (file.content != null) {
-    if (isMarkdown(file.name)) {
-      return <MarkdownContent content={file.content} />;
-    }
-    // Shiki tokenizes the whole document up front, which locks the tab on a large
-    // one — session archives run to hundreds of KB. Plain text past the threshold.
+    // Both renderers tokenize the whole document up front, which locks the tab on a
+    // large one — session archives run to hundreds of KB. Plain text past the
+    // threshold, markdown included: a big README goes through the same Shiki pass.
     if (file.content.length > MAX_HIGHLIGHTED_CHARS) {
       return (
         <div className="flex flex-col gap-2">
@@ -360,9 +357,18 @@ function FileContent({
         </div>
       );
     }
+    if (isMarkdown(file.name)) {
+      return <MarkdownContent content={file.content} />;
+    }
     return <MarkdownContent content={fencedCodeBlock(languageFromFilePath(file.name), file.content)} />;
   }
-  return <p className="text-sm text-muted-foreground">{noPreviewLabel}</p>;
+  // The server also returns no content for a file past its inline cap, which is not
+  // the same thing as an unsupported type — say which one it is.
+  return (
+    <p className="text-sm text-muted-foreground">
+      {file.size > MAX_INLINE_BYTES ? tooLargeLabel : noPreviewLabel}
+    </p>
+  );
 }
 
 export function KnowledgeView() {
@@ -501,6 +507,7 @@ export function KnowledgeView() {
             file={result}
             noPreviewLabel={t("noPreview")}
             largeFileLabel={t("largeFileNotice")}
+            tooLargeLabel={t("tooLarge")}
           />
         ) : null}
       </div>

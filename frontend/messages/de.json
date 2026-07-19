@@ -29,6 +29,7 @@
         "copyHash": "Vollständigen Commit-Hash kopieren",
         "copiedHash": "Kopiert",
         "largeFileNotice": "Syntax-Hervorhebung ist für diese Datei deaktiviert — sie ist zu groß.",
+        "tooLarge": "Diese Datei ist zu groß für eine Vorschau — bitte herunterladen.",
         "skill": {
             "commands": "Befehle",
             "domains": "Domains",

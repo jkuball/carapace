@@ -383,3 +383,28 @@ def test_build_entry_reports_symlink_inside_the_repo(tmp_path: Path) -> None:
     entry = build_entry(root / "alias.md", root.resolve())
 
     assert (entry.type, entry.size) == ("file", len("# soul"))
+
+
+def test_list_dir_does_not_read_dot_git_through_a_symlink(tmp_path: Path) -> None:
+    """A symlink pointing back into .git stays inside the repo, so containment alone
+    would pass it — and .git/config holds the remote URL with its access token."""
+    root = _make_repo(tmp_path)
+    notes = root / "notes"
+    notes.mkdir()
+    (notes / "README.md").symlink_to(root / ".git" / "config")
+
+    assert list_dir(root, notes.resolve()).doc is None
+    # And it is not reachable by browsing to it directly either.
+    with pytest.raises(HTTPException):
+        resolve_target(root.resolve(), "notes/README.md")
+
+
+def test_session_archive_entry_ignores_an_oversized_archive(tmp_path: Path) -> None:
+    """Runs for every subdirectory of a listing, on a file the pushing client sizes."""
+    root = _make_repo(tmp_path)
+    directory = root / "sessions" / "2026" / "06" / "huge"
+    directory.mkdir(parents=True)
+    payload = {"session": {"title": "t", "session_id": "s"}, "pad": "x" * (MAX_INLINE_TEXT_BYTES + 1)}
+    (directory / "conversation.json").write_text(json.dumps(payload))
+
+    assert session_archive_entry(directory, root.resolve()) is None
