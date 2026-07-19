@@ -14,7 +14,17 @@
         "users": "Benutzer",
         "disconnect": "Trennen",
         "github": "thiesgerken/carapace",
-        "apiKeys": "API-Schlüssel"
+        "apiKeys": "API-Schlüssel",
+        "knowledge": "Wissen"
+    },
+    "knowledge": {
+        "title": "Wissen",
+        "root": "Wissen",
+        "loading": "Lädt…",
+        "empty": "Leeres Verzeichnis.",
+        "error": "Laden fehlgeschlagen",
+        "download": "Datei herunterladen",
+        "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar."
     },
     "account": {
         "menu": "Kontomenü",
@@ -1065,6 +1075,7 @@
             "preferences": "Einstellungen",
             "notifications": "Benachrichtigungen",
             "history": "Verlauf",
+            "knowledge": "Wissen",
             "admin": "Administration"
         },
         "secret": {

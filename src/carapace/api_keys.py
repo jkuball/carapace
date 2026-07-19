@@ -28,6 +28,7 @@ class Scope(StrEnum):
     preferences = "preferences"
     notifications = "notifications"
     history = "history"
+    knowledge = "knowledge"
     admin = "admin"
 
 

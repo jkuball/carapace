@@ -1549,3 +1549,59 @@ export function wsUrl(
   const query = params.toString();
   return `${base}/api/chat/${sessionId}${query ? `?${query}` : ""}`;
 }
+
+export interface KnowledgeEntry {
+  name: string;
+  type: "file" | "dir";
+  size: number | null;
+}
+
+export interface KnowledgeDirListing {
+  type: "dir";
+  path: string;
+  entries: KnowledgeEntry[];
+}
+
+export interface KnowledgeFileInfo {
+  type: "file";
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+}
+
+export type KnowledgeBrowseResult = KnowledgeDirListing | KnowledgeFileInfo;
+
+function knowledgeBrowsePath(path: string): string {
+  const clean = path.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!clean) return "/api/knowledge/browse";
+  return `/api/knowledge/browse/${clean.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export async function browseKnowledge(
+  server: string,
+  path: string,
+): Promise<KnowledgeBrowseResult> {
+  const res = await fetch(`${server}${knowledgeBrowsePath(path)}`);
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to browse knowledge"));
+  }
+  return (await res.json()) as KnowledgeBrowseResult;
+}
+
+export function knowledgeRawUrl(
+  server: string,
+  path: string,
+  opts: { download?: boolean } = {},
+): string {
+  const query = opts.download ? "?raw=1&download=1" : "?raw=1";
+  return `${server}${knowledgeBrowsePath(path)}${query}`;
+}
+
+export async function fetchKnowledgeText(server: string, path: string): Promise<string> {
+  const res = await fetch(knowledgeRawUrl(server, path));
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to fetch file"));
+  }
+  return res.text();
+}
