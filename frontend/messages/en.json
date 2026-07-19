@@ -25,7 +25,15 @@
         "error": "Failed to load",
         "download": "Download file",
         "noPreview": "No preview available for this file type.",
-        "untitledSession": "Open session"
+        "untitledSession": "Open session",
+        "skill": {
+            "commands": "Commands",
+            "domains": "Domains",
+            "tunnels": "Tunnels",
+            "credentials": "Credentials",
+            "credential": "Credential",
+            "hints": "Hints"
+        }
     },
     "account": {
         "menu": "Account menu",

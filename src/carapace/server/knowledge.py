@@ -9,11 +9,13 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..api_keys import Access, Scope
 from ..auth import UserIdentity
+from ..models.skills import SkillCarapaceConfig
 from ..session.sent_files import guess_mime
+from ..skills import SkillDocument, parse_skill_document
 from .auth import require
 from .state import server_module
 
@@ -83,15 +85,25 @@ def session_archive_entry(directory: Path) -> tuple[str | None, str] | None:
     )
 
 
+class KnowledgeSkill(BaseModel):
+    """Frontmatter of a skill dir's SKILL.md, rendered as a card above its prose."""
+
+    name: str
+    description: str = ""
+    # None when metadata.carapace is absent or fails validation; the prose still renders.
+    carapace: SkillCarapaceConfig | None = None
+
+
 class KnowledgeDirListing(BaseModel):
     type: Literal["dir"] = "dir"
     path: str
     entries: list[KnowledgeEntry]
     # Recognized directory conventions get their defining document inlined, rendered
-    # below the listing (a skill dir's SKILL.md).
+    # below the listing (a skill dir's SKILL.md, frontmatter stripped into `skill`).
     kind: Literal["skill"] | None = None
     doc_name: str | None = None
     doc: str | None = None
+    skill: KnowledgeSkill | None = None
 
 
 class KnowledgeFileInfo(BaseModel):
@@ -139,12 +151,31 @@ def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
     # the browser can render it under the listing without a second request.
     skill_doc = target / SKILL_DOC
     if skill_doc.is_file():
-        doc = read_text_content(skill_doc, skill_doc.stat().st_size)
-        if doc is not None:
+        raw = read_text_content(skill_doc, skill_doc.stat().st_size)
+        if raw is not None:
+            document = parse_skill_document(raw, fallback_name=target.name)
             listing.kind = "skill"
             listing.doc_name = SKILL_DOC
-            listing.doc = doc
+            listing.doc = document.body
+            listing.skill = KnowledgeSkill(
+                name=document.name,
+                description=document.description,
+                carapace=parse_carapace_config(document, target.name),
+            )
     return listing
+
+
+def parse_carapace_config(document: SkillDocument, skill_name: str) -> SkillCarapaceConfig | None:
+    """Validate ``metadata.carapace``, or return None if absent or malformed."""
+    raw = document.metadata.get("carapace")
+    if raw is None:
+        return None
+    try:
+        return SkillCarapaceConfig.model_validate(raw)
+    except ValidationError as exc:
+        # Skills are user-authored; a bad declaration must not break browsing.
+        logger.warning(f"Invalid metadata.carapace in SKILL.md for skill '{skill_name}': {exc}")
+        return None
 
 
 @router.get("/knowledge/browse", response_model=None)

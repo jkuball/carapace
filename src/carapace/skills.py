@@ -11,10 +11,46 @@ from .models.skills import SkillCarapaceConfig, SkillInfo
 
 
 @dataclass(frozen=True)
-class _SkillFrontmatter:
+class SkillDocument:
+    """A parsed SKILL.md: frontmatter fields plus the markdown body below it."""
+
     name: str
     description: str
     metadata: dict[str, Any]
+    body: str
+
+
+def parse_skill_document(text: str, *, fallback_name: str) -> SkillDocument:
+    """Split *text* into frontmatter and body, tolerating missing or invalid YAML."""
+    fallback = SkillDocument(name=fallback_name, description="", metadata={}, body=text)
+    if not text.startswith("---"):
+        return fallback
+
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return fallback
+
+    try:
+        raw = yaml.safe_load(parts[1])
+    except yaml.YAMLError:
+        return fallback
+
+    if not isinstance(raw, dict):
+        return fallback
+
+    metadata = raw.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    name = raw.get("name")
+    if not isinstance(name, str) or not name:
+        name = fallback_name
+
+    description = raw.get("description")
+    if not isinstance(description, str):
+        description = ""
+
+    return SkillDocument(name=name, description=description, metadata=metadata, body=parts[2].lstrip("\n"))
 
 
 class SkillRegistry:
@@ -80,34 +116,5 @@ class SkillRegistry:
             path=skill_dir,
         )
 
-    def _load_frontmatter(self, skill_md: Path, skill_dir: Path) -> _SkillFrontmatter:
-        text = skill_md.read_text()
-        fallback = _SkillFrontmatter(name=skill_dir.name, description="", metadata={})
-        if not text.startswith("---"):
-            return fallback
-
-        parts = text.split("---", 2)
-        if len(parts) < 3:
-            return fallback
-
-        try:
-            raw = yaml.safe_load(parts[1])
-        except yaml.YAMLError:
-            return fallback
-
-        if not isinstance(raw, dict):
-            return fallback
-
-        metadata = raw.get("metadata")
-        if not isinstance(metadata, dict):
-            metadata = {}
-
-        name = raw.get("name")
-        if not isinstance(name, str) or not name:
-            name = skill_dir.name
-
-        description = raw.get("description")
-        if not isinstance(description, str):
-            description = ""
-
-        return _SkillFrontmatter(name=name, description=description, metadata=metadata)
+    def _load_frontmatter(self, skill_md: Path, skill_dir: Path) -> SkillDocument:
+        return parse_skill_document(skill_md.read_text(), fallback_name=skill_dir.name)

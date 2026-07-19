@@ -1563,13 +1563,48 @@ export interface KnowledgeEntry {
   session_id: string | null;
 }
 
+export interface SkillCommandDecl {
+  name: string;
+  command: string;
+}
+
+export interface SkillCredentialDecl {
+  vault_path: string;
+  description: string;
+  env_var: string | null;
+  file: string | null;
+  base64: boolean;
+}
+
+export interface SkillNetworkTunnel {
+  host: string;
+  remote_port: number;
+  local_port: number;
+  description: string;
+}
+
+export interface SkillCarapaceConfig {
+  network: { domains: string[]; tunnels: SkillNetworkTunnel[] };
+  credentials: SkillCredentialDecl[];
+  commands: SkillCommandDecl[];
+  hints: Record<string, string>;
+}
+
+export interface KnowledgeSkill {
+  name: string;
+  description: string;
+  /** Null when the skill declares no carapace metadata, or it failed validation. */
+  carapace: SkillCarapaceConfig | null;
+}
+
 export interface KnowledgeDirListing {
   type: "dir";
   /** Recognized directory convention, e.g. a skill dir. */
   kind: "skill" | null;
-  /** Defining document inlined by the server (SKILL.md), rendered below the listing. */
+  /** Defining document inlined by the server (SKILL.md), frontmatter stripped. */
   doc_name: string | null;
   doc: string | null;
+  skill: KnowledgeSkill | null;
   path: string;
   entries: KnowledgeEntry[];
 }

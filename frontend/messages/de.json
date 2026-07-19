@@ -25,7 +25,15 @@
         "error": "Laden fehlgeschlagen",
         "download": "Datei herunterladen",
         "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar.",
-        "untitledSession": "Sitzung öffnen"
+        "untitledSession": "Sitzung öffnen",
+        "skill": {
+            "commands": "Befehle",
+            "domains": "Domains",
+            "tunnels": "Tunnel",
+            "credentials": "Zugangsdaten",
+            "credential": "Zugangsdatum",
+            "hints": "Hinweise"
+        }
     },
     "account": {
         "menu": "Kontomenü",

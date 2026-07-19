@@ -10,6 +10,7 @@ import {
   GitCommitHorizontal,
   Loader2,
   MessagesSquare,
+  Puzzle,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -25,6 +26,7 @@ import {
   type KnowledgeBrowseResult,
   type KnowledgeEntry,
   type KnowledgeFileInfo,
+  type KnowledgeSkill,
 } from "@/lib/api";
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
 import { cn } from "@/lib/utils";
@@ -114,6 +116,111 @@ function EntryRow({ path, entry, untitledLabel }: { path: string; entry: Knowled
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatSize(entry.size)}</span>
       ) : null}
     </div>
+  );
+}
+
+function SkillSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+      <div className="shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:w-28">
+        {label}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">{children}</div>
+    </div>
+  );
+}
+
+/** Frontmatter of a skill's SKILL.md as a card: what it exposes, reaches, and needs. */
+function SkillCard({ skill }: { skill: KnowledgeSkill }) {
+  const t = useTranslations("knowledge.skill");
+  const carapace = skill.carapace;
+  const domains = carapace?.network.domains ?? [];
+  const tunnels = carapace?.network.tunnels ?? [];
+  const credentials = carapace?.credentials ?? [];
+  const commands = carapace?.commands ?? [];
+  const hints = Object.entries(carapace?.hints ?? {});
+
+  return (
+    <section className="rounded-lg border border-border bg-muted/30 p-4">
+      <div className="flex items-baseline gap-2">
+        <Puzzle className="h-4 w-4 shrink-0 self-center text-accent-foreground/70" />
+        <h2 className="truncate font-mono text-sm font-semibold">{skill.name}</h2>
+      </div>
+      {skill.description ? (
+        <p className="mt-1.5 text-sm text-muted-foreground">{skill.description}</p>
+      ) : null}
+
+      {commands.length || domains.length || tunnels.length || credentials.length || hints.length ? (
+        <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-3 text-sm">
+          {commands.length ? (
+            <SkillSection label={t("commands")}>
+              {commands.map((command) => (
+                <div key={command.name} className="flex min-w-0 flex-col gap-0.5">
+                  <code className="font-mono text-xs font-semibold">{command.name}</code>
+                  <code className="truncate font-mono text-xs text-muted-foreground" title={command.command}>
+                    {command.command}
+                  </code>
+                </div>
+              ))}
+            </SkillSection>
+          ) : null}
+
+          {domains.length ? (
+            <SkillSection label={t("domains")}>
+              {domains.map((domain) => (
+                <code key={domain} className="truncate font-mono text-xs">{domain}</code>
+              ))}
+            </SkillSection>
+          ) : null}
+
+          {tunnels.length ? (
+            <SkillSection label={t("tunnels")}>
+              {tunnels.map((tunnel) => (
+                <div key={`${tunnel.host}:${tunnel.remote_port}`} className="min-w-0">
+                  <code className="font-mono text-xs">
+                    localhost:{tunnel.local_port} → {tunnel.host}:{tunnel.remote_port}
+                  </code>
+                  {tunnel.description ? (
+                    <span className="ml-2 text-xs text-muted-foreground">{tunnel.description}</span>
+                  ) : null}
+                </div>
+              ))}
+            </SkillSection>
+          ) : null}
+
+          {credentials.length ? (
+            <SkillSection label={t("credentials")}>
+              {credentials.map((credential) => (
+                <div key={credential.vault_path} className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <code className="shrink-0 font-mono text-xs font-semibold">
+                      {credential.env_var ?? credential.file ?? t("credential")}
+                    </code>
+                    {credential.description ? (
+                      <span className="truncate text-xs text-muted-foreground">{credential.description}</span>
+                    ) : null}
+                  </div>
+                  <code className="truncate font-mono text-xs text-muted-foreground" title={credential.vault_path}>
+                    {credential.vault_path}
+                  </code>
+                </div>
+              ))}
+            </SkillSection>
+          ) : null}
+
+          {hints.length ? (
+            <SkillSection label={t("hints")}>
+              {hints.map(([key, value]) => (
+                <div key={key} className="min-w-0 text-xs">
+                  <code className="font-mono font-semibold">{key}</code>
+                  <span className="ml-2 text-muted-foreground">{value}</span>
+                </div>
+              ))}
+            </SkillSection>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -241,7 +348,8 @@ export function KnowledgeView() {
                 ))}
               </div>
             )}
-            {result.doc != null ? (
+            {result.skill ? <div className="mt-6"><SkillCard skill={result.skill} /></div> : null}
+            {result.doc ? (
               <section className="mt-6">
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   <BookText className="h-3.5 w-3.5" />
