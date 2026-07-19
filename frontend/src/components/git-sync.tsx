@@ -252,6 +252,12 @@ export function SandboxGitControls({
 // B2: backend per-user repo ↔ external remote. Shared between the account-menu
 // indicator dot and the panel inside that menu, so status is fetched once.
 
+/**
+ * Fired after a pull or push moves the knowledge repo. Listened to by every
+ * `useGlobalGit` instance, and by views showing repo contents.
+ */
+export const KNOWLEDGE_GIT_CHANGED_EVENT = "carapace:knowledge-git-changed";
+
 export interface GlobalGit {
   configured: boolean | null;
   counts: AheadBehindCounts | null;
@@ -295,6 +301,15 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
     return () => clearTimeout(id);
   }, [refresh]);
 
+  // Several of these hooks are mounted at once (sidebar indicator, account menu,
+  // knowledge browser). A pull or push from any of them moves the repo for all, so
+  // they re-read status together instead of the others going stale until remount.
+  useEffect(() => {
+    const onChanged = () => void refresh();
+    window.addEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onChanged);
+  }, [refresh]);
+
   const runAction = useCallback(
     async (action: "pull" | "push", fn: () => Promise<GitActionResult>) => {
       setBusy(action);
@@ -303,6 +318,9 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
         const result = await fn();
         await refresh();
         setOutcome({ ok: result.ok, errorLabel: t(`errors.${action}`), detail: result.message });
+        if (result.ok) {
+          window.dispatchEvent(new Event(KNOWLEDGE_GIT_CHANGED_EVENT));
+        }
       } catch {
         setOutcome({ ok: false, errorLabel: t(`errors.${action}`), detail: "" });
       } finally {

@@ -68,15 +68,15 @@ class KnowledgeEntry(BaseModel):
     session_id: str | None = None
 
 
-def session_archive_entry(directory: Path) -> tuple[str | None, str] | None:
+def session_archive_entry(directory: Path, root: Path) -> tuple[str | None, str] | None:
     """Return ``(title, session_id)`` if *directory* is a session archive, else ``None``.
 
     Detection is by the ``conversation.json`` marker rather than the path layout,
     so it survives a reconfigured ``path_prefix``. Title may be None for untitled
     (or private, never-titled) sessions; the session id is always the dir name.
     """
-    archive = directory / "conversation.json"
-    if not archive.is_file():
+    archive = contained_target(directory / "conversation.json", root)
+    if archive is None or not archive.is_file():
         return None
     # ponytail: parses the whole archive (up to ~1 MB) for one field, since
     # "session" sorts last in the JSON. Cache by (path, mtime) if listing a month
@@ -129,6 +129,23 @@ class KnowledgeFileInfo(BaseModel):
     content: str | None = None
 
 
+def contained_target(child: Path, root: Path) -> Path | None:
+    """Resolve *child*, or return None if it is unreadable or escapes *root*.
+
+    Listing a directory means reading through its entries (a SKILL.md, a README, a
+    session's conversation.json), and a symlink committed into the repo can point at
+    any host path. Every such read resolves through here first, so the containment
+    check that ``resolve_target`` applies to the browsed path also covers the reads
+    the listing does on its own.
+    """
+    try:
+        target = child.resolve(strict=True)
+    except (OSError, RuntimeError):
+        # Broken symlink, symlink loop, or an unreadable parent: nothing to read.
+        return None
+    return target if target.is_relative_to(root) else None
+
+
 def resolve_target(root: Path, raw_path: str) -> Path:
     """Resolve *raw_path* inside *root*, rejecting traversal and ``.git``."""
     root = root.resolve()
@@ -140,40 +157,44 @@ def resolve_target(root: Path, raw_path: str) -> Path:
     return target
 
 
-def build_entry(child: Path) -> KnowledgeEntry:
-    if not child.is_dir():
-        stat = child.stat()
+def build_entry(child: Path, root: Path) -> KnowledgeEntry:
+    resolved = contained_target(child, root)
+    if resolved is None:
+        # Dangling or escaping symlink: name it, but never read through it.
+        return KnowledgeEntry(name=child.name, type="file")
+    if not resolved.is_dir():
+        stat = resolved.stat()
         return KnowledgeEntry(
             name=child.name,
             type="file",
             size=stat.st_size,
             modified=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
         )
-    archive = session_archive_entry(child)
+    archive = session_archive_entry(resolved, root)
     if archive is not None:
         title, session_id = archive
         return KnowledgeEntry(name=child.name, type="dir", kind="session", label=title, session_id=session_id)
-    if (child / SKILL_DOC).is_file():
+    if contained_target(resolved / SKILL_DOC, root) is not None:
         return KnowledgeEntry(name=child.name, type="dir", kind="skill")
     return KnowledgeEntry(name=child.name, type="dir")
 
 
-def find_readme(target: Path, entries: list[KnowledgeEntry]) -> Path | None:
+def find_readme(target: Path, entries: list[KnowledgeEntry], root: Path) -> Path | None:
     """Pick the directory's README, matched case-insensitively against the listing."""
     for entry in entries:
         if entry.type == "file" and entry.name.lower() in README_NAMES:
-            return target / entry.name
+            return contained_target(target / entry.name, root)
     return None
 
 
-def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDirListing) -> None:
+def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDirListing, root: Path) -> None:
     """Attach the directory's defining document, so the browser needs no second request.
 
     A SKILL.md marks a skill dir (the marker SkillRegistry scans for) and gets its
     frontmatter split out; any other directory falls back to its README.
     """
-    skill_doc = target / SKILL_DOC
-    if skill_doc.is_file():
+    skill_doc = contained_target(target / SKILL_DOC, root)
+    if skill_doc is not None and skill_doc.is_file():
         raw = read_text_content(skill_doc, skill_doc.stat().st_size)
         if raw is None:
             return
@@ -188,8 +209,8 @@ def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDi
         )
         return
 
-    readme = find_readme(target, entries)
-    if readme is None:
+    readme = find_readme(target, entries, root)
+    if readme is None or not readme.is_file():
         return
     raw = read_text_content(readme, readme.stat().st_size)
     if raw is not None:
@@ -198,11 +219,12 @@ def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDi
 
 
 def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
-    entries = [build_entry(child) for child in target.iterdir() if child.name != ".git"]
+    root = root.resolve()
+    entries = [build_entry(child, root) for child in target.iterdir() if child.name != ".git"]
     entries.sort(key=lambda e: (e.type != "dir", e.name.casefold()))
-    rel = target.relative_to(root.resolve())
+    rel = target.relative_to(root)
     listing = KnowledgeDirListing(path="" if rel == Path() else rel.as_posix(), entries=entries)
-    inline_doc(target, entries, listing)
+    inline_doc(target, entries, listing, root)
     return listing
 
 

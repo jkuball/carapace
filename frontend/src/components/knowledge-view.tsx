@@ -22,7 +22,7 @@ import { useTranslations } from "next-intl";
 
 import { useAppShell } from "@/components/app-shell-context";
 import { useAppLocale } from "@/components/locale-provider";
-import { GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
+import { GlobalGitPanel, KNOWLEDGE_GIT_CHANGED_EVENT, useGlobalGit } from "@/components/git-sync";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
   browseKnowledge,
@@ -386,6 +386,15 @@ export function KnowledgeView() {
     document.title = `${t("title")} • ${tApp("name")}`;
   }, [t, tApp]);
 
+  // Bumped to force a re-browse of the same path after a pull/push moves the repo.
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    const onGitChanged = () => setReloadToken((token) => token + 1);
+    window.addEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onGitChanged);
+    return () => window.removeEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onGitChanged);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -409,7 +418,7 @@ export function KnowledgeView() {
     return () => {
       cancelled = true;
     };
-  }, [server, path, t]);
+  }, [server, path, t, reloadToken]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -431,7 +440,10 @@ export function KnowledgeView() {
 
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
             <Breadcrumb path={path} rootLabel={t("root")} />
-            {result?.type === "file" ? (
+            {/* While a new path loads, `result` still holds the previous one — showing
+                its download button would offer the file the user just navigated away
+                from. */}
+            {!loading && result?.type === "file" ? (
               <a
                 href={knowledgeRawUrl(server, result.path, { download: true })}
                 title={t("download")}

@@ -127,18 +127,18 @@ def test_session_archive_entry_reads_title(tmp_path: Path) -> None:
         "2026-06-01-21-07-0062199d",
         {"session": {"session_id": "2026-06-01-21-07-0062199d", "title": "Weather skill"}},
     )
-    assert session_archive_entry(directory) == ("Weather skill", "2026-06-01-21-07-0062199d")
+    assert session_archive_entry(directory, root.resolve()) == ("Weather skill", "2026-06-01-21-07-0062199d")
 
 
 def test_session_archive_entry_untitled_falls_back_to_dir_name(tmp_path: Path) -> None:
     root = _make_repo(tmp_path)
     directory = _archive(root, "2026-06-02-10-00-abcdef01", {"session": {"title": "   "}})
-    assert session_archive_entry(directory) == (None, "2026-06-02-10-00-abcdef01")
+    assert session_archive_entry(directory, root.resolve()) == (None, "2026-06-02-10-00-abcdef01")
 
 
 def test_session_archive_entry_ignores_plain_dir(tmp_path: Path) -> None:
     root = _make_repo(tmp_path)
-    assert session_archive_entry(root / "skills" / "weather") is None
+    assert session_archive_entry((root / "skills" / "weather").resolve(), root.resolve()) is None
 
 
 def test_session_archive_entry_tolerates_corrupt_json(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_session_archive_entry_tolerates_corrupt_json(tmp_path: Path) -> None:
     directory = root / "sessions" / "2026" / "06" / "broken"
     directory.mkdir(parents=True)
     (directory / "conversation.json").write_text("{not json")
-    assert session_archive_entry(directory) is None
+    assert session_archive_entry(directory, root.resolve()) is None
 
 
 def test_build_entry_tags_session_dirs(tmp_path: Path) -> None:
@@ -157,11 +157,11 @@ def test_build_entry_tags_session_dirs(tmp_path: Path) -> None:
         {"session": {"session_id": "2026-06-03-08-30-11223344", "title": "Groceries"}},
     )
 
-    entry = build_entry(directory)
+    entry = build_entry(directory, root.resolve())
 
     assert (entry.kind, entry.label, entry.session_id) == ("session", "Groceries", "2026-06-03-08-30-11223344")
-    assert build_entry(root / "skills").kind is None
-    assert build_entry(root / "SOUL.md").kind is None
+    assert build_entry(root / "skills", root.resolve()).kind is None
+    assert build_entry(root / "SOUL.md", root.resolve()).kind is None
 
 
 def test_list_dir_inlines_skill_doc(tmp_path: Path) -> None:
@@ -308,8 +308,8 @@ def test_list_dir_readme_frontmatter_is_not_stripped(tmp_path: Path) -> None:
 def test_build_entry_tags_skill_dirs(tmp_path: Path) -> None:
     root = _make_repo(tmp_path)
 
-    assert build_entry(root / "skills" / "weather").kind == "skill"
-    assert build_entry(root / "skills").kind is None
+    assert build_entry(root / "skills" / "weather", root.resolve()).kind == "skill"
+    assert build_entry(root / "skills", root.resolve()).kind is None
 
 
 def test_build_entry_session_wins_over_skill(tmp_path: Path) -> None:
@@ -317,7 +317,7 @@ def test_build_entry_session_wins_over_skill(tmp_path: Path) -> None:
     directory = _archive(root, "2026-06-04-09-00-deadbeef", {"session": {"title": "Odd one"}})
     (directory / "SKILL.md").write_text("---\nname: odd\n---\n")
 
-    assert build_entry(directory).kind == "session"
+    assert build_entry(directory, root.resolve()).kind == "session"
 
 
 def test_build_entry_reports_file_mtime(tmp_path: Path) -> None:
@@ -325,8 +325,61 @@ def test_build_entry_reports_file_mtime(tmp_path: Path) -> None:
     target = root / "SOUL.md"
     os.utime(target, (1_780_000_000, 1_780_000_000))
 
-    entry = build_entry(target)
+    entry = build_entry(target, root.resolve())
 
     assert entry.modified == datetime.fromtimestamp(1_780_000_000, tz=UTC)
     # Directories carry no mtime: the client shows a title or nothing for them.
-    assert build_entry(root / "skills").modified is None
+    assert build_entry(root / "skills", root.resolve()).modified is None
+
+
+def test_list_dir_does_not_read_through_escaping_skill_doc(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (tmp_path / "secret.txt").write_text("HOST SECRET")
+    escaping = root / "skills" / "escaping"
+    escaping.mkdir()
+    (escaping / "SKILL.md").symlink_to(tmp_path / "secret.txt")
+
+    listing = list_dir(root, escaping.resolve())
+
+    assert (listing.doc, listing.skill, listing.kind) == (None, None, None)
+
+
+def test_list_dir_does_not_read_through_escaping_readme(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (tmp_path / "secret.txt").write_text("HOST SECRET")
+    notes = root / "notes"
+    notes.mkdir()
+    (notes / "README.md").symlink_to(tmp_path / "secret.txt")
+
+    assert list_dir(root, notes.resolve()).doc is None
+
+
+def test_session_archive_entry_ignores_escaping_conversation(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (tmp_path / "secret.json").write_text(json.dumps({"session": {"title": "leaked"}}))
+    directory = root / "sessions" / "2026" / "06" / "escaping"
+    directory.mkdir(parents=True)
+    (directory / "conversation.json").symlink_to(tmp_path / "secret.json")
+
+    assert session_archive_entry(directory, root.resolve()) is None
+    assert build_entry(directory, root.resolve()).kind is None
+
+
+def test_build_entry_tolerates_broken_symlink(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (root / "dangling.md").symlink_to(tmp_path / "does-not-exist")
+
+    entry = build_entry(root / "dangling.md", root.resolve())
+
+    assert (entry.name, entry.type, entry.size, entry.modified) == ("dangling.md", "file", None, None)
+    # The whole listing must still render around it.
+    assert "dangling.md" in [e.name for e in list_dir(root, root.resolve()).entries]
+
+
+def test_build_entry_reports_symlink_inside_the_repo(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (root / "alias.md").symlink_to(root / "SOUL.md")
+
+    entry = build_entry(root / "alias.md", root.resolve())
+
+    assert (entry.type, entry.size) == ("file", len("# soul"))
