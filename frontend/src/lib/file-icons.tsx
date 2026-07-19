@@ -11,8 +11,10 @@ import {
   FileType,
   FileVideo,
   Folder,
+  FolderArchive,
   FolderClock,
   FolderCog,
+  FolderTree,
   GitBranch,
   Hammer,
   Image,
@@ -139,11 +141,33 @@ const EXTENSION_ICONS: Record<string, LucideIcon> = {
 
 export type EntryIconKind = "session" | "skill" | null;
 
-function lookup(name: string, type: "file" | "dir", kind: EntryIconKind): LucideIcon {
+/**
+ * The two collections at the repo root. Matched by name and only at the root, so a
+ * nested dir that happens to be called "skills" stays a plain folder.
+ *
+ * ponytail: the session prefix is configurable server-side (SessionCommitConfig,
+ * default "sessions"); a renamed one just falls back to the plain folder icon. Tag
+ * these server-side if that ever matters.
+ */
+const ROOT_DIR_ICONS: Record<string, LucideIcon> = {
+  skills: FolderTree,
+  sessions: FolderArchive,
+};
+
+export interface EntryIconTarget {
+  name: string;
+  type: "file" | "dir";
+  kind: EntryIconKind;
+  /** True when the entry sits directly in the repo root. */
+  atRoot?: boolean;
+}
+
+function lookup({ name, type, kind, atRoot }: EntryIconTarget): LucideIcon {
   // Recognized directories keep a folder silhouette so they still read as directories.
   if (type === "dir") {
     if (kind === "session") return FolderClock;
     if (kind === "skill") return FolderCog;
+    if (atRoot) return ROOT_DIR_ICONS[name.toLowerCase()] ?? Folder;
     return Folder;
   }
   const lower = name.toLowerCase();
@@ -162,12 +186,7 @@ function lookup(name: string, type: "file" | "dir", kind: EntryIconKind): Lucide
  * Returns an element rather than a component so callers do not assign a component
  * to a local during render.
  */
-export function entryIcon(
-  name: string,
-  type: "file" | "dir",
-  kind: EntryIconKind,
-  className: string,
-): ReactNode {
-  const Icon = lookup(name, type, kind);
+export function entryIcon(target: EntryIconTarget, className: string): ReactNode {
+  const Icon = lookup(target);
   return <Icon className={className} />;
 }
