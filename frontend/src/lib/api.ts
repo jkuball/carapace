@@ -1556,6 +1556,11 @@ export interface KnowledgeEntry {
   name: string;
   type: "file" | "dir";
   size: number | null;
+  /** Recognized directory convention, e.g. a session archive. */
+  kind: "session" | null;
+  /** Human label shown in place of a file's size (a session's title). */
+  label: string | null;
+  session_id: string | null;
 }
 
 export interface KnowledgeDirListing {

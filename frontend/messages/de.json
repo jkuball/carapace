@@ -24,7 +24,8 @@
         "empty": "Leeres Verzeichnis.",
         "error": "Laden fehlgeschlagen",
         "download": "Datei herunterladen",
-        "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar."
+        "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar.",
+        "untitledSession": "Sitzung öffnen"
     },
     "account": {
         "menu": "Kontomenü",

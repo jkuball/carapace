@@ -24,7 +24,8 @@
         "empty": "Empty directory.",
         "error": "Failed to load",
         "download": "Download file",
-        "noPreview": "No preview available for this file type."
+        "noPreview": "No preview available for this file type.",
+        "untitledSession": "Open session"
     },
     "account": {
         "menu": "Account menu",

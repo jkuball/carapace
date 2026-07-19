@@ -1,9 +1,18 @@
 "use client";
 
-import { ChevronRight, Download, File, FileText, Folder, GitCommitHorizontal, Loader2 } from "lucide-react";
+import {
+  ChevronRight,
+  Download,
+  File,
+  FileText,
+  Folder,
+  GitCommitHorizontal,
+  Loader2,
+  MessagesSquare,
+} from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { useAppShell } from "@/components/app-shell-context";
@@ -66,25 +75,44 @@ function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
   );
 }
 
-function EntryRow({ path, entry }: { path: string; entry: KnowledgeEntry }) {
+function entryIcon(entry: KnowledgeEntry): ReactNode {
+  const className = cn(
+    "h-4 w-4 shrink-0",
+    entry.type === "dir" ? "text-accent-foreground/70" : "text-muted-foreground",
+  );
+  if (entry.kind === "session") return <MessagesSquare className={className} />;
+  if (entry.type === "dir") return <Folder className={className} />;
+  return isMarkdown(entry.name) ? <FileText className={className} /> : <File className={className} />;
+}
+
+/**
+ * One row in a directory listing. The row links into the repo; recognized kinds add
+ * a trailing link of their own (a session's title opens the chat), so the row is a
+ * container rather than a single anchor — anchors cannot nest.
+ */
+function EntryRow({ path, entry, untitledLabel }: { path: string; entry: KnowledgeEntry; untitledLabel: string }) {
   const entryPath = path ? `${path}/${entry.name}` : entry.name;
-  const Icon = entry.type === "dir" ? Folder : isMarkdown(entry.name) ? FileText : File;
   return (
-    <Link
-      href={browseHref(entryPath)}
-      className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <Icon
-        className={cn(
-          "h-4 w-4 shrink-0",
-          entry.type === "dir" ? "text-accent-foreground/70" : "text-muted-foreground",
-        )}
-      />
-      <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-      {entry.size != null ? (
+    <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
+      {entryIcon(entry)}
+      <Link
+        href={browseHref(entryPath)}
+        className="min-w-0 flex-1 truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {entry.name}
+      </Link>
+      {entry.session_id ? (
+        <Link
+          href={`/?session=${encodeURIComponent(entry.session_id)}`}
+          title={entry.label ?? undefined}
+          className="max-w-[55%] shrink truncate rounded-sm text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {entry.label ?? untitledLabel}
+        </Link>
+      ) : entry.size != null ? (
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatSize(entry.size)}</span>
       ) : null}
-    </Link>
+    </div>
   );
 }
 
@@ -202,7 +230,12 @@ export function KnowledgeView() {
           ) : (
             <div className="flex flex-col gap-0.5 rounded-lg border border-border p-1.5">
               {result.entries.map((entry) => (
-                <EntryRow key={entry.name} path={result.path} entry={entry} />
+                <EntryRow
+                  key={entry.name}
+                  path={result.path}
+                  entry={entry}
+                  untitledLabel={t("untitledSession")}
+                />
               ))}
             </div>
           )

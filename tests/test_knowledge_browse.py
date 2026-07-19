@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
 
-from carapace.server.knowledge import MAX_INLINE_TEXT_BYTES, list_dir, read_text_content, resolve_target
+from carapace.server.knowledge import (
+    MAX_INLINE_TEXT_BYTES,
+    build_entry,
+    list_dir,
+    read_text_content,
+    resolve_target,
+    session_archive_entry,
+)
 
 
 def _make_repo(tmp_path: Path) -> Path:
@@ -101,3 +109,54 @@ def test_read_text_content_rejects_binary(tmp_path: Path, name: str, data: bytes
 def test_read_text_content_rejects_oversized(tmp_path: Path) -> None:
     target = _write(tmp_path, "big.txt", b"x")
     assert read_text_content(target, MAX_INLINE_TEXT_BYTES + 1) is None
+
+
+def _archive(root: Path, session_id: str, payload: object) -> Path:
+    directory = root / "sessions" / "2026" / "06" / session_id
+    directory.mkdir(parents=True)
+    (directory / "conversation.json").write_text(json.dumps(payload))
+    return directory
+
+
+def test_session_archive_entry_reads_title(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    directory = _archive(
+        root,
+        "2026-06-01-21-07-0062199d",
+        {"session": {"session_id": "2026-06-01-21-07-0062199d", "title": "Weather skill"}},
+    )
+    assert session_archive_entry(directory) == ("Weather skill", "2026-06-01-21-07-0062199d")
+
+
+def test_session_archive_entry_untitled_falls_back_to_dir_name(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    directory = _archive(root, "2026-06-02-10-00-abcdef01", {"session": {"title": "   "}})
+    assert session_archive_entry(directory) == (None, "2026-06-02-10-00-abcdef01")
+
+
+def test_session_archive_entry_ignores_plain_dir(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    assert session_archive_entry(root / "skills" / "weather") is None
+
+
+def test_session_archive_entry_tolerates_corrupt_json(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    directory = root / "sessions" / "2026" / "06" / "broken"
+    directory.mkdir(parents=True)
+    (directory / "conversation.json").write_text("{not json")
+    assert session_archive_entry(directory) is None
+
+
+def test_build_entry_tags_session_dirs(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    directory = _archive(
+        root,
+        "2026-06-03-08-30-11223344",
+        {"session": {"session_id": "2026-06-03-08-30-11223344", "title": "Groceries"}},
+    )
+
+    entry = build_entry(directory)
+
+    assert (entry.kind, entry.label, entry.session_id) == ("session", "Groceries", "2026-06-03-08-30-11223344")
+    assert build_entry(root / "skills").kind is None
+    assert build_entry(root / "SOUL.md").kind is None

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from loguru import logger
 from pydantic import BaseModel
 
 from ..api_keys import Access, Scope
@@ -45,6 +47,40 @@ class KnowledgeEntry(BaseModel):
     name: str
     type: Literal["file", "dir"]
     size: int | None = None
+    # Recognized directory conventions get a `kind` plus a human label the client
+    # renders where a file would show its size. Extension point for skill dirs.
+    kind: Literal["session"] | None = None
+    label: str | None = None
+    session_id: str | None = None
+
+
+def session_archive_entry(directory: Path) -> tuple[str | None, str] | None:
+    """Return ``(title, session_id)`` if *directory* is a session archive, else ``None``.
+
+    Detection is by the ``conversation.json`` marker rather than the path layout,
+    so it survives a reconfigured ``path_prefix``. Title may be None for untitled
+    (or private, never-titled) sessions; the session id is always the dir name.
+    """
+    archive = directory / "conversation.json"
+    if not archive.is_file():
+        return None
+    # ponytail: parses the whole archive (up to ~1 MB) for one field, since
+    # "session" sorts last in the JSON. Cache by (path, mtime) if listing a month
+    # of sessions ever gets slow.
+    try:
+        payload = json.loads(archive.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        # The repo is user-writable; a hand-mangled archive must not break browsing.
+        logger.debug(f"Ignoring unreadable session archive {archive}: {exc}")
+        return None
+    session = payload.get("session") if isinstance(payload, dict) else None
+    if not isinstance(session, dict):
+        return None
+    title = session.get("title")
+    session_id = session.get("session_id")
+    return (title if isinstance(title, str) and title.strip() else None), (
+        session_id if isinstance(session_id, str) and session_id else directory.name
+    )
 
 
 class KnowledgeDirListing(BaseModel):
@@ -75,16 +111,18 @@ def resolve_target(root: Path, raw_path: str) -> Path:
     return target
 
 
+def build_entry(child: Path) -> KnowledgeEntry:
+    if not child.is_dir():
+        return KnowledgeEntry(name=child.name, type="file", size=child.stat().st_size)
+    archive = session_archive_entry(child)
+    if archive is None:
+        return KnowledgeEntry(name=child.name, type="dir")
+    title, session_id = archive
+    return KnowledgeEntry(name=child.name, type="dir", kind="session", label=title, session_id=session_id)
+
+
 def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
-    entries = [
-        KnowledgeEntry(
-            name=child.name,
-            type="dir" if child.is_dir() else "file",
-            size=None if child.is_dir() else child.stat().st_size,
-        )
-        for child in target.iterdir()
-        if child.name != ".git"
-    ]
+    entries = [build_entry(child) for child in target.iterdir() if child.name != ".git"]
     entries.sort(key=lambda e: (e.type != "dir", e.name.casefold()))
     rel = target.relative_to(root.resolve())
     return KnowledgeDirListing(path="" if rel == Path() else rel.as_posix(), entries=entries)
