@@ -5,15 +5,11 @@ import {
   Cable,
   ChevronRight,
   Download,
-  File,
-  FileText,
-  Folder,
   GitCommitHorizontal,
   Globe,
   KeyRound,
   Lightbulb,
   Loader2,
-  MessagesSquare,
   Puzzle,
   Terminal,
 } from "lucide-react";
@@ -33,6 +29,7 @@ import {
   type KnowledgeFileInfo,
   type KnowledgeSkill,
 } from "@/lib/api";
+import { entryIcon } from "@/lib/file-icons";
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
 import { cn } from "@/lib/utils";
 
@@ -83,14 +80,13 @@ function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
   );
 }
 
-function entryIcon(entry: KnowledgeEntry): ReactNode {
-  const className = cn(
-    "h-4 w-4 shrink-0",
-    entry.type === "dir" ? "text-accent-foreground/70" : "text-muted-foreground",
+function rowIcon(entry: KnowledgeEntry): ReactNode {
+  return entryIcon(
+    entry.name,
+    entry.type,
+    entry.kind,
+    cn("h-4 w-4 shrink-0", entry.type === "dir" ? "text-accent-foreground/70" : "text-muted-foreground"),
   );
-  if (entry.kind === "session") return <MessagesSquare className={className} />;
-  if (entry.type === "dir") return <Folder className={className} />;
-  return isMarkdown(entry.name) ? <FileText className={className} /> : <File className={className} />;
 }
 
 /**
@@ -102,7 +98,7 @@ function EntryRow({ path, entry, untitledLabel }: { path: string; entry: Knowled
   const entryPath = path ? `${path}/${entry.name}` : entry.name;
   return (
     <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
-      {entryIcon(entry)}
+      {rowIcon(entry)}
       <Link
         href={browseHref(entryPath)}
         className="min-w-0 flex-1 truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -127,7 +123,9 @@ function EntryRow({ path, entry, untitledLabel }: { path: string; entry: Knowled
 function SkillSection({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-      <div className="flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:w-32">
+      {/* self-start: the label row must not stretch, or items-center drifts it to the
+          vertical middle of a multi-line value list. */}
+      <div className="flex shrink-0 items-center gap-1.5 self-start pt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:w-32">
         {icon}
         {label}
       </div>

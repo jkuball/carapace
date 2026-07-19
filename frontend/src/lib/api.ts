@@ -1556,8 +1556,8 @@ export interface KnowledgeEntry {
   name: string;
   type: "file" | "dir";
   size: number | null;
-  /** Recognized directory convention, e.g. a session archive. */
-  kind: "session" | null;
+  /** Recognized directory convention: a session archive or a skill dir. */
+  kind: "session" | "skill" | null;
   /** Human label shown in place of a file's size (a session's title). */
   label: string | null;
   session_id: string | null;

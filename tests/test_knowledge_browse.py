@@ -301,3 +301,18 @@ def test_list_dir_readme_frontmatter_is_not_stripped(tmp_path: Path) -> None:
     listing = list_dir(root, (root / "notes").resolve())
 
     assert listing.doc == "---\ntitle: keep\n---\n\nBody.\n"
+
+
+def test_build_entry_tags_skill_dirs(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+
+    assert build_entry(root / "skills" / "weather").kind == "skill"
+    assert build_entry(root / "skills").kind is None
+
+
+def test_build_entry_session_wins_over_skill(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    directory = _archive(root, "2026-06-04-09-00-deadbeef", {"session": {"title": "Odd one"}})
+    (directory / "SKILL.md").write_text("---\nname: odd\n---\n")
+
+    assert build_entry(directory).kind == "session"

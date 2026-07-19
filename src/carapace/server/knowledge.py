@@ -27,6 +27,10 @@ router = APIRouter()
 # listing response, and huge blobs would bloat it for no benefit.
 MAX_INLINE_TEXT_BYTES = 1024 * 1024
 
+# Markers for the directory conventions the browser renders specially.
+SKILL_DOC = "SKILL.md"
+README_NAMES = frozenset({"readme.md", "readme"})
+
 
 def read_text_content(target: Path, size: int) -> str | None:
     """Decode *target* as UTF-8 text, or return ``None`` if binary or too large.
@@ -50,8 +54,8 @@ class KnowledgeEntry(BaseModel):
     type: Literal["file", "dir"]
     size: int | None = None
     # Recognized directory conventions get a `kind` plus a human label the client
-    # renders where a file would show its size. Extension point for skill dirs.
-    kind: Literal["session"] | None = None
+    # renders where a file would show its size.
+    kind: Literal["session", "skill"] | None = None
     label: str | None = None
     session_id: str | None = None
 
@@ -132,14 +136,12 @@ def build_entry(child: Path) -> KnowledgeEntry:
     if not child.is_dir():
         return KnowledgeEntry(name=child.name, type="file", size=child.stat().st_size)
     archive = session_archive_entry(child)
-    if archive is None:
-        return KnowledgeEntry(name=child.name, type="dir")
-    title, session_id = archive
-    return KnowledgeEntry(name=child.name, type="dir", kind="session", label=title, session_id=session_id)
-
-
-SKILL_DOC = "SKILL.md"
-README_NAMES = frozenset({"readme.md", "readme"})
+    if archive is not None:
+        title, session_id = archive
+        return KnowledgeEntry(name=child.name, type="dir", kind="session", label=title, session_id=session_id)
+    if (child / SKILL_DOC).is_file():
+        return KnowledgeEntry(name=child.name, type="dir", kind="skill")
+    return KnowledgeEntry(name=child.name, type="dir")
 
 
 def find_readme(target: Path, entries: list[KnowledgeEntry]) -> Path | None:
