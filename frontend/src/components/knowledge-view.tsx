@@ -3,7 +3,9 @@
 import {
   BookText,
   Cable,
+  Check,
   ChevronRight,
+  Copy,
   Download,
   GitCommitHorizontal,
   Globe,
@@ -88,6 +90,51 @@ function rowIcon(entry: KnowledgeEntry): ReactNode {
   );
 }
 
+/** Short hash that copies the full one — what a reader actually needs to paste. */
+function CopyHash({
+  commit,
+  copyLabel,
+  copiedLabel,
+}: {
+  commit: NonNullable<KnowledgeEntry["commit"]>;
+  copyLabel: string;
+  copiedLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(commit.hash);
+      setCopied(true);
+    } catch {
+      // Clipboard denied (insecure origin, or the user said no) — leave the label alone.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      title={copied ? copiedLabel : `${copyLabel}: ${commit.hash}`}
+      aria-label={copied ? copiedLabel : `${copyLabel}: ${commit.hash}`}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-sm font-mono transition-colors",
+        "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        copied && "text-foreground",
+      )}
+    >
+      {commit.short}
+      {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover/row:opacity-60" />}
+    </button>
+  );
+}
+
 /**
  * One row in a directory listing. The row links into the repo; recognized kinds add
  * a trailing link of their own (a session's title opens the chat), so the row is a
@@ -98,6 +145,8 @@ function EntryRow({
   entry,
   untitledLabel,
   justNowLabel,
+  copyHashLabel,
+  copiedLabel,
   locale,
   now,
 }: {
@@ -105,6 +154,8 @@ function EntryRow({
   entry: KnowledgeEntry;
   untitledLabel: string;
   justNowLabel: string;
+  copyHashLabel: string;
+  copiedLabel: string;
   locale: string;
   now: number;
 }) {
@@ -113,7 +164,7 @@ function EntryRow({
   // paths no commit covers, since a checkout rewrites it.
   const changedAt = entry.commit?.committed_at ?? entry.modified;
   return (
-    <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
+    <div className="group/row flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
       {rowIcon(entry)}
       <Link
         href={browseHref(entryPath)}
@@ -134,12 +185,11 @@ function EntryRow({
           {/* Commit column: the first thing to go as the row narrows, since the
               filename and size stay useful at any width. */}
           {entry.commit ? (
-            <span
-              className="hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex"
-              title={`${entry.commit.hash} · ${entry.commit.subject}`}
-            >
-              <span className="shrink-0 font-mono">{entry.commit.hash}</span>
-              <span className="truncate">{entry.commit.subject}</span>
+            <span className="hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex">
+              <CopyHash commit={entry.commit} copyLabel={copyHashLabel} copiedLabel={copiedLabel} />
+              <span className="truncate" title={entry.commit.subject}>
+                {entry.commit.subject}
+              </span>
             </span>
           ) : null}
           {/* Both slots keep their width when empty, so directories (no size) line up
@@ -410,6 +460,8 @@ export function KnowledgeView() {
                     entry={entry}
                     untitledLabel={t("untitledSession")}
                     justNowLabel={tSidebar("time.justNow")}
+                    copyHashLabel={t("copyHash")}
+                    copiedLabel={t("copiedHash")}
                     locale={locale}
                     now={now}
                   />

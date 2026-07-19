@@ -570,7 +570,8 @@ class TestParseLastCommits:
     """Folding a ``git log -z --name-only`` walk into one commit per child."""
 
     def _record(self, short: str, ts: int, subject: str, paths: list[str]) -> str:
-        return "\x01" + "\x00".join([short, str(ts), subject, *paths])
+        full = short * 5 + short[:5]  # 45 chars, stands in for a 40-char hash
+        return "\x01" + "\x00".join([full[:40], short, str(ts), subject, *paths])
 
     def test_newest_commit_per_child_wins(self):
         out = self._record("aaa1111", 1_780_000_100, "newer", ["skills/weather/SKILL.md"]) + self._record(
@@ -579,9 +580,9 @@ class TestParseLastCommits:
 
         found = _parse_last_commits(out, "skills/")
 
-        assert found["weather"].hash == "aaa1111"
+        assert found["weather"].short == "aaa1111"
         assert found["weather"].subject == "newer"
-        assert found["web"].hash == "bbb2222"
+        assert found["web"].short == "bbb2222"
 
     def test_nested_paths_fold_to_the_child_directory(self):
         out = self._record("aaa1111", 1_780_000_000, "deep", ["skills/weather/src/fetch/api.py"])
@@ -599,7 +600,7 @@ class TestParseLastCommits:
         out = self._record("aaa1111", 1_780_000_100, "merge", []) + self._record(
             "bbb2222", 1_780_000_000, "real", ["skills/weather/SKILL.md"]
         )
-        assert _parse_last_commits(out, "skills/")["weather"].hash == "bbb2222"
+        assert _parse_last_commits(out, "skills/")["weather"].short == "bbb2222"
 
     def test_committed_at_is_utc(self):
         out = self._record("aaa1111", 1_780_000_000, "s", ["skills/weather/SKILL.md"])
@@ -633,3 +634,12 @@ class TestGitStoreLastCommits:
         store = GitStore(tmp_path / "repo", remote_branch="main")
         await store.ensure_repo()
         assert await store.last_commits("") == {}
+
+
+def test_parse_last_commits_keeps_full_and_short_hash():
+    full = "a" * 40
+    out = "\x01" + "\x00".join([full, "aaa1111", "1780000000", "s", "skills/web/SKILL.md"])
+
+    commit = _parse_last_commits(out, "skills/")["web"]
+
+    assert (commit.hash, commit.short) == (full, "aaa1111")

@@ -22,13 +22,14 @@ def _parse_last_commits(out: str, prefix: str) -> dict[str, FileCommit]:
         if not record:
             continue
         fields = record.split("\x00")
-        if len(fields) < 3:
+        if len(fields) < 4:
             continue
-        short, timestamp, subject, *paths = fields
-        if not short or not timestamp.isdigit():
+        full, short, timestamp, subject, *paths = fields
+        if not full or not short or not timestamp.isdigit():
             continue
         commit = FileCommit(
-            hash=short,
+            hash=full,
+            short=short,
             subject=subject,
             committed_at=datetime.fromtimestamp(int(timestamp), tz=UTC),
         )
@@ -467,7 +468,14 @@ class GitStore:
         enough.
         """
         prefix = f"{relative_dir.strip('/')}/" if relative_dir.strip("/") else ""
-        args = ["log", f"-n{limit}", "-z", f"--format={_LOG_RECORD_SEP}%h%x00%ct%x00%s", "--name-only", "HEAD"]
+        args = [
+            "log",
+            f"-n{limit}",
+            "-z",
+            f"--format={_LOG_RECORD_SEP}%H%x00%h%x00%ct%x00%s",
+            "--name-only",
+            "HEAD",
+        ]
         if prefix:
             args += ["--", prefix.rstrip("/")]
         code, out = await self._run(*args)

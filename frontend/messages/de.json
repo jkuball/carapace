@@ -26,6 +26,8 @@
         "download": "Datei herunterladen",
         "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar.",
         "untitledSession": "Sitzung öffnen",
+        "copyHash": "Vollständigen Commit-Hash kopieren",
+        "copiedHash": "Kopiert",
         "largeFileNotice": "Syntax-Hervorhebung ist für diese Datei deaktiviert — sie ist zu groß.",
         "skill": {
             "commands": "Befehle",

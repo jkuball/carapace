@@ -30,7 +30,10 @@ class GlobalGitStatus(BaseModel):
 class FileCommit(BaseModel):
     """Newest commit touching a given path."""
 
+    # Full hash for copying; `short` is git's own abbreviation, which is repo-dependent
+    # and so cannot be reproduced by truncating the full one.
     hash: str
+    short: str
     subject: str
     committed_at: datetime
 

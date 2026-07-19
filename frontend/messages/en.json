@@ -26,6 +26,8 @@
         "download": "Download file",
         "noPreview": "No preview available for this file type.",
         "untitledSession": "Open session",
+        "copyHash": "Copy full commit hash",
+        "copiedHash": "Copied",
         "largeFileNotice": "Syntax highlighting is off for this file — it is too large.",
         "skill": {
             "commands": "Commands",

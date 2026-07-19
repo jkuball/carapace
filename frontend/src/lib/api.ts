@@ -1559,7 +1559,7 @@ export interface KnowledgeEntry {
   /** Working-tree mtime, ISO 8601. Files only; fallback when `commit` is null. */
   modified: string | null;
   /** Newest commit touching this entry; null for uncommitted paths. */
-  commit: { hash: string; subject: string; committed_at: string } | null;
+  commit: { hash: string; short: string; subject: string; committed_at: string } | null;
   /** Recognized directory convention: a session archive or a skill dir. */
   kind: "session" | "skill" | null;
   /** Human label shown in place of a file's size (a session's title). */
