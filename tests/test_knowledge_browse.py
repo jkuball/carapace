@@ -258,3 +258,46 @@ def test_list_dir_skill_without_frontmatter_falls_back_to_dir_name(tmp_path: Pat
     assert listing.skill is not None
     assert (listing.skill.name, listing.skill.description) == ("bare", "")
     assert listing.doc == "# Bare skill\n"
+
+
+def test_list_dir_inlines_readme_for_plain_dir(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (root / "notes").mkdir()
+    (root / "notes" / "README.md").write_text("# Notes\n\nProse.\n")
+
+    listing = list_dir(root, (root / "notes").resolve())
+
+    assert listing.kind is None
+    assert listing.skill is None
+    assert (listing.doc_name, listing.doc) == ("README.md", "# Notes\n\nProse.\n")
+
+
+def test_list_dir_readme_match_is_case_insensitive(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (root / "notes").mkdir()
+    (root / "notes" / "readme.md").write_text("lower\n")
+
+    listing = list_dir(root, (root / "notes").resolve())
+
+    assert (listing.doc_name, listing.doc) == ("readme.md", "lower\n")
+
+
+def test_list_dir_skill_doc_wins_over_readme(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    skill = root / "skills" / "weather"
+    (skill / "README.md").write_text("readme body\n")
+
+    listing = list_dir(root, skill.resolve())
+
+    assert (listing.kind, listing.doc_name) == ("skill", "SKILL.md")
+    assert "readme body" not in (listing.doc or "")
+
+
+def test_list_dir_readme_frontmatter_is_not_stripped(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    (root / "notes").mkdir()
+    (root / "notes" / "README.md").write_text("---\ntitle: keep\n---\n\nBody.\n")
+
+    listing = list_dir(root, (root / "notes").resolve())
+
+    assert listing.doc == "---\ntitle: keep\n---\n\nBody.\n"

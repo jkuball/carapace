@@ -139,6 +139,46 @@ def build_entry(child: Path) -> KnowledgeEntry:
 
 
 SKILL_DOC = "SKILL.md"
+README_NAMES = frozenset({"readme.md", "readme"})
+
+
+def find_readme(target: Path, entries: list[KnowledgeEntry]) -> Path | None:
+    """Pick the directory's README, matched case-insensitively against the listing."""
+    for entry in entries:
+        if entry.type == "file" and entry.name.lower() in README_NAMES:
+            return target / entry.name
+    return None
+
+
+def inline_doc(target: Path, entries: list[KnowledgeEntry], listing: KnowledgeDirListing) -> None:
+    """Attach the directory's defining document, so the browser needs no second request.
+
+    A SKILL.md marks a skill dir (the marker SkillRegistry scans for) and gets its
+    frontmatter split out; any other directory falls back to its README.
+    """
+    skill_doc = target / SKILL_DOC
+    if skill_doc.is_file():
+        raw = read_text_content(skill_doc, skill_doc.stat().st_size)
+        if raw is None:
+            return
+        document = parse_skill_document(raw, fallback_name=target.name)
+        listing.kind = "skill"
+        listing.doc_name = SKILL_DOC
+        listing.doc = document.body
+        listing.skill = KnowledgeSkill(
+            name=document.name,
+            description=document.description,
+            carapace=parse_carapace_config(document, target.name),
+        )
+        return
+
+    readme = find_readme(target, entries)
+    if readme is None:
+        return
+    raw = read_text_content(readme, readme.stat().st_size)
+    if raw is not None:
+        listing.doc_name = readme.name
+        listing.doc = raw
 
 
 def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
@@ -146,22 +186,7 @@ def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
     entries.sort(key=lambda e: (e.type != "dir", e.name.casefold()))
     rel = target.relative_to(root.resolve())
     listing = KnowledgeDirListing(path="" if rel == Path() else rel.as_posix(), entries=entries)
-
-    # A SKILL.md marks a skill dir (same marker SkillRegistry scans for); inline it so
-    # the browser can render it under the listing without a second request.
-    skill_doc = target / SKILL_DOC
-    if skill_doc.is_file():
-        raw = read_text_content(skill_doc, skill_doc.stat().st_size)
-        if raw is not None:
-            document = parse_skill_document(raw, fallback_name=target.name)
-            listing.kind = "skill"
-            listing.doc_name = SKILL_DOC
-            listing.doc = document.body
-            listing.skill = KnowledgeSkill(
-                name=document.name,
-                description=document.description,
-                carapace=parse_carapace_config(document, target.name),
-            )
+    inline_doc(target, entries, listing)
     return listing
 
 

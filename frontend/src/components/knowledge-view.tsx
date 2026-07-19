@@ -2,15 +2,20 @@
 
 import {
   BookText,
+  Cable,
   ChevronRight,
   Download,
   File,
   FileText,
   Folder,
   GitCommitHorizontal,
+  Globe,
+  KeyRound,
+  Lightbulb,
   Loader2,
   MessagesSquare,
   Puzzle,
+  Terminal,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -119,16 +124,19 @@ function EntryRow({ path, entry, untitledLabel }: { path: string; entry: Knowled
   );
 }
 
-function SkillSection({ label, children }: { label: string; children: ReactNode }) {
+function SkillSection({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-      <div className="shrink-0 pt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:w-28">
+      <div className="flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:w-32">
+        {icon}
         {label}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">{children}</div>
     </div>
   );
 }
+
+const sectionIconClass = "h-3.5 w-3.5 shrink-0";
 
 /** Frontmatter of a skill's SKILL.md as a card: what it exposes, reaches, and needs. */
 function SkillCard({ skill }: { skill: KnowledgeSkill }) {
@@ -153,7 +161,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
       {commands.length || domains.length || tunnels.length || credentials.length || hints.length ? (
         <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-3 text-sm">
           {commands.length ? (
-            <SkillSection label={t("commands")}>
+            <SkillSection icon={<Terminal className={sectionIconClass} />} label={t("commands")}>
               {commands.map((command) => (
                 <div key={command.name} className="flex min-w-0 flex-col gap-0.5">
                   <code className="break-all font-mono text-xs font-semibold">{command.name}</code>
@@ -164,7 +172,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           ) : null}
 
           {domains.length ? (
-            <SkillSection label={t("domains")}>
+            <SkillSection icon={<Globe className={sectionIconClass} />} label={t("domains")}>
               {domains.map((domain) => (
                 <code key={domain} className="break-all font-mono text-xs">{domain}</code>
               ))}
@@ -172,7 +180,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           ) : null}
 
           {tunnels.length ? (
-            <SkillSection label={t("tunnels")}>
+            <SkillSection icon={<Cable className={sectionIconClass} />} label={t("tunnels")}>
               {tunnels.map((tunnel) => (
                 <div key={`${tunnel.host}:${tunnel.remote_port}`} className="min-w-0">
                   <code className="break-all font-mono text-xs">
@@ -187,7 +195,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           ) : null}
 
           {credentials.length ? (
-            <SkillSection label={t("credentials")}>
+            <SkillSection icon={<KeyRound className={sectionIconClass} />} label={t("credentials")}>
               {credentials.map((credential) => (
                 <div key={credential.vault_path} className="flex min-w-0 flex-col gap-0.5">
                   <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
@@ -205,7 +213,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
           ) : null}
 
           {hints.length ? (
-            <SkillSection label={t("hints")}>
+            <SkillSection icon={<Lightbulb className={sectionIconClass} />} label={t("hints")}>
               {hints.map(([key, value]) => (
                 <div key={key} className="min-w-0 break-words text-xs">
                   <code className="break-all font-mono font-semibold">{key}</code>
