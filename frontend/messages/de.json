@@ -26,6 +26,7 @@
         "download": "Datei herunterladen",
         "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar.",
         "untitledSession": "Sitzung öffnen",
+        "largeFileNotice": "Syntax-Hervorhebung ist für diese Datei deaktiviert — sie ist zu groß.",
         "skill": {
             "commands": "Befehle",
             "domains": "Domains",
@@ -838,7 +839,8 @@
                 "missing": "Fehlt",
                 "outdated": "Veraltet",
                 "upToDate": "Aktuell"
-            }
+            },
+            "openInBrowser": "Im Wissens-Repository öffnen"
         },
         "mobile": {
             "details": "Details",

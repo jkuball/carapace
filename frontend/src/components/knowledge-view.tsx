@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { entryIcon } from "@/lib/file-icons";
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-time";
+import { knowledgeBrowseHref } from "@/lib/knowledge-links";
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
 import { cn } from "@/lib/utils";
 
@@ -45,9 +46,7 @@ function formatSize(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function browseHref(path: string): string {
-  return path ? `/knowledge?path=${encodeURIComponent(path)}` : "/knowledge";
-}
+const browseHref = knowledgeBrowseHref;
 
 function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
   const segments = path ? path.split("/") : [];
@@ -266,14 +265,18 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
   );
 }
 
+const MAX_HIGHLIGHTED_CHARS = 128 * 1024;
+
 function FileContent({
   server,
   file,
   noPreviewLabel,
+  largeFileLabel,
 }: {
   server: string;
   file: KnowledgeFileInfo;
   noPreviewLabel: string;
+  largeFileLabel: string;
 }) {
   if (file.mime.startsWith("image/")) {
     return (
@@ -290,6 +293,18 @@ function FileContent({
   if (file.content != null) {
     if (isMarkdown(file.name)) {
       return <MarkdownContent content={file.content} />;
+    }
+    // Shiki tokenizes the whole document up front, which locks the tab on a large
+    // one — session archives run to hundreds of KB. Plain text past the threshold.
+    if (file.content.length > MAX_HIGHLIGHTED_CHARS) {
+      return (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground">{largeFileLabel}</p>
+          <pre className="overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs leading-relaxed">
+            {file.content}
+          </pre>
+        </div>
+      );
     }
     return <MarkdownContent content={fencedCodeBlock(languageFromFilePath(file.name), file.content)} />;
   }
@@ -413,7 +428,12 @@ export function KnowledgeView() {
             ) : null}
           </>
         ) : result?.type === "file" ? (
-          <FileContent server={server} file={result} noPreviewLabel={t("noPreview")} />
+          <FileContent
+            server={server}
+            file={result}
+            noPreviewLabel={t("noPreview")}
+            largeFileLabel={t("largeFileNotice")}
+          />
         ) : null}
       </div>
     </div>

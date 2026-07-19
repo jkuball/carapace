@@ -26,6 +26,7 @@
         "download": "Download file",
         "noPreview": "No preview available for this file type.",
         "untitledSession": "Open session",
+        "largeFileNotice": "Syntax highlighting is off for this file — it is too large.",
         "skill": {
             "commands": "Commands",
             "domains": "Domains",
@@ -838,7 +839,8 @@
                 "missing": "Missing",
                 "outdated": "Outdated",
                 "upToDate": "Up to Date"
-            }
+            },
+            "openInBrowser": "Open in the knowledge browser"
         },
         "mobile": {
             "details": "Details",
