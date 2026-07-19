@@ -143,15 +143,16 @@ function EntryRow({
               <span className="truncate">{entry.commit.subject}</span>
             </span>
           ) : null}
-          <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted-foreground">
-            {changedAt ? (
-              <span className="hidden tabular-nums sm:inline" title={formatAbsoluteTime(changedAt, locale)}>
-                {formatRelativeTime(changedAt, locale, now, justNowLabel)}
-              </span>
-            ) : null}
-            {entry.size != null ? (
-              <span className="w-16 text-right tabular-nums">{formatSize(entry.size)}</span>
-            ) : null}
+          {/* Both slots keep their width when empty, so directories (no size) line up
+              with files instead of shifting the whole row right. */}
+          <span className="flex shrink-0 items-baseline gap-2 text-xs tabular-nums text-muted-foreground">
+            <span
+              className="hidden w-28 truncate text-right sm:block"
+              title={changedAt ? formatAbsoluteTime(changedAt, locale) : undefined}
+            >
+              {changedAt ? formatRelativeTime(changedAt, locale, now, justNowLabel) : null}
+            </span>
+            <span className="w-16 text-right">{entry.size != null ? formatSize(entry.size) : null}</span>
           </span>
         </>
       )}
