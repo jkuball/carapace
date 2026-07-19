@@ -160,3 +160,19 @@ def test_build_entry_tags_session_dirs(tmp_path: Path) -> None:
     assert (entry.kind, entry.label, entry.session_id) == ("session", "Groceries", "2026-06-03-08-30-11223344")
     assert build_entry(root / "skills").kind is None
     assert build_entry(root / "SOUL.md").kind is None
+
+
+def test_list_dir_inlines_skill_doc(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    skill = root / "skills" / "weather"
+
+    listing = list_dir(root, skill.resolve())
+
+    assert (listing.kind, listing.doc_name) == ("skill", "SKILL.md")
+    assert listing.doc == "---\nname: weather\n---\n"
+
+
+def test_list_dir_without_skill_doc_has_no_kind(tmp_path: Path) -> None:
+    root = _make_repo(tmp_path)
+    listing = list_dir(root, (root / "skills").resolve())
+    assert (listing.kind, listing.doc_name, listing.doc) == (None, None, None)

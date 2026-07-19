@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookText,
   ChevronRight,
   Download,
   File,
@@ -225,20 +226,31 @@ export function KnowledgeView() {
         ) : error ? (
           <p className="py-8 text-sm text-destructive">{error}</p>
         ) : result?.type === "dir" ? (
-          result.entries.length === 0 ? (
-            <p className="py-8 text-sm text-muted-foreground">{t("empty")}</p>
-          ) : (
-            <div className="flex flex-col gap-0.5 rounded-lg border border-border p-1.5">
-              {result.entries.map((entry) => (
-                <EntryRow
-                  key={entry.name}
-                  path={result.path}
-                  entry={entry}
-                  untitledLabel={t("untitledSession")}
-                />
-              ))}
-            </div>
-          )
+          <>
+            {result.entries.length === 0 ? (
+              <p className="py-8 text-sm text-muted-foreground">{t("empty")}</p>
+            ) : (
+              <div className="flex flex-col gap-0.5 rounded-lg border border-border p-1.5">
+                {result.entries.map((entry) => (
+                  <EntryRow
+                    key={entry.name}
+                    path={result.path}
+                    entry={entry}
+                    untitledLabel={t("untitledSession")}
+                  />
+                ))}
+              </div>
+            )}
+            {result.doc != null ? (
+              <section className="mt-6">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <BookText className="h-3.5 w-3.5" />
+                  {result.doc_name}
+                </h2>
+                <MarkdownContent content={result.doc} />
+              </section>
+            ) : null}
+          </>
         ) : result?.type === "file" ? (
           <FileContent server={server} file={result} noPreviewLabel={t("noPreview")} />
         ) : null}

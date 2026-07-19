@@ -1565,6 +1565,11 @@ export interface KnowledgeEntry {
 
 export interface KnowledgeDirListing {
   type: "dir";
+  /** Recognized directory convention, e.g. a skill dir. */
+  kind: "skill" | null;
+  /** Defining document inlined by the server (SKILL.md), rendered below the listing. */
+  doc_name: string | null;
+  doc: string | null;
   path: string;
   entries: KnowledgeEntry[];
 }

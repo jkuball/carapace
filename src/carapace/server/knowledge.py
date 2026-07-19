@@ -87,6 +87,11 @@ class KnowledgeDirListing(BaseModel):
     type: Literal["dir"] = "dir"
     path: str
     entries: list[KnowledgeEntry]
+    # Recognized directory conventions get their defining document inlined, rendered
+    # below the listing (a skill dir's SKILL.md).
+    kind: Literal["skill"] | None = None
+    doc_name: str | None = None
+    doc: str | None = None
 
 
 class KnowledgeFileInfo(BaseModel):
@@ -121,11 +126,25 @@ def build_entry(child: Path) -> KnowledgeEntry:
     return KnowledgeEntry(name=child.name, type="dir", kind="session", label=title, session_id=session_id)
 
 
+SKILL_DOC = "SKILL.md"
+
+
 def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
     entries = [build_entry(child) for child in target.iterdir() if child.name != ".git"]
     entries.sort(key=lambda e: (e.type != "dir", e.name.casefold()))
     rel = target.relative_to(root.resolve())
-    return KnowledgeDirListing(path="" if rel == Path() else rel.as_posix(), entries=entries)
+    listing = KnowledgeDirListing(path="" if rel == Path() else rel.as_posix(), entries=entries)
+
+    # A SKILL.md marks a skill dir (same marker SkillRegistry scans for); inline it so
+    # the browser can render it under the listing without a second request.
+    skill_doc = target / SKILL_DOC
+    if skill_doc.is_file():
+        doc = read_text_content(skill_doc, skill_doc.stat().st_size)
+        if doc is not None:
+            listing.kind = "skill"
+            listing.doc_name = SKILL_DOC
+            listing.doc = doc
+    return listing
 
 
 @router.get("/knowledge/browse", response_model=None)
