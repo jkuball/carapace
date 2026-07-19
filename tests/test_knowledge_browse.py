@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from carapace.server.knowledge import list_dir, resolve_target
+from carapace.server.knowledge import MAX_INLINE_TEXT_BYTES, list_dir, read_text_content, resolve_target
 
 
 def _make_repo(tmp_path: Path) -> Path:
@@ -64,3 +64,40 @@ def test_list_dir_subdir_path(tmp_path: Path) -> None:
     listing = list_dir(root, (root / "skills" / "weather").resolve())
     assert listing.path == "skills/weather"
     assert [e.name for e in listing.entries] == ["SKILL.md"]
+
+
+def _write(tmp_path: Path, name: str, data: bytes) -> Path:
+    target = tmp_path / name
+    target.write_bytes(data)
+    return target
+
+
+@pytest.mark.parametrize(
+    "name,data",
+    [
+        (".gitignore", b"__pycache__/\n*.pyc\n"),  # no extension to guess from
+        ("Dockerfile", b"FROM python:3.12\n"),
+        ("notes.md", "# über\n".encode()),  # multi-byte UTF-8
+        ("empty", b""),
+    ],
+)
+def test_read_text_content_returns_text(tmp_path: Path, name: str, data: bytes) -> None:
+    target = _write(tmp_path, name, data)
+    assert read_text_content(target, len(data)) == data.decode("utf-8")
+
+
+@pytest.mark.parametrize(
+    "name,data",
+    [
+        ("logo.png", b"\x89PNG\r\n\x1a\n\x00\x00binary"),  # NUL byte
+        ("data.bin", b"\xff\xfe\xfd\xfc"),  # invalid UTF-8
+    ],
+)
+def test_read_text_content_rejects_binary(tmp_path: Path, name: str, data: bytes) -> None:
+    target = _write(tmp_path, name, data)
+    assert read_text_content(target, len(data)) is None
+
+
+def test_read_text_content_rejects_oversized(tmp_path: Path) -> None:
+    target = _write(tmp_path, "big.txt", b"x")
+    assert read_text_content(target, MAX_INLINE_TEXT_BYTES + 1) is None

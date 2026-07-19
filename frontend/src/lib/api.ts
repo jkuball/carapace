@@ -1570,6 +1570,8 @@ export interface KnowledgeFileInfo {
   name: string;
   size: number;
   mime: string;
+  /** Inlined by the server for text files under its size cap; null for binaries. */
+  content: string | null;
 }
 
 export type KnowledgeBrowseResult = KnowledgeDirListing | KnowledgeFileInfo;
@@ -1598,12 +1600,4 @@ export function knowledgeRawUrl(
 ): string {
   const query = opts.download ? "?raw=1&download=1" : "?raw=1";
   return `${server}${knowledgeBrowsePath(path)}${query}`;
-}
-
-export async function fetchKnowledgeText(server: string, path: string): Promise<string> {
-  const res = await fetch(knowledgeRawUrl(server, path));
-  if (!res.ok) {
-    throw new Error(await readErrorMessage(res, "Failed to fetch file"));
-  }
-  return res.text();
 }

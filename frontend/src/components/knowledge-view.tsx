@@ -11,7 +11,6 @@ import { GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
   browseKnowledge,
-  fetchKnowledgeText,
   knowledgeRawUrl,
   type KnowledgeBrowseResult,
   type KnowledgeEntry,
@@ -20,24 +19,8 @@ import {
 import { fencedCodeBlock, languageFromFilePath } from "@/lib/sandbox-read";
 import { cn } from "@/lib/utils";
 
-const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024;
-
-const TEXT_MIMES = new Set([
-  "application/json",
-  "application/xml",
-  "application/yaml",
-  "application/toml",
-  "application/x-sh",
-  "application/javascript",
-]);
-
 function isMarkdown(name: string): boolean {
   return /\.(md|markdown)$/i.test(name);
-}
-
-function isTextFile(file: KnowledgeFileInfo): boolean {
-  if (file.mime.startsWith("text/") || TEXT_MIMES.has(file.mime)) return true;
-  return languageFromFilePath(file.name) !== "text" || isMarkdown(file.name);
 }
 
 function formatSize(size: number): string {
@@ -108,12 +91,10 @@ function EntryRow({ path, entry }: { path: string; entry: KnowledgeEntry }) {
 function FileContent({
   server,
   file,
-  text,
   noPreviewLabel,
 }: {
   server: string;
   file: KnowledgeFileInfo;
-  text: string | null;
   noPreviewLabel: string;
 }) {
   if (file.mime.startsWith("image/")) {
@@ -126,11 +107,13 @@ function FileContent({
       />
     );
   }
-  if (text != null) {
+  // The server inlines contents for anything that decodes as text, so extensionless
+  // files (.gitignore, Dockerfile) still render; only binaries fall through.
+  if (file.content != null) {
     if (isMarkdown(file.name)) {
-      return <MarkdownContent content={text} />;
+      return <MarkdownContent content={file.content} />;
     }
-    return <MarkdownContent content={fencedCodeBlock(languageFromFilePath(file.name), text)} />;
+    return <MarkdownContent content={fencedCodeBlock(languageFromFilePath(file.name), file.content)} />;
   }
   return <p className="text-sm text-muted-foreground">{noPreviewLabel}</p>;
 }
@@ -144,7 +127,6 @@ export function KnowledgeView() {
   const path = (searchParams.get("path") ?? "").replace(/^\/+|\/+$/g, "");
 
   const [result, setResult] = useState<KnowledgeBrowseResult | null>(null);
-  const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,15 +139,9 @@ export function KnowledgeView() {
     (async () => {
       setLoading(true);
       setError(null);
-      setText(null);
       try {
         const browsed = await browseKnowledge(server, path);
-        if (cancelled) return;
-        setResult(browsed);
-        if (browsed.type === "file" && isTextFile(browsed) && browsed.size <= MAX_TEXT_PREVIEW_BYTES) {
-          const content = await fetchKnowledgeText(server, browsed.path);
-          if (!cancelled) setText(content);
-        }
+        if (!cancelled) setResult(browsed);
       } catch (browseError) {
         if (!cancelled) {
           setResult(null);
@@ -231,7 +207,7 @@ export function KnowledgeView() {
             </div>
           )
         ) : result?.type === "file" ? (
-          <FileContent server={server} file={result} text={text} noPreviewLabel={t("noPreview")} />
+          <FileContent server={server} file={result} noPreviewLabel={t("noPreview")} />
         ) : null}
       </div>
     </div>

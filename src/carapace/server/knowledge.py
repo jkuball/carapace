@@ -19,6 +19,27 @@ server = server_module()
 
 router = APIRouter()
 
+# Files above this size are download-only: the browser inlines contents into the
+# listing response, and huge blobs would bloat it for no benefit.
+MAX_INLINE_TEXT_BYTES = 1024 * 1024
+
+
+def read_text_content(target: Path, size: int) -> str | None:
+    """Decode *target* as UTF-8 text, or return ``None`` if binary or too large.
+
+    Same heuristic git uses: a NUL byte means binary. UTF-8 decoding catches the
+    rest, so extensionless files (``.gitignore``, ``Dockerfile``) read as text.
+    """
+    if size > MAX_INLINE_TEXT_BYTES:
+        return None
+    data = target.read_bytes()
+    if b"\0" in data:
+        return None
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
 
 class KnowledgeEntry(BaseModel):
     name: str
@@ -38,6 +59,9 @@ class KnowledgeFileInfo(BaseModel):
     name: str
     size: int
     mime: str
+    # Decoded contents for text files within MAX_INLINE_TEXT_BYTES; None for binary
+    # or oversized files, which the client offers as a download instead.
+    content: str | None = None
 
 
 def resolve_target(root: Path, raw_path: str) -> Path:
@@ -90,9 +114,12 @@ async def browse_knowledge(
             filename=target.name,
             content_disposition_type="attachment" if download else "inline",
         )
+    size = target.stat().st_size
+    mime = guess_mime(target.name)
     return KnowledgeFileInfo(
         path=rel,
         name=target.name,
-        size=target.stat().st_size,
-        mime=guess_mime(target.name),
+        size=size,
+        mime=mime,
+        content=None if mime.startswith("image/") else read_text_content(target, size),
     )
