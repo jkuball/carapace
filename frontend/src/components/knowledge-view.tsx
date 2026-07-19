@@ -82,9 +82,9 @@ function Breadcrumb({ path, rootLabel }: { path: string; rootLabel: string }) {
   );
 }
 
-function rowIcon(entry: KnowledgeEntry, atRoot: boolean): ReactNode {
+function rowIcon(entry: KnowledgeEntry): ReactNode {
   return entryIcon(
-    { name: entry.name, type: entry.type, kind: entry.kind, atRoot },
+    { name: entry.name, type: entry.type, kind: entry.kind },
     cn("h-4 w-4 shrink-0", entry.type === "dir" ? "text-accent-foreground/70" : "text-muted-foreground"),
   );
 }
@@ -112,7 +112,7 @@ function EntryRow({
   const entryPath = path ? `${path}/${entry.name}` : entry.name;
   return (
     <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
-      {rowIcon(entry, path === "")}
+      {rowIcon(entry)}
       <Link
         href={browseHref(entryPath)}
         className="min-w-0 flex-1 truncate rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
