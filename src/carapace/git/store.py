@@ -408,3 +408,11 @@ class GitStore:
         """Check if the repo has any commits."""
         code, _ = await self._run("rev-parse", "HEAD")
         return code == 0
+
+    async def head_revision(self) -> tuple[str, str] | None:
+        """Return ``(short_hash, subject)`` of HEAD, or ``None`` if there are no commits."""
+        code, out = await self._run("log", "-1", "--format=%h%x00%s")
+        if code != 0 or not out:
+            return None
+        short, _, subject = out.partition("\0")
+        return short.strip(), subject.strip()

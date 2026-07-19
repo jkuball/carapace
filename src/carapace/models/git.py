@@ -20,6 +20,9 @@ class GlobalGitStatus(BaseModel):
     remote_configured: bool = False
     ahead: int = 0
     behind: int = 0
+    # Short hash and subject of the local HEAD; None while the repo has no commits.
+    head: str | None = None
+    head_subject: str | None = None
 
 
 class GitActionResult(BaseModel):

@@ -585,6 +585,8 @@ export interface GlobalGitStatus {
   remote_configured: boolean;
   ahead: number;
   behind: number;
+  head: string | null;
+  head_subject: string | null;
 }
 
 export interface GitActionResult {

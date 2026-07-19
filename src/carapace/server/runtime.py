@@ -9,6 +9,7 @@ from loguru import logger
 
 from ..auth import normalize_username
 from ..knowledge import KnowledgeRepoHandle, KnowledgeRepoRegistry
+from ..models.git import GlobalGitStatus
 from ..models.user import DEFAULT_GIT_AUTHOR, DEFAULT_GIT_BRANCH, UserConfig, UserGitConfig
 from ..sandbox.manager import SandboxManager
 
@@ -189,16 +190,24 @@ class KnowledgeGitRuntime:
             handle.git_store.remote_branch = config.branch
             handle.git_store.author_template = config.author
 
-    async def status_for_user(self, owner: str) -> tuple[bool, int, int]:
-        """Return ``(remote_configured, ahead, behind)`` for the backend ↔ remote boundary."""
+    async def status_for_user(self, owner: str) -> GlobalGitStatus:
+        """Return the backend ↔ remote status; ``head`` is filled even without a remote."""
         normalized_owner = normalize_username(owner)
         async with self._lock:
             handle = self._repo_registry.ensure_user_repo(normalized_owner)
             self._apply_config_to_store(normalized_owner, handle)
+            revision = await handle.git_store.head_revision()
+            head, head_subject = revision if revision is not None else (None, None)
             if not handle.git_store.remote_configured:
-                return False, 0, 0
+                return GlobalGitStatus(head=head, head_subject=head_subject)
             ahead, behind = await handle.git_store.remote_status()
-            return True, ahead, behind
+            return GlobalGitStatus(
+                remote_configured=True,
+                ahead=ahead,
+                behind=behind,
+                head=head,
+                head_subject=head_subject,
+            )
 
     async def pull_for_user(self, owner: str) -> tuple[bool, str]:
         """Pull the backend repo from the external remote and invalidate skills.

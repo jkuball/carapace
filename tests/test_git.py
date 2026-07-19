@@ -116,6 +116,39 @@ class TestGitStoreEnsureRepo:
 
 
 @needs_git
+class TestGitStoreHeadRevision:
+    @pytest.fixture
+    async def store(self, tmp_path: Path) -> GitStore:
+        s = GitStore(tmp_path / "knowledge", remote_branch="main")
+        await s.ensure_repo()
+        return s
+
+    async def test_none_without_commits(self, store: GitStore):
+        assert await store.head_revision() is None
+
+    async def test_returns_short_hash_and_subject(self, store: GitStore):
+        (store.repo_dir / "test.md").write_text("hello")
+        await store.commit(["test.md"], "add test file")
+
+        revision = await store.head_revision()
+
+        assert revision is not None
+        short, subject = revision
+        assert subject == "add test file"
+        _, full = await store._run("rev-parse", "HEAD")
+        assert full.startswith(short)
+
+    async def test_subject_with_null_safe_characters(self, store: GitStore):
+        (store.repo_dir / "test.md").write_text("hello")
+        await store.commit(["test.md"], "\U0001f4be session: add 2026-06-01-21-07-0062199d")
+
+        revision = await store.head_revision()
+
+        assert revision is not None
+        assert revision[1] == "\U0001f4be session: add 2026-06-01-21-07-0062199d"
+
+
+@needs_git
 class TestGitStoreCommit:
     @pytest.fixture
     async def store(self, tmp_path: Path) -> GitStore:

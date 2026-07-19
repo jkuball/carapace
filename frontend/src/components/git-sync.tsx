@@ -255,6 +255,7 @@ export function SandboxGitControls({
 export interface GlobalGit {
   configured: boolean | null;
   counts: AheadBehindCounts | null;
+  head: { hash: string; subject: string } | null;
   loading: boolean;
   busy: "pull" | "push" | null;
   outcome: ActionOutcome | null;
@@ -267,6 +268,7 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   const t = useTranslations("git");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
+  const [head, setHead] = useState<{ hash: string; subject: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
   const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
@@ -277,9 +279,11 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
       const status = await getGlobalGit(server, token);
       setConfigured(status.remote_configured);
       setCounts(status.remote_configured ? { ahead: status.ahead, behind: status.behind } : null);
+      setHead(status.head ? { hash: status.head, subject: status.head_subject ?? "" } : null);
       setOutcome((prev) => (prev && !prev.ok ? null : prev));
     } catch {
       setCounts(null);
+      setHead(null);
       setOutcome({ ok: false, errorLabel: t("errors.status"), detail: "" });
     } finally {
       setLoading(false);
@@ -311,6 +315,7 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   return {
     configured,
     counts,
+    head,
     loading,
     busy,
     outcome,
@@ -333,17 +338,28 @@ export function GlobalGitIndicator({ git, className }: { git: GlobalGit; classNa
   );
 }
 
-/** Full git panel for inside the account menu — hidden when no remote is configured. */
-export function GlobalGitPanel({ git, className }: { git: GlobalGit; className?: string }) {
+/**
+ * Full git panel for inside the account menu — hidden when no remote is configured,
+ * unless `alwaysShow` is set (the knowledge browser shows the refresh control regardless).
+ */
+export function GlobalGitPanel({
+  git,
+  className,
+  alwaysShow = false,
+}: {
+  git: GlobalGit;
+  className?: string;
+  alwaysShow?: boolean;
+}) {
   const t = useTranslations("git");
-  if (git.configured === false) return null;
+  if (git.configured === false && !alwaysShow) return null;
   return (
     <div className={className}>
       <GitSyncControls
         title={t("global.label")}
         description={t("global.help")}
         counts={git.counts}
-        emptyLabel={null}
+        emptyLabel={git.configured === false ? t("noRemote") : null}
         loading={git.loading}
         outcome={git.outcome}
         busy={git.busy}

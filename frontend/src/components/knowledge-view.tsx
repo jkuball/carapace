@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight, Download, File, FileText, Folder, Loader2 } from "lucide-react";
+import { ChevronRight, Download, File, FileText, Folder, GitCommitHorizontal, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useAppShell } from "@/components/app-shell-context";
+import { GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { MarkdownContent } from "@/components/markdown-content";
 import {
   browseKnowledge,
@@ -137,7 +138,8 @@ function FileContent({
 export function KnowledgeView() {
   const t = useTranslations("knowledge");
   const tApp = useTranslations("app");
-  const { server } = useAppShell();
+  const { server, token } = useAppShell();
+  const git = useGlobalGit(server, token);
   const searchParams = useSearchParams();
   const path = (searchParams.get("path") ?? "").replace(/^\/+|\/+$/g, "");
 
@@ -181,23 +183,34 @@ export function KnowledgeView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl px-5 py-5 sm:px-6">
-        <div className="flex items-center justify-between gap-3 pb-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
-            <div className="mt-2">
-              <Breadcrumb path={path} rootLabel={t("root")} />
+        <div className="pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+              {git.head ? (
+                <div className="mt-1.5 flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground">
+                  <GitCommitHorizontal className="h-3.5 w-3.5 shrink-0 self-center" />
+                  <span className="shrink-0 font-mono">{git.head.hash}</span>
+                  <span className="truncate" title={git.head.subject}>{git.head.subject}</span>
+                </div>
+              ) : null}
             </div>
+            <GlobalGitPanel git={git} alwaysShow className="w-56 shrink-0" />
           </div>
-          {result?.type === "file" ? (
-            <a
-              href={knowledgeRawUrl(server, result.path, { download: true })}
-              title={t("download")}
-              aria-label={t("download")}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Download className="h-4 w-4" />
-            </a>
-          ) : null}
+
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+            <Breadcrumb path={path} rootLabel={t("root")} />
+            {result?.type === "file" ? (
+              <a
+                href={knowledgeRawUrl(server, result.path, { download: true })}
+                title={t("download")}
+                aria-label={t("download")}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+            ) : null}
+          </div>
         </div>
 
         {loading ? (
