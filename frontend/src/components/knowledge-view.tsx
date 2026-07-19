@@ -110,6 +110,9 @@ function EntryRow({
   now: number;
 }) {
   const entryPath = path ? `${path}/${entry.name}` : entry.name;
+  // The commit date is what a reader means by "last changed"; mtime only fills in for
+  // paths no commit covers, since a checkout rewrites it.
+  const changedAt = entry.commit?.committed_at ?? entry.modified;
   return (
     <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
       {rowIcon(entry)}
@@ -128,19 +131,29 @@ function EntryRow({
           {entry.label ?? untitledLabel}
         </Link>
       ) : (
-        <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted-foreground">
-          {entry.modified ? (
+        <>
+          {/* Commit column: the first thing to go as the row narrows, since the
+              filename and size stay useful at any width. */}
+          {entry.commit ? (
             <span
-              className="hidden tabular-nums sm:inline"
-              title={formatAbsoluteTime(entry.modified, locale)}
+              className="hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex"
+              title={`${entry.commit.hash} · ${entry.commit.subject}`}
             >
-              {formatRelativeTime(entry.modified, locale, now, justNowLabel)}
+              <span className="shrink-0 font-mono">{entry.commit.hash}</span>
+              <span className="truncate">{entry.commit.subject}</span>
             </span>
           ) : null}
-          {entry.size != null ? (
-            <span className="w-16 text-right tabular-nums">{formatSize(entry.size)}</span>
-          ) : null}
-        </span>
+          <span className="flex shrink-0 items-baseline gap-2 text-xs text-muted-foreground">
+            {changedAt ? (
+              <span className="hidden tabular-nums sm:inline" title={formatAbsoluteTime(changedAt, locale)}>
+                {formatRelativeTime(changedAt, locale, now, justNowLabel)}
+              </span>
+            ) : null}
+            {entry.size != null ? (
+              <span className="w-16 text-right tabular-nums">{formatSize(entry.size)}</span>
+            ) : null}
+          </span>
+        </>
       )}
     </div>
   );

@@ -3,9 +3,45 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
+
+from ..models.git import FileCommit
+
+# Record separator for the ``git log`` walk in last_commits: a byte that cannot appear
+# in a commit subject, so records stay distinguishable from the NUL-separated paths.
+_LOG_RECORD_SEP = "%x01"
+
+
+def _parse_last_commits(out: str, prefix: str) -> dict[str, FileCommit]:
+    """Fold a ``git log -z --name-only`` walk into one commit per immediate child."""
+    found: dict[str, FileCommit] = {}
+    for record in out.split("\x01"):
+        if not record:
+            continue
+        fields = record.split("\x00")
+        if len(fields) < 3:
+            continue
+        short, timestamp, subject, *paths = fields
+        if not short or not timestamp.isdigit():
+            continue
+        commit = FileCommit(
+            hash=short,
+            subject=subject,
+            committed_at=datetime.fromtimestamp(int(timestamp), tz=UTC),
+        )
+        for raw in paths:
+            path = raw.strip("\n")
+            if not path or not path.startswith(prefix):
+                continue
+            # Fold e.g. "skills/weather/src/x.py" to the "weather" row under "skills/".
+            child = path[len(prefix) :].split("/", 1)[0]
+            # Commits arrive newest first, so the first one seen wins.
+            found.setdefault(child, commit)
+    return found
+
 
 # Pre-receive hook script — gates every push through the sentinel.
 # CARAPACE_SESSION_ID, CARAPACE_DEFAULT_BRANCH, and CARAPACE_API_PORT
@@ -416,3 +452,25 @@ class GitStore:
             return None
         short, _, subject = out.partition("\0")
         return short.strip(), subject.strip()
+
+    async def last_commits(self, relative_dir: str, *, limit: int = 2000) -> dict[str, FileCommit]:
+        """Map each immediate child of *relative_dir* to the newest commit touching it.
+
+        One ``git log`` walk for the whole directory rather than a process per entry.
+        Paths are reported relative to the repo root, so each is folded back to the
+        child of *relative_dir* that contains it — that is what a directory row shows.
+
+        ponytail: only the newest *limit* commits touching the directory are walked, so
+        a file untouched for longer reports nothing and the row falls back to its mtime.
+        The cap bounds the cost on a large history (~0.1s for a 1k-commit walk); stream
+        the walk with an early exit once every entry is covered if that stops being
+        enough.
+        """
+        prefix = f"{relative_dir.strip('/')}/" if relative_dir.strip("/") else ""
+        args = ["log", f"-n{limit}", "-z", f"--format={_LOG_RECORD_SEP}%h%x00%ct%x00%s", "--name-only", "HEAD"]
+        if prefix:
+            args += ["--", prefix.rstrip("/")]
+        code, out = await self._run(*args)
+        if code != 0 or not out:
+            return {}
+        return _parse_last_commits(out, prefix)

@@ -14,6 +14,8 @@ from pydantic import BaseModel, ValidationError
 
 from ..api_keys import Access, Scope
 from ..auth import UserIdentity
+from ..git.store import GitStore
+from ..models.git import FileCommit
 from ..models.skills import SkillCarapaceConfig
 from ..session.sent_files import guess_mime
 from ..skills import SkillDocument, parse_skill_document
@@ -54,9 +56,11 @@ class KnowledgeEntry(BaseModel):
     name: str
     type: Literal["file", "dir"]
     size: int | None = None
-    # Files only: mtime of the working-tree file, which is when it last changed on
-    # disk (a checkout or pull rewrites it), not the authoring commit date.
+    # Files only: mtime of the working-tree file. A checkout or pull rewrites it, so
+    # it is only the fallback for entries `commit` does not cover (uncommitted files).
     modified: datetime | None = None
+    # Newest commit touching this entry; None for uncommitted paths.
+    commit: FileCommit | None = None
     # Recognized directory conventions get a `kind` plus a human label the client
     # renders where a file would show its size.
     kind: Literal["session", "skill"] | None = None
@@ -202,6 +206,15 @@ def list_dir(root: Path, target: Path) -> KnowledgeDirListing:
     return listing
 
 
+async def attach_commits(git_store: GitStore, listing: KnowledgeDirListing) -> None:
+    """Fill in each entry's newest commit. Silent no-op on a repo without commits."""
+    commits = await git_store.last_commits(listing.path)
+    if not commits:
+        return
+    for entry in listing.entries:
+        entry.commit = commits.get(entry.name)
+
+
 def parse_carapace_config(document: SkillDocument, skill_name: str) -> SkillCarapaceConfig | None:
     """Validate ``metadata.carapace``, or return None if absent or malformed."""
     raw = document.metadata.get("carapace")
@@ -223,12 +236,15 @@ async def browse_knowledge(
     raw: Annotated[bool, Query()] = False,
     download: Annotated[bool, Query()] = False,
 ) -> KnowledgeDirListing | KnowledgeFileInfo | FileResponse:
-    root = server._knowledge_repo_registry.get_for_user(user.username).knowledge_dir.resolve()
+    handle = server._knowledge_repo_registry.get_for_user(user.username)
+    root = handle.knowledge_dir.resolve()
     if not root.is_dir():
         return KnowledgeDirListing(path="", entries=[])
     target = resolve_target(root, path)
     if target.is_dir():
-        return list_dir(root, target)
+        listing = list_dir(root, target)
+        await attach_commits(handle.git_store, listing)
+        return listing
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Not found")
     rel = target.relative_to(root).as_posix()

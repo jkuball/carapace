@@ -6,13 +6,14 @@ import base64
 import os
 import stat
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
 from carapace.git.http import GitHttpHandler
-from carapace.git.store import _PRE_RECEIVE_HOOK, GitStore
+from carapace.git.store import _PRE_RECEIVE_HOOK, GitStore, _parse_last_commits
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -563,3 +564,72 @@ class TestGitHttpHandlerHandle:
         )
 
         assert status == 403
+
+
+class TestParseLastCommits:
+    """Folding a ``git log -z --name-only`` walk into one commit per child."""
+
+    def _record(self, short: str, ts: int, subject: str, paths: list[str]) -> str:
+        return "\x01" + "\x00".join([short, str(ts), subject, *paths])
+
+    def test_newest_commit_per_child_wins(self):
+        out = self._record("aaa1111", 1_780_000_100, "newer", ["skills/weather/SKILL.md"]) + self._record(
+            "bbb2222", 1_780_000_000, "older", ["skills/weather/SKILL.md", "skills/web/SKILL.md"]
+        )
+
+        found = _parse_last_commits(out, "skills/")
+
+        assert found["weather"].hash == "aaa1111"
+        assert found["weather"].subject == "newer"
+        assert found["web"].hash == "bbb2222"
+
+    def test_nested_paths_fold_to_the_child_directory(self):
+        out = self._record("aaa1111", 1_780_000_000, "deep", ["skills/weather/src/fetch/api.py"])
+        assert list(_parse_last_commits(out, "skills/")) == ["weather"]
+
+    def test_root_listing_uses_empty_prefix(self):
+        out = self._record("aaa1111", 1_780_000_000, "root", ["SOUL.md", "skills/weather/SKILL.md"])
+        assert sorted(_parse_last_commits(out, "")) == ["SOUL.md", "skills"]
+
+    def test_paths_outside_the_prefix_are_ignored(self):
+        out = self._record("aaa1111", 1_780_000_000, "other", ["sessions/2026/06/x/conversation.json"])
+        assert _parse_last_commits(out, "skills/") == {}
+
+    def test_merge_commits_without_paths_are_skipped(self):
+        out = self._record("aaa1111", 1_780_000_100, "merge", []) + self._record(
+            "bbb2222", 1_780_000_000, "real", ["skills/weather/SKILL.md"]
+        )
+        assert _parse_last_commits(out, "skills/")["weather"].hash == "bbb2222"
+
+    def test_committed_at_is_utc(self):
+        out = self._record("aaa1111", 1_780_000_000, "s", ["skills/weather/SKILL.md"])
+        assert _parse_last_commits(out, "skills/")["weather"].committed_at == datetime.fromtimestamp(
+            1_780_000_000, tz=UTC
+        )
+
+    def test_malformed_records_are_skipped(self):
+        out = "\x01truncated" + self._record("aaa1111", 1_780_000_000, "ok", ["skills/web/SKILL.md"])
+        assert list(_parse_last_commits(out, "skills/")) == ["web"]
+
+
+@needs_git
+class TestGitStoreLastCommits:
+    async def test_reports_newest_commit_per_entry(self, tmp_path: Path):
+        store = GitStore(tmp_path / "repo", remote_branch="main")
+        await store.ensure_repo()
+        (store.repo_dir / "notes").mkdir()
+        (store.repo_dir / "notes" / "a.md").write_text("a")
+        await store.commit(["notes/a.md"], "add a")
+        (store.repo_dir / "notes" / "b.md").write_text("b")
+        await store.commit(["notes/b.md"], "add b")
+
+        found = await store.last_commits("notes")
+
+        assert found["a.md"].subject == "add a"
+        assert found["b.md"].subject == "add b"
+        assert await store.last_commits("") == {"notes": found["b.md"]}
+
+    async def test_empty_repo_returns_nothing(self, tmp_path: Path):
+        store = GitStore(tmp_path / "repo", remote_branch="main")
+        await store.ensure_repo()
+        assert await store.last_commits("") == {}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -23,6 +25,14 @@ class GlobalGitStatus(BaseModel):
     # Short hash and subject of the local HEAD; None while the repo has no commits.
     head: str | None = None
     head_subject: str | None = None
+
+
+class FileCommit(BaseModel):
+    """Newest commit touching a given path."""
+
+    hash: str
+    subject: str
+    committed_at: datetime
 
 
 class GitActionResult(BaseModel):
