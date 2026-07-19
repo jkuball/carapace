@@ -105,6 +105,7 @@ class ContextGrantEntry(BaseModel):
     domains: list[str] = []
     tunnels: list[str] = []
     vault_paths: list[str] = []
+    mcp_servers: list[str] = []
 
 
 ActionLogEntry = Annotated[

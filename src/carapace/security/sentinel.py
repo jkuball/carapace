@@ -46,14 +46,20 @@ You have tools to read skill source code and documentation.
 Skills are trusted user-authored content. Use them to understand
 what a script does when you see the agent running skill commands.
 
-About use_skill: when you see a use_skill call, the `declared_domains`
-and `declared_creds` fields are NOT requested by the agent — they are
+About use_skill: when you see a use_skill call, the `declared_domains`,
+`declared_creds`, and `declared_mcp` fields are NOT requested by the agent — they are
 declared by the skill itself in its SKILL.md `metadata.carapace` frontmatter and
 automatically bundled into the call for your review. Approving
-use_skill implicitly grants all declared domains and credentials
-for the duration of that skill's usage. Your job is to judge whether
-activating the skill makes sense for the user's request, not whether
-each individual credential or domain is justified separately.
+use_skill implicitly grants all declared domains, credentials, and MCP
+server connections for the duration of that skill's usage. Your job is
+to judge whether activating the skill makes sense for the user's
+request, not whether each individual credential or domain is justified
+separately.
+
+MCP tool calls appear as tools named `mcp:<server>:<tool>`. The server
+connection itself was approved with use_skill, but each individual call
+still comes to you: judge whether the specific tool and arguments fit
+the user's request, exactly as you would for an exec command.
 
 Always respond using the requested structured output schema.
 
@@ -119,12 +125,14 @@ def _format_entry(entry: ActionLogEntry) -> str:
             if explanation:
                 line += f" ({explanation})"
             return line
-        case ContextGrantEntry(skill_name=name, domains=domains, vault_paths=vault_paths):
+        case ContextGrantEntry(skill_name=name, domains=domains, vault_paths=vault_paths, mcp_servers=mcp_servers):
             parts = [f"[context_grant]: {name}"]
             if domains:
                 parts.append(f"domains={sorted(domains)}")
             if vault_paths:
                 parts.append(f"credentials={sorted(vault_paths)}")
+            if mcp_servers:
+                parts.append(f"mcp_servers={sorted(mcp_servers)}")
             return " ".join(parts)
         case _:
             return f"[unknown]: {entry}"

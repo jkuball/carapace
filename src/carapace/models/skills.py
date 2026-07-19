@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -70,12 +70,53 @@ class SkillCommandDecl(BaseModel):
         return self
 
 
+class SkillMcpBearerAuth(BaseModel):
+    """Static bearer token auth for an MCP server; the token is read from the vault."""
+
+    type: Literal["bearer"] = "bearer"
+    vault_path: str
+
+
+# Discriminated union so further auth methods (e.g. oauth) can be added as new variants.
+SkillMcpAuth = Annotated[SkillMcpBearerAuth, Field(discriminator="type")]
+
+_SKILL_MCP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+class SkillMcpDecl(BaseModel):
+    """An MCP server connection declared in a skill's carapace metadata.
+
+    ``name`` doubles as the tool-name prefix: the server's tools are exposed to
+    the agent as ``<name>_<tool>`` while the skill is active.
+    """
+
+    name: str
+    url: str
+    description: str = ""
+    auth: SkillMcpAuth | None = None
+
+    @model_validator(mode="after")
+    def _validate(self) -> SkillMcpDecl:
+        if not _SKILL_MCP_NAME_RE.match(self.name):
+            raise ValueError(
+                "skill mcp name must start with a letter and contain only letters, numbers, or underscores"
+            )
+        if not self.url.startswith(("http://", "https://")):
+            raise ValueError("skill mcp url must be an http(s) URL")
+        return self
+
+    @property
+    def display(self) -> str:
+        return f"{self.name} ({self.url})"
+
+
 class SkillCarapaceConfig(BaseModel):
     """Parsed carapace config declared inline in SKILL.md frontmatter."""
 
     network: SkillNetworkConfig = SkillNetworkConfig()
     credentials: list[SkillCredentialDecl] = []
     commands: list[SkillCommandDecl] = []
+    mcp: list[SkillMcpDecl] = []
     hints: dict[str, str] = {}
 
     @model_validator(mode="after")
@@ -85,6 +126,11 @@ class SkillCarapaceConfig(BaseModel):
             if command.name in seen_names:
                 raise ValueError(f"duplicate skill command name {command.name!r} is not allowed")
             seen_names.add(command.name)
+        seen_mcp: set[str] = set()
+        for server in self.mcp:
+            if server.name in seen_mcp:
+                raise ValueError(f"duplicate skill mcp name {server.name!r} is not allowed")
+            seen_mcp.add(server.name)
         return self
 
 
@@ -100,6 +146,7 @@ class ContextGrant(BaseModel):
     tunnels: list[NetworkTunnel] = []
     credential_decls: list[SkillCredentialDecl] = []
     credential_names: dict[str, str] = {}  # vault_path → human-readable name
+    mcp_servers: list[SkillMcpDecl] = []
 
     @property
     def vault_paths(self) -> set[str]:
@@ -120,6 +167,7 @@ def context_grants_session_summary(
             "tunnels": [tunnel.display for tunnel in grant.tunnels],
             "vault_paths": sorted(grant.vault_paths),
             "cached_credentials": cached,
+            "mcp_servers": [server.display for server in grant.mcp_servers],
         }
     return summary
 

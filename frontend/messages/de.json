@@ -563,6 +563,7 @@
             "deniedByUser": "Vom Benutzer abgelehnt.",
             "contexts": "Kontext:",
             "domains": "Domains:",
+            "mcpServers": "MCP-Server:",
             "credentials": "Zugangsdaten",
             "name": "Name",
             "path": "Pfad",

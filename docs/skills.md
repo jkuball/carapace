@@ -91,6 +91,13 @@ metadata:
     commands:
       - name: web-search
         command: uv run --directory /workspace/skills/web-search scripts/search.py
+    mcp:
+      - name: linear
+        url: https://mcp.linear.app/mcp
+        description: Linear issue tracking
+        auth:
+          type: bearer
+          vault_path: dev/linear-mcp-token
 ---
 ```
 
@@ -138,6 +145,20 @@ Notes:
 - The wrapper uses shell `exec` so the launcher shell is replaced by the real command.
 - `command` must be a single non-empty line.
 - Alias names must be unique across active skills. If an active skill already owns an alias, activating another skill with the same alias fails.
+
+**`mcp`** — optional list of MCP servers the skill connects to. While the skill is active, each server's tools are exposed to the agent as regular tools named `<name>_<tool>`. Each entry has:
+
+- `name` — server name, used as the tool-name prefix. Must start with a letter and contain only letters, numbers, or underscores.
+- `url` — the server's HTTP(S) endpoint (streamable HTTP transport).
+- `description` — optional human-readable explanation for approvals and docs.
+- `auth` — optional authentication. Currently only `type: bearer` with a `vault_path`: the token is read from the vault at activation and sent as `Authorization: Bearer <token>`. The auth block is a tagged union so other methods (e.g. OAuth) can be added later.
+
+Notes:
+
+- The declared servers are part of the `use_skill` approval, like domains and credentials. Every individual MCP tool call is still reviewed by the sentinel (shown as `mcp:<server>:<tool>`), with the usual escalate-to-user path.
+- MCP requests are made by the backend process, not from inside the sandbox. The URL is pinned to the declared value.
+- Oversized text results are spilled to a file in the sandbox (same mechanism as `exec` output).
+- Server tools disappear when the session ends; there is no explicit deactivation, matching context grants.
 
 ## Context-scoped access
 

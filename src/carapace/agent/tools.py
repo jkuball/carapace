@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import re
 import secrets
 from datetime import date
@@ -11,14 +12,17 @@ import httpx
 from loguru import logger
 from pydantic import Field
 from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
+from pydantic_ai.mcp import CallToolFunc, MCPToolset
 from pydantic_ai.messages import BinaryContent, ToolReturn
+from pydantic_ai.toolsets import CombinedToolset
+from pydantic_ai.toolsets.abstract import AbstractToolset
 
 from .. import security as security
 from ..config import load_workspace_file
 from ..credentials import CredentialBackendError
 from ..llm import model_settings_for_config, model_supports_vision
 from ..models.credentials import CredentialMetadata
-from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl
+from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl, SkillMcpDecl
 from ..models.tooling import SentFileInfo, ToolResult, normalize_tool_call_args
 from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW, UploadError, UploadTooLargeError
 from ..sandbox.runtime import SkillActivationError
@@ -493,6 +497,107 @@ async def _cache_skill_credentials(
     return "\n".join(parts), names_map
 
 
+async def _mcp_bearer_token(ctx: RunContext[Deps], decl: SkillMcpDecl) -> str | None:
+    """Resolve the bearer token for an MCP server from the session credential cache, re-fetching on miss."""
+    if decl.auth is None:
+        return None
+    session_id = ctx.deps.session_state.session_id
+    vault_path = decl.auth.vault_path
+    cached = ctx.deps.sandbox.get_cached_credential(session_id, vault_path)
+    if cached is None:
+        logger.info(f"Credential cache miss for {vault_path!r} (MCP server {decl.name!r}), re-fetching from vault")
+        cached = await ctx.deps.credential_registry.fetch(vault_path)
+        ctx.deps.sandbox.cache_credential(session_id, vault_path, cached)
+    return cached
+
+
+def _mcp_process_tool_call(skill_name: str, decl: SkillMcpDecl) -> Any:
+    """Build a ``process_tool_call`` hook that routes every MCP tool call through the security gate.
+
+    The hook mirrors the ``exec`` tool's flow: sentinel gate (with approval
+    escalation), action-log entry, spill-to-file for oversized text results,
+    and UI notification.
+    """
+
+    async def _process(
+        ctx: RunContext[Deps],
+        call_tool: CallToolFunc,
+        name: str,
+        tool_args: dict[str, Any],
+    ) -> Any:
+        gate_name = f"mcp:{decl.name}:{name}"
+        gate_args = {"skill": skill_name, "server": decl.name, "url": decl.url, "tool": name, "args": tool_args}
+        if not ctx.tool_call_approved:
+            if denied := await _gate(ctx, gate_name, gate_args):
+                return denied
+        else:
+            _notify_approved_start(ctx, gate_name, gate_args)
+
+        try:
+            result = await call_tool(name, tool_args)
+        except Exception:
+            ctx.deps.security.append(ToolResultEntry(tool=gate_name, status="error"))
+            raise
+
+        ctx.deps.security.append(ToolResultEntry(tool=gate_name, status="success"))
+
+        text: str | None = None
+        if isinstance(result, str):
+            text = result
+        elif isinstance(result, dict | list):
+            try:
+                text = json.dumps(result, default=str)
+            except (TypeError, ValueError):
+                text = None
+
+        if text is None:
+            _notify_result(ctx, gate_name, f"[non-text MCP tool result: {type(result).__name__}]")
+            return result
+
+        max_chars = ctx.deps.config.agent.tool_output_max_chars
+        if 0 < max_chars < len(text):
+            spilled = await _prepare_exec_tool_result(ctx, text)
+            return _emit_tool_result(ctx, gate_name, spilled)
+
+        _notify_result(ctx, gate_name, text)
+        return result
+
+    return _process
+
+
+async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps] | None:
+    """Dynamic toolset factory: expose MCP tools declared by active skill grants.
+
+    Evaluated per run step by pydantic-ai, so tools appear right after
+    ``use_skill`` registers a grant. Toolset instances are cached on ``Deps``
+    to avoid re-connecting on every step.
+    """
+    toolsets: list[AbstractToolset[Deps]] = []
+    for skill_name, grant in ctx.deps.session_state.context_grants.items():
+        for decl in grant.mcp_servers:
+            key = f"{skill_name}:{decl.name}"
+            toolset = ctx.deps.mcp_toolsets.get(key)
+            if toolset is None:
+                try:
+                    token = await _mcp_bearer_token(ctx, decl)
+                except Exception as exc:
+                    logger.warning(f"Skipping MCP server {decl.display} (skill {skill_name!r}): {exc}")
+                    continue
+                toolset = MCPToolset(
+                    decl.url,
+                    auth=token,
+                    id=f"mcp:{key}",
+                    process_tool_call=_mcp_process_tool_call(skill_name, decl),
+                ).prefixed(decl.name)
+                ctx.deps.mcp_toolsets[key] = toolset
+            toolsets.append(toolset)
+    if not toolsets:
+        return None
+    if len(toolsets) == 1:
+        return toolsets[0]
+    return CombinedToolset(toolsets)
+
+
 def build_system_prompt(deps: Deps) -> str:
     parts: list[str] = []
 
@@ -637,9 +742,11 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         declared_tunnels = carapace_cfg.network.tunnels if carapace_cfg else []
         declared_creds = carapace_cfg.credentials if carapace_cfg else []
         declared_commands = carapace_cfg.commands if carapace_cfg else []
+        declared_mcp = carapace_cfg.mcp if carapace_cfg else []
         declared_creds_payload = [decl.model_dump(mode="json") for decl in declared_creds]
         declared_tunnels_payload = [decl.model_dump(mode="json") for decl in declared_tunnels]
         declared_commands_payload = [decl.model_dump(mode="json") for decl in declared_commands]
+        declared_mcp_payload = [decl.model_dump(mode="json") for decl in declared_mcp]
 
         if conflict_message := _skill_command_alias_conflict(
             skill_name,
@@ -665,6 +772,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
                 "declared_domains": declared_domains,
                 "declared_tunnels": declared_tunnels_payload,
                 "declared_commands": declared_commands_payload,
+                "declared_mcp": declared_mcp_payload,
             }
 
             if denied := await _gate(ctx, "use_skill", gate_args):
@@ -682,6 +790,7 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             domains=set(declared_domains),
             tunnels=list(declared_tunnels),
             credential_decls=list(declared_creds),
+            mcp_servers=list(declared_mcp),
         )
         ctx.deps.session_state.context_grants[skill_name] = grant
         ctx.deps.security.append(
@@ -690,11 +799,20 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
                 domains=declared_domains,
                 tunnels=[tunnel.display for tunnel in declared_tunnels],
                 vault_paths=[c.vault_path for c in declared_creds],
+                mcp_servers=[decl.display for decl in declared_mcp],
             ),
         )
 
-        # Cache credential values for per-exec injection
-        cred_msg, cred_names = await _cache_skill_credentials(ctx, declared_creds, skill_name)
+        # Cache credential values for per-exec injection (incl. MCP bearer tokens)
+        mcp_cred_decls = [
+            SkillCredentialDecl(
+                vault_path=decl.auth.vault_path,
+                description=f"Bearer token for MCP server '{decl.name}'",
+            )
+            for decl in declared_mcp
+            if decl.auth is not None
+        ]
+        cred_msg, cred_names = await _cache_skill_credentials(ctx, declared_creds + mcp_cred_decls, skill_name)
         grant.credential_names = cred_names
 
         sandbox_msg = ""
@@ -731,6 +849,12 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         if declared_tunnels:
             status_lines.append(
                 "Network tunnels available for: " + ", ".join(tunnel.display for tunnel in declared_tunnels)
+            )
+        if declared_mcp:
+            status_lines.append(
+                "MCP servers registered: "
+                + ", ".join(decl.display for decl in declared_mcp)
+                + ". Their tools are now available as regular tools named '<server>_<tool>'."
             )
         if cred_msg:
             status_lines.extend(cred_msg.splitlines())
@@ -1056,5 +1180,11 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         )
 
         return _emit_tool_result(ctx, "exec", result, exit_code)
+
+    # --- MCP (skill-declared servers; tools appear while the skill is active) ---
+
+    @agent.toolset
+    async def skill_mcp_servers(ctx: RunContext[Deps]) -> AbstractToolset[Deps] | None:
+        return await build_skill_mcp_toolset(ctx)
 
     return agent
