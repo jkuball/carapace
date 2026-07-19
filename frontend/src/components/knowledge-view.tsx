@@ -130,7 +130,11 @@ function CopyHash({
       )}
     >
       {commit.short}
-      {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover/row:opacity-60" />}
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0" />
+      ) : (
+        <Copy className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/commit:opacity-60" />
+      )}
     </button>
   );
 }
@@ -164,7 +168,7 @@ function EntryRow({
   // paths no commit covers, since a checkout rewrites it.
   const changedAt = entry.commit?.committed_at ?? entry.modified;
   return (
-    <div className="group/row flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
+    <div className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted">
       {rowIcon(entry)}
       <Link
         href={browseHref(entryPath)}
@@ -185,7 +189,7 @@ function EntryRow({
           {/* Commit column: the first thing to go as the row narrows, since the
               filename and size stay useful at any width. */}
           {entry.commit ? (
-            <span className="hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex">
+            <span className="group/commit hidden min-w-0 max-w-[40%] shrink basis-[40%] items-baseline gap-2 text-xs text-muted-foreground lg:flex">
               <CopyHash commit={entry.commit} copyLabel={copyHashLabel} copiedLabel={copiedLabel} />
               <span className="truncate" title={entry.commit.subject}>
                 {entry.commit.subject}
