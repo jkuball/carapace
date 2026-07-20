@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:bebc7d6de6dd015a483903461eaedea12805728be6f9a044ca7106a2f7e11ddf
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:bcc73375ad29ac6cfe07fd31df0a1fb04e8165b9ea12aaeeb396c622bb6d8eef
 
 # Install git, jq, curl — needed for git http-backend and pre-receive hooks
 RUN apt-get update && apt-get install -y --no-install-recommends \
