@@ -1,6 +1,60 @@
 # CHANGELOG
 
 
+## v0.148.1 (2026-07-20)
+
+
+### Other
+
+
+- Merge pull request #239 from thiesgerken/renovate/pnpm-11.x
+  ([`e647367`](https://github.com/thiesgerken/carapace/commit/e647367dcb62e0f60ab6f1c3ab6d2f207d9bc058))
+
+- Merge pull request #240 from thiesgerken/renovate/astral-sh-setup-uv-8.x
+  ([`df3b573`](https://github.com/thiesgerken/carapace/commit/df3b57355e2645d91c145fd7ab3497e69669c98d))
+
+- Merge pull request #242 from thiesgerken/renovate/actions-setup-node-7.x
+  ([`de0da4b`](https://github.com/thiesgerken/carapace/commit/de0da4b8c3e41779e04dada43af7d187d902b5d3))
+
+- Merge pull request #246 from thiesgerken/renovate/katex-0.x
+  ([`128c0bd`](https://github.com/thiesgerken/carapace/commit/128c0bdcdb370da7665b0409d29f16edf9b3777d))
+
+- Merge pull request #229 from thiesgerken/renovate/lock-file-maintenance
+  ([`4547d77`](https://github.com/thiesgerken/carapace/commit/4547d777691f8b08d60e2debe32341d0a457f1c0))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.13.1
+  ([`e647367`](https://github.com/thiesgerken/carapace/commit/e647367dcb62e0f60ab6f1c3ab6d2f207d9bc058))
+
+- ⬆️ chore: upgrade pnpm to 11.13.1
+  ([`25fd0b2`](https://github.com/thiesgerken/carapace/commit/25fd0b28139fc9f93319edf8ecf4fb00a18ea02d))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v8.3.2
+  ([`df3b573`](https://github.com/thiesgerken/carapace/commit/df3b57355e2645d91c145fd7ab3497e69669c98d))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v8.3.2
+  ([`ef3cf5c`](https://github.com/thiesgerken/carapace/commit/ef3cf5cce25eec37b89a88129e628a307a541f29))
+
+- ⬆️ chore: upgrade actions/setup-node action to v7.0.0
+  ([`de0da4b`](https://github.com/thiesgerken/carapace/commit/de0da4b8c3e41779e04dada43af7d187d902b5d3))
+
+- ⬆️ chore: upgrade actions/setup-node action to v7.0.0
+  ([`c5ea0d6`](https://github.com/thiesgerken/carapace/commit/c5ea0d6ff574ea5b0a3708eef30e58d3957f5a92))
+
+- ⬆️ chore: upgrade katex to 0.18.0
+  ([`128c0bd`](https://github.com/thiesgerken/carapace/commit/128c0bdcdb370da7665b0409d29f16edf9b3777d))
+
+- ⬆️ chore: upgrade katex to 0.18.0
+  ([`9f6c0e6`](https://github.com/thiesgerken/carapace/commit/9f6c0e6900832677207ceeff5be80567ef74c7a1))
+
+- ⬆️ chore: Lock file maintenance
+  ([`4547d77`](https://github.com/thiesgerken/carapace/commit/4547d777691f8b08d60e2debe32341d0a457f1c0))
+
+- ⬆️ chore: Lock file maintenance
+  ([`1064a47`](https://github.com/thiesgerken/carapace/commit/1064a47acc8037139e66e4ff4da7f68380a87353))
+
 ## v0.148.0 (2026-07-20)
 
 
