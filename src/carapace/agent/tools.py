@@ -778,9 +778,9 @@ async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps
             toolset = ctx.deps.mcp_toolsets.get(key)
             if toolset is None:
                 try:
-                    if decl.is_stdio:
+                    if decl.command is not None:
                         toolset = await _build_stdio_mcp_toolset(ctx, skill_name, decl)
-                    else:
+                    elif decl.url is not None:
                         token = await _mcp_bearer_token(ctx, decl)
                         toolset = MCPToolset(
                             decl.url,
@@ -788,6 +788,8 @@ async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps
                             id=f"mcp:{key}",
                             process_tool_call=_mcp_process_tool_call(skill_name, decl),
                         ).prefixed(decl.name)
+                    else:  # unreachable: the model validates url xor command
+                        continue
                 except Exception as exc:
                     logger.warning(f"Skipping MCP server {decl.display} (skill {skill_name!r}): {exc}")
                     continue
