@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.148.2 (2026-07-20)
+
+
+### Other
+
+
+- Merge pull request #245 from thiesgerken/renovate/actions-setup-python-7.x
+  ([`944cb51`](https://github.com/thiesgerken/carapace/commit/944cb5123b3640ae64298d8c70e824f6f4d90f52))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade actions/setup-python action to v7.0.0
+  ([`944cb51`](https://github.com/thiesgerken/carapace/commit/944cb5123b3640ae64298d8c70e824f6f4d90f52))
+
+- ⬆️ chore: upgrade actions/setup-python action to v7.0.0
+  ([`ced59dd`](https://github.com/thiesgerken/carapace/commit/ced59ddb1a5d543225766f711ebeae1d679e2121))
+
 ## v0.148.1 (2026-07-20)
 
 
