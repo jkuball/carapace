@@ -14,7 +14,30 @@
         "users": "Benutzer",
         "disconnect": "Trennen",
         "github": "thiesgerken/carapace",
-        "apiKeys": "API-Schlüssel"
+        "apiKeys": "API-Schlüssel",
+        "knowledge": "Wissen"
+    },
+    "knowledge": {
+        "title": "Wissens-Repository",
+        "root": "Wissen",
+        "loading": "Lädt…",
+        "empty": "Leeres Verzeichnis.",
+        "error": "Laden fehlgeschlagen",
+        "download": "Datei herunterladen",
+        "noPreview": "Für diesen Dateityp ist keine Vorschau verfügbar.",
+        "untitledSession": "Sitzung öffnen",
+        "copyHash": "Vollständigen Commit-Hash kopieren",
+        "copiedHash": "Kopiert",
+        "largeFileNotice": "Syntax-Hervorhebung ist für diese Datei deaktiviert — sie ist zu groß.",
+        "tooLarge": "Diese Datei ist zu groß für eine Vorschau — bitte herunterladen.",
+        "skill": {
+            "commands": "Befehle",
+            "domains": "Domains",
+            "tunnels": "Tunnel",
+            "credentials": "Zugangsdaten",
+            "credential": "Zugangsdatum",
+            "hints": "Hinweise"
+        }
     },
     "account": {
         "menu": "Kontomenü",
@@ -819,7 +842,8 @@
                 "missing": "Fehlt",
                 "outdated": "Veraltet",
                 "upToDate": "Aktuell"
-            }
+            },
+            "openInBrowser": "Im Wissens-Repository öffnen"
         },
         "mobile": {
             "details": "Details",
@@ -1065,6 +1089,7 @@
             "preferences": "Einstellungen",
             "notifications": "Benachrichtigungen",
             "history": "Verlauf",
+            "knowledge": "Wissen",
             "admin": "Administration"
         },
         "secret": {

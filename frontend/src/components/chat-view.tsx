@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Bot, Check, Copy, ExternalLink, Eye, Globe, Link2, Link2Off, Loader2, Lock, MessageSquare, Pin, Play, RotateCcw, Save, Settings2, Square, Star, Terminal, Trash2 } from "lucide-react";
 import { EmojiText } from "@/components/emoji-text";
@@ -43,6 +44,7 @@ import type {
   TurnUsage,
 } from "@/lib/types";
 import { isRecord } from "@/lib/decoding";
+import { knowledgeBrowseHref } from "@/lib/knowledge-links";
 import { getPresenceClientId } from "@/lib/storage";
 import {
   canArchiveSession,
@@ -2664,12 +2666,13 @@ export function ChatView({
           <span className="truncate">{archiveStatusLabel}</span>
         </div>
         {session?.knowledge_last_archive_path ? (
-          <div
-            className="mt-2 break-all font-mono text-xs text-muted-foreground"
-            title={session.knowledge_last_archive_path}
+          <Link
+            href={knowledgeBrowseHref(session.knowledge_last_archive_path)}
+            title={t("knowledge.openInBrowser")}
+            className="mt-2 block break-all rounded-sm font-mono text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {session.knowledge_last_archive_path}
-          </div>
+          </Link>
         ) : null}
       </section>
 

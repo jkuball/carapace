@@ -14,7 +14,30 @@
         "users": "Users",
         "disconnect": "Disconnect",
         "github": "thiesgerken/carapace",
-        "apiKeys": "API Keys"
+        "apiKeys": "API Keys",
+        "knowledge": "Knowledge"
+    },
+    "knowledge": {
+        "title": "Knowledge Repository",
+        "root": "Knowledge",
+        "loading": "Loading…",
+        "empty": "Empty directory.",
+        "error": "Failed to load",
+        "download": "Download file",
+        "noPreview": "No preview available for this file type.",
+        "untitledSession": "Open session",
+        "copyHash": "Copy full commit hash",
+        "copiedHash": "Copied",
+        "largeFileNotice": "Syntax highlighting is off for this file — it is too large.",
+        "tooLarge": "This file is too large to preview — download it instead.",
+        "skill": {
+            "commands": "Commands",
+            "domains": "Domains",
+            "tunnels": "Tunnels",
+            "credentials": "Credentials",
+            "credential": "Credential",
+            "hints": "Hints"
+        }
     },
     "account": {
         "menu": "Account menu",
@@ -819,7 +842,8 @@
                 "missing": "Missing",
                 "outdated": "Outdated",
                 "upToDate": "Up to Date"
-            }
+            },
+            "openInBrowser": "Open in the knowledge browser"
         },
         "mobile": {
             "details": "Details",
@@ -1065,6 +1089,7 @@
             "preferences": "Preferences",
             "notifications": "Notifications",
             "history": "History",
+            "knowledge": "Knowledge",
             "admin": "Admin"
         },
         "secret": {

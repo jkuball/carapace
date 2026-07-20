@@ -585,6 +585,8 @@ export interface GlobalGitStatus {
   remote_configured: boolean;
   ahead: number;
   behind: number;
+  head: string | null;
+  head_subject: string | null;
 }
 
 export interface GitActionResult {
@@ -1548,4 +1550,103 @@ export function wsUrl(
   }
   const query = params.toString();
   return `${base}/api/chat/${sessionId}${query ? `?${query}` : ""}`;
+}
+
+export interface KnowledgeEntry {
+  name: string;
+  type: "file" | "dir";
+  size: number | null;
+  /** Working-tree mtime, ISO 8601. Files only; fallback when `commit` is null. */
+  modified: string | null;
+  /** Newest commit touching this entry; null for uncommitted paths. */
+  commit: { hash: string; short: string; subject: string; committed_at: string } | null;
+  /** Recognized directory convention: a session archive or a skill dir. */
+  kind: "session" | "skill" | null;
+  /** Human label shown in place of a file's size (a session's title). */
+  label: string | null;
+  session_id: string | null;
+}
+
+export interface SkillCommandDecl {
+  name: string;
+  command: string;
+}
+
+export interface SkillCredentialDecl {
+  vault_path: string;
+  description: string;
+  env_var: string | null;
+  file: string | null;
+  base64: boolean;
+}
+
+export interface SkillNetworkTunnel {
+  host: string;
+  remote_port: number;
+  local_port: number;
+  description: string;
+}
+
+export interface SkillCarapaceConfig {
+  network: { domains: string[]; tunnels: SkillNetworkTunnel[] };
+  credentials: SkillCredentialDecl[];
+  commands: SkillCommandDecl[];
+  hints: Record<string, string>;
+}
+
+export interface KnowledgeSkill {
+  name: string;
+  description: string;
+  /** Null when the skill declares no carapace metadata, or it failed validation. */
+  carapace: SkillCarapaceConfig | null;
+}
+
+export interface KnowledgeDirListing {
+  type: "dir";
+  /** Recognized directory convention, e.g. a skill dir. */
+  kind: "skill" | null;
+  /** Defining document inlined by the server (SKILL.md), frontmatter stripped. */
+  doc_name: string | null;
+  doc: string | null;
+  skill: KnowledgeSkill | null;
+  path: string;
+  entries: KnowledgeEntry[];
+}
+
+export interface KnowledgeFileInfo {
+  type: "file";
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+  /** Inlined by the server for text files under its size cap; null for binaries. */
+  content: string | null;
+}
+
+export type KnowledgeBrowseResult = KnowledgeDirListing | KnowledgeFileInfo;
+
+function knowledgeBrowsePath(path: string): string {
+  const clean = path.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!clean) return "/api/knowledge/browse";
+  return `/api/knowledge/browse/${clean.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export async function browseKnowledge(
+  server: string,
+  path: string,
+): Promise<KnowledgeBrowseResult> {
+  const res = await fetch(`${server}${knowledgeBrowsePath(path)}`);
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, "Failed to browse knowledge"));
+  }
+  return (await res.json()) as KnowledgeBrowseResult;
+}
+
+export function knowledgeRawUrl(
+  server: string,
+  path: string,
+  opts: { download?: boolean } = {},
+): string {
+  const query = opts.download ? "?raw=1&download=1" : "?raw=1";
+  return `${server}${knowledgeBrowsePath(path)}${query}`;
 }
