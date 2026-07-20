@@ -704,8 +704,8 @@ export function ToolCallBadge({
 
             // Count MCP servers declared by use_skill
             const declaredMcp = isUseSkillTool && Array.isArray(args.declared_mcp)
-              ? (args.declared_mcp as Array<{ name: string; url: string }>) : [];
-            const mcpTooltip = declaredMcp.map(s => `${s.name} (${s.url})`).join("\n");
+              ? (args.declared_mcp as Array<{ name: string; url?: string; command?: string }>) : [];
+            const mcpTooltip = declaredMcp.map(s => `${s.name} (${s.command ? `stdio: ${s.command}` : s.url})`).join("\n");
 
             return (
               <>
@@ -865,7 +865,7 @@ export function ToolCallBadge({
               {(() => {
                 const servers = (
                   Array.isArray(args.declared_mcp) ? args.declared_mcp : []
-                ) as Array<{ name: string; url: string; description?: string }>;
+                ) as Array<{ name: string; url?: string; command?: string; description?: string }>;
                 return servers.length > 0 ? (
                   <div className="text-[11px] text-muted-foreground">
                     <span className="font-medium text-foreground/70"><Plug className="inline h-3 w-3 -translate-y-px mr-1" />{t("details.mcpServers")} </span>
@@ -873,7 +873,7 @@ export function ToolCallBadge({
                       <span key={s.name} title={s.description || undefined}>
                         {i > 0 && ", "}
                         <span className="font-mono">{s.name}</span>
-                        <span className="text-muted-foreground/70"> ({s.url})</span>
+                        <span className="text-muted-foreground/70"> ({s.command ? `stdio: ${s.command}` : s.url})</span>
                       </span>
                     ))}
                   </div>

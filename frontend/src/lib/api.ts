@@ -1594,7 +1594,8 @@ export interface SkillMcpBearerAuth {
 
 export interface SkillMcpDecl {
   name: string;
-  url: string;
+  url: string | null;
+  command: string | null;
   description: string;
   auth: SkillMcpBearerAuth | null;
 }

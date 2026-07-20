@@ -98,6 +98,9 @@ metadata:
         auth:
           type: bearer
           vault_path: dev/linear-mcp-token
+      - name: karakeep
+        command: npx -y @karakeep/mcp
+        description: Karakeep bookmarks (stdio server, runs in the sandbox)
 ---
 ```
 
@@ -146,19 +149,32 @@ Notes:
 - `command` must be a single non-empty line.
 - Alias names must be unique across active skills. If an active skill already owns an alias, activating another skill with the same alias fails.
 
-**`mcp`** — optional list of MCP servers the skill connects to. While the skill is active, each server's tools are exposed to the agent as regular tools named `<name>_<tool>`. Each entry has:
+**`mcp`** — optional list of MCP servers the skill connects to. While the skill is active, each server's tools are exposed to the agent as regular, typed tools named `<name>_<tool>` (built from the server's own JSON Schemas). Each entry is one of two transports.
+
+Common fields:
 
 - `name` — server name, used as the tool-name prefix. Must start with a letter and contain only letters, numbers, or underscores.
-- `url` — the server's HTTP(S) endpoint (streamable HTTP transport).
 - `description` — optional human-readable explanation for approvals and docs.
-- `auth` — optional authentication. Currently only `type: bearer` with a `vault_path`: the token is read from the vault at activation and sent as `Authorization: Bearer <token>`. The auth block is a tagged union so other methods (e.g. OAuth) can be added later.
 
-Notes:
+**HTTP transport** — set `url`:
+
+- `url` — the server's HTTP(S) endpoint (streamable HTTP transport).
+- `auth` — optional. Currently only `type: bearer` with a `vault_path`: the token is read from the vault at activation and sent as `Authorization: Bearer <token>`. The auth block is a tagged union so other methods (e.g. OAuth) can be added later.
+- The connection is made by the **backend process**; the URL is pinned to the declared value.
+
+**stdio transport** — set `command`:
+
+- `command` — a shell command that starts the MCP server (e.g. `npx -y @karakeep/mcp`, `uv run --directory /workspace/skills/foo mcp-server`).
+- The server process runs **inside the sandbox**, one spawn per operation (once to enumerate tools at activation, once per tool call), bridged by the baked-in `carapace-mcp-bridge`. Nothing persists between calls, so the process model matches an ordinary `exec` — no long-lived connection.
+- `auth` does not apply. The server inherits the skill's context-injected credentials, so declare any secrets it needs under `credentials` with an `env_var` (or `file`); they are injected into the bridge exec under this skill's context.
+- The server may reach the skill's declared `network.domains` (the bridge runs under the skill context), and stateful servers that expect a session across calls are not supported (each call is a fresh process — same limitation as invoking mcp2cli per call).
+
+Notes (both transports):
 
 - The declared servers are part of the `use_skill` approval, like domains and credentials. Every individual MCP tool call is still reviewed by the sentinel (shown as `mcp:<server>:<tool>`), with the usual escalate-to-user path.
-- MCP requests are made by the backend process, not from inside the sandbox. The URL is pinned to the declared value.
 - Oversized text results are spilled to a file in the sandbox (same mechanism as `exec` output).
 - Server tools disappear when the session ends; there is no explicit deactivation, matching context grants.
+- Skills that need full control (OAuth, stateful sessions, custom output shaping) can still wrap a server as a CLI with `mcp2cli` and a `commands` alias instead; `mcp` is the shortcut for the common case.
 
 ## Context-scoped access
 
