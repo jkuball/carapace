@@ -252,9 +252,16 @@ export function SandboxGitControls({
 // B2: backend per-user repo ↔ external remote. Shared between the account-menu
 // indicator dot and the panel inside that menu, so status is fetched once.
 
+/**
+ * Fired after a pull or push moves the knowledge repo. Listened to by every
+ * `useGlobalGit` instance, and by views showing repo contents.
+ */
+export const KNOWLEDGE_GIT_CHANGED_EVENT = "carapace:knowledge-git-changed";
+
 export interface GlobalGit {
   configured: boolean | null;
   counts: AheadBehindCounts | null;
+  head: { hash: string; subject: string } | null;
   loading: boolean;
   busy: "pull" | "push" | null;
   outcome: ActionOutcome | null;
@@ -267,6 +274,7 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
   const t = useTranslations("git");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [counts, setCounts] = useState<AheadBehindCounts | null>(null);
+  const [head, setHead] = useState<{ hash: string; subject: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"pull" | "push" | null>(null);
   const [outcome, setOutcome] = useState<ActionOutcome | null>(null);
@@ -277,9 +285,11 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
       const status = await getGlobalGit(server, token);
       setConfigured(status.remote_configured);
       setCounts(status.remote_configured ? { ahead: status.ahead, behind: status.behind } : null);
+      setHead(status.head ? { hash: status.head, subject: status.head_subject ?? "" } : null);
       setOutcome((prev) => (prev && !prev.ok ? null : prev));
     } catch {
       setCounts(null);
+      setHead(null);
       setOutcome({ ok: false, errorLabel: t("errors.status"), detail: "" });
     } finally {
       setLoading(false);
@@ -291,26 +301,38 @@ export function useGlobalGit(server: string, token: string): GlobalGit {
     return () => clearTimeout(id);
   }, [refresh]);
 
+  // Several of these hooks are mounted at once (sidebar indicator, account menu,
+  // knowledge browser). A pull or push from any of them moves the repo for all, so
+  // they re-read status together instead of the others going stale until remount.
+  useEffect(() => {
+    const onChanged = () => void refresh();
+    window.addEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(KNOWLEDGE_GIT_CHANGED_EVENT, onChanged);
+  }, [refresh]);
+
   const runAction = useCallback(
     async (action: "pull" | "push", fn: () => Promise<GitActionResult>) => {
       setBusy(action);
       setOutcome(null);
       try {
         const result = await fn();
-        await refresh();
         setOutcome({ ok: result.ok, errorLabel: t(`errors.${action}`), detail: result.message });
+        // Every mounted panel re-reads status off this, the acting one included, so
+        // there is no refresh() call here — it would fetch the same status twice.
+        window.dispatchEvent(new Event(KNOWLEDGE_GIT_CHANGED_EVENT));
       } catch {
         setOutcome({ ok: false, errorLabel: t(`errors.${action}`), detail: "" });
       } finally {
         setBusy(null);
       }
     },
-    [refresh, t],
+    [t],
   );
 
   return {
     configured,
     counts,
+    head,
     loading,
     busy,
     outcome,
@@ -333,17 +355,28 @@ export function GlobalGitIndicator({ git, className }: { git: GlobalGit; classNa
   );
 }
 
-/** Full git panel for inside the account menu — hidden when no remote is configured. */
-export function GlobalGitPanel({ git, className }: { git: GlobalGit; className?: string }) {
+/**
+ * Full git panel for inside the account menu — hidden when no remote is configured,
+ * unless `alwaysShow` is set (the knowledge browser shows the refresh control regardless).
+ */
+export function GlobalGitPanel({
+  git,
+  className,
+  alwaysShow = false,
+}: {
+  git: GlobalGit;
+  className?: string;
+  alwaysShow?: boolean;
+}) {
   const t = useTranslations("git");
-  if (git.configured === false) return null;
+  if (git.configured === false && !alwaysShow) return null;
   return (
     <div className={className}>
       <GitSyncControls
         title={t("global.label")}
         description={t("global.help")}
         counts={git.counts}
-        emptyLabel={null}
+        emptyLabel={git.configured === false ? t("noRemote") : null}
         loading={git.loading}
         outcome={git.outcome}
         busy={git.busy}

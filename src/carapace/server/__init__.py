@@ -60,6 +60,7 @@ from .auth import verify_ws_token
 from .history import router as history_router
 from .jobs import _jobs_scheduler_loop
 from .jobs import router as jobs_router
+from .knowledge import router as knowledge_router
 from .notifications import _set_notification_presence as _set_notification_presence
 from .notifications import router as notifications_router
 from .platform_settings import router as platform_settings_router
@@ -733,6 +734,7 @@ async def evaluate_push(req: PushEvalRequest) -> dict[str, str]:
 router.include_router(sessions_router)
 router.include_router(history_router)
 router.include_router(jobs_router)
+router.include_router(knowledge_router)
 router.include_router(session_sandbox_router)
 router.include_router(notifications_router)
 router.include_router(platform_settings_router)

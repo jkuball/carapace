@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -20,6 +22,20 @@ class GlobalGitStatus(BaseModel):
     remote_configured: bool = False
     ahead: int = 0
     behind: int = 0
+    # Short hash and subject of the local HEAD; None while the repo has no commits.
+    head: str | None = None
+    head_subject: str | None = None
+
+
+class FileCommit(BaseModel):
+    """Newest commit touching a given path."""
+
+    # Full hash for copying; `short` is git's own abbreviation, which is repo-dependent
+    # and so cannot be reproduced by truncating the full one.
+    hash: str
+    short: str
+    subject: str
+    committed_at: datetime
 
 
 class GitActionResult(BaseModel):

@@ -605,11 +605,10 @@ async def get_global_git(
     user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
 ) -> GlobalGitStatus:
     try:
-        configured, ahead, behind = await server._knowledge_git_runtime.status_for_user(user.username)
+        return await server._knowledge_git_runtime.status_for_user(user.username)
     except Exception as exc:
         logger.warning(f"Global git status failed for {user.username}: {exc}")
         raise HTTPException(status_code=502, detail="Could not read global git status") from exc
-    return GlobalGitStatus(remote_configured=configured, ahead=ahead, behind=behind)
 
 
 @router.post("/git/pull", response_model=GitActionResult)

@@ -6,13 +6,14 @@ import base64
 import os
 import stat
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
 from carapace.git.http import GitHttpHandler
-from carapace.git.store import _PRE_RECEIVE_HOOK, GitStore
+from carapace.git.store import _PRE_RECEIVE_HOOK, GitStore, _parse_last_commits
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -113,6 +114,39 @@ class TestGitStoreEnsureRepo:
 
         _, out = await store._run("config", "receive.denyCurrentBranch")
         assert out == "updateInstead"
+
+
+@needs_git
+class TestGitStoreHeadRevision:
+    @pytest.fixture
+    async def store(self, tmp_path: Path) -> GitStore:
+        s = GitStore(tmp_path / "knowledge", remote_branch="main")
+        await s.ensure_repo()
+        return s
+
+    async def test_none_without_commits(self, store: GitStore):
+        assert await store.head_revision() is None
+
+    async def test_returns_short_hash_and_subject(self, store: GitStore):
+        (store.repo_dir / "test.md").write_text("hello")
+        await store.commit(["test.md"], "add test file")
+
+        revision = await store.head_revision()
+
+        assert revision is not None
+        short, subject = revision
+        assert subject == "add test file"
+        _, full = await store._run("rev-parse", "HEAD")
+        assert full.startswith(short)
+
+    async def test_subject_with_null_safe_characters(self, store: GitStore):
+        (store.repo_dir / "test.md").write_text("hello")
+        await store.commit(["test.md"], "\U0001f4be session: add 2026-06-01-21-07-0062199d")
+
+        revision = await store.head_revision()
+
+        assert revision is not None
+        assert revision[1] == "\U0001f4be session: add 2026-06-01-21-07-0062199d"
 
 
 @needs_git
@@ -530,3 +564,91 @@ class TestGitHttpHandlerHandle:
         )
 
         assert status == 403
+
+
+class TestParseLastCommits:
+    """Folding a ``git log -z --name-only`` walk into one commit per child."""
+
+    def _record(self, short: str, ts: int, subject: str, paths: list[str]) -> str:
+        full = short * 5 + short[:5]  # 45 chars, stands in for a 40-char hash
+        return "\x01" + "\x00".join([full[:40], short, str(ts), subject, *paths])
+
+    def test_newest_commit_per_child_wins(self):
+        out = self._record("aaa1111", 1_780_000_100, "newer", ["skills/weather/SKILL.md"]) + self._record(
+            "bbb2222", 1_780_000_000, "older", ["skills/weather/SKILL.md", "skills/web/SKILL.md"]
+        )
+
+        found = _parse_last_commits(out, "skills/")
+
+        assert found["weather"].short == "aaa1111"
+        assert found["weather"].subject == "newer"
+        assert found["web"].short == "bbb2222"
+
+    def test_nested_paths_fold_to_the_child_directory(self):
+        out = self._record("aaa1111", 1_780_000_000, "deep", ["skills/weather/src/fetch/api.py"])
+        assert list(_parse_last_commits(out, "skills/")) == ["weather"]
+
+    def test_root_listing_uses_empty_prefix(self):
+        out = self._record("aaa1111", 1_780_000_000, "root", ["SOUL.md", "skills/weather/SKILL.md"])
+        assert sorted(_parse_last_commits(out, "")) == ["SOUL.md", "skills"]
+
+    def test_a_record_separator_in_the_subject_does_not_split_the_record(self):
+        """Git accepts \\x01 in a subject. Splitting on it blindly drops every path in
+        that commit, so those entries silently fall back to an older one."""
+        out = self._record("aaa1111", 1_780_000_000, "pwn\x01deadbeef", ["skills/weather/SKILL.md"])
+
+        found = _parse_last_commits(out, "skills/")
+
+        assert found["weather"].subject == "pwn\x01deadbeef"
+
+    def test_paths_outside_the_prefix_are_ignored(self):
+        out = self._record("aaa1111", 1_780_000_000, "other", ["sessions/2026/06/x/conversation.json"])
+        assert _parse_last_commits(out, "skills/") == {}
+
+    def test_merge_commits_without_paths_are_skipped(self):
+        out = self._record("aaa1111", 1_780_000_100, "merge", []) + self._record(
+            "bbb2222", 1_780_000_000, "real", ["skills/weather/SKILL.md"]
+        )
+        assert _parse_last_commits(out, "skills/")["weather"].short == "bbb2222"
+
+    def test_committed_at_is_utc(self):
+        out = self._record("aaa1111", 1_780_000_000, "s", ["skills/weather/SKILL.md"])
+        assert _parse_last_commits(out, "skills/")["weather"].committed_at == datetime.fromtimestamp(
+            1_780_000_000, tz=UTC
+        )
+
+    def test_malformed_records_are_skipped(self):
+        out = "\x01truncated" + self._record("aaa1111", 1_780_000_000, "ok", ["skills/web/SKILL.md"])
+        assert list(_parse_last_commits(out, "skills/")) == ["web"]
+
+
+@needs_git
+class TestGitStoreLastCommits:
+    async def test_reports_newest_commit_per_entry(self, tmp_path: Path):
+        store = GitStore(tmp_path / "repo", remote_branch="main")
+        await store.ensure_repo()
+        (store.repo_dir / "notes").mkdir()
+        (store.repo_dir / "notes" / "a.md").write_text("a")
+        await store.commit(["notes/a.md"], "add a")
+        (store.repo_dir / "notes" / "b.md").write_text("b")
+        await store.commit(["notes/b.md"], "add b")
+
+        found = await store.last_commits("notes")
+
+        assert found["a.md"].subject == "add a"
+        assert found["b.md"].subject == "add b"
+        assert await store.last_commits("") == {"notes": found["b.md"]}
+
+    async def test_empty_repo_returns_nothing(self, tmp_path: Path):
+        store = GitStore(tmp_path / "repo", remote_branch="main")
+        await store.ensure_repo()
+        assert await store.last_commits("") == {}
+
+
+def test_parse_last_commits_keeps_full_and_short_hash():
+    full = "a" * 40
+    out = "\x01" + "\x00".join([full, "aaa1111", "1780000000", "s", "skills/web/SKILL.md"])
+
+    commit = _parse_last_commits(out, "skills/")["web"]
+
+    assert (commit.hash, commit.short) == (full, "aaa1111")

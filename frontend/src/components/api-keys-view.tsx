@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type Access = "none" | "read" | "write";
 
-const BASE_SCOPES = ["sessions", "jobs", "preferences", "notifications", "history"] as const;
+const BASE_SCOPES = ["sessions", "jobs", "preferences", "notifications", "history", "knowledge"] as const;
 
 const inputClassName = cn(
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-base sm:text-sm",

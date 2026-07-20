@@ -1,6 +1,210 @@
 # CHANGELOG
 
 
+## v0.148.0 (2026-07-20)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #243 from thiesgerken/worktree-knowledge-viewer
+  ([`e376e81`](https://github.com/thiesgerken/carapace/commit/e376e817e6c83d6b4246839eb30251c9c8994a86))
+
+- ✨ feat(knowledge): read-only knowledge repo browser in web UI
+  ([`e376e81`](https://github.com/thiesgerken/carapace/commit/e376e817e6c83d6b4246839eb30251c9c8994a86))
+
+- ✨ feat(knowledge): copy the full commit hash by clicking it
+  ([`b20e456`](https://github.com/thiesgerken/carapace/commit/b20e456335fa4d30ee114f959b6a4ea3c6adb688))
+
+  Listing rows keep showing git's abbreviated hash but now copy the full 40-character one, which is what you actually paste into a git command. The short form is taken from git rather than truncated client-side, since git picks the abbreviation length per repo.
+
+  A copy icon fades in on row hover and briefly becomes a checkmark on success. A rejected clipboard (insecure origin, denied permission) leaves the label untouched instead of falsely reporting success.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): link the session archive path to the knowledge browser
+  ([`8a390ad`](https://github.com/thiesgerken/carapace/commit/8a390ad44f83c19d196419bf3dc2030608f88280))
+
+  The archive path shown in the session inspector now opens that file in the browser instead of being inert text. Route building moves to lib/knowledge-links.ts so both views agree on the query-param form the static export requires.
+
+  Also guards the code viewer: Shiki tokenizes a whole document up front, and this link leads straight to a conversation.json that runs to hundreds of KB. Past 128 KB the file renders as plain text with a note, rather than locking the tab.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): show the last commit per entry in listings
+  ([`995094f`](https://github.com/thiesgerken/carapace/commit/995094fbadf7fa5dcb729b3725cabc4c7e8ec888))
+
+  Each row now carries the newest commit touching it — short hash and subject line — the way a git host shows a tree. Resolved by a single 'git log --name-only' walk per listing that folds nested paths back to the child row, so a directory of 20 files costs one subprocess, not 20 (~70-160ms on a 900-commit repo).
+
+  Row layout degrades by width: the commit column appears at lg, the relative time at sm, and the filename and size stay at every size. The timestamp now prefers the commit date over the working-tree mtime, which a checkout rewrites; mtime remains the fallback for uncommitted files.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): show last-modified time for files in listings
+  ([`14c2bab`](https://github.com/thiesgerken/carapace/commit/14c2bab34a2fb4dbbb04376a8a42782bac156b00))
+
+  File rows now carry a relative mtime ("3 days ago", absolute date past a week) with the exact timestamp as a tooltip, alongside the size. Hidden below the sm breakpoint so narrow rows keep the filename readable.
+
+  Adds lib/format-time.ts with the relative/absolute formatters. sidebar and message still hold their own near-identical copies; noted there for whoever touches them next rather than refactored blind.
+
+  The timestamp is the working-tree mtime, so a checkout or pull rewrites it — it is when the file last changed on disk, not the authoring commit date.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): distinct icons for the top-level skills and sessions dirs
+  ([`9104162`](https://github.com/thiesgerken/carapace/commit/9104162ba6debfe67f1b528207f1ee06d0163de3))
+
+  FolderTree for skills/ and FolderArchive for sessions/, distinguishing the collections from the individual skill (FolderCog) and session (FolderClock) dirs inside them. Matched by name and only at the repo root, so a nested dir with either name stays a plain folder.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): icon lookup by name/extension, fix skill label alignment
+  ([`28c040b`](https://github.com/thiesgerken/carapace/commit/28c040b0fa72aa6afccb50f2f39706e8cc2d32f5))
+
+  Adds lib/file-icons.tsx: an exact-name table (SOUL.md, SECURITY.md, Dockerfile, lockfiles, .gitignore, …) checked before an extension table (~70 extensions across markup, code, config, images, archives, media). Directories resolve by kind and keep a folder silhouette — FolderClock for session archives, FolderCog for skills — so they still read as directories. Skill dirs are now tagged server-side, which the listing needs to pick that icon.
+
+  Fixes the skill card's section labels drifting to the vertical middle of multi-line value lists: the label row became a flex container when it gained an icon, so items-center measured against the stretched full height. self-start stops the stretch.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): render READMEs for plain dirs, icon the skill sections
+  ([`de82b59`](https://github.com/thiesgerken/carapace/commit/de82b595906a63669319219125beaa40938c63e6))
+
+  Any directory without a SKILL.md now renders its README below the listing, the same way skill dirs render their instructions. The name is matched case-insensitively against the entries already listed, so it costs no extra syscalls, and a skill dir that also carries a README still shows SKILL.md. README frontmatter is left intact — only SKILL.md has frontmatter worth stripping.
+
+  Skill card sections gained leading icons (terminal, globe, cable, key, lightbulb) so commands, domains, tunnels, credentials and hints are distinguishable at a glance.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): render parsed skill frontmatter as a card
+  ([`ad27abb`](https://github.com/thiesgerken/carapace/commit/ad27abb4b8fe9d13e754a6815badc87bd4893c98))
+
+  Skill dirs now show their declared capabilities above the prose: commands, network domains and tunnels, credentials, and hints. The frontmatter is stripped from the rendered markdown so it no longer appears as raw YAML at the top.
+
+  Parsing reuses the server-side SkillRegistry logic, extracted into parse_skill_document() so both the registry and the browse endpoint share one implementation, and validates through SkillCarapaceConfig. Skills with absent or malformed carapace metadata still render their prose.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): render SKILL.md below skill directory listings
+  ([`6162f5d`](https://github.com/thiesgerken/carapace/commit/6162f5d154b6017a08599914cf45e8cafd83fa4c))
+
+  Opening a directory that contains SKILL.md now inlines it in the browse response and renders it under the file listing, so a skill's instructions are visible without opening the file. Detection uses the same marker SkillRegistry scans for.
+
+  kind/doc on the listing are the extension point for parsed skill metadata (commands, network domains, credentials) later.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): label session archive dirs with their title
+  ([`443b002`](https://github.com/thiesgerken/carapace/commit/443b00224813e360595e462fcd885ec1e3bd103a))
+
+  Directory listings now tag entries that are session archives (detected by the conversation.json marker, so a reconfigured path_prefix still works) with kind, the session title, and its id. The browser renders the title where a file shows its size, linking to the session in chat, and uses a distinct icon for those dirs.
+
+  kind/label are the extension point for the same treatment on skill dirs later.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): sniff text server-side instead of guessing by extension
+  ([`4e47576`](https://github.com/thiesgerken/carapace/commit/4e47576d4e4b86e9b9d4baad546fe540d0b423fc))
+
+  The browse endpoint now inlines file contents for anything that decodes as UTF-8 without NUL bytes, so extensionless files (.gitignore, Dockerfile) and unknown extensions render in the text viewer instead of falling back to download-only. Binaries and files over 1 MiB still report content: null.
+
+  Drops the client-side extension/MIME allowlist and the second round trip that fetched file text after the metadata request.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): show repo HEAD and git sync controls in browser header
+  ([`71bed31`](https://github.com/thiesgerken/carapace/commit/71bed3156a2ef3798d4a6d7751fe68cb3a2b47da))
+
+  Rename the page heading to 'Knowledge Repository' so it no longer duplicates the breadcrumb root, and add a meta row between heading and path: current HEAD (short hash + subject) plus the existing global git panel (ahead/behind, pull, push, refresh) reused from the account menu.
+
+  /api/git/status now reports head and head_subject, filled even when no external remote is configured; GlobalGitPanel gained an alwaysShow prop so the browser can offer refresh in that case.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(knowledge): read-only knowledge repo browser in web UI
+  ([`1b962ce`](https://github.com/thiesgerken/carapace/commit/1b962cee0bbfe887152b00fbe0c691e02e5728ff))
+
+  Add GET /api/knowledge/browse[/{path}] serving the per-user knowledge repo working tree: directories return a JSON listing, files return metadata or raw content (?raw=1 / ?download=1). Path traversal and .git access are rejected; access is gated by a new 'knowledge' API key scope (cookie sessions unaffected).
+
+  Frontend: /knowledge page with breadcrumb navigation, directory listing, markdown/code rendering (existing MarkdownContent + Shiki), image preview and download fallback. Entry point via sidebar icon.
+
+  Foundation for later augmented displays (skill metadata cards, session archive links).
+
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+### 🔒 Security
+
+
+- 🔒 fix(knowledge): close .git read-through, inline HTML, and log-parse holes
+  ([`15ea56a`](https://github.com/thiesgerken/carapace/commit/15ea56aacd1b6b60f6b4278b95302db7e034877e))
+
+  Self-review of the browse endpoint turned up three more holes of the same family as the symlink escape fixed in 64119ceb:
+
+  - contained_target() checked containment in the repo root but not the .git
+    exclusion resolve_target applies, so a committed
+    `notes/README.md -> ../.git/config` returned the remote URL — access token
+    included — in the listing JSON.
+  - ?raw=1 served user-pushed content inline on the app origin with a guessed
+    mime, so a pushed .html or .svg ran script under the user's cookie session.
+    Only the image types the client renders as an <img> stay inline now.
+  - The session-archive probe read and JSON-parsed conversation.json with no
+    size cap, once per subdirectory of a listing.
+
+  Also: git accepts \x01 in a commit subject, so splitting the `git log` walk on it blindly dropped every path in that commit and showed a stale commit for those entries. Split only where a commit header follows.
+
+  Frontend, same review: the 128 KB highlighting guard sat below the markdown branch and so never covered a large .md; session rows dropped the commit and date columns they were meant to line up with; a file past the server's inline cap read as "no preview for this file type"; pull/push fetched status twice from the acting panel; formatSize duplicated formatBytes.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🔒 fix(knowledge): do not read through symlinks that escape the repo
+  ([`64119ce`](https://github.com/thiesgerken/carapace/commit/64119ceb4f62906ce6ec63441b7aa7ee42ac05a2))
+
+  resolve_target guarded the browsed path, but listing a directory reads through its entries on its own — a SKILL.md, a README, a session's conversation.json — with no containment check. A symlink committed into the repo pointing at any host path had its contents inlined into the browse response, up to the 1 MiB cap.
+
+  Every such read now resolves through contained_target(), which also fixes a listing crashing on a dangling symlink: stat() raised FileNotFoundError and took down the whole directory. Those entries are still listed by name, just without size or metadata read through them.
+
+  Also refreshes browse listings and every git status indicator after a pull or push, and hides the download button while a new path loads so it cannot point at the file just navigated away from.
+
+  Reported by Cursor Bugbot on #243.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- 🎨 fix(knowledge): reveal the copy icon on the commit column, not the whole row
+  ([`1cf87a8`](https://github.com/thiesgerken/carapace/commit/1cf87a8c6244ffdc94ab76dd75ad101db2cabfe8))
+
+  The hover group moves from the row to the commit column, so pointing anywhere in a row no longer suggests the hash is the clickable part.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🎨 fix(knowledge): keep listing columns aligned for directories
+  ([`d6dcb7f`](https://github.com/thiesgerken/carapace/commit/d6dcb7faecfbc50254bd018fc82b0da107ec5cab))
+
+  Directories have no size, so the size slot collapsed and pushed their commit and date columns right, out of line with the file rows below. Both trailing slots now hold their width when empty, and the date slot is fixed-width so dates form a column instead of ragged-right text.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🎨 revert(knowledge): plain folder icon for the top-level skills and sessions dirs
+  ([`b33fffb`](https://github.com/thiesgerken/carapace/commit/b33fffba16a7a9db9fd87afa4033fcbcf756ee63))
+
+  Reverts the FolderTree/FolderArchive icons; both are plain folders again. Drops the atRoot plumbing they needed, since nothing else uses it. Individual skill and session dirs keep FolderCog and FolderClock.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(knowledge): wrap long skill values instead of truncating them
+  ([`6ddc2e8`](https://github.com/thiesgerken/carapace/commit/6ddc2e8f160ab910126aa8d98c632a14432c525f))
+
+  Commands, vault paths, domains and tunnel endpoints in the skill card now wrap (break-all for mono values, break-words for prose) rather than ending in an ellipsis. Real commands reach 138 characters, so the tail — the part identifying which script actually runs — was the part being hidden. Drops the now-redundant title tooltips.
+
+  Row contexts (breadcrumb, listing entries, HEAD subject) keep truncating; they are single-line by design.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.147.1 (2026-06-28)
 
 
