@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.150.1 (2026-07-21)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(knowledge): distinguish unconfigured vault backend from missing secret
+  ([`6868942`](https://github.com/thiesgerken/carapace/commit/6868942477c209b981a1f10175e7cc48a203fbcb))
+
+  The skill viewer showed a red "absent" X for every vault_path when the file credential backend was disabled (CARAPACE_ALLOW_FILE_CREDENTIAL_BACKEND unset), falsely implying the secret was missing. _resolve now raises UnknownBackendError (KeyError subclass) for an unregistered/disabled backend; resolve_vault_status maps it to a new muted "unconfigured" status instead of "absent".
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.150.0 (2026-07-21)
 
 
