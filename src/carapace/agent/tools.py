@@ -218,6 +218,29 @@ def _skill_command_alias_conflict(skill_name: str, knowledge_dir: Path, activate
     return f"Cannot activate skill '{skill_name}' because these command aliases conflict with active skills: {details}."
 
 
+def _skill_mcp_name_conflict(
+    skill_name: str, declared_mcp: list[SkillMcpDecl], context_grants: dict[str, ContextGrant]
+) -> str | None:
+    """Reject activation if a declared MCP name is already registered by another active skill.
+
+    MCP tools are exposed with the prefix ``<name>_`` only, so two active skills sharing a
+    name would collide on tool names pointing at different servers.
+    """
+    active: dict[str, str] = {}
+    for other, grant in context_grants.items():
+        if other == skill_name:
+            continue
+        for server in grant.mcp_servers:
+            active[server.name] = other
+    conflicts = [(decl.name, active[decl.name]) for decl in declared_mcp if decl.name in active]
+    if not conflicts:
+        return None
+    details = ", ".join(f"{name!r} (already registered by {owner!r})" for name, owner in conflicts)
+    return (
+        f"Cannot activate skill '{skill_name}' because these MCP server names conflict with active skills: {details}."
+    )
+
+
 def _extract_leading_command_token(command: str) -> str | None:
     match = re.match(
         r"^\s*(?P<token>(?:" + re.escape(SKILL_COMMAND_SHIM_DIR) + r"/)?[A-Za-z0-9][A-Za-z0-9._-]*)", command
@@ -763,13 +786,51 @@ async def _build_stdio_mcp_toolset(
     return FunctionToolset(tools=tools)
 
 
+async def _prewarm_skill_mcp(ctx: RunContext[Deps], skill_name: str, grant: ContextGrant) -> list[str]:
+    """Eagerly build a skill's MCP servers at activation; return per-server status lines.
+
+    A server whose auth/connection fails is reported (graceful degradation) but does not
+    abort activation — the skill still loads and the agent is told which servers are
+    unavailable instead of being falsely promised their tools.
+    """
+    lines: list[str] = []
+    for decl in grant.mcp_servers:
+        key = f"{skill_name}:{decl.name}"
+        try:
+            if decl.command is not None:
+                toolset = await _build_stdio_mcp_toolset(ctx, skill_name, decl)
+            elif decl.url is not None:
+                token = await _mcp_bearer_token(ctx, decl)
+                toolset = MCPToolset(
+                    decl.url,
+                    auth=token,
+                    id=f"mcp:{key}",
+                    process_tool_call=_mcp_process_tool_call(skill_name, decl),
+                ).prefixed(decl.name)
+            else:  # unreachable: the model validates url xor command
+                continue
+        except Exception as exc:
+            logger.warning(f"MCP server {decl.display} (skill {skill_name!r}) unavailable: {exc}")
+            lines.append(
+                f"MCP server '{decl.name}' is UNAVAILABLE: {exc}. The skill is active, but its "
+                f"{decl.name}_* tools will not work until this is resolved."
+            )
+            continue
+        if toolset is None:
+            lines.append(f"MCP server '{decl.name}' exposes no tools.")
+            continue
+        ctx.deps.mcp_toolsets[key] = toolset
+        lines.append(f"MCP server '{decl.name}' ready — tools available as {decl.name}_*.")
+    return lines
+
+
 async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps] | None:
     """Dynamic toolset factory: expose MCP tools declared by active skill grants.
 
     Evaluated per run step by pydantic-ai, so tools appear right after
-    ``use_skill`` registers a grant. Built toolsets are cached on ``Deps`` so
-    HTTP servers are not re-connected and stdio servers are not re-enumerated
-    on every step.
+    ``use_skill`` registers a grant. Built toolsets are cached on ``Deps`` (activation
+    pre-warms the cache) so HTTP servers are not re-connected and stdio servers are not
+    re-enumerated on every step.
     """
     toolsets: list[AbstractToolset[Deps]] = []
     for skill_name, grant in ctx.deps.session_state.context_grants.items():
@@ -961,6 +1022,9 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         ):
             return conflict_message
 
+        if mcp_conflict := _skill_mcp_name_conflict(skill_name, declared_mcp, ctx.deps.session_state.context_grants):
+            return mcp_conflict
+
         # Resolve human-readable names from the vault for UI display
         cred_registry = ctx.deps.credential_registry
         for entry in declared_creds_payload:
@@ -1057,11 +1121,10 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
                 "Network tunnels available for: " + ", ".join(tunnel.display for tunnel in declared_tunnels)
             )
         if declared_mcp:
-            status_lines.append(
-                "MCP servers registered: "
-                + ", ".join(decl.display for decl in declared_mcp)
-                + ". Their tools are now available as regular tools named '<server>_<tool>'."
-            )
+            # Eagerly connect declared MCP servers so tools are ready and any failure
+            # (missing/unresolvable credential, unreachable server) is reported now
+            # instead of falsely promising the tools.
+            status_lines.extend(await _prewarm_skill_mcp(ctx, skill_name, grant))
         if cred_msg:
             status_lines.extend(cred_msg.splitlines())
 
