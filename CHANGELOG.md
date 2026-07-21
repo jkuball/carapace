@@ -1,6 +1,71 @@
 # CHANGELOG
 
 
+## v0.150.0 (2026-07-21)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #250 from thiesgerken/feature/skill-mcp-vault-status
+  ([`5d2c18f`](https://github.com/thiesgerken/carapace/commit/5d2c18fca61a5ca8e8c5cbbb096cddee3d4b7839))
+
+- ✨ feat(knowledge): vault-presence status + OAuth provisioning hint in the viewer
+  ([`5d2c18f`](https://github.com/thiesgerken/carapace/commit/5d2c18fca61a5ca8e8c5cbbb096cddee3d4b7839))
+
+- ✨ feat(knowledge): vault-presence status for skill secret refs
+  ([`01b7dd9`](https://github.com/thiesgerken/carapace/commit/01b7dd922c797e95063ffaaf45ec31bdad831d7e))
+
+  The knowledge viewer now shows, per secret a skill references (credential vault_paths + MCP auth vault_paths), whether it exists in the user's vault: a green check (present), red cross (absent), or muted alert (vault unreachable). Lookup is metadata-only (never values), one fetch_metadata per ref, and best-effort — a down vault never blocks browsing.
+
+  For OAuth MCP servers whose token isn't present, the card shows a short provisioning hint pointing at scripts/mcp_oauth_blob.py (the deferred interactive "populate" button's stand-in).
+
+  - browse endpoint enriches skill listings with vault_status via the
+    per-user credential registry
+  - knowledge-view renders a VaultBadge next to each ref + oauth hint
+  - en/de strings; TS gains SkillMcpOAuthAuth
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨Merge pull request #249 from thiesgerken/feature/skill-mcp-oauth
+  ([`754fac0`](https://github.com/thiesgerken/carapace/commit/754fac040f4b59cf943f76bccb127fea984f508e))
+
+- ✨ feat(skills): OAuth auth for MCP servers + vault write-back
+  ([`754fac0`](https://github.com/thiesgerken/carapace/commit/754fac040f4b59cf943f76bccb127fea984f508e))
+
+- ✨ feat(skills): OAuth auth for MCP servers + vault write-back
+  ([`e170878`](https://github.com/thiesgerken/carapace/commit/e17087805311dfe39699b2281d36e17ba5d59970))
+
+  Add `type: oauth` to skill MCP auth. The vault entry holds a JSON OAuth state blob; carapace injects the access token, refreshes it via the refresh-token grant when missing / near expiry / rejected (401), and writes the rotated blob back to the vault.
+
+  - VaultBackend gains write(); implemented for Bitwarden (read-modify-write
+    the item's login password via bw serve PUT) and the file backend
+    (.env line-edit / YAML round-trip). Registry + session view route it.
+  - _VaultOAuth (httpx.Auth): proactive refresh + 401 retry + write-back,
+    guarded by a lock; prewarm() surfaces auth errors at activation.
+  - Graceful degradation: use_skill now eagerly connects/enumerates each
+    declared MCP server and reports per-server status; a failing server no
+    longer aborts activation — the skill loads and the agent is told which
+    <server>_* tools are unavailable and why. Shared _build_one_mcp_toolset
+    backs both activation prewarm and the dynamic-toolset factory.
+  - scripts/mcp_oauth_blob.py assembles the blob; docs/skills.md documents
+    the oauth variant, out-of-band bootstrap, and write-back requirement.
+
+  Initial authorization (DCR+PKCE browser login) stays out-of-band; carapace only refreshes. Bitwarden write path needs validation against a live bw serve.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- Merge branch 'feature/skill-mcp-oauth' into feature/skill-mcp-vault-status
+  ([`b025f3c`](https://github.com/thiesgerken/carapace/commit/b025f3c16e35bfaf775b55dac9f11e830735afb9))
+
+- Merge branch 'feature/skill-mcp-stdio-bridge' into feature/skill-mcp-oauth
+  ([`2932efa`](https://github.com/thiesgerken/carapace/commit/2932efae15d32a9147eec38501d73495eb420b7c))
+
+  # Conflicts: #	src/carapace/agent/tools.py
+
 ## v0.149.0 (2026-07-21)
 
 
