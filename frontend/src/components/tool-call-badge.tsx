@@ -11,6 +11,7 @@ import {
   Globe,
   KeyRound,
   Loader2,
+  Plug,
   Puzzle,
   Replace,
   Send,
@@ -701,8 +702,21 @@ export function ToolCallBadge({
               ? (args.declared_domains as string[]).join("\n")
               : childCalls?.filter(c => c.tool === "proxy_domain").map(c => c.args.domain as string ?? "").join("\n") ?? "";
 
+            // Count MCP servers declared by use_skill
+            const declaredMcp = isUseSkillTool && Array.isArray(args.declared_mcp)
+              ? (args.declared_mcp as Array<{ name: string; url: string }>) : [];
+            const mcpTooltip = declaredMcp.map(s => `${s.name} (${s.url})`).join("\n");
+
             return (
               <>
+                {declaredMcp.length > 0 && (
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-400"
+                    title={mcpTooltip}
+                  >
+                    <Plug className="h-2.5 w-2.5" />{declaredMcp.length}
+                  </span>
+                )}
                 {credCount > 0 && (
                   <span
                     className="inline-flex items-center gap-0.5 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-400"
@@ -842,6 +856,24 @@ export function ToolCallBadge({
                       <span key={d}>
                         {i > 0 && ", "}
                         <span className="font-mono">{d}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
+              {(() => {
+                const servers = (
+                  Array.isArray(args.declared_mcp) ? args.declared_mcp : []
+                ) as Array<{ name: string; url: string; description?: string }>;
+                return servers.length > 0 ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground/70"><Plug className="inline h-3 w-3 -translate-y-px mr-1" />{t("details.mcpServers")} </span>
+                    {servers.map((s, i) => (
+                      <span key={s.name} title={s.description || undefined}>
+                        {i > 0 && ", "}
+                        <span className="font-mono">{s.name}</span>
+                        <span className="text-muted-foreground/70"> ({s.url})</span>
                       </span>
                     ))}
                   </div>

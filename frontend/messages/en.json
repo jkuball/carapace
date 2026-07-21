@@ -36,6 +36,8 @@
             "tunnels": "Tunnels",
             "credentials": "Credentials",
             "credential": "Credential",
+            "mcp": "MCP servers",
+            "mcpAuth": "{type} auth",
             "hints": "Hints"
         }
     },
@@ -586,6 +588,7 @@
             "deniedByUser": "Denied by user.",
             "contexts": "Contexts:",
             "domains": "Domains:",
+            "mcpServers": "MCP servers:",
             "credentials": "Credentials",
             "name": "Name",
             "path": "Path",

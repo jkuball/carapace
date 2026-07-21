@@ -12,6 +12,7 @@ import {
   KeyRound,
   Lightbulb,
   Loader2,
+  Plug,
   Puzzle,
   Terminal,
 } from "lucide-react";
@@ -226,6 +227,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
   const tunnels = carapace?.network.tunnels ?? [];
   const credentials = carapace?.credentials ?? [];
   const commands = carapace?.commands ?? [];
+  const mcpServers = carapace?.mcp ?? [];
   const hints = Object.entries(carapace?.hints ?? {});
 
   return (
@@ -238,7 +240,7 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
         <p className="mt-1.5 text-sm text-muted-foreground">{skill.description}</p>
       ) : null}
 
-      {commands.length || domains.length || tunnels.length || credentials.length || hints.length ? (
+      {commands.length || domains.length || tunnels.length || credentials.length || mcpServers.length || hints.length ? (
         <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-3 text-sm">
           {commands.length ? (
             <SkillSection icon={<Terminal className={sectionIconClass} />} label={t("commands")}>
@@ -287,6 +289,27 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
                     ) : null}
                   </div>
                   <code className="break-all font-mono text-xs text-muted-foreground">{credential.vault_path}</code>
+                </div>
+              ))}
+            </SkillSection>
+          ) : null}
+
+          {mcpServers.length ? (
+            <SkillSection icon={<Plug className={sectionIconClass} />} label={t("mcp")}>
+              {mcpServers.map((server) => (
+                <div key={server.name} className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                    <code className="break-all font-mono text-xs font-semibold">{server.name}</code>
+                    {server.description ? (
+                      <span className="break-words text-xs text-muted-foreground">{server.description}</span>
+                    ) : null}
+                  </div>
+                  <code className="break-all font-mono text-xs text-muted-foreground">{server.url}</code>
+                  {server.auth ? (
+                    <code className="break-all font-mono text-xs text-muted-foreground">
+                      {t("mcpAuth", { type: server.auth.type })} · {server.auth.vault_path}
+                    </code>
+                  ) : null}
                 </div>
               ))}
             </SkillSection>

@@ -1587,10 +1587,23 @@ export interface SkillNetworkTunnel {
   description: string;
 }
 
+export interface SkillMcpBearerAuth {
+  type: "bearer";
+  vault_path: string;
+}
+
+export interface SkillMcpDecl {
+  name: string;
+  url: string;
+  description: string;
+  auth: SkillMcpBearerAuth | null;
+}
+
 export interface SkillCarapaceConfig {
   network: { domains: string[]; tunnels: SkillNetworkTunnel[] };
   credentials: SkillCredentialDecl[];
   commands: SkillCommandDecl[];
+  mcp: SkillMcpDecl[];
   hints: Record<string, string>;
 }
 

@@ -50,6 +50,11 @@ class Deps(BaseModel):
         description="carapace-registered model id (custom id or provider:name); usage keys, not provider wire ids.",
     )
 
+    # Live MCPToolset instances keyed by "<skill>:<server>", built lazily from
+    # active context grants. Cached here so per-run-step toolset evaluation
+    # reuses connections instead of re-handshaking every step.
+    mcp_toolsets: dict[str, Any] = {}
+
     tool_call_callback: ToolCallCallback | None = None
     tool_result_callback: Callable[[ToolResult], None] | None = None
     append_session_events: Callable[[list[dict[str, Any]]], None] | None = None

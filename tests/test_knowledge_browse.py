@@ -196,6 +196,12 @@ metadata:
     commands:
       - name: weather
         command: uv run weather
+    mcp:
+      - name: hass
+        url: https://homeassistant.example/api/mcp
+        auth:
+          type: bearer
+          vault_path: vault/abc
 ---
 
 # Weather
@@ -226,6 +232,8 @@ def test_list_dir_strips_frontmatter_into_skill(tmp_path: Path) -> None:
     assert carapace.network.domains == ["homeassistant.example"]
     assert [c.name for c in carapace.commands] == ["weather"]
     assert [c.env_var for c in carapace.credentials] == ["HA_TOKEN"]
+    assert [(s.name, s.url) for s in carapace.mcp] == [("hass", "https://homeassistant.example/api/mcp")]
+    assert carapace.mcp[0].auth is not None and carapace.mcp[0].auth.vault_path == "vault/abc"
 
 
 def test_list_dir_skill_without_carapace_metadata(tmp_path: Path) -> None:
