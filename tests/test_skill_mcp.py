@@ -9,7 +9,12 @@ from pydantic import ValidationError
 from pydantic_ai import ToolDenied
 from pydantic_ai.toolsets.prefixed import PrefixedToolset
 
-from carapace.agent.tools import _mcp_process_tool_call, build_skill_mcp_toolset
+from carapace.agent.tools import (
+    _mcp_process_tool_call,
+    _prewarm_skill_mcp,
+    _skill_mcp_name_conflict,
+    build_skill_mcp_toolset,
+)
 from carapace.models.skills import (
     ContextGrant,
     SkillCarapaceConfig,
@@ -174,3 +179,61 @@ class TestMcpProcessToolCall:
         assert isinstance(result, str)
         assert "Full output saved to" in result
         ctx.deps.sandbox.file_write.assert_awaited_once()
+
+
+# ── Duplicate MCP name conflict (issue #2) ──────────────────────────
+
+
+class TestMcpNameConflict:
+    def test_conflict_across_active_skills(self):
+        grants = {
+            "other": ContextGrant(
+                skill_name="other", mcp_servers=[SkillMcpDecl(name="linear", url="https://a.example/mcp")]
+            )
+        }
+        declared = [SkillMcpDecl(name="linear", url="https://b.example/mcp")]
+        msg = _skill_mcp_name_conflict("new", declared, grants)
+        assert msg is not None and "linear" in msg and "other" in msg
+
+    def test_no_conflict_distinct_names(self):
+        grants = {
+            "other": ContextGrant(
+                skill_name="other", mcp_servers=[SkillMcpDecl(name="linear", url="https://a.example/mcp")]
+            )
+        }
+        declared = [SkillMcpDecl(name="github", url="https://b.example/mcp")]
+        assert _skill_mcp_name_conflict("new", declared, grants) is None
+
+    def test_reactivating_same_skill_is_not_a_conflict(self):
+        grants = {
+            "me": ContextGrant(skill_name="me", mcp_servers=[SkillMcpDecl(name="linear", url="https://a.example/mcp")])
+        }
+        declared = [SkillMcpDecl(name="linear", url="https://a.example/mcp")]
+        assert _skill_mcp_name_conflict("me", declared, grants) is None
+
+
+# ── Activation prewarm reports honest status (issue #1) ─────────────
+
+
+class TestPrewarmStatus:
+    async def test_ready_when_build_succeeds(self):
+        ctx = MagicMock()
+        ctx.deps.mcp_toolsets = {}
+        grant = ContextGrant(skill_name="s", mcp_servers=[SkillMcpDecl(name="srv", url="https://e.example/mcp")])
+        with (
+            patch("carapace.agent.tools._mcp_bearer_token", AsyncMock(return_value="tok")),
+            patch("carapace.agent.tools._mcp_process_tool_call", MagicMock(return_value=None)),
+        ):
+            lines = await _prewarm_skill_mcp(ctx, "s", grant)
+        assert "s:srv" in ctx.deps.mcp_toolsets
+        assert any("ready" in ln and "srv_*" in ln for ln in lines)
+
+    async def test_unavailable_when_token_fails_without_promising_tools(self):
+        ctx = MagicMock()
+        ctx.deps.mcp_toolsets = {}
+        grant = ContextGrant(skill_name="s", mcp_servers=[SkillMcpDecl(name="srv", url="https://e.example/mcp")])
+        with patch("carapace.agent.tools._mcp_bearer_token", AsyncMock(side_effect=KeyError("missing"))):
+            lines = await _prewarm_skill_mcp(ctx, "s", grant)
+        assert "s:srv" not in ctx.deps.mcp_toolsets
+        assert any("UNAVAILABLE" in ln for ln in lines)
+        assert not any("ready" in ln for ln in lines)
