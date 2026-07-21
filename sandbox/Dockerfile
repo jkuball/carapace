@@ -27,6 +27,14 @@ RUN chmod +x /usr/local/bin/setup-proxy.sh
 COPY ccred /usr/local/bin/ccred
 RUN chmod +x /usr/local/bin/ccred
 
+# Self-contained venv for the stdio MCP bridge (skill-declared stdio MCP servers).
+# Baked at build time so no dependency resolution happens at runtime (the sandbox's
+# egress is proxy/domain-gated and would block a runtime `pip`/`uv` fetch).
+RUN uv venv /opt/carapace-mcp --python 3.14 \
+   && uv pip install --python /opt/carapace-mcp/bin/python "mcp>=1.20,<2"
+COPY carapace-mcp-bridge /usr/local/bin/carapace-mcp-bridge
+RUN chmod +x /usr/local/bin/carapace-mcp-bridge
+
 RUN mkdir -p /workspace \
    && git config --global --add safe.directory /workspace
 

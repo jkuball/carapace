@@ -304,7 +304,9 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
                       <span className="break-words text-xs text-muted-foreground">{server.description}</span>
                     ) : null}
                   </div>
-                  <code className="break-all font-mono text-xs text-muted-foreground">{server.url}</code>
+                  <code className="break-all font-mono text-xs text-muted-foreground">
+                    {server.command ? `stdio: ${server.command}` : server.url}
+                  </code>
                   {server.auth ? (
                     <code className="break-all font-mono text-xs text-muted-foreground">
                       {t("mcpAuth", { type: server.auth.type })} · {server.auth.vault_path}

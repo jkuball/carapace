@@ -88,10 +88,21 @@ class SkillMcpDecl(BaseModel):
 
     ``name`` doubles as the tool-name prefix: the server's tools are exposed to
     the agent as ``<name>_<tool>`` while the skill is active.
+
+    A declaration is one of two transports:
+
+    - **HTTP** — set ``url`` (streamable HTTP); optional ``auth`` (bearer token
+      from the vault). The connection is made by the backend process.
+    - **stdio** — set ``command`` (a shell command that starts the server); the
+      process runs inside the sandbox, one spawn per operation, bridged by
+      ``carapace-mcp-bridge``. The server inherits the skill's context-injected
+      credentials (declare them under ``credentials`` with an ``env_var``), so
+      ``auth`` does not apply.
     """
 
     name: str
-    url: str
+    url: str | None = None
+    command: str | None = None
     description: str = ""
     auth: SkillMcpAuth | None = None
 
@@ -101,13 +112,23 @@ class SkillMcpDecl(BaseModel):
             raise ValueError(
                 "skill mcp name must start with a letter and contain only letters, numbers, or underscores"
             )
-        if not self.url.startswith(("http://", "https://")):
+        if bool(self.url) == bool(self.command):
+            raise ValueError("skill mcp declaration must set exactly one of 'url' (HTTP) or 'command' (stdio)")
+        if self.url is not None and not self.url.startswith(("http://", "https://")):
             raise ValueError("skill mcp url must be an http(s) URL")
+        if self.command is not None and self.auth is not None:
+            raise ValueError("skill mcp 'auth' applies to HTTP servers only; stdio servers use skill credentials")
         return self
 
     @property
+    def is_stdio(self) -> bool:
+        return self.command is not None
+
+    @property
     def display(self) -> str:
-        return f"{self.name} ({self.url})"
+        target = self.command if self.is_stdio else self.url
+        prefix = "stdio: " if self.is_stdio else ""
+        return f"{self.name} ({prefix}{target})"
 
 
 class SkillCarapaceConfig(BaseModel):

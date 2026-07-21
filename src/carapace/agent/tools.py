@@ -4,6 +4,8 @@ import base64
 import json
 import re
 import secrets
+import shlex
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any
@@ -11,10 +13,10 @@ from typing import Annotated, Any
 import httpx
 from loguru import logger
 from pydantic import Field
-from pydantic_ai import Agent, DeferredToolRequests, RunContext, ToolDenied, ToolOutput
+from pydantic_ai import Agent, DeferredToolRequests, ModelRetry, RunContext, Tool, ToolDenied, ToolOutput
 from pydantic_ai.mcp import CallToolFunc, MCPToolset
 from pydantic_ai.messages import BinaryContent, ToolReturn
-from pydantic_ai.toolsets import CombinedToolset
+from pydantic_ai.toolsets import CombinedToolset, FunctionToolset
 from pydantic_ai.toolsets.abstract import AbstractToolset
 
 from .. import security as security
@@ -520,6 +522,81 @@ async def _cache_skill_credentials(
     return "\n".join(parts), names_map
 
 
+@dataclass
+class _ContextInjection:
+    """Per-exec credential/domain/tunnel data resolved from active context grants."""
+
+    extra_env: dict[str, str] = field(default_factory=dict)
+    domains: set[str] = field(default_factory=set)
+    tunnels: list[Any] = field(default_factory=list)
+    file_creds: list[tuple[str, str, str]] = field(default_factory=list)  # (skill, path, value)
+    injected_creds: list[tuple[str, str]] = field(default_factory=list)  # (skill, vault_path)
+    missing_cached: list[tuple[str, str]] = field(default_factory=list)  # (skill, vault_path)
+
+
+async def _collect_context_injection(ctx: RunContext[Deps], contexts: list[str]) -> _ContextInjection:
+    """Build per-exec injection (env/files/domains/tunnels) from matching context grants.
+
+    Shared by the ``exec`` tool and the stdio MCP bridge so both inject a skill's
+    declared credentials, domains, and tunnels identically. Credential values come
+    from the session cache, re-fetched from the vault on a cache miss.
+    """
+    inj = _ContextInjection()
+    grants = ctx.deps.session_state.context_grants
+    session_id = ctx.deps.session_state.session_id
+    for ctx_name in contexts:
+        grant = grants.get(ctx_name)
+        if grant is None:
+            continue
+        inj.domains.update(grant.domains)
+        inj.tunnels.extend(grant.tunnels)
+        inj.domains.update(tunnel.host for tunnel in grant.tunnels)
+        for decl in grant.credential_decls:
+            if not (decl.env_var or decl.file):
+                continue
+            cached = ctx.deps.sandbox.get_cached_credential(session_id, decl.vault_path)
+            if cached is None:
+                # Cache miss (e.g. after backend restart) — re-fetch from vault
+                logger.info(f"Credential cache miss for {decl.vault_path!r} (skill {ctx_name!r}), re-fetching")
+                try:
+                    cached = await ctx.deps.credential_registry.fetch(decl.vault_path)
+                    ctx.deps.sandbox.cache_credential(session_id, decl.vault_path, cached)
+                except Exception:
+                    inj.missing_cached.append((ctx_name, decl.vault_path))
+                    continue
+            if decl.base64:
+                cached = base64.b64decode(cached).decode()
+            inj.injected_creds.append((ctx_name, decl.vault_path))
+            if decl.env_var:
+                inj.extra_env[decl.env_var] = cached
+            if decl.file:
+                inj.file_creds.append((ctx_name, decl.file, cached))
+    return inj
+
+
+def _notify_injected_creds_callback(ctx: RunContext[Deps], injected_creds: list[tuple[str, str]]) -> Any:
+    """Build an after-exec callback that logs each skill-declared credential as used."""
+
+    def _notify() -> None:
+        grants = ctx.deps.session_state.context_grants
+        for ctx_name, vp in injected_creds:
+            grant = grants.get(ctx_name)
+            if grant is None:
+                continue
+            cred_name = grant.credential_names.get(vp, "")
+            display = cred_name or vp
+            ctx.deps.security.notify_credential_decision(
+                vp,
+                f"[skill] {display}",
+                name=cred_name,
+                approval_source="skill",
+                approval_verdict="allow",
+                approval_explanation=f"skill-declared credential ({ctx_name})",
+            )
+
+    return _notify
+
+
 async def _mcp_bearer_token(ctx: RunContext[Deps], decl: SkillMcpDecl) -> str | None:
     """Resolve the bearer token for an MCP server from the session credential cache, re-fetching on miss."""
     if decl.auth is None:
@@ -534,12 +611,47 @@ async def _mcp_bearer_token(ctx: RunContext[Deps], decl: SkillMcpDecl) -> str | 
     return cached
 
 
-def _mcp_process_tool_call(skill_name: str, decl: SkillMcpDecl) -> Any:
-    """Build a ``process_tool_call`` hook that routes every MCP tool call through the security gate.
+async def _gate_mcp_call(ctx: RunContext[Deps], gate_name: str, gate_args: dict[str, Any]) -> ToolDenied | None:
+    """Sentinel gate for one MCP tool call (or emit the approved-start notice if pre-approved)."""
+    if not ctx.tool_call_approved:
+        return await _gate(ctx, gate_name, gate_args)
+    _notify_approved_start(ctx, gate_name, gate_args)
+    return None
 
-    The hook mirrors the ``exec`` tool's flow: sentinel gate (with approval
-    escalation), action-log entry, spill-to-file for oversized text results,
-    and UI notification.
+
+async def _emit_mcp_result(ctx: RunContext[Deps], gate_name: str, result: Any) -> Any:
+    """Apply spill-to-file + truncation to an MCP tool result and notify the UI.
+
+    Returns the model-facing value: the original result when small, or a preview
+    string (with the spill path) when oversized. Shared by HTTP and stdio paths.
+    """
+    text: str | None = None
+    if isinstance(result, str):
+        text = result
+    elif isinstance(result, dict | list):
+        try:
+            text = json.dumps(result, default=str)
+        except (TypeError, ValueError):
+            text = None
+
+    if text is None:
+        _notify_result(ctx, gate_name, f"[non-text MCP tool result: {type(result).__name__}]")
+        return result
+
+    max_chars = ctx.deps.config.agent.tool_output_max_chars
+    if 0 < max_chars < len(text):
+        spilled = await _prepare_exec_tool_result(ctx, text)
+        return _emit_tool_result(ctx, gate_name, spilled)
+
+    _notify_result(ctx, gate_name, text)
+    return result
+
+
+def _mcp_process_tool_call(skill_name: str, decl: SkillMcpDecl) -> Any:
+    """Build a ``process_tool_call`` hook that routes each HTTP MCP call through the security gate.
+
+    Mirrors the ``exec`` flow: sentinel gate (with approval escalation),
+    action-log entry, spill-to-file for oversized results, and UI notification.
     """
 
     async def _process(
@@ -550,11 +662,8 @@ def _mcp_process_tool_call(skill_name: str, decl: SkillMcpDecl) -> Any:
     ) -> Any:
         gate_name = f"mcp:{decl.name}:{name}"
         gate_args = {"skill": skill_name, "server": decl.name, "url": decl.url, "tool": name, "args": tool_args}
-        if not ctx.tool_call_approved:
-            if denied := await _gate(ctx, gate_name, gate_args):
-                return denied
-        else:
-            _notify_approved_start(ctx, gate_name, gate_args)
+        if denied := await _gate_mcp_call(ctx, gate_name, gate_args):
+            return denied
 
         try:
             result = await call_tool(name, tool_args)
@@ -563,29 +672,118 @@ def _mcp_process_tool_call(skill_name: str, decl: SkillMcpDecl) -> Any:
             raise
 
         ctx.deps.security.append(ToolResultEntry(tool=gate_name, status="success"))
-
-        text: str | None = None
-        if isinstance(result, str):
-            text = result
-        elif isinstance(result, dict | list):
-            try:
-                text = json.dumps(result, default=str)
-            except (TypeError, ValueError):
-                text = None
-
-        if text is None:
-            _notify_result(ctx, gate_name, f"[non-text MCP tool result: {type(result).__name__}]")
-            return result
-
-        max_chars = ctx.deps.config.agent.tool_output_max_chars
-        if 0 < max_chars < len(text):
-            spilled = await _prepare_exec_tool_result(ctx, text)
-            return _emit_tool_result(ctx, gate_name, spilled)
-
-        _notify_result(ctx, gate_name, text)
-        return result
+        return await _emit_mcp_result(ctx, gate_name, result)
 
     return _process
+
+
+# --- stdio MCP (server runs in the sandbox, bridged per operation) ---
+
+# Prefix the bridge writes its JSON result envelope with. Must match _MARKER in
+# sandbox/carapace-mcp-bridge. Lets us recover the envelope even when the sandbox
+# merges the child's stderr into the captured output.
+_MCP_BRIDGE_MARKER = "@@CARAPACE_MCP@@"
+_MCP_BRIDGE_CMD = "carapace-mcp-bridge"
+
+
+def _parse_bridge_envelope(output: str) -> dict[str, Any]:
+    """Extract the bridge's JSON result envelope from (possibly noisy) exec output."""
+    for line in output.splitlines():
+        if line.startswith(_MCP_BRIDGE_MARKER):
+            return json.loads(line[len(_MCP_BRIDGE_MARKER) :])
+    raise ValueError(f"MCP bridge produced no result envelope. Output tail: {output[-500:]!r}")
+
+
+async def _run_stdio_bridge(
+    ctx: RunContext[Deps],
+    skill_name: str,
+    decl: SkillMcpDecl,
+    mode: str,
+    *,
+    tool: str | None = None,
+    args: dict[str, Any] | None = None,
+) -> Any:
+    """Run the bridge in the sandbox under the skill's context and return the unwrapped result.
+
+    Raises ``RuntimeError`` (message = the server's error) when the envelope reports failure.
+    """
+    server_b64 = base64.b64encode((decl.command or "").encode()).decode()
+    parts = [_MCP_BRIDGE_CMD, mode, "--server", server_b64]
+    if mode == "call":
+        parts += ["--tool", shlex.quote(tool or "")]
+        if args:
+            parts += ["--args", base64.b64encode(json.dumps(args).encode()).decode()]
+    command = " ".join(parts)
+
+    inj = await _collect_context_injection(ctx, [skill_name])
+    exec_result = await ctx.deps.sandbox.exec_command(
+        ctx.deps.session_state.session_id,
+        command,
+        contexts=[skill_name],
+        extra_env=inj.extra_env or None,
+        context_domains=inj.domains or None,
+        context_tunnels=inj.tunnels or None,
+        context_file_creds=inj.file_creds or None,
+        after_exec_credential_notify=_notify_injected_creds_callback(ctx, inj.injected_creds)
+        if inj.injected_creds
+        else None,
+    )
+    envelope = _parse_bridge_envelope(exec_result.output)
+    if not envelope.get("ok"):
+        raise RuntimeError(envelope.get("error", "unknown MCP bridge error"))
+    return envelope["result"]
+
+
+def _stdio_mcp_tool_handler(skill_name: str, decl: SkillMcpDecl, tool_name: str) -> Any:
+    """Build the call handler for one stdio MCP tool: gate, run the bridge, emit the result."""
+
+    async def _handler(ctx: RunContext[Deps], **tool_args: Any) -> Any:
+        gate_name = f"mcp:{decl.name}:{tool_name}"
+        gate_args = {
+            "skill": skill_name,
+            "server": decl.name,
+            "command": decl.command,
+            "tool": tool_name,
+            "args": tool_args,
+        }
+        if denied := await _gate_mcp_call(ctx, gate_name, gate_args):
+            return denied
+
+        try:
+            result = await _run_stdio_bridge(ctx, skill_name, decl, "call", tool=tool_name, args=tool_args)
+        except Exception as exc:
+            ctx.deps.security.append(ToolResultEntry(tool=gate_name, status="error"))
+            raise ModelRetry(f"MCP tool '{decl.name}_{tool_name}' failed: {exc}") from exc
+
+        ctx.deps.security.append(ToolResultEntry(tool=gate_name, status="success"))
+        return await _emit_mcp_result(ctx, gate_name, result)
+
+    return _handler
+
+
+async def _build_stdio_mcp_toolset(
+    ctx: RunContext[Deps], skill_name: str, decl: SkillMcpDecl
+) -> AbstractToolset[Deps] | None:
+    """Enumerate a stdio server's tools via the bridge and register them as typed function tools."""
+    tool_defs = await _run_stdio_bridge(ctx, skill_name, decl, "list")
+    tools: list[Tool[Deps]] = []
+    for td in tool_defs:
+        raw_name = td.get("name")
+        schema = td.get("input_schema") or {"type": "object", "properties": {}}
+        if not raw_name:
+            continue
+        tools.append(
+            Tool.from_schema(
+                _stdio_mcp_tool_handler(skill_name, decl, raw_name),
+                name=f"{decl.name}_{raw_name}",
+                description=td.get("description") or "",
+                json_schema=schema,
+                takes_ctx=True,
+            )
+        )
+    if not tools:
+        return None
+    return FunctionToolset(tools=tools)
 
 
 async def _prewarm_skill_mcp(ctx: RunContext[Deps], skill_name: str, grant: ContextGrant) -> list[str]:
@@ -599,19 +797,27 @@ async def _prewarm_skill_mcp(ctx: RunContext[Deps], skill_name: str, grant: Cont
     for decl in grant.mcp_servers:
         key = f"{skill_name}:{decl.name}"
         try:
-            token = await _mcp_bearer_token(ctx, decl)
-            toolset = MCPToolset(
-                decl.url,
-                auth=token,
-                id=f"mcp:{key}",
-                process_tool_call=_mcp_process_tool_call(skill_name, decl),
-            ).prefixed(decl.name)
+            if decl.command is not None:
+                toolset = await _build_stdio_mcp_toolset(ctx, skill_name, decl)
+            elif decl.url is not None:
+                token = await _mcp_bearer_token(ctx, decl)
+                toolset = MCPToolset(
+                    decl.url,
+                    auth=token,
+                    id=f"mcp:{key}",
+                    process_tool_call=_mcp_process_tool_call(skill_name, decl),
+                ).prefixed(decl.name)
+            else:  # unreachable: the model validates url xor command
+                continue
         except Exception as exc:
             logger.warning(f"MCP server {decl.display} (skill {skill_name!r}) unavailable: {exc}")
             lines.append(
                 f"MCP server '{decl.name}' is UNAVAILABLE: {exc}. The skill is active, but its "
                 f"{decl.name}_* tools will not work until this is resolved."
             )
+            continue
+        if toolset is None:
+            lines.append(f"MCP server '{decl.name}' exposes no tools.")
             continue
         ctx.deps.mcp_toolsets[key] = toolset
         lines.append(f"MCP server '{decl.name}' ready — tools available as {decl.name}_*.")
@@ -622,8 +828,9 @@ async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps
     """Dynamic toolset factory: expose MCP tools declared by active skill grants.
 
     Evaluated per run step by pydantic-ai, so tools appear right after
-    ``use_skill`` registers a grant. Toolset instances are cached on ``Deps``
-    to avoid re-connecting on every step (activation pre-warms the cache).
+    ``use_skill`` registers a grant. Built toolsets are cached on ``Deps`` (activation
+    pre-warms the cache) so HTTP servers are not re-connected and stdio servers are not
+    re-enumerated on every step.
     """
     toolsets: list[AbstractToolset[Deps]] = []
     for skill_name, grant in ctx.deps.session_state.context_grants.items():
@@ -632,16 +839,23 @@ async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps
             toolset = ctx.deps.mcp_toolsets.get(key)
             if toolset is None:
                 try:
-                    token = await _mcp_bearer_token(ctx, decl)
+                    if decl.command is not None:
+                        toolset = await _build_stdio_mcp_toolset(ctx, skill_name, decl)
+                    elif decl.url is not None:
+                        token = await _mcp_bearer_token(ctx, decl)
+                        toolset = MCPToolset(
+                            decl.url,
+                            auth=token,
+                            id=f"mcp:{key}",
+                            process_tool_call=_mcp_process_tool_call(skill_name, decl),
+                        ).prefixed(decl.name)
+                    else:  # unreachable: the model validates url xor command
+                        continue
                 except Exception as exc:
                     logger.warning(f"Skipping MCP server {decl.display} (skill {skill_name!r}): {exc}")
                     continue
-                toolset = MCPToolset(
-                    decl.url,
-                    auth=token,
-                    id=f"mcp:{key}",
-                    process_tool_call=_mcp_process_tool_call(skill_name, decl),
-                ).prefixed(decl.name)
+                if toolset is None:
+                    continue
                 ctx.deps.mcp_toolsets[key] = toolset
             toolsets.append(toolset)
     if not toolsets:
@@ -1149,64 +1363,19 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
         session_id = ctx.deps.session_state.session_id
 
         # Build per-exec injection data from matching context grants
-        extra_env: dict[str, str] = {}
-        context_domains: set[str] = set()
-        context_tunnels = []
-        context_file_creds: list[tuple[str, str, str]] = []  # (skill_name, file_path, value)
-        missing_cached: list[tuple[str, str]] = []
-        injected_creds: list[tuple[str, str]] = []  # (ctx_name, vault_path)
-        for ctx_name in contexts:
-            grant = grants[ctx_name]
-            context_domains.update(grant.domains)
-            context_tunnels.extend(grant.tunnels)
-            context_domains.update(tunnel.host for tunnel in grant.tunnels)
-            for decl in grant.credential_decls:
-                if not (decl.env_var or decl.file):
-                    continue
-                cached = ctx.deps.sandbox.get_cached_credential(session_id, decl.vault_path)
-                if cached is None:
-                    # Cache miss (e.g. after backend restart) — re-fetch from vault
-                    logger.info(
-                        f"Credential cache miss for {decl.vault_path!r} (skill {ctx_name!r}), re-fetching from vault"
-                    )
-                    try:
-                        cached = await ctx.deps.credential_registry.fetch(decl.vault_path)
-                        ctx.deps.sandbox.cache_credential(session_id, decl.vault_path, cached)
-                    except Exception:
-                        missing_cached.append((ctx_name, decl.vault_path))
-                        continue
-                if decl.base64:
-                    cached = base64.b64decode(cached).decode()
-                injected_creds.append((ctx_name, decl.vault_path))
-                if decl.env_var:
-                    extra_env[decl.env_var] = cached
-                if decl.file:
-                    context_file_creds.append((ctx_name, decl.file, cached))
-
-        def _notify_injected_skill_creds() -> None:
-            for ctx_name, vp in injected_creds:
-                grant = grants[ctx_name]
-                cred_name = grant.credential_names.get(vp, "")
-                display = cred_name or vp
-                ctx.deps.security.notify_credential_decision(
-                    vp,
-                    f"[skill] {display}",
-                    name=cred_name,
-                    approval_source="skill",
-                    approval_verdict="allow",
-                    approval_explanation=f"skill-declared credential ({ctx_name})",
-                )
+        inj = await _collect_context_injection(ctx, contexts)
+        notify = _notify_injected_creds_callback(ctx, inj.injected_creds)
 
         try:
             exec_result = await ctx.deps.sandbox.exec_command(
                 session_id,
                 command,
                 contexts=contexts,
-                extra_env=extra_env or None,
-                context_domains=context_domains or None,
-                context_tunnels=context_tunnels or None,
-                context_file_creds=context_file_creds or None,
-                after_exec_credential_notify=_notify_injected_skill_creds if injected_creds else None,
+                extra_env=inj.extra_env or None,
+                context_domains=inj.domains or None,
+                context_tunnels=inj.tunnels or None,
+                context_file_creds=inj.file_creds or None,
+                after_exec_credential_notify=notify if inj.injected_creds else None,
             )
             result = exec_result.output
             exit_code = exec_result.exit_code
@@ -1215,8 +1384,9 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
             result = f"Error: {exc}"
             exit_code = -1
 
-        if missing_cached:
-            lines = "\n".join(f"  - skill {name!r}, vault path {vp!r}" for name, vp in dict.fromkeys(missing_cached))
+        if inj.missing_cached:
+            missing = dict.fromkeys(inj.missing_cached)
+            lines = "\n".join(f"  - skill {name!r}, vault path {vp!r}" for name, vp in missing)
             result = (
                 "Warning: these credentials are not in the session cache and were not injected "
                 "(re-run use_skill for the skill if you need them):\n"
