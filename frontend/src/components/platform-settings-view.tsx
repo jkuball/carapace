@@ -450,9 +450,9 @@ function newModelDraft(): ModelDraft {
   };
 }
 
-// ponytail: name/id cleared so the copy stays an incomplete (auto-expanded) draft instead of colliding with the source id.
+// ponytail: everything but the stored secret is copied; the duplicate id is the user's to edit before saving.
 function copyModelDraft(model: ModelDraft): ModelDraft {
-  return { ...model, rowId: nextModelDraftId(), name: "", id: "", apiKeyValue: "", apiKeyConfigured: false, apiKeyConfiguredSource: "none" };
+  return { ...model, rowId: nextModelDraftId(), apiKeyValue: "", apiKeyConfigured: false, apiKeyConfiguredSource: "none" };
 }
 
 export function PlatformSettingsView({ server, token }: { server: string; token: string }) {
