@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.148.4 (2026-07-21)
+
+
+### Other
+
+
+- Merge pull request #248 from thiesgerken/renovate/pnpm-11.x
+  ([`8bdf9ae`](https://github.com/thiesgerken/carapace/commit/8bdf9aeec73386587037e769a2fb4be0ffbf698a))
+
+- Merge pull request #251 from thiesgerken/renovate/astral-sh-setup-uv-9.x
+  ([`fb9b4d5`](https://github.com/thiesgerken/carapace/commit/fb9b4d5aff2b0239e4a668434f29af9139e4beef))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.15.0
+  ([`8bdf9ae`](https://github.com/thiesgerken/carapace/commit/8bdf9aeec73386587037e769a2fb4be0ffbf698a))
+
+- ⬆️ chore: upgrade pnpm to 11.15.0
+  ([`dcfed24`](https://github.com/thiesgerken/carapace/commit/dcfed244f07e56c2dde3ae8d786351b52a0fbce1))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v9.0.0
+  ([`fb9b4d5`](https://github.com/thiesgerken/carapace/commit/fb9b4d5aff2b0239e4a668434f29af9139e4beef))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v9.0.0
+  ([`b81ae05`](https://github.com/thiesgerken/carapace/commit/b81ae0549bffe9be570cf02ee2aa2407073a43d0))
+
 ## v0.148.3 (2026-07-20)
 
 
