@@ -1,6 +1,39 @@
 # CHANGELOG
 
 
+## v0.151.0 (2026-07-21)
+
+
+### ✨ Features
+
+
+- ✨ feat(frontend): open duplicated model rows and suffix their name
+  ([`c1893f3`](https://github.com/thiesgerken/carapace/commit/c1893f355db05ae40c68d3c1a451230a2432ef1a))
+
+  Copies now land as "<name> (copy)" (and "<id> (copy)" when the id is explicit) and start expanded so they are ready to edit.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(frontend): copy name and id when duplicating a model
+  ([`58c37ba`](https://github.com/thiesgerken/carapace/commit/58c37bad0f9c38c7f0b0da0ceaebb91246631b34))
+
+  Keeps the duplicate collapsed like any other row instead of forcing an expanded incomplete draft; only the stored secret is dropped.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(frontend): duplicate button for platform models
+  ([`11e262c`](https://github.com/thiesgerken/carapace/commit/11e262ca85e1c7f041f8aee24c3fd690072292e2))
+
+  Clones a model row into a new unsaved draft at the top of the catalog, clearing name/id/secret so it opens expanded and cannot collide with the source id.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+### Other
+
+
+- remove worktrees
+  ([`8720780`](https://github.com/thiesgerken/carapace/commit/87207807308c8b05a6300fc67eda1d87db24053b))
+
 ## v0.150.2 (2026-07-21)
 
 
