@@ -77,8 +77,24 @@ class SkillMcpBearerAuth(BaseModel):
     vault_path: str
 
 
-# Discriminated union so further auth methods (e.g. oauth) can be added as new variants.
-SkillMcpAuth = Annotated[SkillMcpBearerAuth, Field(discriminator="type")]
+class SkillMcpOAuthAuth(BaseModel):
+    """OAuth 2.0 auth for an MCP server (refresh-token grant).
+
+    ``vault_path`` points to a JSON state blob in the vault with fields:
+    ``token_url``, ``client_id``, optional ``client_secret``, ``refresh_token``,
+    and optional ``access_token`` / ``expires_at`` (epoch seconds) / ``scope``.
+    carapace refreshes the access token when it is missing or near expiry and
+    writes the updated blob back to the vault (token rotation). The one-time
+    authorization that produces the initial ``refresh_token`` is done
+    out-of-band; see docs/skills.md.
+    """
+
+    type: Literal["oauth"] = "oauth"
+    vault_path: str
+
+
+# Discriminated union so further auth methods can be added as new variants.
+SkillMcpAuth = Annotated[SkillMcpBearerAuth | SkillMcpOAuthAuth, Field(discriminator="type")]
 
 _SKILL_MCP_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 

@@ -53,6 +53,18 @@ class BitwardenBackend:
             logger.exception(f"{message} Request target: {self._base_url}{path}")
             raise CredentialBackendError(message) from exc
 
+    async def _put(self, path: str, *, json_body: dict, operation: str) -> httpx.Response:
+        try:
+            return await self._client.put(path, json=json_body)
+        except httpx.RequestError as exc:
+            message = (
+                f"Bitwarden credential backend {self._name!r} is unreachable at {self._base_url} "
+                f"while trying to {operation}. Check that the `bw serve` sidecar or proxy is running, "
+                "unlocked, and reachable from the Carapace server."
+            )
+            logger.exception(f"{message} Request target: {self._base_url}{path}")
+            raise CredentialBackendError(message) from exc
+
     def _vault_path(self, uuid: str) -> str:
         return f"{self._name}/{uuid}"
 
@@ -65,6 +77,23 @@ class BitwardenBackend:
         resp.raise_for_status()
         data = resp.json()
         return data.get("data", {}).get("data", "")
+
+    async def write(self, identifier: str, value: str) -> None:
+        """Store *value* in the item's login password field (read-modify-write via bw serve)."""
+        require_exposed(identifier, self._cfg, self._name)
+        resp = await self._get(f"/object/item/{identifier}", operation="fetch item for update")
+        if resp.status_code == 404:
+            raise KeyError(f"Credential '{identifier}' not found in backend '{self._name}'")
+        resp.raise_for_status()
+        item = resp.json().get("data", {})
+        login = item.get("login")
+        if not isinstance(login, dict):
+            raise CredentialBackendError(
+                f"Bitwarden item {identifier!r} in backend '{self._name}' has no login field to store the secret in"
+            )
+        login["password"] = value
+        put_resp = await self._put(f"/object/item/{identifier}", json_body=item, operation="update item")
+        put_resp.raise_for_status()
 
     async def fetch_metadata(self, identifier: str) -> CredentialMetadata:
         """Fetch item metadata by UUID."""
