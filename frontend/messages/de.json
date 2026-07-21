@@ -214,6 +214,7 @@
         "actions": {
             "save": "Speichern",
             "saving": "Speichert",
+            "copySuffix": "(Kopie)",
             "copyModel": "Modell duplizieren",
             "addModel": "Modell hinzufügen",
             "removeModel": "Modell entfernen",

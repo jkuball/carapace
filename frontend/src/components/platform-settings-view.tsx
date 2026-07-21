@@ -450,9 +450,18 @@ function newModelDraft(): ModelDraft {
   };
 }
 
-// ponytail: everything but the stored secret is copied; the duplicate id is the user's to edit before saving.
-function copyModelDraft(model: ModelDraft): ModelDraft {
-  return { ...model, rowId: nextModelDraftId(), apiKeyValue: "", apiKeyConfigured: false, apiKeyConfiguredSource: "none" };
+// ponytail: everything but the stored secret is copied; the suffixed name/id keep the duplicate from colliding.
+function copyModelDraft(model: ModelDraft, t: Translate): ModelDraft {
+  const suffix = t("actions.copySuffix");
+  return {
+    ...model,
+    rowId: nextModelDraftId(),
+    name: `${model.name} ${suffix}`,
+    id: model.id.trim() ? `${model.id} ${suffix}` : "",
+    apiKeyValue: "",
+    apiKeyConfigured: false,
+    apiKeyConfiguredSource: "none",
+  };
 }
 
 export function PlatformSettingsView({ server, token }: { server: string; token: string }) {
@@ -463,6 +472,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [copiedRowIds, setCopiedRowIds] = useState<Set<string>>(new Set());
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -613,9 +623,14 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
                 key={model.rowId}
                 model={model}
                 disabled={fieldsDisabled}
+                defaultOpen={copiedRowIds.has(model.rowId)}
                 onChange={(patch) => updateModel(model.rowId, patch)}
                 onRemove={() => updateDraft({ models: draft.models.filter((item) => item.rowId !== model.rowId) })}
-                onCopy={() => updateDraft({ models: [copyModelDraft(model), ...draft.models] })}
+                onCopy={() => {
+                  const copy = copyModelDraft(model, t);
+                  setCopiedRowIds((previous) => new Set(previous).add(copy.rowId));
+                  updateDraft({ models: [copy, ...draft.models] });
+                }}
                 t={t}
               />
             ))}
@@ -740,9 +755,9 @@ function ProviderInput({ value, disabled, onChange }: { value: string; disabled:
   );
 }
 
-export function ModelRow({ model, disabled, onChange, onRemove, onCopy, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; onCopy: () => void; t: Translate }) {
+export function ModelRow({ model, disabled, defaultOpen = false, onChange, onRemove, onCopy, t }: { model: ModelDraft; disabled: boolean; defaultOpen?: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; onCopy: () => void; t: Translate }) {
   const incomplete = isIncompleteModelDraft(model);
-  const [expanded, setExpanded] = useState(incomplete);
+  const [expanded, setExpanded] = useState(incomplete || defaultOpen);
   const open = expanded || incomplete;
   const effectiveId = modelId(model);
   const summaryId = model.name.trim() ? effectiveId : t("placeholders.generatedId");
