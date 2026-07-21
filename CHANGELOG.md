@@ -1,6 +1,105 @@
 # CHANGELOG
 
 
+## v0.149.0 (2026-07-21)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #247 from thiesgerken/feature/skill-mcp-stdio-bridge
+  ([`c6c0f0a`](https://github.com/thiesgerken/carapace/commit/c6c0f0a1c1ac5852d3e9ece8e00706adb39d96c4))
+
+- ✨ feat(skills): stdio MCP servers via an in-sandbox bridge
+  ([`c6c0f0a`](https://github.com/thiesgerken/carapace/commit/c6c0f0a1c1ac5852d3e9ece8e00706adb39d96c4))
+
+- ✨ feat(skills): stdio MCP servers via an in-sandbox bridge
+  ([`104def2`](https://github.com/thiesgerken/carapace/commit/104def21c930b6275fa9e573c7857d1c7a7c9447))
+
+  Skills can now declare stdio MCP servers (metadata.carapace.mcp with `command` instead of `url`). The server process runs inside the sandbox, spawned once per operation (enumerate at activation, one spawn per call) by a baked-in `carapace-mcp-bridge` — stateless, matching mcp2cli's process model, so nothing about the sandbox's concurrency/lifecycle model changes.
+
+  Unlike driving mcp2cli through a shell alias, tools are registered as real typed pydantic-ai tools built from the server's own JSON Schemas (Tool.from_schema), which fixes the agent's discovery/understanding struggles. Skills that need OAuth, stateful sessions, or custom output shaping can still wrap a server with mcp2cli + a command alias.
+
+  - SkillMcpDecl: url (HTTP) xor command (stdio); stdio servers inherit
+    the skill's context-injected credentials, so `auth` is HTTP-only
+  - bridge speaks MCP over stdio (mcp SDK), emits a marked JSON envelope
+    recoverable from merged stderr; args/server passed base64
+  - each call gated by the sentinel as mcp:<server>:<tool>; oversized
+    results spill to file — shared with the HTTP path
+  - exec credential/domain/tunnel injection factored into
+    _collect_context_injection, reused by the bridge
+  - knowledge viewer + use_skill badge render stdio decls
+  - sandbox image: dedicated /opt/carapace-mcp venv + bridge script
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨Merge pull request #244 from thiesgerken/feature/skill-mcp-connections
+  ([`719037d`](https://github.com/thiesgerken/carapace/commit/719037d9f999905f2e1c95f36617cd54f2519112))
+
+- ✨ feat(skills): declare MCP server connections in skill metadata
+  ([`719037d`](https://github.com/thiesgerken/carapace/commit/719037d9f999905f2e1c95f36617cd54f2519112))
+
+- ✨ feat(knowledge): render skill MCP servers in the knowledge viewer
+  ([`bf68450`](https://github.com/thiesgerken/carapace/commit/bf68450709081a5bdea3ad1e2a4482d72bf75258))
+
+  The viewer already serves the full SkillCarapaceConfig, so mcp entries flow through automatically — add the TS type, a Plug-icon section (name, url, auth type + vault path), and en/de labels.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- ✨ feat(skills): declare MCP server connections in skill metadata
+  ([`1ea0f43`](https://github.com/thiesgerken/carapace/commit/1ea0f430a8772a9e18db7c299d6203ead33a19e9))
+
+  Skills can now declare MCP servers under metadata.carapace.mcp. While a skill is active, each server's tools are exposed to the agent as regular tools named <server>_<tool>, backed by pydantic-ai's MCPToolset over streamable HTTP.
+
+  - declared servers are part of the use_skill approval (gate payload,
+    context grant, sentinel action log, frontend badge)
+  - every MCP tool call routes through the sentinel gate with the usual
+    escalate-to-user path, shown as mcp:<server>:<tool>
+  - oversized text results spill to a sandbox file like exec output
+  - bearer-token auth reads from the vault (auth is a tagged union so
+    oauth can be added later); tokens cache in the session credential
+    cache and re-fetch on miss
+
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+### Other
+
+
+- Merge branch 'feature/skill-mcp-connections' into feature/skill-mcp-stdio-bridge
+  ([`8dda728`](https://github.com/thiesgerken/carapace/commit/8dda728be04857b6ec7db4887209c0a422ffa3aa))
+
+  # Conflicts: #	src/carapace/agent/tools.py
+
+- 🔀 Merge main into feature/skill-mcp-connections
+  ([`832b334`](https://github.com/thiesgerken/carapace/commit/832b3340457ac14871b5e5f8cb9e0dca4f395ee1))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix(agent): narrow MCP decl url for pyrefly
+  ([`5aabf9f`](https://github.com/thiesgerken/carapace/commit/5aabf9fc9321f158339834ef6a6b12d381264a9f))
+
+  Making url optional (str | None) for the stdio transport tripped pyrefly at the HTTP MCPToolset(decl.url, ...) call. Branch on command/url directly so the type checker narrows url to str in the HTTP arm.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+- 🐛 fix(skills): honest MCP activation status + reject duplicate MCP names
+  ([`cc60bee`](https://github.com/thiesgerken/carapace/commit/cc60bee0bd95a5f54ede1477f3089d2d6d0bbabc))
+
+  Addresses two review findings:
+
+  - use_skill no longer unconditionally claims MCP tools are available. It
+    now eagerly connects each declared server at activation and reports
+    per-server status; a server whose bearer token can't be resolved (or
+    that can't be built) is reported UNAVAILABLE instead of falsely
+    promised, and activation still succeeds (graceful degradation).
+  - Reject activating a skill whose MCP server name is already registered
+    by another active skill — tool names are prefixed by name only, so a
+    collision would shadow a different server. Mirrors the existing command
+    alias conflict check.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.148.4 (2026-07-21)
 
 
