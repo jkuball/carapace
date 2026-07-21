@@ -16,6 +16,7 @@ from carapace.server.knowledge import (
     list_dir,
     read_text_content,
     resolve_target,
+    resolve_vault_status,
     session_archive_entry,
 )
 
@@ -416,3 +417,43 @@ def test_session_archive_entry_ignores_an_oversized_archive(tmp_path: Path) -> N
     (directory / "conversation.json").write_text(json.dumps(payload))
 
     assert session_archive_entry(directory, root.resolve()) is None
+
+
+# ── Vault presence status ───────────────────────────────────────────
+
+
+class _FakeRegistry:
+    """Minimal credential registry: only paths in `present` resolve; `errors` raise."""
+
+    def __init__(self, present: set[str], errors: set[str] | None = None) -> None:
+        self._present = present
+        self._errors = errors or set()
+
+    async def fetch_metadata(self, vault_path: str):
+        from carapace.credentials import CredentialBackendError
+        from carapace.models.credentials import CredentialMetadata
+
+        if vault_path in self._errors:
+            raise CredentialBackendError("vault down")
+        if vault_path not in self._present:
+            raise KeyError(vault_path)
+        return CredentialMetadata(vault_path=vault_path, name=vault_path)
+
+
+async def test_resolve_vault_status_present_absent_error():
+    from carapace.models.skills import SkillCarapaceConfig
+
+    cfg = SkillCarapaceConfig.model_validate(
+        {
+            "credentials": [
+                {"vault_path": "vault/have", "env_var": "A"},
+                {"vault_path": "vault/missing", "env_var": "B"},
+            ],
+            "mcp": [
+                {"name": "o", "url": "https://e.example/mcp", "auth": {"type": "oauth", "vault_path": "vault/down"}},
+            ],
+        }
+    )
+    registry = _FakeRegistry(present={"vault/have"}, errors={"vault/down"})
+    status = await resolve_vault_status(cfg, registry)
+    assert status == {"vault/have": "present", "vault/missing": "absent", "vault/down": "error"}
