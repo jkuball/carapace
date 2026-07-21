@@ -40,6 +40,7 @@
             "mcpAuth": "{type} auth",
             "vaultPresent": "Found in vault",
             "vaultAbsent": "Not found in vault",
+            "vaultUnconfigured": "Vault backend not configured",
             "vaultError": "Vault unreachable",
             "oauthHint": "No OAuth token stored. Generate one with",
             "oauthHintStore": "then save the JSON in the vault entry above.",

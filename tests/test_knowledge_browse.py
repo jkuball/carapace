@@ -425,16 +425,19 @@ def test_session_archive_entry_ignores_an_oversized_archive(tmp_path: Path) -> N
 class _FakeRegistry:
     """Minimal credential registry: only paths in `present` resolve; `errors` raise."""
 
-    def __init__(self, present: set[str], errors: set[str] | None = None) -> None:
+    def __init__(self, present: set[str], errors: set[str] | None = None, unconfigured: set[str] | None = None) -> None:
         self._present = present
         self._errors = errors or set()
+        self._unconfigured = unconfigured or set()
 
     async def fetch_metadata(self, vault_path: str):
-        from carapace.credentials import CredentialBackendError
+        from carapace.credentials import CredentialBackendError, UnknownBackendError
         from carapace.models.credentials import CredentialMetadata
 
         if vault_path in self._errors:
             raise CredentialBackendError("vault down")
+        if vault_path in self._unconfigured:
+            raise UnknownBackendError(f"Unknown credential backend: {vault_path!r}")
         if vault_path not in self._present:
             raise KeyError(vault_path)
         return CredentialMetadata(vault_path=vault_path, name=vault_path)
@@ -457,3 +460,12 @@ async def test_resolve_vault_status_present_absent_error():
     registry = _FakeRegistry(present={"vault/have"}, errors={"vault/down"})
     status = await resolve_vault_status(cfg, registry)
     assert status == {"vault/have": "present", "vault/missing": "absent", "vault/down": "error"}
+
+
+async def test_resolve_vault_status_unconfigured_backend():
+    """An unregistered/disabled backend is 'unconfigured', not a missing secret."""
+    from carapace.models.skills import SkillCarapaceConfig
+
+    cfg = SkillCarapaceConfig.model_validate({"credentials": [{"vault_path": "vault/x", "env_var": "A"}]})
+    registry = _FakeRegistry(present=set(), unconfigured={"vault/x"})
+    assert await resolve_vault_status(cfg, registry) == {"vault/x": "unconfigured"}

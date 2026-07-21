@@ -14,6 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..api_keys import Access, Scope
 from ..auth import UserIdentity
+from ..credentials import UnknownBackendError
 from ..git.store import GitStore
 from ..models.credentials import CredentialRegistryProtocol
 from ..models.git import FileCommit
@@ -270,12 +271,19 @@ def _skill_secret_refs(cfg: SkillCarapaceConfig) -> list[str]:
 
 
 async def resolve_vault_status(cfg: SkillCarapaceConfig, registry: CredentialRegistryProtocol) -> dict[str, str]:
-    """Check each referenced vault path for existence (metadata only, never values)."""
+    """Check each referenced vault path for existence (metadata only, never values).
+
+    Status per path: ``present`` (a loaded backend has it), ``absent`` (a loaded
+    backend lacks it), ``unconfigured`` (the named backend is not registered — e.g.
+    the file backend is disabled), or ``error`` (backend reachable but failed).
+    """
     status: dict[str, str] = {}
     for ref in _skill_secret_refs(cfg):
         try:
             await registry.fetch_metadata(ref)
             status[ref] = "present"
+        except UnknownBackendError:
+            status[ref] = "unconfigured"
         except KeyError:
             status[ref] = "absent"
         except Exception:

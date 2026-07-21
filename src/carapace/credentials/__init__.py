@@ -6,6 +6,7 @@ from .protocol import CredentialBackendError, VaultBackend, is_exposed
 from .registry import (
     CredentialRegistry,
     SessionCredentialRegistry,
+    UnknownBackendError,
     build_credential_registry,
 )
 
@@ -15,6 +16,7 @@ __all__ = [
     "CredentialRegistry",
     "FileVaultBackend",
     "SessionCredentialRegistry",
+    "UnknownBackendError",
     "VaultBackend",
     "build_credential_registry",
     "is_exposed",

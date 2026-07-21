@@ -4,6 +4,7 @@ import {
   BookText,
   Cable,
   CircleAlert,
+  CircleDashed,
   Check,
   ChevronRight,
   Copy,
@@ -228,6 +229,7 @@ function VaultBadge({ status }: { status?: string }) {
   const map: Record<string, { icon: ReactNode; cls: string; label: string }> = {
     present: { icon: <Check className="h-3 w-3" />, cls: "text-emerald-600 dark:text-emerald-400", label: t("vaultPresent") },
     absent: { icon: <X className="h-3 w-3" />, cls: "text-red-600 dark:text-red-400", label: t("vaultAbsent") },
+    unconfigured: { icon: <CircleDashed className="h-3 w-3" />, cls: "text-muted-foreground", label: t("vaultUnconfigured") },
     error: { icon: <CircleAlert className="h-3 w-3" />, cls: "text-muted-foreground", label: t("vaultError") },
   };
   const s = map[status] ?? map.error;

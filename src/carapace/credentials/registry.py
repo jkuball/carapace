@@ -33,6 +33,14 @@ def file_credential_backend_allowed_from_env() -> bool:
     raise ValueError(f"{FILE_CREDENTIAL_BACKEND_ENV} must be a boolean value (true/false, yes/no, on/off, or 1/0)")
 
 
+class UnknownBackendError(KeyError):
+    """Vault path names a backend that is not registered (unknown or disabled).
+
+    Distinct from a plain ``KeyError`` (backend exists but has no such identifier),
+    so callers can tell "backend not configured" apart from "secret missing".
+    """
+
+
 class CredentialRegistry:
     """Routes ``<backend-name>/<identifier>`` vault paths to the correct backend."""
 
@@ -45,14 +53,14 @@ class CredentialRegistry:
     def _resolve(self, vault_path: str) -> tuple[VaultBackend, str]:
         """Split *vault_path* into backend + identifier and return both.
 
-        Raises ``KeyError`` if the backend prefix is unknown.
+        Raises ``UnknownBackendError`` if the backend prefix is unknown or disabled.
         """
         prefix, _, identifier = vault_path.partition("/")
         if not identifier:
-            raise KeyError(f"Invalid vault_path (missing backend prefix): {vault_path!r}")
+            raise UnknownBackendError(f"Invalid vault_path (missing backend prefix): {vault_path!r}")
         backend = self._backends.get(prefix)
         if backend is None:
-            raise KeyError(f"Unknown credential backend: {prefix!r}")
+            raise UnknownBackendError(f"Unknown credential backend: {prefix!r}")
         return backend, identifier
 
     async def fetch(self, vault_path: str) -> str:
