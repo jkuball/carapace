@@ -3,6 +3,7 @@
 import {
   BookText,
   Cable,
+  CircleAlert,
   Check,
   ChevronRight,
   Copy,
@@ -15,6 +16,7 @@ import {
   Plug,
   Puzzle,
   Terminal,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -220,7 +222,23 @@ function SkillSection({ icon, label, children }: { icon: ReactNode; label: strin
 const sectionIconClass = "h-3.5 w-3.5 shrink-0";
 
 /** Frontmatter of a skill's SKILL.md as a card: what it exposes, reaches, and needs. */
-function SkillCard({ skill }: { skill: KnowledgeSkill }) {
+function VaultBadge({ status }: { status?: string }) {
+  const t = useTranslations("knowledge.skill");
+  if (!status) return null;
+  const map: Record<string, { icon: ReactNode; cls: string; label: string }> = {
+    present: { icon: <Check className="h-3 w-3" />, cls: "text-emerald-600 dark:text-emerald-400", label: t("vaultPresent") },
+    absent: { icon: <X className="h-3 w-3" />, cls: "text-red-600 dark:text-red-400", label: t("vaultAbsent") },
+    error: { icon: <CircleAlert className="h-3 w-3" />, cls: "text-muted-foreground", label: t("vaultError") },
+  };
+  const s = map[status] ?? map.error;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] ${s.cls}`} title={s.label}>
+      {s.icon}
+    </span>
+  );
+}
+
+function SkillCard({ skill, vaultStatus }: { skill: KnowledgeSkill; vaultStatus?: Record<string, string> }) {
   const t = useTranslations("knowledge.skill");
   const carapace = skill.carapace;
   const domains = carapace?.network.domains ?? [];
@@ -288,7 +306,10 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
                       <span className="break-words text-xs text-muted-foreground">{credential.description}</span>
                     ) : null}
                   </div>
-                  <code className="break-all font-mono text-xs text-muted-foreground">{credential.vault_path}</code>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <code className="break-all font-mono text-xs text-muted-foreground">{credential.vault_path}</code>
+                    <VaultBadge status={vaultStatus?.[credential.vault_path]} />
+                  </div>
                 </div>
               ))}
             </SkillSection>
@@ -308,9 +329,21 @@ function SkillCard({ skill }: { skill: KnowledgeSkill }) {
                     {server.command ? `stdio: ${server.command}` : server.url}
                   </code>
                   {server.auth ? (
-                    <code className="break-all font-mono text-xs text-muted-foreground">
-                      {t("mcpAuth", { type: server.auth.type })} · {server.auth.vault_path}
-                    </code>
+                    <div className="flex min-w-0 items-center gap-1">
+                      <code className="break-all font-mono text-xs text-muted-foreground">
+                        {t("mcpAuth", { type: server.auth.type })} · {server.auth.vault_path}
+                      </code>
+                      <VaultBadge status={vaultStatus?.[server.auth.vault_path]} />
+                    </div>
+                  ) : null}
+                  {server.auth?.type === "oauth" && vaultStatus?.[server.auth.vault_path] !== "present" ? (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("oauthHint")}{" "}
+                      <code className="break-all font-mono">
+                        python scripts/mcp_oauth_blob.py --token-url … --client-id … --refresh-token …
+                      </code>{" "}
+                      {t("oauthHintStore")}
+                    </p>
                   ) : null}
                 </div>
               ))}
@@ -515,7 +548,7 @@ export function KnowledgeView() {
                 ))}
               </div>
             )}
-            {result.skill ? <div className="mt-6"><SkillCard skill={result.skill} /></div> : null}
+            {result.skill ? <div className="mt-6"><SkillCard skill={result.skill} vaultStatus={result.vault_status} /></div> : null}
             {result.doc ? (
               <section className="mt-6">
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">

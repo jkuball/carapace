@@ -38,6 +38,11 @@
             "credential": "Zugangsdatum",
             "mcp": "MCP-Server",
             "mcpAuth": "{type}-Auth",
+            "vaultPresent": "Im Vault vorhanden",
+            "vaultAbsent": "Nicht im Vault",
+            "vaultError": "Vault nicht erreichbar",
+            "oauthHint": "Kein OAuth-Token hinterlegt. Erzeuge eines mit",
+            "oauthHintStore": "und speichere das JSON im obigen Vault-Eintrag.",
             "hints": "Hinweise"
         }
     },

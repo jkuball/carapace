@@ -1592,12 +1592,17 @@ export interface SkillMcpBearerAuth {
   vault_path: string;
 }
 
+export interface SkillMcpOAuthAuth {
+  type: "oauth";
+  vault_path: string;
+}
+
 export interface SkillMcpDecl {
   name: string;
   url: string | null;
   command: string | null;
   description: string;
-  auth: SkillMcpBearerAuth | null;
+  auth: SkillMcpBearerAuth | SkillMcpOAuthAuth | null;
 }
 
 export interface SkillCarapaceConfig {
@@ -1623,6 +1628,8 @@ export interface KnowledgeDirListing {
   doc_name: string | null;
   doc: string | null;
   skill: KnowledgeSkill | null;
+  /** Per vault_path referenced by the skill: "present" | "absent" | "error". */
+  vault_status?: Record<string, string>;
   path: string;
   entries: KnowledgeEntry[];
 }

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from ..api_keys import Access, Scope
 from ..auth import UserIdentity
 from ..git.store import GitStore
+from ..models.credentials import CredentialRegistryProtocol
 from ..models.git import FileCommit
 from ..models.skills import SkillCarapaceConfig
 from ..session.sent_files import guess_mime
@@ -123,6 +124,9 @@ class KnowledgeDirListing(BaseModel):
     doc_name: str | None = None
     doc: str | None = None
     skill: KnowledgeSkill | None = None
+    # Per secret vault_path referenced by the skill (credentials + mcp auth):
+    # "present" | "absent" | "error" (vault unreachable). Empty unless a skill dir.
+    vault_status: dict[str, str] = {}
 
 
 class KnowledgeFileInfo(BaseModel):
@@ -258,6 +262,27 @@ def parse_carapace_config(document: SkillDocument, skill_name: str) -> SkillCara
         return None
 
 
+def _skill_secret_refs(cfg: SkillCarapaceConfig) -> list[str]:
+    """All vault paths a skill references (credentials + MCP auth), de-duplicated."""
+    refs = {c.vault_path for c in cfg.credentials}
+    refs |= {m.auth.vault_path for m in cfg.mcp if m.auth is not None}
+    return sorted(refs)
+
+
+async def resolve_vault_status(cfg: SkillCarapaceConfig, registry: CredentialRegistryProtocol) -> dict[str, str]:
+    """Check each referenced vault path for existence (metadata only, never values)."""
+    status: dict[str, str] = {}
+    for ref in _skill_secret_refs(cfg):
+        try:
+            await registry.fetch_metadata(ref)
+            status[ref] = "present"
+        except KeyError:
+            status[ref] = "absent"
+        except Exception:
+            status[ref] = "error"
+    return status
+
+
 @router.get("/knowledge/browse", response_model=None)
 @router.get("/knowledge/browse/{path:path}", response_model=None)
 async def browse_knowledge(
@@ -274,6 +299,12 @@ async def browse_knowledge(
     if target.is_dir():
         listing = list_dir(root, target)
         await attach_commits(handle.git_store, listing)
+        if listing.skill is not None and listing.skill.carapace is not None:
+            try:
+                registry = await server._credential_registry_for_user(user.username)
+                listing.vault_status = await resolve_vault_status(listing.skill.carapace, registry)
+            except Exception as exc:
+                logger.warning(f"Vault status lookup failed for skill '{target.name}': {exc}")
         return listing
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Not found")
