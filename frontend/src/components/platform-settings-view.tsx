@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, BrainCircuit, Check, ChevronDown, Cloud, Eye, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
+import { Brain, BrainCircuit, Check, ChevronDown, Cloud, Copy, Eye, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ComponentType, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -450,6 +450,11 @@ function newModelDraft(): ModelDraft {
   };
 }
 
+// ponytail: name/id cleared so the copy stays an incomplete (auto-expanded) draft instead of colliding with the source id.
+function copyModelDraft(model: ModelDraft): ModelDraft {
+  return { ...model, rowId: nextModelDraftId(), name: "", id: "", apiKeyValue: "", apiKeyConfigured: false, apiKeyConfiguredSource: "none" };
+}
+
 export function PlatformSettingsView({ server, token }: { server: string; token: string }) {
   const t = useTranslations("platformSettings");
   const [settings, setSettings] = useState<PlatformSettingsResponseInfo | null>(null);
@@ -610,6 +615,7 @@ export function PlatformSettingsView({ server, token }: { server: string; token:
                 disabled={fieldsDisabled}
                 onChange={(patch) => updateModel(model.rowId, patch)}
                 onRemove={() => updateDraft({ models: draft.models.filter((item) => item.rowId !== model.rowId) })}
+                onCopy={() => updateDraft({ models: [copyModelDraft(model), ...draft.models] })}
                 t={t}
               />
             ))}
@@ -734,7 +740,7 @@ function ProviderInput({ value, disabled, onChange }: { value: string; disabled:
   );
 }
 
-export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; t: Translate }) {
+export function ModelRow({ model, disabled, onChange, onRemove, onCopy, t }: { model: ModelDraft; disabled: boolean; onChange: (patch: Partial<ModelDraft>) => void; onRemove: () => void; onCopy: () => void; t: Translate }) {
   const incomplete = isIncompleteModelDraft(model);
   const [expanded, setExpanded] = useState(incomplete);
   const open = expanded || incomplete;
@@ -785,6 +791,9 @@ export function ModelRow({ model, disabled, onChange, onRemove, t }: { model: Mo
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <button type="button" disabled={disabled} onClick={(event) => { event.preventDefault(); event.stopPropagation(); onCopy(); }} title={t("actions.copyModel")} aria-label={t("actions.copyModel")} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+            <Copy className="h-4 w-4" />
+          </button>
           <button type="button" disabled={disabled} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (incomplete || window.confirm(t("actions.confirmRemoveModel", { name: model.name.trim() }))) onRemove(); }} title={t("actions.removeModel")} aria-label={t("actions.removeModel")} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50">
             <Trash2 className="h-4 w-4" />
           </button>

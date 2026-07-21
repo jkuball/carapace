@@ -214,6 +214,7 @@
         "actions": {
             "save": "Save",
             "saving": "Saving",
+            "copyModel": "Duplicate model",
             "addModel": "Add model",
             "removeModel": "Remove model",
             "confirmRemoveModel": "Remove model \"{name}\"? This cannot be undone."

@@ -230,6 +230,7 @@ test("ModelRow reopens incomplete rows after a manual collapse", async () => {
         disabled={false}
         onChange={() => undefined}
         onRemove={() => undefined}
+        onCopy={() => undefined}
         t={translate}
       />,
     );
