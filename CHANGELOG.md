@@ -1,8 +1,27 @@
 # CHANGELOG
 
 
+## v0.150.2 (2026-07-21)
+
+
+### Other
+
+
+- Merge remote-tracking branch 'origin/main'
+  ([`8896a62`](https://github.com/thiesgerken/carapace/commit/8896a62ab60c21259288f31e5125a5b03dcdf3a2))
+
 ## v0.150.1 (2026-07-21)
 
+
+### 💄 UI/UX
+
+
+- 💄 fix(frontend): clean rendering for skill MCP tool-call rows
+  ([`cf2a491`](https://github.com/thiesgerken/carapace/commit/cf2a49181fdf6126ef5d2e8296c5b74526e4007f))
+
+  MCP calls arrive as `mcp:<server>:<tool>` with the gate's internal args (url/skill/server/tool) mirrored in. The row dumped all of that raw. Now it shows a Plug icon, a `<server> · <tool>` label, and summarizes only the actual tool arguments (args.args).
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
 ### 🐛 Bug Fixes
 
