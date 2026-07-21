@@ -547,6 +547,12 @@ export function ToolCallBadge({
   const isCredentialAccessTool = tool === "credential_access";
   const isProxyDomainTool = tool === "proxy_domain";
   const isGitPushTool = tool === "git_push";
+  // Skill-declared MCP tool calls arrive as `mcp:<server>:<tool>`; the server and
+  // tool are also mirrored into args by the backend gate.
+  const isMcpTool = tool.startsWith("mcp:");
+  const mcpParts = isMcpTool ? tool.split(":") : [];
+  const mcpServer = isMcpTool ? stringArg(args, "server") || mcpParts[1] || "" : "";
+  const mcpTool = isMcpTool ? stringArg(args, "tool") || mcpParts.slice(2).join(":") : "";
   const isAuxiliaryTool = isCredentialAccessTool || isProxyDomainTool || isGitPushTool;
   const readPath = isReadTool && typeof args.path === "string" ? args.path : "";
   const readSplit =
@@ -589,7 +595,11 @@ export function ToolCallBadge({
     (credentialAccessPath.length === 0 || credentialAccessPath === "<list>");
   const isCompleted =
     !loading && (result != null || exitCode != null || isAuxiliaryTool);
-  const toolLabel = resolveToolLabel(
+  const toolLabel = isMcpTool
+    ? mcpServer
+      ? `${mcpServer} · ${mcpTool}`
+      : mcpTool
+    : resolveToolLabel(
     {
       tool,
       isCompleted,
@@ -617,7 +627,13 @@ export function ToolCallBadge({
             readSplit,
             t,
           )
-        : formatArgsSummary(tool, args, t);
+        : isMcpTool
+          ? formatArgsSummary(
+              tool,
+              (args.args && typeof args.args === "object" ? (args.args as Record<string, unknown>) : {}),
+              t,
+            )
+          : formatArgsSummary(tool, args, t);
   const shouldClampSummary = argsSummary.length > MULTILINE_SUMMARY_THRESHOLD;
   const contextCount = contexts?.length ?? 0;
   const contextTooltip = contexts?.join("\n") ?? "";
@@ -657,7 +673,7 @@ export function ToolCallBadge({
           )}
         />
         {(() => {
-          const ToolIcon = TOOL_ICONS[tool];
+          const ToolIcon = TOOL_ICONS[tool] ?? (isMcpTool ? Plug : undefined);
           return ToolIcon ? (
             <ToolIcon className="h-3 w-3 shrink-0 text-foreground/65 dark:text-foreground/70" />
           ) : null;
