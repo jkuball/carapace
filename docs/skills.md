@@ -159,7 +159,9 @@ Common fields:
 **HTTP transport** — set `url`:
 
 - `url` — the server's HTTP(S) endpoint (streamable HTTP transport).
-- `auth` — optional. Currently only `type: bearer` with a `vault_path`: the token is read from the vault at activation and sent as `Authorization: Bearer <token>`. The auth block is a tagged union so other methods (e.g. OAuth) can be added later.
+- `auth` — optional authentication (a tagged union on `type`):
+  - `type: bearer` with a `vault_path`: the token is read from the vault at activation and sent as `Authorization: Bearer <token>`.
+  - `type: oauth` with a `vault_path`: the vault entry holds a JSON OAuth-state blob; carapace injects the access token, refreshes it via the refresh-token grant when missing/near-expiry/rejected (401), and **writes the rotated blob back to the vault**. See "OAuth servers" below.
 - The connection is made by the **backend process**; the URL is pinned to the declared value.
 
 **stdio transport** — set `command`:
@@ -174,7 +176,26 @@ Notes (both transports):
 - The declared servers are part of the `use_skill` approval, like domains and credentials. Every individual MCP tool call is still reviewed by the sentinel (shown as `mcp:<server>:<tool>`), with the usual escalate-to-user path.
 - Oversized text results are spilled to a file in the sandbox (same mechanism as `exec` output).
 - Server tools disappear when the session ends; there is no explicit deactivation, matching context grants.
-- Skills that need full control (OAuth, stateful sessions, custom output shaping) can still wrap a server as a CLI with `mcp2cli` and a `commands` alias instead; `mcp` is the shortcut for the common case.
+- **Graceful degradation**: MCP servers are connected/enumerated at `use_skill` time. If a server fails (missing/expired credential, unreachable endpoint, refresh failure), the skill **still activates** — the `use_skill` result tells the agent that server is unavailable and why, and only its `<server>_*` tools are absent.
+- Skills that need full control (stateful sessions, custom output shaping) can still wrap a server as a CLI with `mcp2cli` and a `commands` alias instead; `mcp` is the shortcut for the common case.
+
+### OAuth servers (`type: oauth`)
+
+The vault entry for an OAuth MCP server holds a compact JSON blob:
+
+```json
+{"token_url":"https://issuer/oauth2/token","client_id":"...","client_secret":"...","refresh_token":"...","access_token":"...","expires_at":1750000000,"scope":"..."}
+```
+
+Only `token_url`, `client_id`, and `refresh_token` are required (`client_secret` is omitted for public/PKCE clients; `access_token`/`expires_at` are filled in by carapace on first refresh). At connection carapace refreshes the token if it is missing or within a minute of expiry, retries once on a 401, and writes the updated blob (including a rotated `refresh_token`, if the provider returns one) back to the vault — so **the vault backend must support writes** (Bitwarden/Vaultwarden does; the file backend does too but is disabled by default).
+
+The one-time authorization that produces the initial `refresh_token` (typically DCR + PKCE + a browser login) is done **out-of-band** — carapace only refreshes. Assemble the blob with `scripts/mcp_oauth_blob.py` and store it at the `auth.vault_path`:
+
+```sh
+python scripts/mcp_oauth_blob.py --token-url https://issuer/oauth2/token \
+    --client-id <id> --refresh-token <token> > blob.json
+# then store blob.json's contents in the vault entry the skill points at
+```
 
 ## Context-scoped access
 

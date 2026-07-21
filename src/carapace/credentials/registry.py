@@ -59,6 +59,10 @@ class CredentialRegistry:
         backend, identifier = self._resolve(vault_path)
         return await backend.fetch(identifier)
 
+    async def write(self, vault_path: str, value: str) -> None:
+        backend, identifier = self._resolve(vault_path)
+        await backend.write(identifier, value)
+
     async def fetch_metadata(self, vault_path: str) -> CredentialMetadata:
         backend, identifier = self._resolve(vault_path)
         return await backend.fetch_metadata(identifier)
@@ -96,6 +100,9 @@ class SessionCredentialRegistry:
 
     async def fetch(self, vault_path: str) -> str:
         return await (await self._registry()).fetch(vault_path)
+
+    async def write(self, vault_path: str, value: str) -> None:
+        await (await self._registry()).write(vault_path, value)
 
     async def fetch_metadata(self, vault_path: str) -> CredentialMetadata:
         return await (await self._registry()).fetch_metadata(vault_path)

@@ -27,6 +27,15 @@ class VaultBackend(Protocol):
         """
         ...
 
+    async def write(self, identifier: str, value: str) -> None:
+        """Overwrite the secret value for an existing *identifier*.
+
+        Used for token rotation (e.g. persisting a refreshed OAuth access token).
+        Raises ``KeyError`` if the identifier does not exist and
+        ``CredentialBackendError`` if the backend cannot store the value.
+        """
+        ...
+
     async def fetch_metadata(self, identifier: str) -> CredentialMetadata:
         """Return metadata (vault_path, name, description) for *identifier*.
 

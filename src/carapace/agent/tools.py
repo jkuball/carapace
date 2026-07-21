@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
 import secrets
 import shlex
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
@@ -24,7 +26,13 @@ from ..config import load_workspace_file
 from ..credentials import CredentialBackendError
 from ..llm import model_settings_for_config, model_supports_vision
 from ..models.credentials import CredentialMetadata
-from ..models.skills import ContextGrant, SkillCarapaceConfig, SkillCredentialDecl, SkillMcpDecl
+from ..models.skills import (
+    ContextGrant,
+    SkillCarapaceConfig,
+    SkillCredentialDecl,
+    SkillMcpDecl,
+    SkillMcpOAuthAuth,
+)
 from ..models.tooling import SentFileInfo, ToolResult, normalize_tool_call_args
 from ..sandbox.manager import READ_TOOL_MAX_LINE_WINDOW, UploadError, UploadTooLargeError
 from ..sandbox.runtime import SkillActivationError
@@ -575,8 +583,11 @@ def _notify_injected_creds_callback(ctx: RunContext[Deps], injected_creds: list[
 
 
 async def _mcp_bearer_token(ctx: RunContext[Deps], decl: SkillMcpDecl) -> str | None:
-    """Resolve the bearer token for an MCP server from the session credential cache, re-fetching on miss."""
-    if decl.auth is None:
+    """Resolve a static bearer token for an MCP server from the session cache, re-fetching on miss.
+
+    Only for ``bearer`` auth (or no auth). OAuth is handled by :class:`_VaultOAuth`.
+    """
+    if decl.auth is None or isinstance(decl.auth, SkillMcpOAuthAuth):
         return None
     session_id = ctx.deps.session_state.session_id
     vault_path = decl.auth.vault_path
@@ -586,6 +597,80 @@ async def _mcp_bearer_token(ctx: RunContext[Deps], decl: SkillMcpDecl) -> str | 
         cached = await ctx.deps.credential_registry.fetch(vault_path)
         ctx.deps.sandbox.cache_credential(session_id, vault_path, cached)
     return cached
+
+
+class _VaultOAuth(httpx.Auth):
+    """httpx auth that keeps a vault-stored OAuth access token fresh.
+
+    Reads a JSON state blob from the vault, injects ``Authorization: Bearer
+    <access_token>``, refreshes via the refresh-token grant when the token is
+    missing / near expiry / rejected with 401, and writes the rotated blob back
+    to the vault. Used by the backend HTTP MCP client.
+    """
+
+    def __init__(self, cred_registry: Any, vault_path: str, *, refresh_margin: int = 60) -> None:
+        self._cred = cred_registry
+        self._vault_path = vault_path
+        self._margin = refresh_margin
+        self._lock = asyncio.Lock()
+        self._blob: dict[str, Any] | None = None
+
+    async def prewarm(self) -> None:
+        """Resolve (and if needed refresh) the token now, to surface auth errors early."""
+        await self._token()
+
+    async def async_auth_flow(self, request: httpx.Request) -> Any:
+        request.headers["Authorization"] = f"Bearer {await self._token()}"
+        response = yield request
+        if response.status_code == 401:
+            request.headers["Authorization"] = f"Bearer {await self._token(force=True)}"
+            yield request
+
+    async def _token(self, *, force: bool = False) -> str:
+        async with self._lock:
+            if self._blob is None:
+                self._blob = json.loads(await self._cred.fetch(self._vault_path))
+            if force or self._needs_refresh(self._blob):
+                await self._refresh(self._blob)
+            token = self._blob.get("access_token")
+            if not token:
+                raise CredentialBackendError(f"OAuth state at {self._vault_path!r} has no access_token after refresh")
+            return token
+
+    def _needs_refresh(self, blob: dict[str, Any]) -> bool:
+        if not blob.get("access_token"):
+            return True
+        expires_at = blob.get("expires_at")
+        return expires_at is None or time.time() >= float(expires_at) - self._margin
+
+    async def _refresh(self, blob: dict[str, Any]) -> None:
+        for required in ("token_url", "client_id", "refresh_token"):
+            if not blob.get(required):
+                raise CredentialBackendError(f"OAuth state at {self._vault_path!r} is missing '{required}'")
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": blob["refresh_token"],
+            "client_id": blob["client_id"],
+        }
+        if blob.get("client_secret"):
+            data["client_secret"] = blob["client_secret"]
+        if blob.get("scope"):
+            data["scope"] = blob["scope"]
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(blob["token_url"], data=data)
+        if resp.status_code >= 400:
+            raise CredentialBackendError(
+                f"OAuth refresh for {self._vault_path!r} failed ({resp.status_code}); "
+                "the refresh token may be expired — re-provision the vault blob. "
+                f"Response: {resp.text[:200]}"
+            )
+        tok = resp.json()
+        blob["access_token"] = tok["access_token"]
+        if "expires_in" in tok:
+            blob["expires_at"] = int(time.time()) + int(tok["expires_in"])
+        if tok.get("refresh_token"):
+            blob["refresh_token"] = tok["refresh_token"]
+        await self._cred.write(self._vault_path, json.dumps(blob, separators=(",", ":")))
 
 
 async def _gate_mcp_call(ctx: RunContext[Deps], gate_name: str, gate_args: dict[str, Any]) -> ToolDenied | None:
@@ -763,13 +848,68 @@ async def _build_stdio_mcp_toolset(
     return FunctionToolset(tools=tools)
 
 
+async def _build_one_mcp_toolset(
+    ctx: RunContext[Deps], skill_name: str, decl: SkillMcpDecl, *, validate: bool = False
+) -> AbstractToolset[Deps] | None:
+    """Build the toolset for a single declared MCP server (raises on failure).
+
+    ``validate=True`` resolves auth eagerly (fetch bearer token / refresh OAuth /
+    enumerate stdio) so failures surface at activation instead of first tool use.
+    """
+    key = f"{skill_name}:{decl.name}"
+    if decl.command is not None:
+        return await _build_stdio_mcp_toolset(ctx, skill_name, decl)
+    if decl.url is None:  # unreachable: the model validates url xor command
+        return None
+    if isinstance(decl.auth, SkillMcpOAuthAuth):
+        oauth = _VaultOAuth(ctx.deps.credential_registry, decl.auth.vault_path)
+        if validate:
+            await oauth.prewarm()
+        auth: Any = oauth
+    else:
+        auth = await _mcp_bearer_token(ctx, decl)
+    return MCPToolset(
+        decl.url,
+        auth=auth,
+        id=f"mcp:{key}",
+        process_tool_call=_mcp_process_tool_call(skill_name, decl),
+    ).prefixed(decl.name)
+
+
+async def _prewarm_skill_mcp(ctx: RunContext[Deps], skill_name: str, grant: ContextGrant) -> list[str]:
+    """Eagerly build a skill's MCP servers at activation; return per-server status lines.
+
+    Failures are reported (graceful degradation) but do not abort activation — the
+    skill still loads and the agent is told which servers are unavailable and why.
+    """
+    lines: list[str] = []
+    for decl in grant.mcp_servers:
+        key = f"{skill_name}:{decl.name}"
+        try:
+            toolset = await _build_one_mcp_toolset(ctx, skill_name, decl, validate=True)
+        except Exception as exc:
+            logger.warning(f"MCP server {decl.display} (skill {skill_name!r}) unavailable: {exc}")
+            lines.append(
+                f"MCP server '{decl.name}' is UNAVAILABLE: {exc}. The skill is active, but its "
+                f"{decl.name}_* tools will not work until this is resolved."
+            )
+            continue
+        if toolset is None:
+            lines.append(f"MCP server '{decl.name}' exposes no tools.")
+            continue
+        ctx.deps.mcp_toolsets[key] = toolset
+        lines.append(f"MCP server '{decl.name}' ready — tools available as {decl.name}_*.")
+    return lines
+
+
 async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps] | None:
     """Dynamic toolset factory: expose MCP tools declared by active skill grants.
 
     Evaluated per run step by pydantic-ai, so tools appear right after
     ``use_skill`` registers a grant. Built toolsets are cached on ``Deps`` so
     HTTP servers are not re-connected and stdio servers are not re-enumerated
-    on every step.
+    on every step (activation pre-warms the cache; this rebuilds after a
+    backend restart drops the cache).
     """
     toolsets: list[AbstractToolset[Deps]] = []
     for skill_name, grant in ctx.deps.session_state.context_grants.items():
@@ -778,18 +918,7 @@ async def build_skill_mcp_toolset(ctx: RunContext[Deps]) -> AbstractToolset[Deps
             toolset = ctx.deps.mcp_toolsets.get(key)
             if toolset is None:
                 try:
-                    if decl.command is not None:
-                        toolset = await _build_stdio_mcp_toolset(ctx, skill_name, decl)
-                    elif decl.url is not None:
-                        token = await _mcp_bearer_token(ctx, decl)
-                        toolset = MCPToolset(
-                            decl.url,
-                            auth=token,
-                            id=f"mcp:{key}",
-                            process_tool_call=_mcp_process_tool_call(skill_name, decl),
-                        ).prefixed(decl.name)
-                    else:  # unreachable: the model validates url xor command
-                        continue
+                    toolset = await _build_one_mcp_toolset(ctx, skill_name, decl)
                 except Exception as exc:
                     logger.warning(f"Skipping MCP server {decl.display} (skill {skill_name!r}): {exc}")
                     continue
@@ -1057,11 +1186,9 @@ def create_agent(deps: Deps) -> Agent[Deps, str | TaskDone | TaskFailed | Deferr
                 "Network tunnels available for: " + ", ".join(tunnel.display for tunnel in declared_tunnels)
             )
         if declared_mcp:
-            status_lines.append(
-                "MCP servers registered: "
-                + ", ".join(decl.display for decl in declared_mcp)
-                + ". Their tools are now available as regular tools named '<server>_<tool>'."
-            )
+            # Eagerly connect/enumerate declared MCP servers so tools are ready and any
+            # failure (missing/expired credential, unreachable server) is reported now.
+            status_lines.extend(await _prewarm_skill_mcp(ctx, skill_name, grant))
         if cred_msg:
             status_lines.extend(cred_msg.splitlines())
 

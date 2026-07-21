@@ -41,6 +41,8 @@ class FileVaultBackend:
     def __init__(self, *, name: str, path: Path, cfg: FileCredentialBackendConfig) -> None:
         self._name = name
         self._cfg = cfg
+        self._path = path
+        self._is_yaml = path.suffix in (".yaml", ".yml")
         self._secrets: dict[str, _Secret] = {}
         self._load(path)
 
@@ -95,6 +97,38 @@ class FileVaultBackend:
     async def fetch(self, identifier: str) -> str:
         self._require(identifier)
         return self._secrets[identifier].value
+
+    async def write(self, identifier: str, value: str) -> None:
+        """Overwrite an existing secret and persist it back to the file."""
+        self._require(identifier)
+        self._secrets[identifier] = _Secret(name=self._secrets[identifier].name, value=value)
+        self._persist(identifier, value)
+
+    def _persist(self, identifier: str, value: str) -> None:
+        if self._is_yaml:
+            data = [{"id": k, "name": s.name, "value": s.value} for k, s in sorted(self._secrets.items())]
+            self._path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+            return
+        # .env: line-edit so comments and other keys are preserved. ponytail: value must be
+        # single-line (OAuth blobs are compact JSON); newlines would corrupt the .env format.
+        lines = self._path.read_text().splitlines() if self._path.exists() else []
+        out: list[str] = []
+        replaced = False
+        for line in lines:
+            stripped = line.strip()
+            if (
+                stripped
+                and not stripped.startswith("#")
+                and "=" in stripped
+                and stripped.split("=", 1)[0].strip() == identifier
+            ):
+                out.append(f"{identifier}={value}")
+                replaced = True
+            else:
+                out.append(line)
+        if not replaced:
+            out.append(f"{identifier}={value}")
+        self._path.write_text("\n".join(out) + "\n")
 
     async def fetch_metadata(self, identifier: str) -> CredentialMetadata:
         self._require(identifier)
