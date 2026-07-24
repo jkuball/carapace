@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.152.0 (2026-07-24)
+
+
+### ✨ Features
+
+
+- ✨ feat: customizable per-user agent name
+  ([`69a1af5`](https://github.com/thiesgerken/carapace/commit/69a1af556331e4b57ab0d05f3c7d71b539056e83))
+
+  Adds an optional agent name in user preferences (stored on UserConfig). When set, it replaces "carapace" in the browser tab title, sidebar brand, mobile header, chat empty state, and message-box placeholder. Flows to the frontend via /auth/me config, so no extra request app-wide. Empty falls back to the default brand.
+
+  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 ## v0.151.0 (2026-07-21)
 
 
