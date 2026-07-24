@@ -104,6 +104,7 @@ interface ChatInputProps {
   connected: boolean;
   disabled?: boolean;
   disabledPlaceholder?: string;
+  agentName: string;
   waiting?: boolean;
   queuedMessage?: string | null;
   commands?: SlashCommand[];
@@ -123,6 +124,7 @@ export function ChatInput({
   connected,
   disabled = false,
   disabledPlaceholder,
+  agentName,
   waiting,
   queuedMessage,
   commands = [],
@@ -657,7 +659,7 @@ export function ChatInput({
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={disabled ? disabledPlaceholderText : t("placeholder")}
+            placeholder={disabled ? disabledPlaceholderText : t("placeholder", { name: agentName })}
             rows={1}
             disabled={disabled}
             className={cn(

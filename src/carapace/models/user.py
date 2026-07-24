@@ -50,8 +50,14 @@ class UserDefaultModelsConfig(UserConfigModel):
 
 
 class UserConfig(UserConfigModel):
+    agent_name: str = ""
     credentials: CredentialsConfig = CredentialsConfig()
     channels: UserChannelsConfig = UserChannelsConfig()
     git: UserGitConfig = UserGitConfig()
     default_models: UserDefaultModelsConfig = UserDefaultModelsConfig()
     budgets: SessionBudget = SessionBudget()
+
+    @field_validator("agent_name", mode="before")
+    @classmethod
+    def _normalize_agent_name(cls, value: str | None) -> str:
+        return (value or "").strip()

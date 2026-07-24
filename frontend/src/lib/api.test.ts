@@ -173,6 +173,7 @@ test("getCurrentUser parses authenticated user roles", async () => {
         username: "admin",
         display_name: "Admin",
         roles: ["admin"],
+        config: { agent_name: "Jarvis" },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
@@ -182,6 +183,7 @@ test("getCurrentUser parses authenticated user roles", async () => {
 
   assert.equal(calls[0]?.url, "https://carapace.example.test/api/auth/me");
   assert.deepEqual(user.roles, ["admin"]);
+  assert.equal(user.agentName, "Jarvis");
 });
 
 test("authenticated API 401 dispatches auth-required event", async () => {

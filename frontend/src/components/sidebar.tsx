@@ -599,7 +599,7 @@ export function Sidebar({
               aria-label={t("navigation.home")}
               className="cursor-pointer rounded-sm text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {t("app.name")}
+              {currentUser?.agentName?.trim() || t("app.name")}
             </button>
           </div>
           <VersionBadge frontendVersion={frontendVersion} backendVersion={backendVersion} />

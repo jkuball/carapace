@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -22,6 +22,11 @@ function AppChrome({ children }: { children: ReactNode }) {
   useSwipeDrawer(sidebarOpen, setSidebarOpen);
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
+  const brand = shell.currentUser?.agentName?.trim() || t("app.name");
+
+  useEffect(() => {
+    document.title = brand;
+  }, [brand]);
 
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;
@@ -80,7 +85,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-baseline gap-2">
             <span className="text-sm font-semibold">
-              {isSettings ? t("navigation.settings") : t("app.name")}
+              {isSettings ? t("navigation.settings") : brand}
             </span>
             {isSettings ? null : (
               <VersionBadge frontendVersion={BUILD_APP_VERSION} backendVersion={shell.serverVersion} />

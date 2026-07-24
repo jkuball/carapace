@@ -101,6 +101,7 @@ class PublicGitSettings(SettingsModel):
 
 
 class PublicUserSettings(SettingsModel):
+    agent_name: str = ""
     default_models: UserDefaultModelsConfig
     default_budget: SessionBudget
     matrix: PublicMatrixSettings
@@ -160,6 +161,7 @@ class GitSettingsPatch(SettingsModel):
 
 
 class UserSettingsPatch(SettingsModel):
+    agent_name: str | None = None
     default_models: UserDefaultModelsConfig | None = None
     default_budget: SessionBudget | None = None
     matrix: MatrixSettingsPatch | None = None
@@ -418,6 +420,7 @@ def _settings_response(username: str) -> UserSettingsResponse:
             entry.model_dump(mode="json", by_alias=True) for entry in server._engine.available_model_entries
         ],
         settings=PublicUserSettings(
+            agent_name=config.agent_name,
             default_models=config.default_models,
             default_budget=config.budgets,
             matrix=_public_matrix(config.channels.matrix),
@@ -487,6 +490,9 @@ async def update_user_settings(
 
     original_config = stored_user.config
     next_config = original_config.model_copy(deep=True)
+
+    if "agent_name" in body.model_fields_set:
+        next_config.agent_name = (body.agent_name or "").strip()
 
     if "default_models" in body.model_fields_set:
         next_config.default_models = body.default_models or UserDefaultModelsConfig()

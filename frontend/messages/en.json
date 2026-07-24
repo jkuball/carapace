@@ -78,6 +78,7 @@
             "budgetNumber": "{field} must be a non-negative number."
         },
         "sections": {
+            "agentName": "Agent name",
             "defaultModels": "Default models",
             "defaultBudgets": "Default budgets",
             "matrix": "Matrix",
@@ -85,6 +86,7 @@
             "gitRemote": "Git remote"
         },
         "fields": {
+            "agentName": "Name",
             "agent": "Agent",
             "sentinel": "Sentinel",
             "title": "Title",
@@ -151,6 +153,9 @@
                     "description": "Password manager proxy"
                 }
             }
+        },
+        "hints": {
+            "agentName": "Shown instead of “carapace” in the tab title, sidebar, and message box. Leave empty for the default."
         }
     },
     "platformSettings": {
@@ -456,7 +461,7 @@
         "attachFileUnavailable": "Start the sandbox to upload files",
         "startingSandbox": "Starting sandbox…",
         "removeAttachment": "Remove",
-        "placeholder": "Message carapace…",
+        "placeholder": "Message {name}…",
         "usageBreakdown": {
             "systemLine": "system: {percent}%",
             "userLine": "user: {percent}%",

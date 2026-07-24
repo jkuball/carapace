@@ -9,6 +9,7 @@ import { SandboxGitControls } from "@/components/git-sync";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SessionOptionTiles } from "@/components/session-option-tiles";
 import { useAppLocale } from "@/components/locale-provider";
+import { useAppShell } from "@/components/app-shell-context";
 import { useSessionPresence } from "@/hooks/use-session-presence";
 import { useWebSocket } from "@/hooks/use-websocket";
 import {
@@ -1026,6 +1027,8 @@ export function ChatView({
   const tc = useTranslations("compaction");
   const tRoot = useTranslations();
   const { locale } = useAppLocale();
+  const { currentUser } = useAppShell();
+  const agentName = currentUser?.agentName?.trim() || tRoot("app.name");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [waiting, setWaiting] = useState(false);
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
@@ -2741,7 +2744,7 @@ export function ChatView({
               )}
               {!loadingHistory && messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <p className="text-lg font-medium text-foreground/80">carapace</p>
+                  <p className="text-lg font-medium text-foreground/80">{agentName}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {connected
                       ? t("empty.start")
@@ -2815,6 +2818,7 @@ export function ChatView({
             connected={connected}
             disabled={inputDisabled}
             disabledPlaceholder={inputDisabledPlaceholder}
+            agentName={agentName}
             waiting={waiting}
             queuedMessage={queuedMessage}
             commands={commands}

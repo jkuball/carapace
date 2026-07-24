@@ -88,6 +88,7 @@ export interface AuthUserInfo {
   username: string;
   display_name: string | null;
   roles: string[];
+  agentName: string;
 }
 
 export interface WebSocketTicketResponse {
@@ -171,10 +172,12 @@ function decodeAuthUser(raw: unknown): AuthUserInfo | null {
   if (!isRecord(raw)) return null;
   const username = readString(raw, "username");
   if (!username) return null;
+  const config = isRecord(raw.config) ? raw.config : {};
   return {
     username,
     display_name: readString(raw, "display_name") ?? null,
     roles: readStringArray(raw, "roles") ?? [],
+    agentName: readString(config, "agent_name") ?? "",
   };
 }
 
@@ -1052,6 +1055,7 @@ export interface GitSettingsInfo {
 }
 
 export interface UserSettingsInfo {
+  agent_name: string;
   default_models: UserDefaultModelsSettings;
   default_budget: SessionBudgetSettings;
   matrix: MatrixSettingsInfo;
@@ -1076,6 +1080,7 @@ export interface UserSettingsResponseInfo {
 }
 
 export interface UserSettingsPatchInput {
+  agent_name?: string | null;
   default_models?: UserDefaultModelsSettings | null;
   default_budget?: SessionBudgetSettings | null;
   matrix?: Partial<{
@@ -1267,6 +1272,7 @@ function decodeUserSettingsResponse(raw: unknown): UserSettingsResponseInfo {
     },
     available_models: decodeAvailableModels(raw.available_models),
     settings: {
+      agent_name: readString(settings, "agent_name") ?? "",
       default_models: decodeDefaultModels(settings.default_models),
       default_budget: decodeBudget(settings.default_budget),
       matrix: decodeMatrixSettings(settings.matrix),
