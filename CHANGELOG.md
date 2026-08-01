@@ -1,6 +1,37 @@
 # CHANGELOG
 
 
+## v0.153.0 (2026-08-01)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #258 from thiesgerken/feat/disable-models
+  ([`8b2e62c`](https://github.com/thiesgerken/carapace/commit/8b2e62c47ebdf5ef6b53708cb6753f41a397a8b3))
+
+- ✨ feat: disable individual models
+  ([`8b2e62c`](https://github.com/thiesgerken/carapace/commit/8b2e62c47ebdf5ef6b53708cb6753f41a397a8b3))
+
+- ✨ feat: disable individual models
+  ([`ea7e432`](https://github.com/thiesgerken/carapace/commit/ea7e4329f0ca249db2a6022b040ea84692b3754b))
+
+  Adds an `enabled` flag to the model catalog (default true, so new and existing rows stay enabled). Disabled models are hidden from every picker — /api/models, user settings, the /models command, and the admin default-model pickers — and rejected at inference time.
+
+  No silent fallback: a session whose agent/sentinel/title/compaction override points at a disabled model fails the turn with "agent model 'x' is disabled — select another model" instead of quietly switching to the platform default. Enforced both at turn start (assert_models_enabled, since only the agent model is re-resolved per turn) and in resolve_available_model_entry, which every model creation goes through.
+
+  Platform defaults cannot be disabled: AgentConfig rejects the save, so the admin sees the error instead of every session breaking.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+### Other
+
+
+- 🌐 i18n(frontend): clarify model enabled hint
+  ([`1658ee2`](https://github.com/thiesgerken/carapace/commit/1658ee2334cd756cf76de26192b16d42d9b81981))
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 ## v0.152.0 (2026-07-24)
 
 
