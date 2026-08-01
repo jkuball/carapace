@@ -207,7 +207,7 @@
             "vision": "Vision",
             "visionHint": "Akzeptiert Bildeingaben",
             "enabled": "Aktiviert",
-            "enabledHint": "Für neue Sitzungen auswählbar",
+            "enabledHint": "Auswählbar und für Anfragen nutzbar",
             "disabled": "Deaktiviert",
             "apiKeySource": "API-Key-Quelle",
             "apiKey": "API-Key",
