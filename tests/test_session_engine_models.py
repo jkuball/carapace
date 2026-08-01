@@ -26,7 +26,8 @@ from pydantic_ai.usage import RunUsage
 
 import carapace.security as security_mod
 import carapace.usage as usage_mod
-from carapace.models.config import AgentConfig
+from carapace.llm import DisabledModelError
+from carapace.models.config import AgentConfig, AvailableModelEntry
 from carapace.models.session import SessionBudget
 from carapace.security.context import SentinelVerdict, SessionSecurity, ToolCallEntry
 from carapace.security.sentinel import Sentinel
@@ -889,3 +890,30 @@ def test_save_user_message_on_failure_appends_cancelled_parallel_tool_results(tm
         for event in events[3:5]
     )
     assert events[-1]["content"] == "The previous turn was interrupted before completion."
+
+
+def test_disabled_model_override_errors_instead_of_falling_back(tmp_path: Path, db_factory) -> None:
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        state = engine.session_mgr.create_session(user="thies")
+
+    state.agent_model_name = "openai:gpt-4o"
+    engine.session_mgr.save_state(state)
+
+    with _patch_sentinel():
+        restarted = _make_engine(tmp_path, session_factory=db_factory)
+        restarted.config.agent.available_models.append(
+            AvailableModelEntry.model_validate({"provider": "openai", "name": "gpt-4o", "enabled": False})
+        )
+        restarted._resolve_model = MagicMock(
+            side_effect=lambda name: (_ for _ in ()).throw(DisabledModelError(f"Model {name!r} is disabled"))
+        )
+        active = restarted.get_or_activate(state.session_id)
+
+        assert active.agent_model_name == "openai:gpt-4o"
+        with pytest.raises(DisabledModelError, match="agent model 'openai:gpt-4o' is disabled"):
+            restarted._build_deps(active)
+
+    persisted = restarted.session_mgr.load_state(state.session_id)
+    assert persisted is not None
+    assert persisted.agent_model_name == "openai:gpt-4o"

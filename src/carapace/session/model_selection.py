@@ -10,7 +10,7 @@ from loguru import logger
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.settings import ModelSettings
 
-from ..llm import model_settings_for_config
+from ..llm import DisabledModelError, model_settings_for_config
 from ..models.config import AvailableModelEntry, Config, agent_available_model_entries
 from ..models.session import SessionState
 from .manager import SessionManager
@@ -58,11 +58,36 @@ class SessionModelMixin(SessionModelHost):
         """Deduplicated ``agent.available_models`` (last row per ``model_id``), sorted by id."""
         return agent_available_model_entries(self._config.agent)
 
+    @property
+    def enabled_model_entries(self) -> list[AvailableModelEntry]:
+        """Catalog rows offered for selection. Disabled rows stay in ``available_model_entries``
+        so lookups (max_input_tokens, vision) keep working for sessions that still reference them."""
+        return [e for e in self.available_model_entries if e.enabled]
+
     def _max_input_tokens_for_model_id(self, model_id: str) -> int | None:
         for entry in self.available_model_entries:
             if entry.model_id == model_id:
                 return entry.max_input_tokens
         return None
+
+    def assert_models_enabled(self, active: ActiveSession) -> None:
+        """Turn-level gate for the session's model overrides.
+
+        Only the agent model is resolved per turn, so sentinel/title/compaction overrides would
+        otherwise keep running on a stale model object after their catalog row was switched off.
+        Platform defaults need no check — ``AgentConfig`` refuses to point them at a disabled row.
+        """
+        entries = {e.model_id: e for e in self.available_model_entries}
+        overrides: dict[ModelType, str | None] = {
+            "agent": active.agent_model_name,
+            "sentinel": active.sentinel_model_name,
+            "title": active.title_model_name,
+            "compaction": active.compaction_model_name,
+        }
+        for model_type, name in overrides.items():
+            entry = entries.get(name) if name is not None else None
+            if entry is not None and not entry.enabled:
+                raise DisabledModelError(f"{model_type} model {name!r} is disabled — select another model")
 
     def _resolve_model(self, name: str) -> Model:
         """Create a Model from a name, using the model_factory if available."""
@@ -110,12 +135,18 @@ class SessionModelMixin(SessionModelHost):
                     self._session_mgr.save_state(active.state)
 
     def _restore_persisted_model_overrides(self, active: ActiveSession) -> None:
-        """Validate restored overrides, falling back to defaults when they are no longer usable."""
+        """Validate restored overrides, falling back to defaults when they are no longer usable.
+
+        A disabled model is kept as the override: no silent fallback, the next request fails with
+        the disabled-model error so the user sees why nothing runs.
+        """
         state_changed = False
 
         if active.agent_model_name is not None:
             try:
                 active.agent_model = self._resolve_model(active.agent_model_name)
+            except DisabledModelError:
+                pass
             except Exception as exc:
                 _logger().warning(
                     f"Persisted agent model override {active.agent_model_name!r} for session "
@@ -128,6 +159,8 @@ class SessionModelMixin(SessionModelHost):
         if active.sentinel_model_name is not None and active.sentinel is not None:
             try:
                 active.sentinel.set_model(active.sentinel_model_name)
+            except DisabledModelError:
+                pass
             except Exception as exc:
                 _logger().warning(
                     f"Persisted sentinel model override {active.sentinel_model_name!r} for session "
@@ -140,6 +173,8 @@ class SessionModelMixin(SessionModelHost):
         if active.title_model_name is not None:
             try:
                 self._resolve_model(active.title_model_name)
+            except DisabledModelError:
+                pass
             except Exception as exc:
                 _logger().warning(
                     f"Persisted title model override {active.title_model_name!r} for session "
@@ -152,6 +187,8 @@ class SessionModelMixin(SessionModelHost):
         if active.compaction_model_name is not None:
             try:
                 self._resolve_model(active.compaction_model_name)
+            except DisabledModelError:
+                pass
             except Exception as exc:
                 _logger().warning(
                     f"Persisted compaction model override {active.compaction_model_name!r} for session "
@@ -197,7 +234,7 @@ class SessionModelMixin(SessionModelHost):
 
     def _handle_models_command(self, active: ActiveSession) -> dict[str, Any]:
         """Show the available model catalog for selection."""
-        available = [e.model_dump(mode="json", by_alias=True) for e in self.available_model_entries]
+        available = [e.model_dump(mode="json", by_alias=True) for e in self.enabled_model_entries]
         return {"command": "models", "data": {"available": available}}
 
     def _models_slash_view(self, active: ActiveSession) -> dict[str, dict[str, str]]:

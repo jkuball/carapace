@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, BrainCircuit, Check, ChevronDown, Cloud, Copy, Eye, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
+import { Ban, Brain, BrainCircuit, Check, ChevronDown, Cloud, Copy, Eye, KeyRound, Loader2, Plus, Save, StretchHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ComponentType, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -30,6 +30,7 @@ interface ModelDraft {
   thinkingBudgetTokens: string;
   baseUrl: string;
   vision: boolean;
+  enabled: boolean;
   apiKeySource: SecretSource;
   apiKeyValue: string;
   apiKeyConfigured: boolean;
@@ -69,6 +70,7 @@ const inputClassName = cn(
   "outline-none transition-colors placeholder:text-muted-foreground/50",
   "focus:border-ring focus:ring-2 focus:ring-ring/30",
 );
+const disabledBadgeClassName = "rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200";
 const neutralBadgeClassName = "rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground";
 const providerBadgeClassNames = [
   "rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200",
@@ -242,6 +244,7 @@ function modelDraftFromSettings(model: PlatformModelEntryInfo): ModelDraft {
     thinkingBudgetTokens: model.thinking_budget_tokens?.toString() ?? "",
     baseUrl: model.base_url ?? "",
     vision: model.vision ?? false,
+    enabled: model.enabled,
     apiKeySource,
     apiKeyValue: apiKeySource === "raw" ? "" : model.api_key.value ?? "",
     apiKeyConfigured: model.api_key.configured,
@@ -344,6 +347,7 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
       max_input_tokens: numericLimit(model.maxInputTokens, t("fields.maxInputTokens"), t),
       thinking: thinkingFromDraft(model.thinking),
       vision: model.vision,
+      enabled: model.enabled,
     };
     if (openAICompatible) {
       entry.thinking_budget_tokens = nonNegativeLimit(model.thinkingBudgetTokens, t("fields.thinkingBudgetTokens"), t);
@@ -363,16 +367,19 @@ function modelsFromDraft(models: ModelDraft[], t: Translate): PlatformModelEntry
 
 export function buildPlatformSettingsPatch(draft: PlatformDraft, t: Translate): PlatformSettingsPatchInput {
   const availableModels = modelsFromDraft(draft.models, t);
-  const ids = new Set(availableModels.map((model) => model.id ?? `${model.provider}:${model.name}`));
+  const byId = new Map(availableModels.map((model) => [model.id ?? `${model.provider}:${model.name}`, model]));
+  const checkDefault = (field: string, id: string) => {
+    const entry = byId.get(id);
+    if (entry === undefined) throw new Error(t("errors.defaultUnknown", { field, id }));
+    if (entry.enabled === false) throw new Error(t("errors.defaultDisabled", { field, id }));
+  };
   for (const key of ["agent", "sentinel", "title"] as const) {
     const normalized = draft.defaultModels[key].trim();
     if (!normalized) throw new Error(t("errors.defaultRequired", { field: t(`fields.${key}`) }));
-    if (!ids.has(normalized)) throw new Error(t("errors.defaultUnknown", { field: t(`fields.${key}`), id: normalized }));
+    checkDefault(t(`fields.${key}`), normalized);
   }
   const compactionModel = draft.defaultModels.compaction.trim();
-  if (compactionModel && !ids.has(compactionModel)) {
-    throw new Error(t("errors.defaultUnknown", { field: t("fields.compaction"), id: compactionModel }));
-  }
+  if (compactionModel) checkDefault(t("fields.compaction"), compactionModel);
   return {
     default_models: {
       agent: draft.defaultModels.agent.trim(),
@@ -413,6 +420,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
       thinkingBudgetTokens: model.thinkingBudgetTokens,
       baseUrl: model.baseUrl,
       vision: model.vision,
+      enabled: model.enabled,
       apiKeySource: model.apiKeySource,
       apiKeyValue: model.apiKeyValue,
       apiKeyConfigured: model.apiKeyConfigured,
@@ -423,7 +431,7 @@ function comparableDraft(draft: PlatformDraft | null): unknown {
 
 function draftModelOptions(models: ModelDraft[]): AvailableModelInfo[] {
   return sortModelDrafts(models)
-    .filter((model) => model.provider.trim() && model.name.trim())
+    .filter((model) => model.enabled && model.provider.trim() && model.name.trim())
     .map((model) => ({
       id: modelId(model),
       provider: model.provider.trim(),
@@ -443,6 +451,7 @@ function newModelDraft(): ModelDraft {
     thinkingBudgetTokens: "",
     baseUrl: "",
     vision: false,
+    enabled: true,
     apiKeySource: "none",
     apiKeyValue: "",
     apiKeyConfigured: false,
@@ -773,6 +782,7 @@ export function ModelRow({ model, disabled, defaultOpen = false, onChange, onRem
   if (model.maxInputTokens.trim()) summaryBadges.push({ label: tokenLabel(compactTokenCount(model.maxInputTokens), t), className: neutralBadgeClassName, icon: StretchHorizontal });
   if (model.thinking || (openAICompatible && model.thinkingBudgetTokens.trim())) summaryBadges.push({ label: thinkingBadgeLabel(model.thinking, openAICompatible ? model.thinkingBudgetTokens : "", t), className: neutralBadgeClassName, icon: Brain });
   if (model.vision) summaryBadges.push({ label: t("fields.vision"), className: neutralBadgeClassName, icon: Eye });
+  if (!model.enabled) summaryBadges.push({ label: t("fields.disabled"), className: disabledBadgeClassName, icon: Ban });
   const rawSecretConfigured = model.apiKeySource === "raw" && hasReusableRawSecret(model);
   return (
     <details
@@ -843,6 +853,22 @@ export function ModelRow({ model, disabled, defaultOpen = false, onChange, onRem
               <span className={cn("inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform", model.vision ? "translate-x-6" : "translate-x-1")} />
             </span>
             <span className="text-muted-foreground">{t("fields.visionHint")}</span>
+          </button>
+        </div>
+        <div className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">{t("fields.enabled")}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={model.enabled}
+            disabled={disabled}
+            onClick={() => onChange({ enabled: !model.enabled })}
+            className="flex h-9 items-center gap-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span aria-hidden="true" className={cn("relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors", model.enabled ? "border-[#236b86] bg-[#236b86]" : "border-border bg-muted")}>
+              <span className={cn("inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform", model.enabled ? "translate-x-6" : "translate-x-1")} />
+            </span>
+            <span className="text-muted-foreground">{t("fields.enabledHint")}</span>
           </button>
         </div>
         <Field label={t("fields.apiKeySource")}>

@@ -62,6 +62,7 @@ class PublicPlatformModelEntry(PlatformSettingsModel):
     thinking_budget_tokens: int | None = None
     base_url: str | None = None
     vision: bool = False
+    enabled: bool = True
     api_key: PublicModelSecret = PublicModelSecret()
 
 
@@ -108,6 +109,7 @@ class PlatformModelEntryPatch(PlatformSettingsModel):
     thinking_budget_tokens: int | None = Field(default=None, ge=0)
     base_url: str | None = None
     vision: bool = False
+    enabled: bool = True
     api_key: PlatformSecretPatch | None = None
 
     @field_validator("provider", "name", "id", "base_url", mode="before")
@@ -172,6 +174,7 @@ def _public_model_entry(entry: AvailableModelEntry) -> PublicPlatformModelEntry:
         thinking_budget_tokens=entry.thinking_budget_tokens,
         base_url=entry.base_url,
         vision=entry.vision,
+        enabled=entry.enabled,
         api_key=_public_secret(entry.api_key),
     )
 
@@ -241,6 +244,7 @@ def _agent_config_from_patch(body: PlatformSettingsPatch, existing_agent: AgentC
                 thinking_budget_tokens=patch.thinking_budget_tokens if openai_compatible else None,
                 base_url=patch.base_url if openai_compatible else None,
                 vision=patch.vision,
+                enabled=patch.enabled,
                 api_key=(
                     _secret_from_patch(patch.api_key, existing.api_key if existing is not None else None)
                     if supports_api_key

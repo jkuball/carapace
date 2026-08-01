@@ -180,7 +180,8 @@
             "secretValueRequired": "Secret reference is required for {id}.",
             "defaultRequired": "{field} default model is required.",
             "defaultUnknown": "{field} default model {id} is not in the catalog.",
-            "minInt": "{field} must be a whole number of at least {min}."
+            "minInt": "{field} must be a whole number of at least {min}.",
+            "defaultDisabled": "{field} default model {id} is disabled."
         },
         "sections": {
             "defaultModels": "Default models",
@@ -205,6 +206,9 @@
             "baseUrl": "Base URL",
             "vision": "Vision",
             "visionHint": "Accepts image input",
+            "enabled": "Enabled",
+            "enabledHint": "Selectable and usable for requests",
+            "disabled": "Disabled",
             "apiKeySource": "API key source",
             "apiKey": "API key",
             "secretReference": "Secret reference",

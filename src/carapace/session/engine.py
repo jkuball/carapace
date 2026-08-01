@@ -449,6 +449,7 @@ class SessionEngine(
         tool_result_callback: Callable[[ToolResult], None] | None = None,
     ) -> Deps:
         assert active.security is not None and active.sentinel is not None
+        self.assert_models_enabled(active)
         session_id = active.state.session_id
         agent_model_id = active.agent_model_name or self._config.agent.model
         agent_model = active.agent_model

@@ -11,7 +11,8 @@ from carapace.config import (
     resolve_knowledge_repos_dir,
     resolve_user_knowledge_dir,
 )
-from carapace.models.config import AuthConfig, Config
+from carapace.llm import resolve_available_model_entry
+from carapace.models.config import AgentConfig, AuthConfig, AvailableModelEntry, Config
 from carapace.notifications.models import NotificationsConfig
 
 
@@ -98,3 +99,24 @@ def test_resolve_user_knowledge_dir_uses_explicit_root(tmp_path: Path) -> None:
 def test_resolve_user_knowledge_dir_rejects_noncanonical_username(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="username must be lowercase"):
         resolve_user_knowledge_dir(tmp_path, "Thies")
+
+
+def test_disabled_model_is_rejected_by_the_llm_path(tmp_path: Path) -> None:
+    cfg = build_config(tmp_path)
+    cfg.agent.available_models.append(
+        AvailableModelEntry.model_validate({"provider": "anthropic", "name": "claude-opus-4-1", "enabled": False})
+    )
+    with pytest.raises(ValueError, match="is disabled"):
+        resolve_available_model_entry(cfg, "anthropic:claude-opus-4-1")
+
+
+def test_platform_default_cannot_point_at_a_disabled_model() -> None:
+    with pytest.raises(ValidationError, match="refers to a disabled model"):
+        AgentConfig.model_validate(
+            {
+                "model": "anthropic:claude-sonnet-4-6",
+                "sentinel_model": "anthropic:claude-sonnet-4-6",
+                "title_model": "anthropic:claude-sonnet-4-6",
+                "available_models": [{"provider": "anthropic", "name": "claude-sonnet-4-6", "enabled": False}],
+            }
+        )

@@ -105,7 +105,7 @@ async def get_vapid_public_key() -> VapidPublicKeyResponse:
 async def list_models(
     _user: Annotated[UserIdentity, Depends(require(Scope.sessions, Access.read))],
 ) -> list[dict[str, Any]]:
-    return [e.model_dump(mode="json", by_alias=True) for e in server._engine.available_model_entries]
+    return [e.model_dump(mode="json", by_alias=True) for e in server._engine.enabled_model_entries]
 
 
 class WebSocketSubscriber:

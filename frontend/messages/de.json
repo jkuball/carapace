@@ -180,7 +180,8 @@
             "secretValueRequired": "Secret-Referenz ist für {id} erforderlich.",
             "defaultRequired": "{field}-Standardmodell ist erforderlich.",
             "defaultUnknown": "{field}-Standardmodell {id} ist nicht im Katalog.",
-            "minInt": "{field} muss eine ganze Zahl ≥ {min} sein."
+            "minInt": "{field} muss eine ganze Zahl ≥ {min} sein.",
+            "defaultDisabled": "{field}-Standardmodell {id} ist deaktiviert."
         },
         "sections": {
             "defaultModels": "Standardmodelle",
@@ -205,6 +206,9 @@
             "baseUrl": "Base URL",
             "vision": "Vision",
             "visionHint": "Akzeptiert Bildeingaben",
+            "enabled": "Aktiviert",
+            "enabledHint": "Auswählbar und für Anfragen nutzbar",
+            "disabled": "Deaktiviert",
             "apiKeySource": "API-Key-Quelle",
             "apiKey": "API-Key",
             "secretReference": "Secret-Referenz",
