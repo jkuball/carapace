@@ -35,6 +35,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.usage import UsageLimits
 
 from ..agent.deps import Deps
+from ..llm import DisabledModelError
 from ..models.config import Config
 from ..models.tooling import ToolCallCallback, ToolResult
 from ..notifications.router import NotificationRouter, build_turn_outcome_notification_id
@@ -352,6 +353,16 @@ class SessionTurnMixin(SessionTurnHost):
                 latest_messages=latest_messages,
                 terminal_message=str(exc),
                 save_progress=True,
+            )
+            await self._broadcast(active, "on_error", str(exc), turn_terminal=True)
+        except DisabledModelError as exc:
+            logger.info(f"Turn blocked by disabled model for {session_id}: {exc}")
+            await self._finalize_failed_turn(
+                active,
+                session_id,
+                agent_input,
+                latest_messages=latest_messages,
+                terminal_message=str(exc),
             )
             await self._broadcast(active, "on_error", str(exc), turn_terminal=True)
         except UsageLimitExceeded as exc:

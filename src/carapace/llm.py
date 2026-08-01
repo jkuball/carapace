@@ -69,11 +69,17 @@ def infer_model_with_retry_transport(model_name: str) -> Model:
     return infer_model(model_name, provider_factory=_provider_factory)
 
 
+class DisabledModelError(ValueError):
+    """Raised when a model exists in the catalog but is switched off."""
+
+
 def resolve_available_model_entry(config: Config, model_name: str):
     entries = {e.model_id: e for e in agent_available_model_entries(config.agent)}
     entry = entries.get(model_name)
     if entry is None:
         raise ValueError(f"Model {model_name!r} is not registered in agent.available_models")
+    if not entry.enabled:
+        raise DisabledModelError(f"Model {model_name!r} is disabled")
     return entry
 
 

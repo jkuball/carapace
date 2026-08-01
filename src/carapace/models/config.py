@@ -107,6 +107,10 @@ class AvailableModelEntry(ConfigModel):
         default=False,
         description="Model accepts image input; enables raw-image read-tool results.",
     )
+    enabled: bool = Field(
+        default=True,
+        description="Disabled models are hidden from pickers and rejected by the LLM call.",
+    )
     api_key: Secret | None = Field(default=None, exclude=True)
 
     @model_validator(mode="before")
@@ -196,18 +200,18 @@ class AgentConfig(ConfigModel):
             raise ValueError("agent.max_sentinel_calls_per_tool_call must be >= 0")
         if self.sentinel_domain_batch_window_ms < 0:
             raise ValueError("agent.sentinel_domain_batch_window_ms must be >= 0")
-        catalog_ids = {e.model_id for e in self.available_models}
-        for field_name in ("model", "sentinel_model", "title_model"):
+        catalog = {e.model_id: e for e in self.available_models}
+        for field_name in ("model", "sentinel_model", "title_model", "compaction_model"):
             mid = getattr(self, field_name)
-            if mid not in catalog_ids:
+            if mid is None:
+                continue
+            entry = catalog.get(mid)
+            if entry is None:
                 raise ValueError(
                     f"agent.{field_name}={mid!r} must match an entry in agent.available_models (as id or provider:name)"
                 )
-        if self.compaction_model is not None and self.compaction_model not in catalog_ids:
-            raise ValueError(
-                f"agent.compaction_model={self.compaction_model!r} must match an entry in "
-                "agent.available_models (as id or provider:name)"
-            )
+            if not entry.enabled:
+                raise ValueError(f"agent.{field_name}={mid!r} refers to a disabled model")
         return self
 
 
@@ -254,6 +258,8 @@ def model_entry_to_dict(entry: AvailableModelEntry) -> dict[str, Any]:
         data["base_url"] = entry.base_url
     if entry.vision:
         data["vision"] = entry.vision
+    if not entry.enabled:
+        data["enabled"] = False
     secret = secret_to_dict(entry.api_key)
     if secret is not None:
         data["api_key"] = secret

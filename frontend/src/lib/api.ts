@@ -996,6 +996,7 @@ export interface PlatformModelEntryInfo extends AvailableModelInfo {
   thinking_budget_tokens?: number | null;
   base_url?: string | null;
   vision?: boolean | null;
+  enabled: boolean;
   api_key: PlatformModelSecretInfo;
 }
 
@@ -1143,6 +1144,7 @@ export interface PlatformModelEntryPatchInput {
   thinking_budget_tokens?: number | null;
   base_url?: string | null;
   vision?: boolean | null;
+  enabled?: boolean;
   api_key?: PlatformSecretPatchInput | null;
 }
 
@@ -1315,6 +1317,7 @@ function decodePlatformModelEntry(raw: unknown): PlatformModelEntryInfo | null {
     thinking_budget_tokens: readNumber(raw, "thinking_budget_tokens") ?? null,
     base_url: readString(raw, "base_url") ?? null,
     vision: typeof raw.vision === "boolean" ? raw.vision : null,
+    enabled: readBoolean(raw, "enabled", true),
     api_key: decodePlatformModelSecret(raw.api_key),
   };
 }

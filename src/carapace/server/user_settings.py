@@ -296,7 +296,7 @@ def _clear_persisted_matrix_token(username: str, config: UserConfig) -> MatrixTo
 
 
 def _available_model_ids() -> set[str]:
-    return {entry.model_id for entry in server._engine.available_model_entries}
+    return {entry.model_id for entry in server._engine.enabled_model_entries}
 
 
 def _validate_default_models(default_models: UserDefaultModelsConfig) -> None:
@@ -417,7 +417,7 @@ def _settings_response(username: str) -> UserSettingsResponse:
             budget=server._config.agent.default_session_budget,
         ),
         available_models=[
-            entry.model_dump(mode="json", by_alias=True) for entry in server._engine.available_model_entries
+            entry.model_dump(mode="json", by_alias=True) for entry in server._engine.enabled_model_entries
         ],
         settings=PublicUserSettings(
             agent_name=config.agent_name,
