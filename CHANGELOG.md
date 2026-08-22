@@ -1,6 +1,60 @@
 # CHANGELOG
 
 
+## v0.153.1 (2026-08-22)
+
+
+### Other
+
+
+- Merge pull request #252 from thiesgerken/renovate/all-routine-dependencies
+  ([`6aba338`](https://github.com/thiesgerken/carapace/commit/6aba33869c6d62c3aa6cc46d7464131a34695cac))
+
+- Merge pull request #256 from thiesgerken/renovate/jsdom-30.x
+  ([`a679def`](https://github.com/thiesgerken/carapace/commit/a679def7c31e04d4f3ccd6bfbab59d83a3993be5))
+
+- Merge pull request #253 from thiesgerken/renovate/pnpm-11.x
+  ([`740b413`](https://github.com/thiesgerken/carapace/commit/740b413a0b9581e5391c46ce5a1eb351ef328abd))
+
+- Merge pull request #257 from thiesgerken/renovate/j178-prek-action-3.x
+  ([`4131056`](https://github.com/thiesgerken/carapace/commit/4131056fb90984bd42c5a2101583adf916c87906))
+
+- Merge pull request #259 from thiesgerken/renovate/astral-sh-setup-uv-10.x
+  ([`544a192`](https://github.com/thiesgerken/carapace/commit/544a19222c53badac6425baf5bed690ed9087ceb))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`6aba338`](https://github.com/thiesgerken/carapace/commit/6aba33869c6d62c3aa6cc46d7464131a34695cac))
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`9b047df`](https://github.com/thiesgerken/carapace/commit/9b047df3392e6fca282d0ee9b4e6fd41b0149858))
+
+- ⬆️ chore: upgrade jsdom to 30.0.1
+  ([`a679def`](https://github.com/thiesgerken/carapace/commit/a679def7c31e04d4f3ccd6bfbab59d83a3993be5))
+
+- ⬆️ chore: upgrade jsdom to 30.0.1
+  ([`7f93207`](https://github.com/thiesgerken/carapace/commit/7f93207e8cc5010333ff736952fc246e70b621ab))
+
+- ⬆️ chore: upgrade pnpm to 11.22.0
+  ([`740b413`](https://github.com/thiesgerken/carapace/commit/740b413a0b9581e5391c46ce5a1eb351ef328abd))
+
+- ⬆️ chore: upgrade pnpm to 11.22.0
+  ([`5dedf73`](https://github.com/thiesgerken/carapace/commit/5dedf73cad0cfa27a9cef162b4a091cf2197aaff))
+
+- ⬆️ chore: upgrade j178/prek-action action to v3.0.0
+  ([`4131056`](https://github.com/thiesgerken/carapace/commit/4131056fb90984bd42c5a2101583adf916c87906))
+
+- ⬆️ chore: upgrade j178/prek-action action to v3.0.0
+  ([`ee25c05`](https://github.com/thiesgerken/carapace/commit/ee25c056c5a293c2b680e2a5990b0a3da2db3c9d))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v10.0.1
+  ([`544a192`](https://github.com/thiesgerken/carapace/commit/544a19222c53badac6425baf5bed690ed9087ceb))
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v10.0.1
+  ([`63a452c`](https://github.com/thiesgerken/carapace/commit/63a452c447c87a259fe6740c3018c8360a05e84e))
+
 ## v0.153.0 (2026-08-01)
 
 
