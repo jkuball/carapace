@@ -1,6 +1,46 @@
 # CHANGELOG
 
 
+## v0.153.2 (2026-08-24)
+
+
+### 🐛 Bug Fixes
+
+
+- 🐛Merge pull request #262 from thiesgerken/fix/261-lazy-model-construction
+  ([`89be0f9`](https://github.com/thiesgerken/carapace/commit/89be0f9c24a820c5093d0dc68208860200af7fa5))
+
+- 🐛 fix: start server without provider credentials
+  ([`89be0f9`](https://github.com/thiesgerken/carapace/commit/89be0f9c24a820c5093d0dc68208860200af7fa5))
+
+- 🐛 fix: cache the lazily built default agent model
+  ([`0a905e6`](https://github.com/thiesgerken/carapace/commit/0a905e65ff1a413bb6b639ba4802c73a0abe144d))
+
+  _build_deps runs once per turn and the default branch cached nowhere, so every message built a fresh provider client (each with its own httpx.AsyncClient) that was never closed. Store the first resolve on the engine; apply_platform_model_config still replaces it when an admin edits the catalog.
+
+  Also mark the ANTHROPIC_API_KEY line in the Kubernetes quick start as the optional part, instead of contradicting the command below it.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: start server without provider credentials
+  ([`6970a72`](https://github.com/thiesgerken/carapace/commit/6970a724646dd9503c2a19a6fe196a946ae27fdc))
+
+  A fresh install crash-looped when no ANTHROPIC_API_KEY was set: the lifespan eagerly built the default agent model before an admin could configure another provider. Drop the eager construction (SessionEngine already resolves lazily), and fall back to a placeholder key when a provider refuses to construct without one, so keyless Anthropic-compatible endpoints work and a genuinely missing key fails as a provider auth error on the first request instead of at startup.
+
+  Closes #261
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+### Other
+
+
+- ✅ test: cover server startup without provider credentials
+  ([`a836689`](https://github.com/thiesgerken/carapace/commit/a8366899cdbfa861032f1c4e51e9232cdf16681b))
+
+  Extract the lifespan stub harness into a helper and add a second case that runs the real model factory with ANTHROPIC_API_KEY unset, asserting the lifespan completes and hands SessionEngine no eagerly-built model.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 ## v0.153.1 (2026-08-22)
 
 
