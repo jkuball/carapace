@@ -96,7 +96,6 @@ class MatrixChannel:
         config: MatrixChannelConfig,
         full_config: Config,
         session_mgr: SessionManager,
-        agent_model: Any,
         sandbox_mgr: SandboxManager,
         engine: SessionEngine,
         owner_user: str,
@@ -106,7 +105,6 @@ class MatrixChannel:
         self._config = config
         self._full_config = full_config
         self._session_mgr = session_mgr
-        self._agent_model = agent_model
         self._sandbox_mgr = sandbox_mgr
         self._engine = engine
         self._presence_registry = presence_registry

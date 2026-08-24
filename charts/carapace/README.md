@@ -122,7 +122,7 @@ All images default to the chart's `appVersion` tag. Release charts use the seman
 | What                   | How                                                                                                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap password** | Set `CARAPACE_TOKEN` in the Secret referenced via `envFrom`. It is only used as the initial password for the bootstrap `admin` user when no enabled admin user exists. |
-| **LLM API key**        | Set `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or another configured provider key in the same Secret.                                                                  |
+| **LLM API key**        | Set `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, or another configured provider key in the same Secret. Not needed at startup: the server boots without one so an admin can configure the model catalog first. |
 | **Ingress hostname**   | `--set ingress.hostname=carapace.example.com`                                                                                                                          |
 | **Gateway parent ref** | `--set ingress.parentRefs[0].name=my-gateway` (defaults to `default-gateway`)                                                                                          |
 

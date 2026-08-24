@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic_ai.exceptions import UserError
 from pydantic_ai.models import Model
 
 from ..api_keys import Access, Scope
@@ -306,10 +307,10 @@ async def update_platform_settings(
     # then a candidate Config so the runtime model factory can be built before we persist anything.
     try:
         agent = _agent_config_from_patch(body, server._config.agent)
-    except (ValueError, ValidationError) as exc:
+        config = server._config.model_copy(update={"agent": agent})
+        model_factory, agent_model = _runtime_models_for_config(config)
+    except (ValueError, ValidationError, UserError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    config = server._config.model_copy(update={"agent": agent})
-    model_factory, agent_model = _runtime_models_for_config(config)
     # Persist to the DB (model catalog + scalar agent row) in one transaction, then swap runtime.
     server._platform_store.save_agent_config(agent)
     _apply_runtime_config(config, model_factory=model_factory, agent_model=agent_model)

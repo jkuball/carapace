@@ -512,6 +512,20 @@ def test_model_overrides_persist_across_restart(tmp_path: Path, db_factory) -> N
     _sentinel_set_model_mock(active).assert_called_once_with("openai:gpt-4o")
 
 
+def test_default_agent_model_is_built_once(tmp_path: Path, db_factory) -> None:
+    # The platform default is resolved lazily (startup may have no credentials) and must be cached:
+    # every build opens its own HTTP client, and _build_deps runs once per turn.
+    with _patch_sentinel():
+        engine = _make_engine(tmp_path, session_factory=db_factory)
+        state = engine.session_mgr.create_session(user="thies")
+        active = engine.get_or_activate(state.session_id)
+        first = engine._build_deps(active)
+        second = engine._build_deps(active)
+
+    assert first.agent_model is second.agent_model
+    assert engine.agent_model is first.agent_model
+
+
 def test_apply_platform_model_config_invalidates_cached_override_agent_model(tmp_path: Path, db_factory) -> None:
     with _patch_sentinel():
         engine = _make_engine(tmp_path, session_factory=db_factory)

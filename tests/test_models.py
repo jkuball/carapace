@@ -656,3 +656,13 @@ def test_normalize_provider_prefix():
     assert normalize_provider_prefix("anthropic:claude-opus-4-8") == "anthropic:claude-opus-4-8"
     assert normalize_provider_prefix("google:gemini-2.0-flash") == "google:gemini-2.0-flash"
     assert normalize_provider_prefix("openai:gpt-4o") == "openai:gpt-4o"
+
+
+def test_model_construction_without_provider_key(monkeypatch):
+    # A fresh install has no credentials yet; construction must still succeed so the admin can
+    # boot the server and configure the catalog (the auth failure lands on the first request).
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    from carapace.llm import infer_model_with_retry_transport
+
+    model = infer_model_with_retry_transport("anthropic:claude-sonnet-4-6")
+    assert model.model_name == "claude-sonnet-4-6"
