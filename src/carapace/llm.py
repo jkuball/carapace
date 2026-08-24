@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Literal, cast
 
 from httpx import AsyncClient, HTTPStatusError, Timeout
+from pydantic_ai.exceptions import UserError
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
 from pydantic_ai.models.openrouter import OpenRouterModel
@@ -26,6 +27,10 @@ ThinkingSetting = bool | Literal["minimal", "low", "medium", "high", "xhigh"]
 # requests where max_tokens <= thinking.budget_tokens, and pydantic_ai defaults max_tokens
 # to 4096 — too small once thinking maps to a budget (e.g. True -> 10000).
 _THINKING_OUTPUT_RESERVE = 8192
+
+# Stand-in for an absent provider key: keeps model construction working so the failure
+# surfaces as a provider auth error on the first request instead of blocking server startup.
+_PLACEHOLDER_API_KEY = "carapace-unconfigured-api-key"
 
 
 def retry_http_client() -> AsyncClient:
@@ -62,9 +67,18 @@ def infer_model_with_retry_transport(model_name: str) -> Model:
         if name.startswith("gateway/"):
             return infer_provider(name)
         cls = infer_provider_class(name)
-        if "http_client" in inspect.signature(cls).parameters:
-            return cls(http_client=http_client)  # type: ignore
-        return cls()
+        params = inspect.signature(cls).parameters
+        kwargs: dict[str, object] = {"http_client": http_client} if "http_client" in params else {}
+        try:
+            return cls(**kwargs)  # type: ignore[arg-type]
+        except UserError:
+            # Providers reject construction when no key is in the environment. A keyless
+            # endpoint (self-hosted proxy behind ANTHROPIC_BASE_URL) is legitimate, and an
+            # admin must be able to boot the server before configuring credentials, so hand
+            # over a placeholder and let the provider answer with 401 if it does want a key.
+            if "api_key" not in params:
+                raise
+            return cls(api_key=_PLACEHOLDER_API_KEY, **kwargs)  # type: ignore[arg-type]
 
     return infer_model(model_name, provider_factory=_provider_factory)
 

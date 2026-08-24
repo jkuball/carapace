@@ -1029,7 +1029,7 @@ def test_admin_platform_settings_validates_runtime_before_persisting(
         },
     )
 
-    assert resp.status_code == 500
+    assert resp.status_code == 422
     # DB catalog and in-memory config unchanged: persistence happens only after model build.
     assert {m.model_id for m in srv._platform_store.load_models()} == baseline
     assert srv._config.agent.model == "anthropic:claude-sonnet-4-6"

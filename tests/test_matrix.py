@@ -85,7 +85,6 @@ def _make_channel(tmp_path: Path, db_factory, *, owner_user: str = "thies", **co
         config=_make_config(**config_kwargs),
         full_config=full_config,
         session_mgr=session_mgr,
-        agent_model=None,
         sandbox_mgr=sandbox_mgr,
         engine=_make_engine_mock(),
         owner_user=owner_user,

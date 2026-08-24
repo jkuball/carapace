@@ -342,8 +342,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     _session_list_cache = SessionListCache(_config.cache)
     session_mgr = SessionManager(_session_factory, _data_dir, on_change=_session_list_cache.invalidate_sync)
+    # No eager default-model construction: a fresh install has no provider credentials yet, and
+    # the admin needs the server up to configure them. SessionEngine resolves on first use.
     model_factory = make_model_factory(_config)
-    agent_model = model_factory(_config.agent.model)
 
     runtime = _create_sandbox_runtime(_config, _data_dir)
 
@@ -442,7 +443,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         config=_config,
         data_dir=_data_dir,
         session_mgr=session_mgr,
-        agent_model=agent_model,
+        agent_model=None,
         sandbox_mgr=_sandbox_mgr,
         credential_registry_for_session=_credential_registry_for_session,
         knowledge_repo_for_session=knowledge_repo_for_session,
@@ -524,7 +525,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             config=user_config.channels.matrix,
             full_config=_config,
             session_mgr=session_mgr,
-            agent_model=agent_model,
             sandbox_mgr=_sandbox_mgr,
             engine=_engine,
             owner_user=username,
