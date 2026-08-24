@@ -12,9 +12,9 @@ carapace supports Kubernetes as a sandbox runtime. Instead of Docker containers,
 ## Quick start
 
 ```bash
-# 1. Create a secret with your bootstrap admin password (or use an ExternalSecret / SealedSecret).
-#    The provider key is optional here — without one the server still starts, and an admin can
-#    configure the model catalog under Settings -> Admin -> Platform.
+# 1. Create a secret with your API key and bootstrap admin password (or use an ExternalSecret / SealedSecret).
+#    The ANTHROPIC_API_KEY line is optional: drop it and the server still starts, so an admin can
+#    configure the model catalog under Settings -> Admin -> Platform first.
 kubectl create namespace carapace
 kubectl create secret generic carapace-secrets -n carapace \
   --from-literal=ANTHROPIC_API_KEY=sk-ant-... \

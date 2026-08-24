@@ -455,7 +455,12 @@ class SessionEngine(
         agent_model = active.agent_model
         if agent_model is None:
             if active.agent_model_name is None:
-                agent_model = self._agent_model or self._resolve_model(self._config.agent.model)
+                if self._agent_model is None:
+                    # Cache the platform default: it is built on first use (startup has no
+                    # credentials yet) and each build opens its own HTTP client. Admin catalog
+                    # changes replace it via apply_platform_model_config.
+                    self._agent_model = self._resolve_model(self._config.agent.model)
+                agent_model = self._agent_model
             else:
                 agent_model = self._resolve_model(active.agent_model_name)
                 active.agent_model = agent_model
