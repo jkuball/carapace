@@ -532,8 +532,8 @@ def test_admin_user_enable_bootstraps_user_repo(client, admin_auth_headers, monk
     assert runtime.apply_user_config.await_args.args[0] == "ada"
 
 
-@pytest.mark.anyio
-async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_path, monkeypatch):
+def _patch_lifespan_dependencies(tmp_path, monkeypatch, *, stub_model_factory: bool = True) -> MagicMock:
+    """Stub out sandbox/proxy/uvicorn so `srv._lifespan` can run in-process. Returns the sandbox mgr."""
     config = srv._config.model_copy(deep=True, update={"data_dir": str(tmp_path)})
     config.sandbox.cleanup_orphans_on_startup = False
 
@@ -587,6 +587,7 @@ async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_pat
     class _FakeSessionEngine:
         def __init__(self, *, session_mgr, **_kwargs) -> None:
             self.session_mgr = session_mgr
+            self.kwargs = _kwargs
 
         def is_agent_running(self, _session_id: str) -> bool:
             return False
@@ -612,7 +613,8 @@ async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_pat
 
     monkeypatch.delattr(srv, "_knowledge_repo_registry", raising=False)
     monkeypatch.setattr(srv, "build_config", lambda *args, **kwargs: config)
-    monkeypatch.setattr(srv, "make_model_factory", lambda _config: lambda _model_name: None)
+    if stub_model_factory:
+        monkeypatch.setattr(srv, "make_model_factory", lambda _config: lambda _model_name: None)
     monkeypatch.setattr(srv, "_create_sandbox_runtime", lambda _config, _data_dir: _FakeRuntime())
     monkeypatch.setattr(srv, "SessionListCache", lambda _cache_config: _FakeSessionListCache())
     monkeypatch.setattr(srv, "SandboxManager", lambda **_kwargs: sandbox_mgr)
@@ -627,11 +629,32 @@ async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_pat
     monkeypatch.setattr(srv, "MatrixChannelManager", _FakeMatrixChannelManager)
     monkeypatch.setattr(srv, "_jobs_scheduler_loop", AsyncMock())
 
+    return sandbox_mgr
+
+
+@pytest.mark.anyio
+async def test_lifespan_initializes_knowledge_repo_registry_module_state(tmp_path, monkeypatch):
+    sandbox_mgr = _patch_lifespan_dependencies(tmp_path, monkeypatch)
+
     async with srv._lifespan(app):
         registry = getattr(srv, "_knowledge_repo_registry", None)
 
         assert isinstance(registry, KnowledgeRepoRegistry)
         assert registry.knowledge_repos_dir == tmp_path / "knowledges"
+
+    sandbox_mgr.cleanup_all.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_lifespan_starts_without_provider_credentials(tmp_path, monkeypatch):
+    # Regression for #261: startup must not construct the default agent model, or a fresh
+    # install crash-loops before an admin can configure a provider.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    sandbox_mgr = _patch_lifespan_dependencies(tmp_path, monkeypatch, stub_model_factory=False)
+
+    async with srv._lifespan(app):
+        # Nothing built the default model: the engine resolves it on first use instead.
+        assert srv._engine.kwargs["agent_model"] is None
 
     sandbox_mgr.cleanup_all.assert_awaited_once()
 
