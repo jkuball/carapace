@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Check, CircleHelp, FileText, KeyRound, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/api";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SwitchRow } from "@/components/switch-row";
+import { resolveBundledEmojiAsset, splitEmojiText } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
 
 interface UserSettingsDraft {
@@ -54,6 +56,8 @@ interface CredentialBackendDraft {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+const DEFAULT_AGENT_ICON = "/icon.svg";
 
 const inputClassName = cn(
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm",
@@ -631,7 +635,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
               hint={t("hints.agentName")}
               onChange={(agentName) => updateDraft({ agentName })}
             />
-            <TextInput
+            <EmojiInput
               label={t("fields.agentIcon")}
               value={draft.agentIcon}
               hint={t("hints.agentIcon")}
@@ -800,6 +804,47 @@ function Field({ label, hint, help, children }: { label: string; hint?: string; 
       {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
+}
+
+function EmojiInput({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const preview = resolveBundledEmojiAsset(value);
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(event) => onChange(firstBundledEmoji(event.target.value))}
+          className={cn(inputClassName, "min-w-0 flex-1")}
+        />
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border">
+          <Image
+            src={preview ?? DEFAULT_AGENT_ICON}
+            alt=""
+            width={22}
+            height={22}
+            aria-hidden="true"
+            className={preview ? undefined : "opacity-30"}
+          />
+        </span>
+      </div>
+    </Field>
+  );
+}
+
+// Only emoji bundled as SVG assets can be rendered as an icon, so anything else is
+// dropped on input rather than stored as a value that silently shows the default.
+function firstBundledEmoji(value: string): string {
+  return splitEmojiText(value).find((segment) => segment.kind === "emoji")?.value ?? "";
 }
 
 function TextInput({
