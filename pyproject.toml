@@ -1,6 +1,6 @@
 [project]
 name = "carapace"
-version = "0.153.2"
+version = "0.153.3"
 description = "Security-first personal AI agent with rule-based information flow control"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,6 +24,7 @@ server = [
     "tenacity>=9,<10",
     "logfire[httpx]>=4,<5",
     "fastapi>=0.115,<1",
+    "httpx2>=2.12,<3",
     "python-multipart>=0.0.20,<1",
     "uvicorn[standard]>=0.40,<1",
     "pydantic-settings>=2,<3",

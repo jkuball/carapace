@@ -205,8 +205,8 @@ class SessionModelMixin(SessionModelHost):
         self,
         session_id: str,
         *,
-        agent_model_name: str | None | _UnsetType = _UNSET,
-        sentinel_model_name: str | None | _UnsetType = _UNSET,
+        agent_model_name: str | _UnsetType | None = _UNSET,
+        sentinel_model_name: str | _UnsetType | None = _UNSET,
     ) -> SessionState:
         """Persist agent and sentinel model overrides without routing through slash commands."""
         active = self._active.get(session_id)
