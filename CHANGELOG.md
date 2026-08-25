@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.154.1 (2026-08-25)
+
+
+### Other
+
+
+- Merge pull request #264 from jkuball/fix/persist-chat-drafts
+  ([`8af70b2`](https://github.com/thiesgerken/carapace/commit/8af70b24f38e33d2fe6b1d4b8ed67a0f2a7c80ce))
+
+- Merge branch 'main' into fix/persist-chat-drafts
+  ([`e89a682`](https://github.com/thiesgerken/carapace/commit/e89a6820fa8c87cc51f21592d8fe940c3d40ac32))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: persist chat drafts per session
+  ([`8af70b2`](https://github.com/thiesgerken/carapace/commit/8af70b24f38e33d2fe6b1d4b8ed67a0f2a7c80ce))
+
 ## v0.154.0 (2026-08-25)
 
 
@@ -10,11 +28,17 @@
 - Merge pull request #267 from thiesgerken/fix/pin-gitpython
   ([`4e3ddc5`](https://github.com/thiesgerken/carapace/commit/4e3ddc559518b61e2e8cbae1861a6794836818b3))
 
+- Merge branch 'main' into fix/persist-chat-drafts
+  ([`528a605`](https://github.com/thiesgerken/carapace/commit/528a605123467bedb113ded3035034398e093729))
+
 - Merge pull request #254 from thiesgerken/renovate/lock-file-maintenance
   ([`4deef5e`](https://github.com/thiesgerken/carapace/commit/4deef5ecd46a47b392bed522792a57fbaefbd67b))
 
 - Merge pull request #263 from thiesgerken/worktree-agent-icon
   ([`5bbf992`](https://github.com/thiesgerken/carapace/commit/5bbf9923bd0c0fb8435b95a13aafa2d476f4e790))
+
+- Merge branch 'main' into fix/persist-chat-drafts
+  ([`ea406b8`](https://github.com/thiesgerken/carapace/commit/ea406b83c4fd19fc1835e5530b964bdeedfc6f42))
 
 - Merge pull request #265 from thiesgerken/renovate/all-routine-dependencies
   ([`dfd2cef`](https://github.com/thiesgerken/carapace/commit/dfd2ceff72ea77b6aabe65930c2f70ef7ee6c6b0))
@@ -168,6 +192,25 @@
 
 - ⬆️ chore: upgrade docker.io/library/nginx:1.31.4 Docker digest to 0d4374c
   ([`08c6f6d`](https://github.com/thiesgerken/carapace/commit/08c6f6d17a19d72dbdb6129b434d181d836040ba))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: address review findings on chat draft persistence
+  ([`3171b23`](https://github.com/thiesgerken/carapace/commit/3171b23352b874ac6cdf4c05baf75470046a91b7))
+
+  - resize the textarea on mount so a restored multi-line draft is not
+    rendered one line tall until the next keystroke
+  - guard the draft helpers against a throwing sessionStorage, since they
+    now run on every keystroke rather than once
+  - assert on the store directly in the test, getChatDraft cannot tell a
+    stored empty string from a missing key
+  - note why ChatView is keyed by session id
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: persist chat drafts per session
+  ([`db1ac97`](https://github.com/thiesgerken/carapace/commit/db1ac97c121aba4a3a4b61701e3818450ebc0f30))
 
 ## v0.153.2 (2026-08-24)
 
