@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -25,9 +25,7 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
   const brand = shell.currentUser?.agentName?.trim() || t("app.name");
-  const customIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "");
-  const brandIcon = customIcon ?? DEFAULT_ICON;
-  const iconOverridden = useRef(false);
+  const brandIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
 
   // Next re-applies the static route metadata on every client-side navigation, so the
   // title has to be re-asserted whenever the route changes, not just when it changes.
@@ -35,31 +33,16 @@ function AppChrome({ children }: { children: ReactNode }) {
     document.title = brand;
   }, [brand, pathname]);
 
-  // Without a custom icon the metadata links are left alone so their .ico and PNG
-  // fallbacks survive; once taken over, keep overriding even after the icon is cleared,
-  // otherwise the stale emoji would stick around until a reload. Browsers only re-read
-  // the favicon reliably when the element itself is replaced, not when its href changes.
-  useEffect(() => {
-    if (!customIcon && !iconOverridden.current) {
-      return;
-    }
-    iconOverridden.current = true;
-    for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')) {
-      link.remove();
-    }
-    const link = document.createElement("link");
-    link.rel = "icon";
-    link.type = "image/svg+xml";
-    link.href = customIcon ?? DEFAULT_ICON;
-    document.head.append(link);
-  }, [customIcon, pathname]);
-
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;
   }
 
   return (
     <div className="flex h-dvh overflow-hidden">
+      {/* React hoists this into <head>. Editing the head imperatively instead would
+          remove the metadata links React owns and crash its next commit. */}
+      <link rel="icon" type="image/svg+xml" href={brandIcon} />
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

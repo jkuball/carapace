@@ -23,12 +23,6 @@ export const metadata: Metadata = {
   description: defaultMessages.app?.description ?? "Security-first personal AI agent",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/pwa-192x192.png", type: "image/png", sizes: "192x192" },
-      { url: "/pwa-512x512.png", type: "image/png", sizes: "512x512" },
-    ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
 };
