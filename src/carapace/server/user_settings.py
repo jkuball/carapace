@@ -47,20 +47,32 @@ class SettingsModel(BaseModel):
 # joiner, the variation selectors, the keycap mark and the skin tone modifiers.
 _EMOJI_ZWJ = 0x200D
 _EMOJI_EXTENDERS = frozenset({_EMOJI_ZWJ, 0xFE0E, 0xFE0F, 0x20E3}) | frozenset(range(0x1F3FB, 0x1F400))
+# Flags are a pair of regional indicators, so the second one continues the first.
+_EMOJI_REGIONAL = frozenset(range(0x1F1E6, 0x1F200))
+# Long enough for the deepest sequences (a four-person family with skin tones), short
+# enough that padding the value with joiners cannot grow it without bound.
+MAX_AGENT_ICON_LENGTH = 16
 
 
 def _emoji_count(value: str) -> int:
-    """Number of separate emoji in a string, counting a ZWJ sequence as one."""
+    """Number of separate emoji in a string, counting a ZWJ sequence or flag as one."""
     count = 0
     joined = False
+    after_regional = False
     for char in value:
         code = ord(char)
         if code in _EMOJI_EXTENDERS:
             joined = code == _EMOJI_ZWJ
+            after_regional = False
             continue
         if joined:
             joined = False
+            after_regional = False
             continue
+        if after_regional and code in _EMOJI_REGIONAL:
+            after_regional = False
+            continue
+        after_regional = code in _EMOJI_REGIONAL
         count += 1
     return count
 
@@ -194,9 +206,13 @@ class UserSettingsPatch(SettingsModel):
             return None
         icon = value.strip()
         # Rendered as a single icon, so text or several emoji would be stored only to be
-        # silently replaced by the default; reject them instead of accepting a lie.
-        if icon and (icon.isascii() or _emoji_count(icon) != 1):
-            raise ValueError("agent_icon must be a single emoji")
+        # silently replaced by the default. Whether the emoji is one the frontend bundles
+        # an asset for is not checked here: that table lives with the frontend, and
+        # mirroring it server-side would mean keeping the two in sync forever.
+        if icon and (icon.isascii() or len(icon) > MAX_AGENT_ICON_LENGTH or _emoji_count(icon) != 1):
+            raise ValueError(
+                f"agent_icon must be a single non-ASCII symbol of at most {MAX_AGENT_ICON_LENGTH} code points"
+            )
         return icon
 
     default_models: UserDefaultModelsConfig | None = None
