@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  clearChatDraft,
   clearConnection,
   clearNotificationSubscriptionId,
+  getChatDraft,
   getNotificationDeviceName,
   getNotificationSubscriptionId,
   getPresenceClientId,
@@ -10,6 +12,7 @@ import {
   getServer,
   getToken,
   hasConnection,
+  saveChatDraft,
   saveConnection,
   saveNotificationDeviceName,
   saveNotificationSubscriptionId,
@@ -142,6 +145,21 @@ test("getPresenceClientId is stable within one browser session", () => {
 
   assert.equal(first, "presence-uuid-1");
   assert.equal(second, "presence-uuid-1");
+});
+
+test("chat drafts persist per session and can be removed", () => {
+  saveChatDraft("session-1", "first draft");
+  saveChatDraft("session-2", "second draft");
+
+  assert.equal(getChatDraft("session-1"), "first draft");
+  assert.equal(getChatDraft("session-2"), "second draft");
+
+  saveChatDraft("session-1", "");
+  clearChatDraft("session-2");
+
+  // Read the store directly: getChatDraft cannot tell a stored "" from a missing key.
+  assert.equal(sessionStorage.getItem("carapace_chat_draft_session-1"), null);
+  assert.equal(sessionStorage.getItem("carapace_chat_draft_session-2"), null);
 });
 
 test("notification subscription helpers persist and clear local state", () => {

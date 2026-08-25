@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { type NewSessionOptions } from "@/components/new-session-button";
 import {
+  clearChatDraft,
   clearConnection,
   getServer,
   getShowArchivedSessionsPreference,
@@ -456,6 +457,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     }
     try {
       await deleteSession(server, token, id);
+      clearChatDraft(id);
       pendingSandboxUpdatesRef.current.delete(id);
       setSessions((prev) => prev.filter((s) => s.session_id !== id));
       if (activeSessionId === id) {

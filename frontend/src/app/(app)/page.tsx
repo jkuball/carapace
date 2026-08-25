@@ -43,6 +43,7 @@ export default function ChatPage() {
   if (activeSessionId) {
     return (
       <ChatView
+        // Remount per session: the composer reads its draft once, on mount.
         key={activeSessionId}
         server={shell.server}
         token={shell.token}

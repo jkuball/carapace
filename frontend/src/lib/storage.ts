@@ -5,6 +5,7 @@ const USERNAME_KEY = "carapace_username";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
 const SHOW_ARCHIVED_SESSIONS_KEY = "carapace_show_archived_sessions";
 const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
+const CHAT_DRAFT_KEY_PREFIX = "carapace_chat_draft_";
 const NOTIFICATION_SUBSCRIPTION_ID_KEY =
   "carapace_notification_subscription_id";
 const NOTIFICATION_DEVICE_NAME_KEY = "carapace_notification_device_name";
@@ -75,6 +76,38 @@ export function getPresenceClientId(): string {
       : `presence-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   window.sessionStorage.setItem(PRESENCE_CLIENT_ID_KEY, generated);
   return generated;
+}
+
+// Drafts are written on every keystroke, so unlike the other helpers here they
+// have to survive a throwing sessionStorage: a quota overflow or a context that
+// blocks site data must not take the composer down with it.
+export function getChatDraft(sessionId: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.sessionStorage.getItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function saveChatDraft(sessionId: string, draft: string): void {
+  if (!draft) {
+    clearChatDraft(sessionId);
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`, draft);
+  } catch {
+    // Draft persistence is best effort; losing it beats breaking typing.
+  }
+}
+
+export function clearChatDraft(sessionId: string): void {
+  try {
+    window.sessionStorage.removeItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`);
+  } catch {
+    // Nothing to do: the draft was never stored.
+  }
 }
 
 export function getNotificationSubscriptionId(): string {
