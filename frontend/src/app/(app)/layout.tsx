@@ -8,11 +8,13 @@ import { AppShellProvider, useAppShell } from "@/components/app-shell-context";
 import { ConnectForm } from "@/components/connect-form";
 import { Sidebar } from "@/components/sidebar";
 import { VersionBadge } from "@/components/version-badge";
+import { resolveBundledEmojiAsset } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
 import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
 
 const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
 const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
+const DEFAULT_ICON = "/icon.svg";
 
 function AppChrome({ children }: { children: ReactNode }) {
   const t = useTranslations();
@@ -23,10 +25,22 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
   const brand = shell.currentUser?.agentName?.trim() || t("app.name");
+  const brandIcon =
+    resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
 
+  // Next re-applies the static metadata on every client-side navigation, so both
+  // the title and the icon link have to be re-asserted whenever the route changes.
   useEffect(() => {
     document.title = brand;
-  }, [brand]);
+    for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')) {
+      link.remove();
+    }
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.href = brandIcon;
+    document.head.append(link);
+  }, [brand, brandIcon, pathname]);
 
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;
@@ -55,6 +69,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           sessions={shell.sessions}
           showArchivedSessions={shell.showArchivedSessions}
           activeSessionId={shell.activeSessionId}
+          brandIcon={brandIcon}
           frontendVersion={BUILD_APP_VERSION}
           backendVersion={shell.serverVersion}
           currentUser={shell.currentUser}

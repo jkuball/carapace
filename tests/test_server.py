@@ -1174,6 +1174,21 @@ def test_user_settings_apply_defaults_to_new_sessions(client, auth_headers):
     assert state.budget.cost_usd == Decimal("1.50")
 
 
+def test_user_settings_roundtrips_agent_branding(client, auth_headers):
+    patch_resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"agent_name": "  velo  ", "agent_icon": "  \U0001f422 "},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["settings"]["agent_name"] == "velo"
+    assert patch_resp.json()["settings"]["agent_icon"] == "\U0001f422"
+
+    me_resp = client.get("/api/auth/me", headers=auth_headers)
+    assert me_resp.status_code == 200
+    assert me_resp.json()["config"]["agent_icon"] == "\U0001f422"
+
+
 def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, auth_headers):
     resp = client.patch(
         "/api/user/settings",

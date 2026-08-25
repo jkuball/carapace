@@ -28,6 +28,7 @@ interface SidebarProps {
   sessions: SessionInfo[];
   showArchivedSessions?: boolean;
   activeSessionId: string | null;
+  brandIcon?: string;
   frontendVersion?: string | null;
   backendVersion?: string | null;
   currentUser?: AuthUserInfo | null;
@@ -99,6 +100,7 @@ export function Sidebar({
   sessions,
   showArchivedSessions = true,
   activeSessionId,
+  brandIcon = "/icon.svg",
   frontendVersion = null,
   backendVersion = null,
   currentUser = null,
@@ -591,7 +593,7 @@ export function Sidebar({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-1.5 leading-none">
-            <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
+            <Image src={brandIcon} alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
             <button
               type="button"
               onClick={onGoHome}

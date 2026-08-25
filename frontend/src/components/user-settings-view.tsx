@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 interface UserSettingsDraft {
   agentName: string;
+  agentIcon: string;
   defaultModels: UserDefaultModelsSettings;
   budget: Record<keyof Required<SessionBudgetSettings>, string>;
   matrix: MatrixSettingsInfo;
@@ -282,6 +283,7 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
   const budget = response.settings.default_budget;
   return {
     agentName: response.settings.agent_name,
+    agentIcon: response.settings.agent_icon,
     defaultModels: response.settings.default_models,
     budget: {
       input_tokens: budgetValue(budget.input_tokens),
@@ -358,6 +360,7 @@ function comparableDefaultModels(models: UserDefaultModelsSettings): unknown {
 function comparableDraft(draft: UserSettingsDraft): unknown {
   return {
     agent_name: draft.agentName.trim(),
+    agent_icon: draft.agentIcon.trim(),
     default_models: comparableDefaultModels(draft.defaultModels),
     default_budget: comparableBudget(draft.budget),
     matrix: {
@@ -378,6 +381,7 @@ function comparableDraft(draft: UserSettingsDraft): unknown {
 function comparableSettings(settings: UserSettingsResponseInfo): unknown {
   return {
     agent_name: settings.settings.agent_name.trim(),
+    agent_icon: settings.settings.agent_icon.trim(),
     default_models: comparableDefaultModels(settings.settings.default_models),
     default_budget: comparableBudget(settings.settings.default_budget),
     matrix: {
@@ -431,6 +435,7 @@ export function buildUserSettingsPatch(
 
   const body: UserSettingsPatchInput = {
     agent_name: draft.agentName.trim(),
+    agent_icon: draft.agentIcon.trim(),
     default_models: {
       agent: draft.defaultModels.agent?.trim() || null,
       sentinel: draft.defaultModels.sentinel?.trim() || null,
@@ -618,13 +623,19 @@ export function UserSettingsView({ server, token }: { server: string; token: str
           </button>
         </div>
 
-        <Section title={t("sections.agentName")}>
+        <Section title={t("sections.appearance")}>
           <div className="grid gap-4 md:grid-cols-2">
             <TextInput
               label={t("fields.agentName")}
               value={draft.agentName}
               hint={t("hints.agentName")}
               onChange={(agentName) => updateDraft({ agentName })}
+            />
+            <TextInput
+              label={t("fields.agentIcon")}
+              value={draft.agentIcon}
+              hint={t("hints.agentIcon")}
+              onChange={(agentIcon) => updateDraft({ agentIcon })}
             />
           </div>
         </Section>

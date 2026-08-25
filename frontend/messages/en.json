@@ -78,7 +78,7 @@
             "budgetNumber": "{field} must be a non-negative number."
         },
         "sections": {
-            "agentName": "Agent name",
+            "appearance": "Appearance",
             "defaultModels": "Default models",
             "defaultBudgets": "Default budgets",
             "matrix": "Matrix",
@@ -87,6 +87,7 @@
         },
         "fields": {
             "agentName": "Name",
+            "agentIcon": "Icon",
             "agent": "Agent",
             "sentinel": "Sentinel",
             "title": "Title",
@@ -155,7 +156,8 @@
             }
         },
         "hints": {
-            "agentName": "Shown instead of “carapace” in the tab title, sidebar, and message box. Leave empty for the default."
+            "agentName": "Shown instead of “carapace” in the tab title, sidebar, and message box. Leave empty for the default.",
+            "agentIcon": "A single emoji used as the favicon and sidebar logo. Leave empty for the default."
         }
     },
     "platformSettings": {
