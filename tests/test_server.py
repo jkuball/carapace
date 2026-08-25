@@ -1197,6 +1197,34 @@ def test_user_settings_apply_defaults_to_new_sessions(client, auth_headers):
     assert state.budget.cost_usd == Decimal("1.50")
 
 
+def test_user_settings_roundtrips_agent_branding(client, auth_headers):
+    patch_resp = client.patch(
+        "/api/user/settings",
+        headers=auth_headers,
+        json={"agent_name": "  velo  ", "agent_icon": "  \U0001f422 "},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["settings"]["agent_name"] == "velo"
+    assert patch_resp.json()["settings"]["agent_icon"] == "\U0001f422"
+
+    me_resp = client.get("/api/auth/me", headers=auth_headers)
+    assert me_resp.status_code == 200
+    assert me_resp.json()["config"]["agent_icon"] == "\U0001f422"
+
+
+def test_user_settings_rejects_agent_icon_that_is_not_an_emoji(client, auth_headers):
+    for icon in ("my agent", "x", "\U0001f422\U0001f98a", "\U0001f422" * 9, "\U0001f422" + "\u200d" * 50):
+        resp = client.patch("/api/user/settings", headers=auth_headers, json={"agent_icon": icon})
+        assert resp.status_code == 422, icon
+
+
+def test_user_settings_accepts_composed_agent_icons(client, auth_headers):
+    for icon in ("\U0001f1e9\U0001f1ea", "\U0001f44d\U0001f3fd", "\u2764\ufe0f"):
+        resp = client.patch("/api/user/settings", headers=auth_headers, json={"agent_icon": icon})
+        assert resp.status_code == 200, icon
+        assert resp.json()["settings"]["agent_icon"] == icon
+
+
 def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, auth_headers):
     resp = client.patch(
         "/api/user/settings",

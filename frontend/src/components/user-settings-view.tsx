@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Check, CircleHelp, FileText, KeyRound, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -16,12 +17,15 @@ import {
   type UserSettingsPatchInput,
   type UserSettingsResponseInfo,
 } from "@/lib/api";
+import { useAppShell } from "@/components/app-shell-context";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SwitchRow } from "@/components/switch-row";
+import { resolveBundledEmojiAsset, splitEmojiText } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
 
 interface UserSettingsDraft {
   agentName: string;
+  agentIcon: string;
   defaultModels: UserDefaultModelsSettings;
   budget: Record<keyof Required<SessionBudgetSettings>, string>;
   matrix: MatrixSettingsInfo;
@@ -53,6 +57,8 @@ interface CredentialBackendDraft {
 }
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+const DEFAULT_AGENT_ICON = "/icon.svg";
 
 const inputClassName = cn(
   "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm",
@@ -282,6 +288,7 @@ function draftFromSettings(response: UserSettingsResponseInfo): UserSettingsDraf
   const budget = response.settings.default_budget;
   return {
     agentName: response.settings.agent_name,
+    agentIcon: response.settings.agent_icon,
     defaultModels: response.settings.default_models,
     budget: {
       input_tokens: budgetValue(budget.input_tokens),
@@ -358,6 +365,7 @@ function comparableDefaultModels(models: UserDefaultModelsSettings): unknown {
 function comparableDraft(draft: UserSettingsDraft): unknown {
   return {
     agent_name: draft.agentName.trim(),
+    agent_icon: draft.agentIcon.trim(),
     default_models: comparableDefaultModels(draft.defaultModels),
     default_budget: comparableBudget(draft.budget),
     matrix: {
@@ -378,6 +386,7 @@ function comparableDraft(draft: UserSettingsDraft): unknown {
 function comparableSettings(settings: UserSettingsResponseInfo): unknown {
   return {
     agent_name: settings.settings.agent_name.trim(),
+    agent_icon: settings.settings.agent_icon.trim(),
     default_models: comparableDefaultModels(settings.settings.default_models),
     default_budget: comparableBudget(settings.settings.default_budget),
     matrix: {
@@ -431,6 +440,7 @@ export function buildUserSettingsPatch(
 
   const body: UserSettingsPatchInput = {
     agent_name: draft.agentName.trim(),
+    agent_icon: draft.agentIcon.trim(),
     default_models: {
       agent: draft.defaultModels.agent?.trim() || null,
       sentinel: draft.defaultModels.sentinel?.trim() || null,
@@ -461,6 +471,7 @@ export function buildUserSettingsPatch(
 
 export function UserSettingsView({ server, token }: { server: string; token: string }) {
   const t = useTranslations("accountSettings");
+  const { onRefreshCurrentUser } = useAppShell();
   const [settings, setSettings] = useState<UserSettingsResponseInfo | null>(null);
   const [draft, setDraft] = useState<UserSettingsDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -575,6 +586,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       const response = await updateUserSettings(server, token, body);
       setSettings(response);
       setDraft(draftFromSettings(response));
+      onRefreshCurrentUser();
       setNotice(t("notices.saved"));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t("errors.save"));
@@ -618,13 +630,19 @@ export function UserSettingsView({ server, token }: { server: string; token: str
           </button>
         </div>
 
-        <Section title={t("sections.agentName")}>
+        <Section title={t("sections.appearance")}>
           <div className="grid gap-4 md:grid-cols-2">
             <TextInput
               label={t("fields.agentName")}
               value={draft.agentName}
               hint={t("hints.agentName")}
               onChange={(agentName) => updateDraft({ agentName })}
+            />
+            <EmojiInput
+              label={t("fields.agentIcon")}
+              value={draft.agentIcon}
+              hint={t("hints.agentIcon")}
+              onChange={(agentIcon) => updateDraft({ agentIcon })}
             />
           </div>
         </Section>
@@ -789,6 +807,47 @@ function Field({ label, hint, help, children }: { label: string; hint?: string; 
       {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
     </label>
   );
+}
+
+function EmojiInput({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const preview = resolveBundledEmojiAsset(value);
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(event) => onChange(firstBundledEmoji(event.target.value))}
+          className={cn(inputClassName, "min-w-0 flex-1")}
+        />
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border">
+          <Image
+            src={preview ?? DEFAULT_AGENT_ICON}
+            alt=""
+            width={22}
+            height={22}
+            aria-hidden="true"
+            className={preview ? undefined : "opacity-30"}
+          />
+        </span>
+      </div>
+    </Field>
+  );
+}
+
+// Only emoji bundled as SVG assets can be rendered as an icon, so anything else is
+// dropped on input rather than stored as a value that silently shows the default.
+function firstBundledEmoji(value: string): string {
+  return splitEmojiText(value).find((segment) => segment.kind === "emoji")?.value ?? "";
 }
 
 function TextInput({

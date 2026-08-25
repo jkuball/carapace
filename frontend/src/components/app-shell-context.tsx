@@ -87,6 +87,7 @@ export interface AppShell {
   server: string;
   token: string;
   currentUser: AuthUserInfo | null;
+  onRefreshCurrentUser: () => void;
   isAdmin: boolean;
   serverVersion: string | null;
   sessions: SessionInfo[];
@@ -241,6 +242,18 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer);
     };
   }, [connected, loadInitialSessions, server, showArchivedSessions, token]);
+
+  // Settings that change the user's own config (agent name, icon) have to land in the
+  // shell too, or the sidebar and favicon keep rendering the pre-save values.
+  const onRefreshCurrentUser = useCallback(() => {
+    if (!connected || !server) {
+      setCurrentUser(null);
+      return;
+    }
+    void getCurrentUser(server)
+      .then(setCurrentUser)
+      .catch(() => setCurrentUser(null));
+  }, [connected, server]);
 
   useEffect(() => {
     let cancelled = false;
@@ -518,6 +531,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     server,
     token,
     currentUser,
+    onRefreshCurrentUser,
     isAdmin,
     serverVersion,
     sessions,
@@ -547,6 +561,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     activeSessionId,
     connected,
     currentUser,
+    onRefreshCurrentUser,
     isAdmin,
     loading,
     loadingMoreSessions,

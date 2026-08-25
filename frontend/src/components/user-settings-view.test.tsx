@@ -22,6 +22,7 @@ function userSettingsResponse(defaultBudget: { tool_calls: number }): UserSettin
     ],
     settings: {
       agent_name: "",
+      agent_icon: "",
       default_models: { agent: "anthropic:default" },
       default_budget: defaultBudget,
       matrix: {
@@ -58,6 +59,7 @@ test("buildUserSettingsPatch omits unchanged credentials when file backends are 
   const settings = userSettingsResponse({ tool_calls: 3 });
   const draft: Parameters<typeof buildUserSettingsPatch>[0] = {
     agentName: "",
+    agentIcon: "",
     defaultModels: settings.settings.default_models,
     budget: {
       input_tokens: "",
