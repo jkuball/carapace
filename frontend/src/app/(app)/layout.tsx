@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -28,16 +28,25 @@ function AppChrome({ children }: { children: ReactNode }) {
   const brand = useBrand();
   const brandIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
 
+  // The route metadata deliberately declares no rel="icon", so this link is the only
+  // one and needs no precedence guessing. It is appended by hand instead of rendered:
+  // React must not own the node, or unmounting it collides with our head mutation.
+  // Replacing the element on change is also what makes browsers re-read the favicon.
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.href = brandIcon;
+    document.head.append(link);
+    return () => link.remove();
+  }, [brandIcon]);
+
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;
   }
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* React hoists this into <head>. Editing the head imperatively instead would
-          remove the metadata links React owns and crash its next commit. */}
-      <link rel="icon" type="image/svg+xml" href={brandIcon} />
-
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
