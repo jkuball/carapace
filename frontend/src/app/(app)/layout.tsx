@@ -9,6 +9,7 @@ import { ConnectForm } from "@/components/connect-form";
 import { Sidebar } from "@/components/sidebar";
 import { VersionBadge } from "@/components/version-badge";
 import { cn } from "@/lib/utils";
+import { useBrand } from "@/hooks/use-brand";
 import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
 
 const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
@@ -22,11 +23,21 @@ function AppChrome({ children }: { children: ReactNode }) {
   useSwipeDrawer(sidebarOpen, setSidebarOpen);
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
-  const brand = shell.currentUser?.agentName?.trim() || t("app.name");
+  const { name: brand, icon: brandIcon } = useBrand();
 
+  // The icon assets live in public/ rather than as app/ file conventions, so nothing
+  // else declares a rel="icon" and this link needs no precedence guessing. It is
+  // appended by hand instead of rendered: React must not own the node, or unmounting
+  // it collides with our head mutation. Replacing the element on change is also what
+  // makes browsers re-read the favicon.
   useEffect(() => {
-    document.title = brand;
-  }, [brand]);
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.href = brandIcon;
+    document.head.append(link);
+    return () => link.remove();
+  }, [brandIcon]);
 
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;

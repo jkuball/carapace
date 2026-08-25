@@ -78,7 +78,7 @@
             "budgetNumber": "{field} muss eine nicht negative Zahl sein."
         },
         "sections": {
-            "agentName": "Agent-Name",
+            "appearance": "Darstellung",
             "defaultModels": "Standardmodelle",
             "defaultBudgets": "Standardbudgets",
             "matrix": "Matrix",
@@ -87,6 +87,7 @@
         },
         "fields": {
             "agentName": "Name",
+            "agentIcon": "Symbol",
             "agent": "Agent",
             "sentinel": "Sentinel",
             "title": "Titel",
@@ -155,7 +156,8 @@
             }
         },
         "hints": {
-            "agentName": "Wird statt „carapace“ im Tab-Titel, in der Seitenleiste und im Eingabefeld angezeigt. Leer lassen für Standard."
+            "agentName": "Wird statt „carapace“ im Tab-Titel, in der Seitenleiste und im Eingabefeld angezeigt. Leer lassen für Standard.",
+            "agentIcon": "Ein einzelnes Emoji als Favicon und Logo in der Seitenleiste. Leer lassen für Standard."
         }
     },
     "platformSettings": {

@@ -10,6 +10,7 @@ import { useAppLocale } from "@/components/locale-provider";
 import { NewSessionButton, type NewSessionOptions } from "@/components/new-session-button";
 import { GlobalGitIndicator, GlobalGitPanel, useGlobalGit } from "@/components/git-sync";
 import { VersionBadge } from "@/components/version-badge";
+import { agentIcon } from "@/hooks/use-brand";
 import type { AuthUserInfo } from "@/lib/api";
 import type { SessionAttributesPatch, SessionInfo, SessionSandboxSnapshot } from "@/lib/types";
 import {
@@ -591,7 +592,7 @@ export function Sidebar({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-1.5 leading-none">
-            <Image src="/icon.svg" alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
+            <Image src={agentIcon(currentUser?.agentIcon)} alt="" width={18} height={18} aria-hidden="true" className="shrink-0" />
             <button
               type="button"
               onClick={onGoHome}
