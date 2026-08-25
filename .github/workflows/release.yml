@@ -27,12 +27,19 @@ jobs:
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
+      # Not the python-semantic-release action: it builds its image with an
+      # unpinned `gitpython ~= 3.0`, and 3.1.60 dropped Actor.name_email_regex,
+      # which psr 10.6.1 still uses. Running the CLI ourselves is the only place
+      # the constraint fits. Drop the --with once psr releases a fix.
       - name: Semantic Release (version only)
         id: release
-        uses: python-semantic-release/python-semantic-release@39dd2052f2ce8282a5d932c31d58a2ca06d2550e # v10
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          vcs_release: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          uv tool run
+          --from 'python-semantic-release==10.6.1'
+          --with 'gitpython<3.1.60'
+          semantic-release -v version --no-vcs-release
 
   docker-backend:
     needs: version
