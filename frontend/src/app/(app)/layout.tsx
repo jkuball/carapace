@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -25,22 +25,34 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
   const brand = shell.currentUser?.agentName?.trim() || t("app.name");
-  const brandIcon =
-    resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
+  const customIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "");
+  const brandIcon = customIcon ?? DEFAULT_ICON;
+  const iconOverridden = useRef(false);
 
-  // Next re-applies the static metadata on every client-side navigation, so both
-  // the title and the icon link have to be re-asserted whenever the route changes.
+  // Next re-applies the static route metadata on every client-side navigation, so the
+  // title has to be re-asserted whenever the route changes, not just when it changes.
   useEffect(() => {
     document.title = brand;
+  }, [brand, pathname]);
+
+  // Without a custom icon the metadata links are left alone so their .ico and PNG
+  // fallbacks survive; once taken over, keep overriding even after the icon is cleared,
+  // otherwise the stale emoji would stick around until a reload. Browsers only re-read
+  // the favicon reliably when the element itself is replaced, not when its href changes.
+  useEffect(() => {
+    if (!customIcon && !iconOverridden.current) {
+      return;
+    }
+    iconOverridden.current = true;
     for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')) {
       link.remove();
     }
     const link = document.createElement("link");
     link.rel = "icon";
     link.type = "image/svg+xml";
-    link.href = brandIcon;
+    link.href = customIcon ?? DEFAULT_ICON;
     document.head.append(link);
-  }, [brand, brandIcon, pathname]);
+  }, [customIcon, pathname]);
 
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;
