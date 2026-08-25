@@ -2812,6 +2812,7 @@ export function ChatView({
           </div>
 
           <ChatInput
+            sessionId={sessionId}
             onSend={handleSend}
             onCancel={handleCancel}
             onInterrupt={handleInterrupt}

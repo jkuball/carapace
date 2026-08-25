@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clock, Loader2, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
 import { cn, formatBytes } from "@/lib/utils";
+import { getChatDraft, saveChatDraft } from "@/lib/storage";
 import type { AvailableModelInfo, SlashCommand, UploadedFile } from "@/lib/api";
 import type {
   Attachment,
@@ -98,6 +99,7 @@ const MODEL_COMMANDS = ["/model"];
 const MODEL_TARGETS = new Set(["all", "agent", "sentinel", "title", "compaction"]);
 
 interface ChatInputProps {
+  sessionId: string;
   onSend: (content: string, attachments?: Attachment[]) => void;
   onCancel?: () => void;
   onInterrupt?: (content: string) => void;
@@ -118,6 +120,7 @@ interface ChatInputProps {
 }
 
 export function ChatInput({
+  sessionId,
   onSend,
   onCancel,
   onInterrupt,
@@ -134,7 +137,7 @@ export function ChatInput({
   uploadFile,
 }: ChatInputProps) {
   const t = useTranslations("chatInput");
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => getChatDraft(sessionId));
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -142,6 +145,10 @@ export function ChatInput({
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const updateValue = useCallback((nextValue: string) => {
+    setValue(nextValue);
+    saveChatDraft(sessionId, nextValue);
+  }, [sessionId]);
   // Uploading no longer requires a running sandbox: the backend starts it on demand.
   const canUpload = !!uploadFile && !disabled;
 
@@ -255,10 +262,9 @@ export function ChatInput({
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       if (transcript) {
-        setValue((prev) => {
-          const space = prev && !prev.endsWith(" ") ? " " : "";
-          return prev + space + transcript;
-        });
+        const previous = textareaRef.current?.value ?? "";
+        const space = previous && !previous.endsWith(" ") ? " " : "";
+        updateValue(previous + space + transcript);
         if (textareaRef.current) {
           setTimeout(() => {
             if (textareaRef.current) {
@@ -274,7 +280,7 @@ export function ChatInput({
     recognitionRef.current = recognition;
     setIsListening(true);
     recognition.start();
-  }, [isListening]);
+  }, [isListening, updateValue]);
 
   // Stop listening when disabled
   useEffect(() => {
@@ -384,10 +390,10 @@ export function ChatInput({
 
   const selectModelSuggestion = useCallback(
     (item: string) => {
-      setValue(value.slice(0, modelSuggestions.replaceFrom) + item);
+      updateValue(value.slice(0, modelSuggestions.replaceFrom) + item);
       textareaRef.current?.focus();
     },
-    [value, modelSuggestions.replaceFrom],
+    [value, modelSuggestions.replaceFrom, updateValue],
   );
 
   // Scroll selected item into view
@@ -400,16 +406,16 @@ export function ChatInput({
   }, [selectedIndex]);
 
   const selectCommand = useCallback((cmd: string) => {
-    setValue(cmd);
+    updateValue(cmd);
     textareaRef.current?.focus();
-  }, []);
+  }, [updateValue]);
 
   const clearInput = useCallback(() => {
-    setValue("");
+    updateValue("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, []);
+  }, [updateValue]);
 
   const uploading = attachments.some((a) => a.status === "uploading");
   const completedAttachments = useMemo(
@@ -485,7 +491,7 @@ export function ChatInput({
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        setValue("");
+        updateValue("");
         return;
       }
     } else if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
@@ -499,7 +505,7 @@ export function ChatInput({
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     if (disabled) return;
-    setValue(e.target.value);
+    updateValue(e.target.value);
     setSelectedIndex(0);
     const el = e.target;
     el.style.height = "auto";

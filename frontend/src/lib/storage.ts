@@ -5,6 +5,7 @@ const USERNAME_KEY = "carapace_username";
 const LOCALE_OVERRIDE_KEY = "carapace_locale_override";
 const SHOW_ARCHIVED_SESSIONS_KEY = "carapace_show_archived_sessions";
 const PRESENCE_CLIENT_ID_KEY = "carapace_presence_client_id";
+const CHAT_DRAFT_KEY_PREFIX = "carapace_chat_draft_";
 const NOTIFICATION_SUBSCRIPTION_ID_KEY =
   "carapace_notification_subscription_id";
 const NOTIFICATION_DEVICE_NAME_KEY = "carapace_notification_device_name";
@@ -75,6 +76,21 @@ export function getPresenceClientId(): string {
       : `presence-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   window.sessionStorage.setItem(PRESENCE_CLIENT_ID_KEY, generated);
   return generated;
+}
+
+export function getChatDraft(sessionId: string): string {
+  if (typeof window === "undefined") return "";
+  return window.sessionStorage.getItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`) ?? "";
+}
+
+export function saveChatDraft(sessionId: string, draft: string): void {
+  const key = `${CHAT_DRAFT_KEY_PREFIX}${sessionId}`;
+  if (draft) window.sessionStorage.setItem(key, draft);
+  else clearChatDraft(sessionId);
+}
+
+export function clearChatDraft(sessionId: string): void {
+  window.sessionStorage.removeItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`);
 }
 
 export function getNotificationSubscriptionId(): string {
