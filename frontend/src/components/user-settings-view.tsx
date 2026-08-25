@@ -17,6 +17,7 @@ import {
   type UserSettingsPatchInput,
   type UserSettingsResponseInfo,
 } from "@/lib/api";
+import { useAppShell } from "@/components/app-shell-context";
 import { ModelPicker, withSelectedModelOption } from "@/components/model-picker";
 import { SwitchRow } from "@/components/switch-row";
 import { resolveBundledEmojiAsset, splitEmojiText } from "@/lib/emoji";
@@ -470,6 +471,7 @@ export function buildUserSettingsPatch(
 
 export function UserSettingsView({ server, token }: { server: string; token: string }) {
   const t = useTranslations("accountSettings");
+  const { onRefreshCurrentUser } = useAppShell();
   const [settings, setSettings] = useState<UserSettingsResponseInfo | null>(null);
   const [draft, setDraft] = useState<UserSettingsDraft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -584,6 +586,7 @@ export function UserSettingsView({ server, token }: { server: string; token: str
       const response = await updateUserSettings(server, token, body);
       setSettings(response);
       setDraft(draftFromSettings(response));
+      onRefreshCurrentUser();
       setNotice(t("notices.saved"));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t("errors.save"));

@@ -1189,6 +1189,12 @@ def test_user_settings_roundtrips_agent_branding(client, auth_headers):
     assert me_resp.json()["config"]["agent_icon"] == "\U0001f422"
 
 
+def test_user_settings_rejects_agent_icon_that_is_not_an_emoji(client, auth_headers):
+    for icon in ("my agent", "x", "\U0001f422\U0001f98a", "\U0001f422" * 9):
+        resp = client.patch("/api/user/settings", headers=auth_headers, json={"agent_icon": icon})
+        assert resp.status_code == 422, icon
+
+
 def test_user_settings_full_unchanged_patch_does_not_reload_runtimes(client, auth_headers):
     resp = client.patch(
         "/api/user/settings",

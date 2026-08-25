@@ -43,6 +43,28 @@ class SettingsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# Code points that extend the preceding emoji rather than starting a new one: zero-width
+# joiner, the variation selectors, the keycap mark and the skin tone modifiers.
+_EMOJI_ZWJ = 0x200D
+_EMOJI_EXTENDERS = frozenset({_EMOJI_ZWJ, 0xFE0E, 0xFE0F, 0x20E3}) | frozenset(range(0x1F3FB, 0x1F400))
+
+
+def _emoji_count(value: str) -> int:
+    """Number of separate emoji in a string, counting a ZWJ sequence as one."""
+    count = 0
+    joined = False
+    for char in value:
+        code = ord(char)
+        if code in _EMOJI_EXTENDERS:
+            joined = code == _EMOJI_ZWJ
+            continue
+        if joined:
+            joined = False
+            continue
+        count += 1
+    return count
+
+
 class UserSettingsCapabilities(SettingsModel):
     file_credential_backend: bool = False
 
@@ -164,6 +186,19 @@ class GitSettingsPatch(SettingsModel):
 class UserSettingsPatch(SettingsModel):
     agent_name: str | None = None
     agent_icon: str | None = None
+
+    @field_validator("agent_icon", mode="after")
+    @classmethod
+    def _validate_agent_icon(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        icon = value.strip()
+        # Rendered as a single icon, so text or several emoji would be stored only to be
+        # silently replaced by the default; reject them instead of accepting a lie.
+        if icon and (icon.isascii() or _emoji_count(icon) != 1):
+            raise ValueError("agent_icon must be a single emoji")
+        return icon
+
     default_models: UserDefaultModelsConfig | None = None
     default_budget: SessionBudget | None = None
     matrix: MatrixSettingsPatch | None = None

@@ -25,10 +25,11 @@ function AppChrome({ children }: { children: ReactNode }) {
   const isSettings = pathname?.startsWith("/settings") ?? false;
   const { name: brand, icon: brandIcon } = useBrand();
 
-  // The route metadata deliberately declares no rel="icon", so this link is the only
-  // one and needs no precedence guessing. It is appended by hand instead of rendered:
-  // React must not own the node, or unmounting it collides with our head mutation.
-  // Replacing the element on change is also what makes browsers re-read the favicon.
+  // The icon assets live in public/ rather than as app/ file conventions, so nothing
+  // else declares a rel="icon" and this link needs no precedence guessing. It is
+  // appended by hand instead of rendered: React must not own the node, or unmounting
+  // it collides with our head mutation. Replacing the element on change is also what
+  // makes browsers re-read the favicon.
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "icon";
