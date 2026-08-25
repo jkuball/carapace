@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -10,6 +10,7 @@ import { Sidebar } from "@/components/sidebar";
 import { VersionBadge } from "@/components/version-badge";
 import { resolveBundledEmojiAsset } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
+import { useBrand } from "@/hooks/use-brand";
 import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
 
 const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
@@ -24,14 +25,8 @@ function AppChrome({ children }: { children: ReactNode }) {
   useSwipeDrawer(sidebarOpen, setSidebarOpen);
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
-  const brand = shell.currentUser?.agentName?.trim() || t("app.name");
+  const brand = useBrand();
   const brandIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
-
-  // Next re-applies the static route metadata on every client-side navigation, so the
-  // title has to be re-asserted whenever the route changes, not just when it changes.
-  useEffect(() => {
-    document.title = brand;
-  }, [brand, pathname]);
 
   if (!shell.connected) {
     return <ConnectForm onConnect={shell.onConnect} />;

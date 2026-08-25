@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAppShell } from "@/components/app-shell-context";
+import { useBrand } from "@/hooks/use-brand";
 import type { SettingsTab } from "@/lib/settings-tabs";
 import { cn } from "@/lib/utils";
 
@@ -19,11 +20,11 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const t = useTranslations();
   const tJobs = useTranslations("jobs");
   const { isAdmin } = useAppShell();
+  const brand = useBrand();
   const segment = useSelectedLayoutSegment() as SettingsTab | null;
   const activeTab: SettingsTab = segment ?? "preferences";
 
   useEffect(() => {
-    const appTitle = t("app.name");
     const viewTitle = activeTab === "jobs"
       ? t("navigation.jobs")
       : activeTab === "platform-models"
@@ -31,8 +32,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         : activeTab === "platform-users"
           ? t("navigation.users")
           : t("navigation.settings");
-    document.title = `${viewTitle} • ${appTitle}`;
-  }, [activeTab, t]);
+    document.title = `${viewTitle} • ${brand}`;
+  }, [activeTab, brand, t]);
 
   function tab(value: SettingsTab, label: string) {
     const selected = activeTab === value;

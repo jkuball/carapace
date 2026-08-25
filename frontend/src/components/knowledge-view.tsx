@@ -36,6 +36,7 @@ import {
   type KnowledgeFileInfo,
   type KnowledgeSkill,
 } from "@/lib/api";
+import { useBrand } from "@/hooks/use-brand";
 import { entryIcon } from "@/lib/file-icons";
 import { formatAbsoluteTime, formatRelativeTime } from "@/lib/format-time";
 import { knowledgeBrowseHref } from "@/lib/knowledge-links";
@@ -433,7 +434,7 @@ function FileContent({
 
 export function KnowledgeView() {
   const t = useTranslations("knowledge");
-  const tApp = useTranslations("app");
+  const brand = useBrand();
   const tSidebar = useTranslations("sidebar");
   const { locale } = useAppLocale();
   const { server, token } = useAppShell();
@@ -449,8 +450,8 @@ export function KnowledgeView() {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    document.title = `${t("title")} • ${tApp("name")}`;
-  }, [t, tApp]);
+    document.title = `${t("title")} • ${brand}`;
+  }, [t, brand]);
 
   // Bumped to force a re-browse of the same path after a pull/push moves the repo.
   const [reloadToken, setReloadToken] = useState(0);

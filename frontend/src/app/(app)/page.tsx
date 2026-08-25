@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useAppShell } from "@/components/app-shell-context";
+import { useBrand } from "@/hooks/use-brand";
 import { ChatView } from "@/components/chat-view";
 import { NewSessionButton } from "@/components/new-session-button";
 import type { SessionInfo } from "@/lib/types";
@@ -12,6 +13,7 @@ const MAX_DOCUMENT_TITLE_LENGTH = 30;
 export default function ChatPage() {
   const t = useTranslations();
   const shell = useAppShell();
+  const brand = useBrand();
   const { activeSessionId, activeSession } = shell;
 
   const onActiveTitleUpdate = useCallback((title: string) => {
@@ -30,14 +32,13 @@ export default function ChatPage() {
   }, [activeSessionId, shell]);
 
   useEffect(() => {
-    const appTitle = t("app.name");
     const sessionTitle = activeSession?.title?.trim();
     const useDefaultTitle = !activeSession || activeSession.attributes.private || !sessionTitle;
     const truncatedTitle = sessionTitle && sessionTitle.length > MAX_DOCUMENT_TITLE_LENGTH
       ? `${sessionTitle.slice(0, MAX_DOCUMENT_TITLE_LENGTH - 3)}...`
       : sessionTitle;
-    document.title = useDefaultTitle ? appTitle : `${truncatedTitle} • ${appTitle}`;
-  }, [activeSession, t]);
+    document.title = useDefaultTitle ? brand : `${truncatedTitle} • ${brand}`;
+  }, [activeSession, brand]);
 
   if (activeSessionId) {
     return (
