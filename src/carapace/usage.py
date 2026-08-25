@@ -26,6 +26,7 @@ from pydantic_ai.messages import (
     NativeToolCallPart,
     NativeToolReturnPart,
     RetryPromptPart,
+    SpeechPart,
     SystemPromptPart,
     TextPart,
     ThinkingPart,
@@ -649,6 +650,8 @@ def _accumulate_response_part(part: ModelResponsePart, buckets: dict[str, str]) 
         buckets["tool_returns"] += f"{part.tool_name}\n{_tool_return_blob(part.content)}\n"
     elif isinstance(part, FilePart):
         buckets["other"] += _file_part_blob(part) + "\n"
+    elif isinstance(part, SpeechPart):
+        buckets["assistant"] += (part.transcript or "") + "\n"
     else:
         assert_never(part)
 

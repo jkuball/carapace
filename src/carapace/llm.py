@@ -6,7 +6,7 @@ import inspect
 from collections.abc import Callable
 from typing import Literal, cast
 
-from httpx import AsyncClient, HTTPStatusError, Timeout
+from httpx2 import AsyncClient, HTTPStatusError, Timeout
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
@@ -15,7 +15,7 @@ from pydantic_ai.profiles.anthropic import ANTHROPIC_THINKING_BUDGET_MAP
 from pydantic_ai.providers import Provider, infer_provider, infer_provider_class
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
-from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
+from pydantic_ai.retries import AsyncHTTPX2TenacityTransport, RetryConfig, wait_retry_after
 from pydantic_ai.settings import ModelSettings
 from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -34,7 +34,7 @@ _PLACEHOLDER_API_KEY = "carapace-unconfigured-api-key"
 
 
 def retry_http_client() -> AsyncClient:
-    transport = AsyncTenacityTransport(
+    transport = AsyncHTTPX2TenacityTransport(
         config=RetryConfig(
             retry=retry_if_exception_type((HTTPStatusError, ConnectionError)),
             wait=wait_retry_after(fallback_strategy=wait_exponential(multiplier=1, max=60), max_wait=300),
