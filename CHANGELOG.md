@@ -1,6 +1,156 @@
 # CHANGELOG
 
 
+## v0.154.0 (2026-08-25)
+
+
+### Other
+
+
+- Merge pull request #267 from thiesgerken/fix/pin-gitpython
+  ([`4e3ddc5`](https://github.com/thiesgerken/carapace/commit/4e3ddc559518b61e2e8cbae1861a6794836818b3))
+
+- Merge pull request #254 from thiesgerken/renovate/lock-file-maintenance
+  ([`4deef5e`](https://github.com/thiesgerken/carapace/commit/4deef5ecd46a47b392bed522792a57fbaefbd67b))
+
+- Merge pull request #263 from thiesgerken/worktree-agent-icon
+  ([`5bbf992`](https://github.com/thiesgerken/carapace/commit/5bbf9923bd0c0fb8435b95a13aafa2d476f4e790))
+
+- Merge pull request #265 from thiesgerken/renovate/all-routine-dependencies
+  ([`dfd2cef`](https://github.com/thiesgerken/carapace/commit/dfd2ceff72ea77b6aabe65930c2f70ef7ee6c6b0))
+
+### 🐛 Bug Fixes
+
+
+- 🐛 fix: pin gitpython below 3.1.60 for semantic release
+  ([`4e3ddc5`](https://github.com/thiesgerken/carapace/commit/4e3ddc559518b61e2e8cbae1861a6794836818b3))
+
+- 🐛 fix: pin gitpython below 3.1.60 for semantic release
+  ([`63b879d`](https://github.com/thiesgerken/carapace/commit/63b879db19a44bf211eb86e5af1d41ba885fd3a4))
+
+  GitPython 3.1.60 removed Actor.name_email_regex, which python-semantic-release 10.6.1 still uses to validate commit_author, so every release run has failed at config load since that release.
+
+  The psr action builds its image with an unpinned `gitpython ~= 3.0` and offers no way to constrain it, so run the CLI through uv instead, where the constraint fits. psr writes the job outputs itself, so `released` and `version` keep working.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: accept flag emoji as agent icons and bound the value
+  ([`8aa8b30`](https://github.com/thiesgerken/carapace/commit/8aa8b30715d4a8ecd9d7bdf496de16f3968937f3))
+
+  A flag is two regional indicators, which the emoji counter read as two separate emoji, so bundled flags were rejected by the API even though the input field offered them. Treat the second indicator as continuing the first.
+
+  Also bound the length: joiners only re-armed the continuation flag, so a single emoji padded with them counted as one and was stored verbatim. The error message now states what is actually enforced — whether an emoji has a bundled asset is still not checked here.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: apply the agent name and icon without a reload
+  ([`d987ec8`](https://github.com/thiesgerken/carapace/commit/d987ec8549ba916d0745d6c0bde553292c9ad19d))
+
+  Three review findings:
+
+  - The shell only fetched /auth/me on connect, so the sidebar and favicon kept
+    the pre-save values until F5. Expose a refresh and call it after saving.
+  - agent_icon was clamped only by the input field, so the API stored arbitrary
+    text verbatim. Reject anything that is not exactly one emoji, counting a ZWJ
+    sequence, keycap or skin tone modifier as part of its base.
+  - icon.svg was still an app/ file convention, so its rel="icon" link only
+    stayed away because metadata.icons was non-empty. Move it to public/ next to
+    favicon.ico, which makes the single-declaration comment structural.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: make the agent icon the only favicon declaration
+  ([`503e4a3`](https://github.com/thiesgerken/carapace/commit/503e4a3663dd6bf131c931268465d11d69058fff))
+
+  The sidebar rendered the custom emoji while the tab kept the default, because the auto-emitted favicon.ico link competed with the one carrying the agent icon and browsers pick between them by their own rules. Move favicon.ico to public/ so no link is emitted for it — it still serves as the implicit /favicon.ico — and own the remaining link outside React.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: use the agent name in every document title
+  ([`9781467`](https://github.com/thiesgerken/carapace/commit/9781467a9b330fbce1ba18347d9158c0fc9f5568))
+
+  Four routes set document.title independently, all hardcoding the product name, so the chat, settings and knowledge views overwrote whatever the app shell had put there. Route them through a shared useBrand() hook instead of re-asserting the title from the layout, which could never win the race.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: render the favicon link through React
+  ([`1a44df8`](https://github.com/thiesgerken/carapace/commit/1a44df8c35465d5cbce3b5c2aca3fa757df6fb01))
+
+  Removing the metadata icon links imperatively deleted DOM nodes React owns, crashing its commit phase with "finishedRoot.parentNode is null". Render the link from the app shell instead and let React hoist it, and drop the static icon declarations so the per-user one is the only rel="icon" candidate besides the .ico fallback.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 🐛 fix: keep the default favicon links when no agent icon is set
+  ([`1c0bfe7`](https://github.com/thiesgerken/carapace/commit/1c0bfe792b3f55727339b56248734f3d55d98dac))
+
+  Stripping every icon link unconditionally also dropped the .ico and PNG fallbacks for users on the default, so only take over once a custom icon resolves — and keep the override afterwards so clearing it does not leave the stale emoji in place.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Lock file maintenance
+  ([`4deef5e`](https://github.com/thiesgerken/carapace/commit/4deef5ecd46a47b392bed522792a57fbaefbd67b))
+
+- ⬆️ chore: Lock file maintenance
+  ([`0aad6b6`](https://github.com/thiesgerken/carapace/commit/0aad6b6418c5b9dc14cb43cd2d310f0151d07685))
+
+- ⬆️ chore: relock backend dependencies
+  ([`1d6659c`](https://github.com/thiesgerken/carapace/commit/1d6659c0f591ee2d43d1f743d817d8a7942dda3b))
+
+  anthropic 1.0.0 dropped httpx support and now rejects any http_client that is not an httpx2.AsyncClient, so retry_http_client() moves to httpx2 plus AsyncHTTPX2TenacityTransport (also clears the pydantic-ai v3 deprecation warnings on the OpenAI/OpenRouter providers).
+
+  pydantic-ai 2.34 adds SpeechPart to the response-part union; token counting handles it via its transcript.
+
+  Notable bumps: anthropic 0.117->1.0, openai 2.46->3.3, pydantic-ai 2.13->2.34, starlette 1.3->1.6, cryptography 49->50, fastapi 0.139->0.141, ruff 0.15->0.16 (new RUF036 fix in model_selection.py).
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`dfd2cef`](https://github.com/thiesgerken/carapace/commit/dfd2ceff72ea77b6aabe65930c2f70ef7ee6c6b0))
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`a81d9e4`](https://github.com/thiesgerken/carapace/commit/a81d9e41eb0509fd66c029aff50b9b9d03c087d5))
+
+### ✨ Features
+
+
+- ✨ feat: custom agent icon; keep tab title on navigation
+  ([`5bbf992`](https://github.com/thiesgerken/carapace/commit/5bbf9923bd0c0fb8435b95a13aafa2d476f4e790))
+
+- ✨ feat: custom agent icon; keep tab title on navigation
+  ([`fcc7da3`](https://github.com/thiesgerken/carapace/commit/fcc7da3f288a4c7014d1f18cfc71844be0642e5d))
+
+  Adds a per-user `agent_icon` setting (a single emoji) that drives the favicon and the sidebar logo, resolved against the already-bundled twemoji assets.
+
+  Also fixes the tab title falling back to "carapace": Next re-applies the static route metadata on every client-side navigation, so the effect has to depend on the pathname too.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- ✨⬆️Merge pull request #266 from thiesgerken/chore/relock-backend-deps
+  ([`5a18f8a`](https://github.com/thiesgerken/carapace/commit/5a18f8ab882ed42d5f3ee91125acb31b62a30579))
+
+- ✨⬆️ chore: relock backend dependencies
+  ([`5a18f8a`](https://github.com/thiesgerken/carapace/commit/5a18f8ab882ed42d5f3ee91125acb31b62a30579))
+
+### 💄 UI/UX
+
+
+- 💄 feat: keep the product identity in platform administration
+  ([`741614a`](https://github.com/thiesgerken/carapace/commit/741614a8cf06c5c6ff1b3a111c6d9b921880293a))
+
+  The platform model and user views administer the deployment rather than the user's own agent, so the tab there shows the carapace name and turtle. The sidebar resolves its own icon so it keeps showing the agent on every route.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- 💄 feat: preview and clamp the agent icon input
+  ([`fedfab4`](https://github.com/thiesgerken/carapace/commit/fedfab4df68a25cc0d03a6acc7ed35ec5aa44501))
+
+  The icon only renders if it resolves to a bundled emoji SVG, so show the resolved asset next to the field (dimmed default when it does not resolve) and drop non-emoji input instead of storing a value that silently falls back.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 ## v0.153.3 (2026-08-25)
 
 
