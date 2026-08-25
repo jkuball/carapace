@@ -8,14 +8,12 @@ import { AppShellProvider, useAppShell } from "@/components/app-shell-context";
 import { ConnectForm } from "@/components/connect-form";
 import { Sidebar } from "@/components/sidebar";
 import { VersionBadge } from "@/components/version-badge";
-import { resolveBundledEmojiAsset } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
 import { useBrand } from "@/hooks/use-brand";
 import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
 
 const GITHUB_REPO_URL = "https://github.com/thiesgerken/carapace";
 const BUILD_APP_VERSION = process.env.NEXT_PUBLIC_CARAPACE_VERSION?.trim() || null;
-const DEFAULT_ICON = "/icon.svg";
 
 function AppChrome({ children }: { children: ReactNode }) {
   const t = useTranslations();
@@ -25,8 +23,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   useSwipeDrawer(sidebarOpen, setSidebarOpen);
 
   const isSettings = pathname?.startsWith("/settings") ?? false;
-  const brand = useBrand();
-  const brandIcon = resolveBundledEmojiAsset(shell.currentUser?.agentIcon?.trim() ?? "") ?? DEFAULT_ICON;
+  const { name: brand, icon: brandIcon } = useBrand();
 
   // The route metadata deliberately declares no rel="icon", so this link is the only
   // one and needs no precedence guessing. It is appended by hand instead of rendered:
@@ -68,7 +65,6 @@ function AppChrome({ children }: { children: ReactNode }) {
           sessions={shell.sessions}
           showArchivedSessions={shell.showArchivedSessions}
           activeSessionId={shell.activeSessionId}
-          brandIcon={brandIcon}
           frontendVersion={BUILD_APP_VERSION}
           backendVersion={shell.serverVersion}
           currentUser={shell.currentUser}

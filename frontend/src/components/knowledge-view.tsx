@@ -434,7 +434,7 @@ function FileContent({
 
 export function KnowledgeView() {
   const t = useTranslations("knowledge");
-  const brand = useBrand();
+  const { name: brand } = useBrand();
   const tSidebar = useTranslations("sidebar");
   const { locale } = useAppLocale();
   const { server, token } = useAppShell();

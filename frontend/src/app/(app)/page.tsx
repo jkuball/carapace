@@ -13,7 +13,7 @@ const MAX_DOCUMENT_TITLE_LENGTH = 30;
 export default function ChatPage() {
   const t = useTranslations();
   const shell = useAppShell();
-  const brand = useBrand();
+  const { name: brand } = useBrand();
   const { activeSessionId, activeSession } = shell;
 
   const onActiveTitleUpdate = useCallback((title: string) => {

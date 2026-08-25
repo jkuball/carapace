@@ -20,7 +20,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const t = useTranslations();
   const tJobs = useTranslations("jobs");
   const { isAdmin } = useAppShell();
-  const brand = useBrand();
+  const { name: brand } = useBrand();
   const segment = useSelectedLayoutSegment() as SettingsTab | null;
   const activeTab: SettingsTab = segment ?? "preferences";
 
