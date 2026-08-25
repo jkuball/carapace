@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.153.3 (2026-08-25)
+
+
+### Other
+
+
+- Merge pull request #260 from thiesgerken/renovate/all-routine-dependencies
+  ([`40737e1`](https://github.com/thiesgerken/carapace/commit/40737e167c90573016620b275b83fa71f20d750b))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade docker.io/library/nginx:1.31.4 Docker digest to 0d4374c
+  ([`40737e1`](https://github.com/thiesgerken/carapace/commit/40737e167c90573016620b275b83fa71f20d750b))
+
+- ⬆️ chore: upgrade docker.io/library/nginx:1.31.4 Docker digest to 0d4374c
+  ([`08c6f6d`](https://github.com/thiesgerken/carapace/commit/08c6f6d17a19d72dbdb6129b434d181d836040ba))
+
 ## v0.153.2 (2026-08-24)
 
 
