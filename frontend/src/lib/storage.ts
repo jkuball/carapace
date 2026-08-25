@@ -78,19 +78,36 @@ export function getPresenceClientId(): string {
   return generated;
 }
 
+// Drafts are written on every keystroke, so unlike the other helpers here they
+// have to survive a throwing sessionStorage: a quota overflow or a context that
+// blocks site data must not take the composer down with it.
 export function getChatDraft(sessionId: string): string {
   if (typeof window === "undefined") return "";
-  return window.sessionStorage.getItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`) ?? "";
+  try {
+    return window.sessionStorage.getItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function saveChatDraft(sessionId: string, draft: string): void {
-  const key = `${CHAT_DRAFT_KEY_PREFIX}${sessionId}`;
-  if (draft) window.sessionStorage.setItem(key, draft);
-  else clearChatDraft(sessionId);
+  if (!draft) {
+    clearChatDraft(sessionId);
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`, draft);
+  } catch {
+    // Draft persistence is best effort; losing it beats breaking typing.
+  }
 }
 
 export function clearChatDraft(sessionId: string): void {
-  window.sessionStorage.removeItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`);
+  try {
+    window.sessionStorage.removeItem(`${CHAT_DRAFT_KEY_PREFIX}${sessionId}`);
+  } catch {
+    // Nothing to do: the draft was never stored.
+  }
 }
 
 export function getNotificationSubscriptionId(): string {

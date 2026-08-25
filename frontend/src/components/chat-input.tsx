@@ -119,6 +119,11 @@ interface ChatInputProps {
   ) => Promise<UploadedFile>;
 }
 
+function resizeTextarea(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 200) + "px";
+}
+
 export function ChatInput({
   sessionId,
   onSend,
@@ -149,6 +154,12 @@ export function ChatInput({
     setValue(nextValue);
     saveChatDraft(sessionId, nextValue);
   }, [sessionId]);
+
+  // A restored draft never passes through the input handler, so without this the
+  // textarea would render one line tall until the next keystroke.
+  useEffect(() => {
+    if (textareaRef.current) resizeTextarea(textareaRef.current);
+  }, []);
   // Uploading no longer requires a running sandbox: the backend starts it on demand.
   const canUpload = !!uploadFile && !disabled;
 
@@ -265,15 +276,9 @@ export function ChatInput({
         const previous = textareaRef.current?.value ?? "";
         const space = previous && !previous.endsWith(" ") ? " " : "";
         updateValue(previous + space + transcript);
-        if (textareaRef.current) {
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.style.height = "auto";
-              textareaRef.current.style.height =
-                Math.min(textareaRef.current.scrollHeight, 200) + "px";
-            }
-          }, 0);
-        }
+        setTimeout(() => {
+          if (textareaRef.current) resizeTextarea(textareaRef.current);
+        }, 0);
       }
     };
 
@@ -507,9 +512,7 @@ export function ChatInput({
     if (disabled) return;
     updateValue(e.target.value);
     setSelectedIndex(0);
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    resizeTextarea(e.target);
   }
 
   const hasText = value.trim().length > 0;

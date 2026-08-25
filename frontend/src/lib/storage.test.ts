@@ -157,8 +157,9 @@ test("chat drafts persist per session and can be removed", () => {
   saveChatDraft("session-1", "");
   clearChatDraft("session-2");
 
-  assert.equal(getChatDraft("session-1"), "");
-  assert.equal(getChatDraft("session-2"), "");
+  // Read the store directly: getChatDraft cannot tell a stored "" from a missing key.
+  assert.equal(sessionStorage.getItem("carapace_chat_draft_session-1"), null);
+  assert.equal(sessionStorage.getItem("carapace_chat_draft_session-2"), null);
 });
 
 test("notification subscription helpers persist and clear local state", () => {
