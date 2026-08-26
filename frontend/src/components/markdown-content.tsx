@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ComponentPropsWithoutRef } from "react";
 import Markdown, { MarkdownHooks, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypePrettyCode, {
@@ -11,7 +11,9 @@ import remarkMath from "remark-math";
 import type { PluggableList } from "unified";
 
 import { splitEmojiText } from "@/lib/emoji";
+import { MERMAID_PROP, rehypeMermaid } from "@/lib/rehype-mermaid";
 import { MarkdownPre } from "./markdown-code-pre";
+import { MermaidDiagram } from "./mermaid-diagram";
 
 const PRETTY_CODE_OPTIONS: RehypePrettyCodeOptions = {
   theme: {
@@ -124,10 +126,23 @@ function getClassNames(value: unknown): string[] {
   return [];
 }
 
+type MarkdownDivProps = ComponentPropsWithoutRef<"div"> & { node?: unknown };
+
+function MarkdownDiv({ ...props }: MarkdownDivProps) {
+  const divProps = props;
+  delete (divProps as { node?: unknown }).node;
+  const source = (divProps as Record<string, unknown>)[MERMAID_PROP];
+  if (typeof source === "string") {
+    return <MermaidDiagram code={source} />;
+  }
+  return <div {...divProps} />;
+}
+
 export function MarkdownContent({ content }: { content: string }) {
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
   const rehypePluginsAsync = useMemo((): PluggableList => {
     return [
+      rehypeMermaid,
       [rehypePrettyCode, PRETTY_CODE_OPTIONS],
       [rehypeKatex, KATEX_OPTIONS],
       rehypeBundledEmoji,
@@ -135,7 +150,7 @@ export function MarkdownContent({ content }: { content: string }) {
   }, []);
   /** Sync `Markdown` cannot run `rehype-pretty-code` (Shiki is async). */
   const rehypePluginsFallback = useMemo((): PluggableList => {
-    return [[rehypeKatex, KATEX_OPTIONS], rehypeBundledEmoji];
+    return [rehypeMermaid, [rehypeKatex, KATEX_OPTIONS], rehypeBundledEmoji];
   }, []);
 
   const components = useMemo<Components>(
@@ -144,6 +159,7 @@ export function MarkdownContent({ content }: { content: string }) {
         <a {...props} target="_blank" rel="noreferrer noopener" />
       ),
       pre: MarkdownPre,
+      div: MarkdownDiv,
     }),
     [],
   );

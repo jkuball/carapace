@@ -324,3 +324,23 @@ body {
   background: var(--muted);
   font-weight: 600;
 }
+
+/* Mermaid diagrams */
+.prose .mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  background: var(--muted);
+  overflow-x: auto;
+}
+.prose .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.prose .mermaid-error {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8em;
+  color: var(--destructive);
+}
