@@ -327,3 +327,17 @@ The workflow for the agent to create a skill via chat:
 6. On approval, the skill is persisted in the workspace repository and becomes available in future sessions
 
 A built-in `create-skill` skill is seeded on first run to guide the agent through this process.
+
+## Bundled skills
+
+These are seeded into every knowledge repo on first run and can be edited or deleted like any other skill:
+
+| Skill          | Purpose                                                                        |
+| -------------- | ------------------------------------------------------------------------------ |
+| `carapace`     | Drive a carapace server over its JSON CLI (sessions, approvals, jobs).         |
+| `create-skill` | Write and refine skills.                                                       |
+| `credentials`  | List, fetch, and use secrets from the vault.                                   |
+| `example`      | Reference skill showing Python and Node providers, tunnels, and setup scripts.  |
+| `mermaid`      | Write Mermaid diagrams; the web UI renders ` ```mermaid ` fences as pictures.   |
+| `web`          | Web search and page fetch.                                                     |
+| `wikipedia`    | Wikipedia search and article fetch.                                            |

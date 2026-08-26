@@ -879,6 +879,15 @@
             "copy": "Code kopieren",
             "copied": "Kopiert"
         },
+        "mermaid": {
+            "showSource": "Diagrammquelltext anzeigen",
+            "showDiagram": "Diagramm anzeigen",
+            "download": "SVG herunterladen",
+            "copySource": "Diagrammquelltext kopieren",
+            "copySvg": "SVG kopieren",
+            "copied": "Kopiert",
+            "renderFailed": "Diagramm konnte nicht gerendert werden: {error}"
+        },
         "thinking": {
             "streaming": "Denke nach",
             "complete": "Nachgedacht"
