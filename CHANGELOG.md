@@ -1,6 +1,36 @@
 # CHANGELOG
 
 
+## v0.154.2 (2026-08-26)
+
+
+### Other
+
+
+- Merge pull request #268 from thiesgerken/renovate/all-routine-dependencies
+  ([`9da980f`](https://github.com/thiesgerken/carapace/commit/9da980f42c9d3af7ab8552d343d6fa3f8400cb41))
+
+- Merge pull request #271 from thiesgerken/pnpm-automerge
+  ([`5e8f83e`](https://github.com/thiesgerken/carapace/commit/5e8f83e8c5acabdd716a459b0135ec93571294d8))
+
+  Automerge pnpm minor and patch updates
+
+- Automerge pnpm minor and patch updates
+  ([`f87fe41`](https://github.com/thiesgerken/carapace/commit/f87fe41f5c0f753f6988f330b97637167cb28b9d))
+
+  pnpm ships a minor every couple of weeks and the bumps are routine, so they were arriving as review-and-click PRs for no gain. The groupName also splits them out of the grouped update PR, which otherwise blocks automerge on every other dep in the group being automergeable too.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`9da980f`](https://github.com/thiesgerken/carapace/commit/9da980f42c9d3af7ab8552d343d6fa3f8400cb41))
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`08eb5fa`](https://github.com/thiesgerken/carapace/commit/08eb5fa37bc40027cb6c07f32c05834b87002cdb))
+
 ## v0.154.1 (2026-08-25)
 
 
