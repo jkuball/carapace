@@ -1,6 +1,55 @@
 # CHANGELOG
 
 
+## v0.155.0 (2026-08-26)
+
+
+### ✨ Features
+
+
+- ✨Merge pull request #269 from thiesgerken/feature/mermaid
+  ([`0b762e5`](https://github.com/thiesgerken/carapace/commit/0b762e54c03d1d02e021eef1a51b43bb3cbdaabc))
+
+- ✨ feat: Mermaid diagram rendering + bundled mermaid skill
+  ([`0b762e5`](https://github.com/thiesgerken/carapace/commit/0b762e54c03d1d02e021eef1a51b43bb3cbdaabc))
+
+### Other
+
+
+- fix(ui): correct mermaid render lifecycle, download and security docs
+  ([`6449b37`](https://github.com/thiesgerken/carapace/commit/6449b37dad8d68281422c120a094d701964ab672))
+
+  Review findings from #269:
+
+  - mermaid.render() removes any element carrying the id it is handed, so a
+    fixed per-component id let concurrent renders (the undefined -> resolved
+    theme transition on mount, and every token while streaming) delete each
+    other's containers, and let a repeat render rip out the already-injected
+    SVG. Every invocation now gets a fresh id and renders are serialized.
+  - suppressErrorRendering keeps a failed draw from pinning its error graphic
+    to document.body.
+  - The whole async body is inside the queue's catch, so a failed chunk load
+    surfaces as an error instead of an unhandled rejection.
+  - The download anchor is attached to the document and the object URL is
+    revoked in a later tick; revoking in the same tick aborts the download in
+    Safari and Firefox.
+  - securityLevel "strict" sanitizes the SVG with DOMPurify and blocks click
+    callbacks, but does not disable HTML labels — corrected in the code
+    comment, SKILL.md, flowchart.md and styling.md.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+- feat(ui): render mermaid diagrams, add bundled mermaid skill
+  ([`aba592c`](https://github.com/thiesgerken/carapace/commit/aba592c89751b76435bef1409228927229c9a126))
+
+  Fenced ```mermaid blocks now render as diagrams in the web UI (chat, tool output, knowledge browser). A rehype plugin rewrites the fence into a `data-mermaid` div before rehype-pretty-code can turn it into Shiki spans; the diagram component lazy-loads mermaid, so nothing is added to the initial bundle.
+
+  While a reply streams, the fence is still incomplete and `mermaid.parse` fails — the component keeps showing the source instead of an error, and flips to the diagram once it parses. Rendering uses securityLevel "strict" since the source is LLM output. Each diagram gets a toolbar: source toggle, copy (source or SVG, depending on the view), and SVG download.
+
+  The bundled `mermaid` skill teaches the agent when a diagram is worth drawing and how to write one that renders here, with per-type syntax references next to SKILL.md.
+
+  Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
 ## v0.154.3 (2026-08-26)
 
 
