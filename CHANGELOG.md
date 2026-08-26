@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.154.3 (2026-08-26)
+
+
+### Other
+
+
+- Merge pull request #272 from thiesgerken/renovate/pnpm
+  ([`107b3ad`](https://github.com/thiesgerken/carapace/commit/107b3adfc04fb3a20fc39f3425ae1c2db4c1775e))
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 11.23.0
+  ([`107b3ad`](https://github.com/thiesgerken/carapace/commit/107b3adfc04fb3a20fc39f3425ae1c2db4c1775e))
+
+- ⬆️ chore: upgrade pnpm to 11.23.0
+  ([`fea1f65`](https://github.com/thiesgerken/carapace/commit/fea1f6594bf84e3fc83bf6cbebcde65d8543e747))
+
 ## v0.154.2 (2026-08-26)
 
 
