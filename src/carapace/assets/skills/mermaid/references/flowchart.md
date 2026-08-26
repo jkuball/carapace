@@ -119,9 +119,9 @@ flowchart LR
     C["multi<br/>line"] --> D["100% done"]
 ```
 
-`<br/>` is the only markup allowed inside a label — the UI renders with
-`securityLevel: "strict"`, which strips everything else. Backticks around a label
-(`` A["`bold **text**`"] ``) enable markdown strings; keep them for emphasis only.
+`<br/>` gives a line break inside a label. Simple formatting tags (`<b>`, `<i>`) survive
+the UI's DOMPurify pass too, but stay boring: markdown strings are the better tool —
+backticks around a label (`` A["`bold **text**`"] ``) render `**bold**` and `*italic*`.
 
 ## Pitfalls
 

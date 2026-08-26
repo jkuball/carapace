@@ -108,9 +108,14 @@ diagrams that carry real information.
 
 `securityLevel: "strict"` in the UI means:
 
-- **no `click` handlers** — `click A callback()` and `click A "https://…"` do nothing
-- **no HTML labels** — no `<span>`, `<b>`, `<img>`, inline `style=`; only `<br/>` survives
+- **no `click` callbacks** — `click A call fn()` is dropped before it reaches the diagram
+  (it needs `securityLevel: "loose"`, which the UI does not use)
+- **the SVG is sanitized with DOMPurify** — formatting tags in labels (`<br/>`, `<b>`,
+  `<i>`) survive, but scripts, event handlers (`onerror=…`) and anything else dangerous
+  are stripped
 - **no external icon packs or fonts** — the icon-based shapes (`::icon(fa fa-x)`,
   architecture icons beyond the five built-ins) render as nothing
 
-Do not work around this. Put the link in the prose next to the diagram instead.
+A diagram cannot lower this itself: `securityLevel` is on mermaid's secure-keys list, so a
+`%%{init: {'securityLevel': 'loose'}}%%` directive inside the fence is ignored. Put links
+in the prose next to the diagram instead of trying to make `click` work.

@@ -3,9 +3,16 @@
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { Check, Code, Copy, Download, Image as ImageIcon } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type MermaidState = { svg: string } | { error: string } | null;
+
+/* mermaid.render() removes any element already carrying the id it is given — including an
+   SVG this component injected earlier — and reads back a temp container it appends to
+   document.body. Two renders sharing an id therefore delete each other's work, so every
+   invocation gets a fresh id and renders run one at a time. */
+let renderQueue: Promise<unknown> = Promise.resolve();
+let renderCount = 0;
 
 export function MermaidDiagram({ code }: { code: string }) {
   const t = useTranslations("message.mermaid");
@@ -13,21 +20,19 @@ export function MermaidDiagram({ code }: { code: string }) {
   const [state, setState] = useState<MermaidState>(null);
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState(false);
-  const rawId = useId();
-  const renderId = useMemo(
-    () => `mermaid-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`,
-    [rawId],
-  );
 
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
+    const run = async () => {
+      if (cancelled) return;
       const mermaid = (await import("mermaid")).default;
       mermaid.initialize({
         startOnLoad: false,
-        /** LLM output is untrusted: strict keeps HTML labels off and sanitizes. */
+        /** LLM output is untrusted: strict runs the SVG through DOMPurify and kills click callbacks. */
         securityLevel: "strict",
+        /** Without this, a failed draw leaves its error graphic pinned to document.body. */
+        suppressErrorRendering: true,
         theme: resolvedTheme === "dark" ? "dark" : "default",
       });
 
@@ -37,21 +42,23 @@ export function MermaidDiagram({ code }: { code: string }) {
         if (!cancelled) setState(null);
         return;
       }
+      /* A newer render superseded this one — skip the layout work. */
+      if (cancelled) return;
 
-      try {
-        const { svg } = await mermaid.render(renderId, code);
-        if (!cancelled) setState({ svg });
-      } catch (error) {
-        if (!cancelled) {
-          setState({ error: error instanceof Error ? error.message : String(error) });
-        }
+      const { svg } = await mermaid.render(`mermaid-${(renderCount += 1)}`, code);
+      if (!cancelled) setState({ svg });
+    };
+
+    renderQueue = renderQueue.then(run).catch((error: unknown) => {
+      if (!cancelled) {
+        setState({ error: error instanceof Error ? error.message : String(error) });
       }
-    })();
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [code, renderId, resolvedTheme]);
+  }, [code, resolvedTheme]);
 
   const svg = state && "svg" in state ? state.svg : null;
   const sourceShown = showSource || svg === null;
@@ -72,8 +79,11 @@ export function MermaidDiagram({ code }: { code: string }) {
     const link = document.createElement("a");
     link.href = url;
     link.download = "diagram.svg";
+    document.body.append(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    /* Revoking in the same tick aborts the download in Safari and Firefox. */
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }, [svg]);
 
   return (

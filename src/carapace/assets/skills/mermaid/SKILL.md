@@ -48,9 +48,10 @@ starts with a copy-paste-ready example.
 ## Rules that keep diagrams rendering
 
 1. **Fence it as `mermaid`.** Any other language tag stays a code block.
-2. **The UI renders with `securityLevel: "strict"`.** No HTML in labels, no inline
-   `<span style>`, no `click` callbacks — they are stripped or ignored. `<br/>` for a
-   line break inside a label is fine.
+2. **The UI renders with `securityLevel: "strict"`.** The finished SVG goes through
+   DOMPurify — simple formatting in labels (`<br/>`, `<b>`, `<i>`) survives, scripts and
+   event handlers do not — and `click … call fn()` callbacks never fire. Keep labels to
+   text plus `<br/>` and put links in the prose next to the diagram.
 3. **Quote labels containing punctuation.** `A["load(config)"]`, not `A[load(config)]`.
    Parentheses, brackets, braces, colons, commas and `#` all break unquoted labels.
 4. **Node ids are identifiers**, not sentences: letters, digits, underscore. Never use
