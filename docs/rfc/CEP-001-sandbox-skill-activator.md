@@ -21,7 +21,7 @@ The motivating deployment uses a custom Nix-based sandbox:
 - Multiple skills should not require composing devshell environments.
 - Carapace core should not gain Nix-specific behavior.
 
-A Nix activator can realize all packages for one skill in one invocation and return direct executable paths.
+A Nix activator can realize all packages for one skill in one invocation and return direct store-backed commands.
 
 ## Goals
 
@@ -56,10 +56,10 @@ metadata:
 
 The activator receives these declarations. For each command it may either:
 
-1. Return an executable override.
+1. Return a command override.
 2. Omit the command, causing Carapace to use the original declared command unchanged.
 
-The official activator can therefore reproduce current behavior by preparing dependencies, running `setup.sh` when present, and returning no overrides. A custom activator can instead use the alias name or its own skill-file conventions to return another executable without changing the skill schema.
+The official activator can therefore reproduce current behavior by preparing dependencies, running `setup.sh` when present, and returning no overrides. A custom activator can instead use the alias name or its own skill-file conventions to return another command without changing the skill schema.
 
 No activator command is embedded in skill metadata. The activator is selected by the deployment, not by the skill.
 
@@ -113,11 +113,11 @@ It returns optional command overrides and status messages:
 }
 ```
 
-`protocol_version` identifies the protocol spoken by both sides. `command_overrides` replaces only the listed aliases; an omitted command always uses its original declaration. Overrides should be absolute executable paths. An activator that needs arguments or environment preparation can create an executable wrapper and return its path.
+`protocol_version` identifies the protocol spoken by both sides. `command_overrides` replaces only the listed aliases; an omitted command always uses its original declaration. Overrides use the same shell-command semantics as existing skill commands and may include arguments or environment preparation.
 
 `messages` contains model-facing activation status. The official activator can use it to report completed uv, npm, pnpm, or `setup.sh` work and include appropriate non-sensitive hook output.
 
-Carapace validates that overrides only reference declared aliases and point to executable files. It installs new shims only after successful activation and successful result validation. Exact transport, timeout, logging, and rollback details remain open.
+Carapace validates that overrides reference declared aliases and contain nonempty, single-line command strings without carriage returns or newlines. It installs new shims only after successful activation and successful result validation. Exact transport, timeout, logging, and rollback details remain open.
 
 ## Lifecycle
 
