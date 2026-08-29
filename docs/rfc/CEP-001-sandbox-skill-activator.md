@@ -1,6 +1,6 @@
 # CEP-001: Sandbox-provided skill activator
 
-**Status:** Draft for discussion. This CEP proposes a direction and ownership boundary, not an implementation-ready protocol.
+**Status:** Implemented in this pull request.
 
 ## Summary
 
@@ -65,17 +65,18 @@ No activator command is embedded in skill metadata. The activator is selected by
 
 ## Activator configuration
 
-A compatible sandbox image provides one activator executable at an operator-configured absolute path, conceptually:
+A compatible sandbox image provides one activator executable at an operator-configured absolute path:
 
 ```text
-CARAPACE_SANDBOX_SKILL_ACTIVATOR=/usr/libexec/carapace/activate-skill
+CARAPACE_SANDBOX_SKILL_ACTIVATOR=/usr/local/bin/carapace-skill-activator
+CARAPACE_SANDBOX_SKILL_ACTIVATOR_TIMEOUT_SECONDS=600
 ```
 
-The official Carapace sandbox image ships the default implementation. A custom sandbox image may provide a different implementation.
+The path must be absolute and outside `/workspace`, `/tmp`, `/var/tmp`, and `/dev/shm`. Activator integrity remains a deployment requirement; core does not prove that the configured file is immutable. The official Carapace sandbox image ships the default implementation. Docker Compose and the Helm chart configure its path. A custom sandbox image may provide a different implementation at that or another path.
 
-When no activator is configured or available, Carapace uses no-op activation: it performs no runtime preparation, returns no command overrides, and installs the originally declared commands unchanged.
+When no activator is configured, Carapace uses no-op activation: it performs no runtime preparation, receives no command overrides, and installs the originally declared commands unchanged. A configured path that is missing or not executable is an activation error.
 
-Carapace core does not retain the legacy uv, npm, pnpm, or `setup.sh` provider chain as a fallback. No-op activation is therefore still an intentional execution-layer compatibility break for older sandbox images: a command such as `uv run ...` is preserved, but the preceding `uv sync` no longer happens. This avoids keeping two activation implementations indefinitely and does not require a skill-schema migration.
+Carapace core does not retain the legacy uv, npm, pnpm, or `setup.sh` provider chain as a fallback. No-op activation is therefore an intentional execution-layer compatibility break for configurations that omit the activator: a command such as `uv run ...` is preserved, but the preceding `uv sync` no longer happens. This avoids keeping two activation implementations indefinitely and does not require a skill-schema migration.
 
 ## Conceptual activator protocol
 
@@ -87,6 +88,7 @@ Carapace invokes the activator once per skill with all declared commands:
   "skill": "web",
   "skill_dir": "/workspace/skills/web",
   "workspace": "/workspace",
+  "source_revision": "0123456789abcdef0123456789abcdef01234567",
   "commands": [
     {
       "name": "web_search",
@@ -113,11 +115,30 @@ It returns optional command overrides and status messages:
 }
 ```
 
-`protocol_version` identifies the protocol spoken by both sides. `command_overrides` replaces only the listed aliases; an omitted command always uses its original declaration. Overrides use the same shell-command semantics as existing skill commands and may include arguments or environment preparation.
+`protocol_version` identifies the protocol spoken by both sides and must equal `1`. `source_revision` is the exact committed knowledge-repository object ID selected by core. The activator decides which inputs it consumes from that revision and how it restores or materializes them. Core never resets the complete skill directory.
 
-`messages` contains model-facing activation status. The official activator can use it to report completed uv, npm, pnpm, or `setup.sh` work and include appropriate non-sensitive hook output.
+`command_overrides` replaces only the listed aliases; an omitted command always uses its original declaration. Overrides use the same shell-command semantics as existing skill commands and may include arguments or environment preparation.
 
-Carapace validates that overrides reference declared aliases and contain nonempty, single-line command strings without carriage returns or newlines. It installs new shims only after successful activation and successful result validation. Exact transport, timeout, logging, and rollback details remain open.
+`messages` contains model-facing activation status. Messages must be short, non-sensitive, single-line summaries authored by the activator. Carapace does not pass package-manager or hook output through automatically.
+
+Carapace invokes the executable as:
+
+```text
+<activator> --request-base64 <base64-encoded-request-json>
+```
+
+The activator writes exactly one response line to stdout, prefixed with `@@CARAPACE_SKILL_ACTIVATOR@@`. Other output is diagnostic only. Exit status zero requires a valid success response. A failure may return a safe, single-line error response before exiting nonzero:
+
+```json
+{
+  "protocol_version": 1,
+  "error": "setup.sh failed with status 1"
+}
+```
+
+Unknown protocol versions, timeouts, nonzero exits, missing responses, invalid JSON, undeclared override aliases, and invalid command strings fail automatic setup. The default 600-second timeout covers the complete one-skill invocation. It reuses the existing runtime timeout behavior, which is best-effort and does not guarantee that every container backend kills the process.
+
+Carapace validates the complete response before installing shims. Activator side effects are not rolled back. On failure, no new shims are installed, the skill remains active, and current best-effort error reporting is preserved.
 
 ## Lifecycle
 
@@ -130,7 +151,7 @@ No automatic reactivation occurs when workspace files change. Skill development 
 
 ## Official sandbox activator
 
-The official implementation moves the full current provider chain out of the server and preserves its order and behavior:
+The official implementation moves the full current provider chain out of the server and preserves its order and behavior. It detects provider files in `source_revision`, restores only the matching provider inputs into the live skill directory with `git checkout`, then runs:
 
 1. `pyproject.toml` plus `uv.lock` runs `uv sync --locked`.
 2. `package.json` plus the npm lockfile runs `npm ci` when pnpm does not apply.
@@ -143,33 +164,30 @@ A separate lifecycle-hook system may still be useful for events unrelated to ski
 
 ## Credentials and network policy
 
-Current automatic providers receive approved activation credentials and run with proxy bypass. `setup.sh` relies on this for use cases such as materializing tool-specific configuration. Preserving official behavior therefore requires the activator interface to support equivalent inputs and capabilities.
+The activator preserves the current provider behavior. It receives every successfully resolved, approved skill credential declared with an `env_var` or `file`, and runs with proxy bypass for the invocation. Credentials are not included in the JSON request. Environment credentials are scoped to the process. File credentials are materialized immediately before activation and deleted afterwards.
 
-This does not mean every activator should receive every skill credential or unrestricted network access. Credential injection and network policy should be explicit operator-controlled activator capabilities:
-
-- The official activator can request compatibility behavior.
-- Any custom activator can disable runtime credential injection.
-- Credentials for private registries or binary caches should be activator-specific deployment credentials, invocation-scoped secrets, or supplied through an authenticated proxy.
-
-The exact capability configuration remains open. Skills must not be able to grant these capabilities to the activator themselves.
+No additional capability settings are introduced in protocol version 1. The activator is trusted operator-selected deployment code, while skills still cannot grant credentials or network capabilities beyond their approved declarations. A capability switch can be added later if a concrete deployment needs to separate command-time credentials from activation credentials.
 
 ## Security model
 
 The activator is trusted deployment code. The skill files, manifests, package definitions, and `setup.sh` it consumes remain untrusted activation input.
 
-Required controls:
+Core-enforced controls:
 
 - The activator path is configured by the operator and cannot be overridden by skill metadata.
-- The path is absolute and outside writable workspace and temporary directories.
-- Activator code is immutable to the agent through a read-only root filesystem, read-only mount, or an unprivileged agent combined with root-owned files.
-- A writable container root filesystem is insufficient when agent commands run as root.
+- The path is absolute and lexically outside writable workspace and temporary directories.
 - The activator runs only after `use_skill` security approval.
+- Core supplies the exact committed source revision in the request.
 - Returned overrides may reference only commands declared by the skill.
-- Every override is validated before Carapace replaces command shims.
+- Every response and override is validated before Carapace replaces command shims.
 
-Activator confidentiality is not a security boundary. Read access can aid auditing. Integrity, not secrecy, is required.
+Deployment requirements:
 
-The final design must specify whether activation consumes the live workspace, files restored from upstream, or another pinned snapshot. This CEP does not yet choose that trust model.
+- Activator code must be immutable to the agent through an immutable image path, read-only mount, Nix store path, or an unprivileged agent combined with root-owned files.
+- A writable container root filesystem is insufficient when agent commands run as root.
+- The activator must select automatically executed inputs from `source_revision`, rather than trusting arbitrary replacements in the live workspace.
+
+Carapace does not attempt to enforce image immutability consistently across Docker and Kubernetes as part of this feature. Activator confidentiality is not a security boundary. Read access can aid auditing. Integrity, not secrecy, is required.
 
 ## Alternatives considered
 
@@ -193,12 +211,14 @@ Rejected because it introduces global lookup order, collision, environment-compo
 
 Rejected because they make deployment-specific execution skill-controlled and recreate arbitrary automatic shell execution in the schema.
 
-## Open questions
+## Packaging and deferred work
 
-- Exact configuration and protocol names.
-- Request and response transport, timeout, exit-code, stdout, stderr, and versioning semantics.
-- Failure and rollback behavior after partial activator side effects.
-- How credential and network capabilities are configured per activator.
-- Whether activation consumes the live workspace, upstream-restored files, or a pinned snapshot.
-- How activator immutability is enforced consistently in Docker and Kubernetes.
-- How the official activator is packaged so custom images can reuse or extend it.
+The official sandbox image installs a standalone executable at `/usr/local/bin/carapace-skill-activator`. Custom images may copy it from the official image or replace it. The JSON protocol is the compatibility boundary; there is no library or subclass API.
+
+Deferred until a concrete need appears:
+
+- Per-activator credential or network capability switches.
+- Strong process termination guarantees after timeout.
+- Core-enforced read-only roots or non-root sandbox execution.
+- Filesystem rollback after partial activation side effects.
+- Manual refresh, file watching, or activation fingerprints.
