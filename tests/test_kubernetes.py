@@ -316,7 +316,7 @@ async def test_get_ip():
 async def test_measure_workspace_usage_uses_df_used_bytes():
     rt = _make_runtime()
     rt.is_running = AsyncMock(return_value=True)
-    rt.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="1048576\n"))
+    rt.exec = AsyncMock(return_value=ExecResult(stdout="1048576\n", exit_code=0, output="1048576\n"))
 
     used_bytes = await rt.measure_workspace_usage("sess-1", "test-pod")
 

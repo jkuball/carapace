@@ -575,7 +575,7 @@ class SandboxManager:
         if result.exit_code != 0 and f"[exit code: {result.exit_code}]" not in output:
             logger.debug(f"Command failed in session {session_id} (exit {result.exit_code}): {command}")
             output += f"\n[exit code: {result.exit_code}]"
-        return ExecResult(exit_code=result.exit_code, output=output or "(no output)")
+        return ExecResult(stdout=result.stdout, exit_code=result.exit_code, output=output or "(no output)")
 
     # ------------------------------------------------------------------
     # Sandbox git status / sync (B1: /workspace clone ↔ backend repo).

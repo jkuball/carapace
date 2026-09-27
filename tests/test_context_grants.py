@@ -449,11 +449,11 @@ class TestSandboxManagerCredentialCache:
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
         runtime.exec = AsyncMock(
             side_effect=[
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=1, output=""),
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=1, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
             ]
         )
         mgr = _sandbox_manager(
@@ -496,13 +496,13 @@ class TestSandboxManagerCredentialCache:
         runtime.logs = AsyncMock(return_value="carapace sandbox ready")
         runtime.exec = AsyncMock(
             side_effect=[
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=1, output=""),
-                ExecResult(exit_code=1, output="clone failed"),
-                ExecResult(exit_code=1, output=""),
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=0, output=""),
-                ExecResult(exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=1, output=""),
+                ExecResult(stdout="clone failed", exit_code=1, output="clone failed"),
+                ExecResult(stdout="", exit_code=1, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
+                ExecResult(stdout="", exit_code=0, output=""),
             ]
         )
         mgr = _sandbox_manager(
@@ -831,7 +831,7 @@ class TestExecNotificationDedupe:
         async def fake_exec_in_container(*_a, **_kw):
             assert mgr._exec_notified_credentials.get("s1") is not None
             mgr.mark_credential_notified("s1", "dev/token")
-            return ExecResult(exit_code=0, output="ok")
+            return ExecResult(stdout="ok", exit_code=0, output="ok")
 
         mgr.ensure_session = fake_ensure
         mgr._rebuild_skill_venvs = fake_rebuild
@@ -864,7 +864,7 @@ class TestExecNotificationDedupe:
         post_calls: list[str] = []
 
         async def fake_exec_in_container(*_a, **_kw):
-            return ExecResult(exit_code=0, output="ok")
+            return ExecResult(stdout="ok", exit_code=0, output="ok")
 
         mgr.ensure_session = fake_ensure
         mgr._rebuild_skill_venvs = fake_rebuild

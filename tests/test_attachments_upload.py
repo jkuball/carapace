@@ -42,7 +42,7 @@ def _fake_manager(exec_outputs: dict[str, ExecResult] | None = None) -> SimpleNa
             for needle, result in exec_outputs.items():
                 if needle in command:
                     return result
-        return ExecResult(exit_code=0, output="")
+        return ExecResult(stdout="", exit_code=0, output="")
 
     fake = SimpleNamespace()
     fake.exec_command = AsyncMock(side_effect=exec_command)
@@ -75,7 +75,7 @@ async def test_upload_no_collision_returns_plain_path() -> None:
 
 @pytest.mark.asyncio
 async def test_upload_collision_inserts_hash() -> None:
-    fake = _fake_manager({"test -e": ExecResult(exit_code=0, output="EXISTS")})
+    fake = _fake_manager({"test -e": ExecResult(stdout="EXISTS", exit_code=0, output="EXISTS")})
     path = await SandboxManager.upload_tmp_file(fake, "s1", "abc.png", _reader(b"x"), max_bytes=1000)
     assert path.startswith("/tmp/abc-") and path.endswith(".png")
     assert path != "/tmp/abc.png"

@@ -14,7 +14,6 @@ from .runtime import ExecResult, SkillActivationError, SkillActivationInputs
 
 SKILL_ACTIVATOR_PATH = "/usr/local/bin/carapace-skill-activator"
 SKILL_ACTIVATOR_PROTOCOL_VERSION = 1
-SKILL_ACTIVATOR_MARKER = "@@CARAPACE_SKILL_ACTIVATOR@@"
 SKILL_COMMAND_SHIM_DIR = "/workspace/.carapace/bin"
 
 type ActivationCommand = tuple[str, str]
@@ -157,15 +156,8 @@ class SkillActivationRunner:
         return f"test -x {path} || exit 126; exec {path} --request-base64 {shlex.quote(encoded)}"
 
     def _parse_response(self, output: str) -> SkillActivatorResponse:
-        marked = [
-            line.removeprefix(SKILL_ACTIVATOR_MARKER)
-            for line in output.splitlines()
-            if line.startswith(SKILL_ACTIVATOR_MARKER)
-        ]
-        if len(marked) != 1:
-            raise SkillActivationError("skill activator must emit exactly one marked JSON response")
         try:
-            return SkillActivatorResponse.model_validate_json(marked[0])
+            return SkillActivatorResponse.model_validate_json(output)
         except ValidationError as exc:
             raise SkillActivationError("skill activator returned an invalid protocol response") from exc
 
@@ -184,7 +176,7 @@ class SkillActivationRunner:
                 raise SkillActivationError(
                     f"skill activator returned an invalid override for command {alias!r}"
                 ) from exc
-        return [(alias, resolved[alias]) for alias, _command in declared]
+        return list(resolved.items())
 
     async def _exec_activator(
         self,
@@ -199,7 +191,6 @@ class SkillActivationRunner:
             raise ValueError("Exactly one of session_id and sc must be set")
 
         command = self._invocation(request)
-        skill_dir = f"/workspace/skills/{skill_name}"
         extra_env = activation_inputs.environment or None
         file_creds = self._activation_file_credentials(skill_name, activation_inputs)
         if session_id is not None:
@@ -208,7 +199,7 @@ class SkillActivationRunner:
                 command,
                 timeout=self._activator_timeout,
                 bypass_proxy=True,
-                workdir=skill_dir,
+                workdir=self._knowledge_workdir,
                 extra_env=extra_env,
                 context_file_creds=file_creds or None,
             )
@@ -222,7 +213,7 @@ class SkillActivationRunner:
                 sc,
                 command,
                 timeout=self._activator_timeout,
-                workdir=skill_dir,
+                workdir=self._knowledge_workdir,
                 bypass_proxy=True,
                 extra_env=extra_env,
             )
@@ -241,7 +232,7 @@ class SkillActivationRunner:
     ) -> list[str]:
         request = SkillActivatorRequest(
             skill=skill_name,
-            skill_dir=f"/workspace/skills/{skill_name}",
+            skill_dir=f"{self._knowledge_workdir}/skills/{skill_name}",
             workspace=self._knowledge_workdir,
             source_revision=source_revision,
             commands=[SkillCommandDecl(name=name, command=command) for name, command in command_aliases],
@@ -256,28 +247,34 @@ class SkillActivationRunner:
             sc=None if run_session_id is not None else sc,
         )
 
-        response: SkillActivatorResponse | None = None
         try:
-            response = self._parse_response(result.stdout)
+            response: SkillActivatorResponse | None = None
+            try:
+                response = self._parse_response(result.stdout)
+            except SkillActivationError:
+                if result.exit_code == 0:
+                    raise
+
+            if result.exit_code != 0:
+                if response is not None and response.error is not None:
+                    detail = response.error
+                elif result.exit_code == 126:
+                    detail = f"sandbox image skill activator is missing or not executable: {SKILL_ACTIVATOR_PATH}"
+                elif result.exit_code == -1:
+                    detail = f"skill activator timed out after {self._activator_timeout} seconds"
+                else:
+                    detail = f"skill activator exited with status {result.exit_code}"
+                raise SkillActivationError(detail)
+
+            assert response is not None
+            if response.error is not None:
+                raise SkillActivationError(response.error)
+            resolved_commands = self._resolved_commands(command_aliases, response.command_overrides)
         except SkillActivationError:
-            if result.exit_code == 0:
-                raise
-
-        if result.exit_code != 0:
-            if response is not None and response.error is not None:
-                detail = response.error
-            elif result.exit_code == 126:
-                detail = f"sandbox image skill activator is missing or not executable: {SKILL_ACTIVATOR_PATH}"
-            elif result.exit_code == -1:
-                detail = f"skill activator timed out after {self._activator_timeout} seconds"
-            else:
-                detail = f"skill activator exited with status {result.exit_code}"
-            raise SkillActivationError(detail)
-
-        assert response is not None
-        if response.error is not None:
-            raise SkillActivationError(response.error)
-        resolved_commands = self._resolved_commands(command_aliases, response.command_overrides)
+            logger.error(
+                f"Skill activation failed for '{skill_name}' (exit {result.exit_code}): {result.output[:2000]}"
+            )
+            raise
         status_lines = list(response.messages)
         status_lines.extend(
             await self.register_command_aliases(

@@ -89,7 +89,11 @@ async def test_multichunk_partial_failure_removes_file() -> None:
     async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
         # Fail on the first append, after the first command already truncated+wrote.
         fail = ">>" in cmd and not any(">>" in c for c in calls[:-1])
-        return ExecResult(exit_code=1, output="boom") if fail else ExecResult(exit_code=0, output="")
+        return (
+            ExecResult(stdout="boom", exit_code=1, output="boom")
+            if fail
+            else ExecResult(stdout="", exit_code=0, output="")
+        )
 
     result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
     assert result.exit_code == 1
@@ -100,7 +104,7 @@ async def test_multichunk_partial_failure_removes_file() -> None:
 async def test_first_command_failure_leaves_existing_file() -> None:
     # mkdir/truncate fails before any chunk is written — must not delete a pre-existing file.
     async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
-        return ExecResult(exit_code=1, output="denied")
+        return ExecResult(stdout="denied", exit_code=1, output="denied")
 
     result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2))
     assert result.exit_code == 1
@@ -112,8 +116,8 @@ async def test_chmod_failure_keeps_written_file() -> None:
     # All data appended successfully; only the trailing chmod fails — keep the file.
     async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
         if cmd.startswith("chmod"):
-            return ExecResult(exit_code=1, output="chmod denied")
-        return ExecResult(exit_code=0, output="")
+            return ExecResult(stdout="chmod denied", exit_code=1, output="chmod denied")
+        return ExecResult(stdout="", exit_code=0, output="")
 
     result, calls = await _run(exec_one, "C" * (_FILE_WRITE_CHUNK_BYTES * 2), mode=0o644)
     assert result.exit_code == 1
@@ -124,7 +128,7 @@ async def test_chmod_failure_keeps_written_file() -> None:
 @pytest.mark.asyncio
 async def test_single_chunk_failure_does_not_remove_file() -> None:
     async def exec_one(cmd: str, calls: list[str]) -> ExecResult:
-        return ExecResult(exit_code=1, output="denied")
+        return ExecResult(stdout="denied", exit_code=1, output="denied")
 
     result, calls = await _run(exec_one, "small")
     assert result.exit_code == 1

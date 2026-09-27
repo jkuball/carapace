@@ -380,7 +380,7 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path, db_factory):
     runtime.create_sandbox = AsyncMock(side_effect=["container-1", "container-2"])
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-    _git_exists = ExecResult(exit_code=0, output="")
+    _git_exists = ExecResult(stdout="", exit_code=0, output="")
     runtime.exec = AsyncMock(
         side_effect=[
             _git_exists,  # knowledge repo probe after first create
@@ -390,7 +390,7 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path, db_factory):
             _git_exists,  # knowledge repo probe after recreate
             _git_exists,  # setup_git_identity
             _git_exists,  # install_commit_msg_hook
-            ExecResult(exit_code=0, output="ok"),  # actual command retry
+            ExecResult(stdout="ok", exit_code=0, output="ok"),  # actual command retry
         ]
     )
 
@@ -402,6 +402,7 @@ async def test_exec_recreate_preserves_domains(tmp_path: Path, db_factory):
 
     output = await mgr.exec_command(session_id, "curl https://api.example.com")
     assert output.output == "ok"
+    assert output.stdout == "ok"
     assert mgr.get_allowed_domains(session_id) == {"api.example.com"}
 
 
@@ -414,11 +415,11 @@ async def test_activate_skill_registers_command_aliases_in_image_shim_dir(tmp_pa
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(
         side_effect=[
-            ExecResult(exit_code=0, output=""),  # _clone_knowledge_repo probe after create
-            ExecResult(exit_code=0, output=""),  # setup_git_identity
-            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
-            ExecResult(exit_code=0, output="", stdout='@@CARAPACE_SKILL_ACTIVATOR@@{"protocol_version":1}'),
-            ExecResult(exit_code=0, output=""),  # command alias registration
+            ExecResult(stdout="", exit_code=0, output=""),  # _clone_knowledge_repo probe after create
+            ExecResult(stdout="", exit_code=0, output=""),  # setup_git_identity
+            ExecResult(stdout="", exit_code=0, output=""),  # install_commit_msg_hook
+            ExecResult(exit_code=0, output="", stdout='{"protocol_version":1}'),
+            ExecResult(stdout="", exit_code=0, output=""),  # command alias registration
         ]
     )
 
@@ -761,7 +762,7 @@ async def test_exec_command_sets_up_and_cleans_up_tunnels(tmp_path: Path, db_fac
     runtime.create_sandbox = AsyncMock(return_value="container-1")
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-    runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
+    runtime.exec = AsyncMock(return_value=ExecResult(stdout="ok", exit_code=0, output="ok"))
 
     mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
     _seed_session_row(db_factory, tmp_path, "sess-1")
@@ -795,7 +796,7 @@ async def test_exec_command_rejects_conflicting_tunnel_local_ports(tmp_path: Pat
     runtime.create_sandbox = AsyncMock(return_value="container-1")
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-    runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
+    runtime.exec = AsyncMock(return_value=ExecResult(stdout="ok", exit_code=0, output="ok"))
 
     mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
     _seed_session_row(db_factory, tmp_path, "sess-1")
@@ -818,7 +819,7 @@ async def test_exec_command_allows_duplicate_tunnel_with_different_descriptions(
     runtime.create_sandbox = AsyncMock(return_value="container-1")
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
-    runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
+    runtime.exec = AsyncMock(return_value=ExecResult(stdout="ok", exit_code=0, output="ok"))
 
     mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
     _seed_session_row(db_factory, tmp_path, "sess-1")
@@ -857,7 +858,7 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path, db_fa
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
 
-    _ok = ExecResult(exit_code=0, output="")
+    _ok = ExecResult(stdout="", exit_code=0, output="")
     runtime.exec = AsyncMock(
         side_effect=[
             _ok,  # clone probe (create)
@@ -875,7 +876,7 @@ async def test_exec_command_recreates_tunnels_before_retry(tmp_path: Path, db_fa
             _ok,
             _ok,
             _ok,
-            ExecResult(exit_code=0, output="ok"),  # retried command
+            ExecResult(stdout="ok", exit_code=0, output="ok"),  # retried command
             _ok,  # cleanup
         ]
     )
@@ -906,15 +907,15 @@ async def test_exec_command_cleans_up_tunnels_after_command_failure(tmp_path: Pa
     runtime.logs = AsyncMock(return_value="carapace sandbox ready")
     runtime.exec = AsyncMock(
         side_effect=[
-            ExecResult(exit_code=0, output=""),  # clone probe
-            ExecResult(exit_code=0, output=""),  # setup_git_identity
-            ExecResult(exit_code=0, output=""),  # install_commit_msg_hook
-            ExecResult(exit_code=0, output=""),  # tunnel prep
-            ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=0, output=""),
-            ExecResult(exit_code=5, output="mail failed"),  # command
-            ExecResult(exit_code=0, output=""),  # cleanup
+            ExecResult(stdout="", exit_code=0, output=""),  # clone probe
+            ExecResult(stdout="", exit_code=0, output=""),  # setup_git_identity
+            ExecResult(stdout="", exit_code=0, output=""),  # install_commit_msg_hook
+            ExecResult(stdout="", exit_code=0, output=""),  # tunnel prep
+            ExecResult(stdout="", exit_code=0, output=""),
+            ExecResult(stdout="", exit_code=0, output=""),
+            ExecResult(stdout="", exit_code=0, output=""),
+            ExecResult(stdout="mail failed", exit_code=5, output="mail failed"),  # command
+            ExecResult(stdout="", exit_code=0, output=""),  # cleanup
         ]
     )
 

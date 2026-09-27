@@ -237,7 +237,7 @@ The activator detects matching provider inputs in the committed source revision 
 3. `package.json` + `pnpm-lock.yaml` → `pnpm install --frozen-lockfile`
 4. `setup.sh` → `sh ./setup.sh`
 
-If the source revision is missing locally, the activator fetches it from `GIT_REPO_URL`. Before execution, it restores only matching provider inputs and, when setup or commands are present, the tracked `SKILL.md`. It does not reset the complete skill directory. Generated environments and unrelated workspace files remain in place. Restoration protects these specific files, not every transitive file a build or hook might read.
+If the source revision is missing locally, the activator fetches it from `GIT_REPO_URL`. Before execution, it restores only matching provider inputs and, when setup or commands are present, the tracked `SKILL.md`. It reads raw Git blobs without checkout hooks, filters, or index updates. Symlinked directory components are rejected; destination file symlinks are replaced rather than followed. It does not reset the complete skill directory. Generated environments and unrelated workspace files remain in place. Restoration protects these specific files, not every transitive file a build or hook might read.
 
 The official activator returns status summaries without command overrides or raw hook output.
 

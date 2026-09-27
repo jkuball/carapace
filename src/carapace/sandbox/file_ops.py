@@ -161,15 +161,15 @@ class SandboxFileOps:
                     with contextlib.suppress(Exception):
                         await exec_one(f"rm -f {_shell_path(path, quote=quote)}")
                 output = result.output or f"Error: cannot write {path} (exit {result.exit_code})."
-                return ExecResult(exit_code=result.exit_code, output=output)
+                return ExecResult(stdout=result.stdout, exit_code=result.exit_code, output=output)
             wrote_any = True
         if chmod_cmd is not None:
             result = await exec_one(chmod_cmd)
             if result.exit_code != 0:
                 output = result.output or f"Error: cannot chmod {path} (exit {result.exit_code})."
-                return ExecResult(exit_code=result.exit_code, output=output)
+                return ExecResult(stdout=result.stdout, exit_code=result.exit_code, output=output)
         lines = _line_count(content)
-        return ExecResult(exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
+        return ExecResult(stdout="", exit_code=0, output=f"Wrote {lines} line(s) to {path}.")
 
     async def file_write(
         self,
@@ -207,7 +207,7 @@ class SandboxFileOps:
         cmd = f"python3 -c {shlex.quote(_STR_REPLACE_SCRIPT)} {pq} {old_b64} {new_b64} {replace_all_flag}"
         result = await self._exec_in_session(session_id, cmd, timeout=10)
         output = result.output or f"Error: cannot replace in {path}"
-        return ExecResult(exit_code=result.exit_code, output=output)
+        return ExecResult(stdout=result.stdout, exit_code=result.exit_code, output=output)
 
     async def file_write_in_container(
         self,

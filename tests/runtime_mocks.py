@@ -24,7 +24,7 @@ def make_runtime_mock() -> MagicMock:
         )
     )
     runtime.measure_workspace_usage = AsyncMock(return_value=None)
-    runtime.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="ok"))
+    runtime.exec = AsyncMock(return_value=ExecResult(stdout="ok", exit_code=0, output="ok"))
     runtime.is_running = AsyncMock(return_value=True)
     runtime.get_ip = AsyncMock(return_value="172.18.0.22")
     runtime.resolve_self_network_name = AsyncMock(return_value="bridge")

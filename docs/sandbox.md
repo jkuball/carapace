@@ -64,13 +64,15 @@ The knowledge repo is cloned directly into `/workspace/` on first start. On cont
 
 Every sandbox image must contain an executable at `/usr/local/bin/carapace-skill-activator`. It prepares a complete skill runtime and may override declared command aliases. The image owns the implementation; neither Helm nor Docker Compose selects its path. A custom image may provide a wrapper or a symlink to an immutable executable, for example in the Nix store.
 
-A missing or non-executable activator fails automatic setup. There is no implicit no-op fallback. An image that needs no preparation must still provide an executable that exits zero and emits `@@CARAPACE_SKILL_ACTIVATOR@@{"protocol_version":1}`. This leaves all declared commands unchanged.
+A missing or non-executable activator fails automatic setup. There is no implicit no-op fallback. An image that needs no preparation must still provide an executable that exits zero and emits `{"protocol_version":1}`. This leaves all declared commands unchanged.
 
 Carapace enforces a 600-second timeout for the complete invocation, configurable on the server:
 
 ```text
 CARAPACE_SANDBOX_SKILL_ACTIVATOR_TIMEOUT_SECONDS=600
 ```
+
+Upgrade note: the previous built-in providers each had a separate 600-second budget. The new budget covers the entire invocation, including fetching source inputs and all setup steps. Raise this setting for heavy skills that previously relied on multiple provider budgets.
 
 Carapace invokes the executable once per skill with `--request-base64` followed by a base64-encoded JSON object:
 
@@ -96,27 +98,29 @@ Carapace supplies `GIT_REPO_URL` in the process environment. It is the authentic
 
 Keep `GIT_REPO_URL` out of protocol JSON, messages, and logs: it contains authentication credentials. The base64 request is encoded for shell transport, not encrypted.
 
-On success, the executable exits zero and writes exactly one marked JSON line to stdout. The parser reads raw stdout only, never combined stdout/stderr. Send package-manager and hook diagnostics to stderr; marker-like text there cannot act as a protocol response:
+On success, the executable exits zero and writes exactly one JSON object to stdout, with no prefix or other output. The parser reads raw stdout only, never combined stdout/stderr. Send all diagnostics to stderr; JSON there cannot act as a protocol response:
 
 ```text
-@@CARAPACE_SKILL_ACTIVATOR@@{"protocol_version":1,"command_overrides":{"web_search":"/nix/store/.../bin/web_search"},"messages":["Realized web commands."]}
+{"protocol_version":1,"command_overrides":{"web_search":"/nix/store/.../bin/web_search"},"messages":["Realized web commands."]}
 ```
 
 `command_overrides` may contain only aliases present in `commands`. Omitted aliases keep their declared commands. Commands and messages must be nonempty single-line strings. Messages are model-facing and must not contain credentials or raw package-manager and hook output.
 
-On failure, the executable exits nonzero. It may emit one marked response with a safe error:
+On failure, the executable exits nonzero. It may emit one JSON response with a safe error:
 
 ```text
-@@CARAPACE_SKILL_ACTIVATOR@@{"protocol_version":1,"error":"runtime realization failed with status 1"}
+{"protocol_version":1,"error":"runtime realization failed with status 1"}
 ```
 
-Carapace rejects unknown versions, malformed responses, undeclared aliases, invalid command strings, and invocations exceeding the configured timeout. It validates the full response before installing command shims. Activator filesystem side effects are not rolled back.
+Carapace rejects unknown versions, malformed responses, undeclared aliases, invalid command strings, and invocations exceeding the configured timeout. It validates the full response before installing command shims. Activator filesystem side effects are not rolled back. Activation failures, including invalid responses, log at most 2,000 characters of combined diagnostics server-side; this raw output is not returned to the model. Activators and setup scripts must not print credentials, including environment variables and authenticated URLs.
 
 The activator runs after `use_skill` approval with the skill's successfully resolved `env_var` and `file` credentials, plus the same proxy bypass used by the previous built-in setup providers. Credentials are not part of the JSON request. File credentials are removed after invocation.
 
 The executable is trusted deployment code that receives credentials and proxy bypass. It must not be stored in agent-writable locations such as `/workspace` or `/tmp`, to ensure that the agent cannot tamper with activation. Its integrity, including the symlink target, interpreter, and dependencies, is the sandbox image operator's responsibility. Use read-only mounts or a non-root sandbox user with protected image files. A Nix store path is suitable only if the agent cannot modify that store or the link to it. The fixed path alone is not an integrity guarantee; Carapace does not enforce a read-only container root.
 
-The official image contains `/usr/local/bin/carapace-skill-activator`. It restores matching provider inputs from `source_revision`, then runs the [official provider chain](skills.md#official-sandbox-activator). Custom images must implement the versioned process contract above; they need not reproduce that provider chain.
+Carapace starts the activator in the workspace, not the skill directory, so it can materialize inputs even when the skill directory is missing.
+
+The official image contains `/usr/local/bin/carapace-skill-activator`. It reads matching provider blobs using `git cat-file`, avoiding checkout hooks, filters, and index changes. Provider inputs must be regular committed files; their executable bit is preserved. It rejects symlinked directory components and writes temporary files before renaming over destination files, replacing rather than following a destination symlink. It then runs the [official provider chain](skills.md#official-sandbox-activator). Custom images must implement the versioned process contract above; they need not reproduce that provider chain.
 
 ## Network policy
 

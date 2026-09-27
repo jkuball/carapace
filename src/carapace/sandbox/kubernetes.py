@@ -780,10 +780,10 @@ class KubernetesRuntime(ContainerRuntime):
         except kr8s.NotFoundError as exc:
             raise ContainerGoneError(f"Pod {container_id} no longer exists") from exc
         except kr8s.ExecError:
-            return ExecResult(exit_code=1, output="Error: exec protocol error")
+            return ExecResult(stdout="", exit_code=1, output="Error: exec protocol error")
         except TimeoutError:
             logger.warning(f"Command timed out in pod {container_id} after {timeout}s: {command_preview}")
-            return ExecResult(exit_code=-1, output=f"Error: command timed out ({timeout}s)")
+            return ExecResult(stdout="", exit_code=-1, output=f"Error: command timed out ({timeout}s)")
 
         if result.exit_code != 0:
             logger.debug(f"Command exited {result.exit_code} in pod {container_id}: {command_preview}")
