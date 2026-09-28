@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.157.3 (2026-09-28)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: Lock file maintenance
+  ([`55a055c`](https://github.com/thiesgerken/carapace/commit/55a055ccb69a00ece93dd1e23466033d83b1ae87))
+
+- ⬆️ chore: Lock file maintenance
+  ([`55a055c`](https://github.com/thiesgerken/carapace/commit/55a055ccb69a00ece93dd1e23466033d83b1ae87))
+
+- ⬆️ chore: migrate stdio MCP bridge to mcp 2
+  ([`55a055c`](https://github.com/thiesgerken/carapace/commit/55a055ccb69a00ece93dd1e23466033d83b1ae87))
+
+  Lock maintenance pulls pydantic-ai 2.51 -> fastmcp 4 -> mcp 2.x, which renames the camelCase model fields and drops mcp.server.fastmcp. Bump the sandbox's bridge venv to mcp 2 so production runs the same SDK the tests do.
+
+  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+  ---------
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
+  Co-authored-by: Thies Gerken <thies.gerken@lector.ai>
+
+  Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>
+
 ## v0.157.2 (2026-09-28)
 
 
