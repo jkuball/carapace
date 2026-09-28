@@ -1,6 +1,32 @@
 # CHANGELOG
 
 
+## v0.157.1 (2026-09-28)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade emoji-regex to 11.0.0
+  ([`d212c1f`](https://github.com/thiesgerken/carapace/commit/d212c1fc3f710be5c596c8d7a428ea198e7a7487))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
+- ⬆️ chore: upgrade logfire to 5.1.1
+  ([`b955a3c`](https://github.com/thiesgerken/carapace/commit/b955a3cf23a21ba223b8f6f79e41d0d12432a208))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
+- ⬆️ chore: upgrade all routine dependency updates
+  ([`c1ad1b8`](https://github.com/thiesgerken/carapace/commit/c1ad1b88e977d2d7344cef6c6f5ac064942d6d5a))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
+- ⬆️ chore: upgrade astral-sh/setup-uv action to v10.2.0
+  ([`5818d0e`](https://github.com/thiesgerken/carapace/commit/5818d0e82cba2e50ab93da5ebaa599c52b77b13a))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
 ## v0.157.0 (2026-09-28)
 
 
