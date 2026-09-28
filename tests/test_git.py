@@ -108,6 +108,18 @@ class TestGitStoreEnsureRepo:
 
         assert (repo_dir / ".git").is_dir()
 
+    @pytest.mark.parametrize("existing", [False, True])
+    async def test_reachable_revision_fetch_enabled(self, repo_dir: Path, existing: bool) -> None:
+        store = GitStore(repo_dir)
+        if existing:
+            await store.ensure_repo()
+            await store._run("config", "uploadpack.allowReachableSHA1InWant", "false")
+        await store.ensure_repo()
+
+        code, value = await store._run("config", "uploadpack.allowReachableSHA1InWant")
+        assert code == 0
+        assert value == "true"
+
     async def test_update_instead_configured(self, repo_dir: Path):
         store = GitStore(repo_dir)
         await store.ensure_repo()
@@ -125,6 +137,7 @@ class TestGitStoreHeadRevision:
         return s
 
     async def test_none_without_commits(self, store: GitStore):
+        assert await store.head_sha() is None
         assert await store.head_revision() is None
 
     async def test_returns_short_hash_and_subject(self, store: GitStore):
@@ -137,6 +150,7 @@ class TestGitStoreHeadRevision:
         short, subject = revision
         assert subject == "add test file"
         _, full = await store._run("rev-parse", "HEAD")
+        assert await store.head_sha() == full
         assert full.startswith(short)
 
     async def test_subject_with_null_safe_characters(self, store: GitStore):

@@ -400,7 +400,7 @@ class DockerRuntime(ContainerRuntime):
             if stderr:
                 output += f"\n[stderr] {stderr}"
 
-            return ExecResult(exit_code=exit_code, output=output)
+            return ExecResult(exit_code=exit_code, output=output, stdout=stdout)
 
         cmd_preview = command if isinstance(command, str) else " ".join(command)
         logger.debug(f"Exec in {container_id[:12]}: {cmd_preview} (timeout={timeout}s)")
@@ -412,7 +412,7 @@ class DockerRuntime(ContainerRuntime):
             raise
         except TimeoutError:
             logger.warning(f"Command timed out in {container_id[:12]} after {timeout}s: {cmd_preview}")
-            return ExecResult(exit_code=-1, output=f"Error: command timed out ({timeout}s)")
+            return ExecResult(stdout="", exit_code=-1, output=f"Error: command timed out ({timeout}s)")
 
         if result.exit_code != 0:
             logger.debug(f"Command exited {result.exit_code} in {container_id[:12]}: {cmd_preview}")

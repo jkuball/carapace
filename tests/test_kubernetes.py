@@ -316,7 +316,7 @@ async def test_get_ip():
 async def test_measure_workspace_usage_uses_df_used_bytes():
     rt = _make_runtime()
     rt.is_running = AsyncMock(return_value=True)
-    rt.exec = AsyncMock(return_value=ExecResult(exit_code=0, output="1048576\n"))
+    rt.exec = AsyncMock(return_value=ExecResult(stdout="1048576\n", exit_code=0, output="1048576\n"))
 
     used_bytes = await rt.measure_workspace_usage("sess-1", "test-pod")
 
@@ -425,15 +425,20 @@ async def test_resume_sandbox():
 
 
 @pytest.mark.asyncio
-async def test_exec_with_env_uses_non_login_shell() -> None:
+@pytest.mark.parametrize("exit_code", [0, 1, -1])
+async def test_exec_with_env_uses_non_login_shell(exit_code: int) -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock()
 
-    completed = MagicMock(stdout=b"ok", stderr=b"", returncode=0)
+    completed = MagicMock(stdout=b"ok", stderr=b"diagnostics", returncode=exit_code)
     pod = MagicMock()
-    pod.exec = AsyncMock(return_value=completed)
+    pod.exec = AsyncMock(return_value=completed, side_effect=TimeoutError if exit_code == -1 else None)
 
-    with patch("carapace.sandbox.kubernetes.Pod.get", AsyncMock(return_value=pod)):
+    with (
+        patch("carapace.sandbox.kubernetes.Pod.get", AsyncMock(return_value=pod)),
+        patch("carapace.sandbox.kubernetes.logger.debug") as debug_log,
+        patch("carapace.sandbox.kubernetes.logger.warning") as warning_log,
+    ):
         result = await rt.exec(
             "carapace-sandbox-abc-0",
             "weather --daily",
@@ -441,8 +446,14 @@ async def test_exec_with_env_uses_non_login_shell() -> None:
             workdir="/workspace",
         )
 
-    assert result.exit_code == 0
-    assert result.output == "ok"
+    assert result.exit_code == exit_code
+    assert all("secret" not in call.args[0] for call in debug_log.call_args_list + warning_log.call_args_list)
+    if exit_code == -1:
+        assert "timed out" in result.output
+        assert result.stdout == ""
+    else:
+        assert result.output == "ok\n[stderr] diagnostics"
+        assert result.stdout == "ok"
     pod.exec.assert_awaited_once_with(
         [
             "bash",

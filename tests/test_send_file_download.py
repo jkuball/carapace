@@ -17,10 +17,12 @@ from carapace.session import sent_files
 def _fake_manager(size: int, payload: bytes) -> SimpleNamespace:
     async def exec_command(_sid, command, **_kw):
         if "stat -c %s" in command:
-            return ExecResult(exit_code=0, output=f"{size}\n")
+            return ExecResult(stdout=f"{size}\n", exit_code=0, output=f"{size}\n")
         if "tail -c" in command:
-            return ExecResult(exit_code=0, output=base64.b64encode(payload).decode())
-        return ExecResult(exit_code=0, output="")
+            return ExecResult(
+                stdout=base64.b64encode(payload).decode(), exit_code=0, output=base64.b64encode(payload).decode()
+            )
+        return ExecResult(stdout="", exit_code=0, output="")
 
     fake = SimpleNamespace()
     fake.exec_command = AsyncMock(side_effect=exec_command)
@@ -41,7 +43,7 @@ async def test_download_streams_bytes_to_dest(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_download_missing_file_raises(tmp_path: Path) -> None:
     async def exec_command(_sid, command, **_kw):
-        return ExecResult(exit_code=0, output="MISSING")
+        return ExecResult(stdout="MISSING", exit_code=0, output="MISSING")
 
     fake = SimpleNamespace(exec_command=AsyncMock(side_effect=exec_command), _UPLOAD_CHUNK_BYTES=1024)
     with pytest.raises(UploadError):

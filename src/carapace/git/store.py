@@ -204,6 +204,8 @@ class GitStore:
             # Ensure updateInstead is set even on existing repos
             await self._run("config", "receive.denyCurrentBranch", "updateInstead")
 
+        # Activators may request a revision that stopped being HEAD after selection.
+        await self._run("config", "uploadpack.allowReachableSHA1InWant", "true")
         self._install_hook()
 
     def _install_hook(self) -> None:
@@ -450,6 +452,12 @@ class GitStore:
         """Check if the repo has any commits."""
         code, _ = await self._run("rev-parse", "HEAD")
         return code == 0
+
+    async def head_sha(self) -> str | None:
+        """Return the full object ID of HEAD, or ``None`` if there are no commits."""
+        code, out = await self._run("rev-parse", "HEAD")
+        revision = out.strip()
+        return revision if code == 0 and re.fullmatch(r"[0-9a-f]{40,64}", revision) else None
 
     async def head_revision(self) -> tuple[str, str] | None:
         """Return ``(short_hash, subject)`` of HEAD, or ``None`` if there are no commits."""

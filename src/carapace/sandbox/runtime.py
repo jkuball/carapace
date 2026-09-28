@@ -113,6 +113,7 @@ class SandboxConfig(BaseModel):
 class ExecResult(BaseModel):
     exit_code: int
     output: str
+    stdout: str
 
 
 SandboxRuntimeKind = Literal["docker", "kubernetes"]
