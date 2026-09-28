@@ -1,6 +1,22 @@
 # CHANGELOG
 
 
+## v0.157.2 (2026-09-28)
+
+
+### ⬆️ Dependencies
+
+
+- ⬆️ chore: upgrade pnpm to 12.6.0
+  ([`e6d24b3`](https://github.com/thiesgerken/carapace/commit/e6d24b389b4f2dd12cac6628c56034872a0be457))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
+- ⬆️ chore: upgrade mermaid to 12.0.0
+  ([`e63ed53`](https://github.com/thiesgerken/carapace/commit/e63ed537f3bf6a2b8df7970ffa69d10138423bc9))
+
+  Co-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>
+
 ## v0.157.1 (2026-09-28)
 
 
