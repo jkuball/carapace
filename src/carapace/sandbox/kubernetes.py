@@ -537,6 +537,16 @@ class KubernetesRuntime(ContainerRuntime):
             return f"{sts_name}-0"
         return None
 
+    async def sandbox_image(self, name: str) -> str | None:
+        """Read the sandbox image from its StatefulSet template, even when scaled down."""
+        api = await self._ensure_api()
+        try:
+            sts = await StatefulSet.get(_sanitize_pod_name(name), namespace=self._namespace, api=api)
+        except kr8s.NotFoundError:
+            return None
+        containers = sts.raw["spec"]["template"]["spec"]["containers"]
+        return next((container["image"] for container in containers if container["name"] == "sandbox"), None)
+
     async def list_sandboxes(self) -> dict[str, str]:
         """List all carapace-managed StatefulSets, returning ``{session_id: pod_name}``."""
         api = await self._ensure_api()
@@ -564,9 +574,9 @@ class KubernetesRuntime(ContainerRuntime):
             api=api,
         ):
             sts = cast(StatefulSet, sts)
-            if sts.labels.get("carapace.pool") != "true":
+            if sts.labels.get("carapace.pool") != "true" or sts.labels.get("carapace.session"):
                 continue
-            sandbox_id = sts.labels.get("carapace.sandbox") or sts.labels.get("carapace.session")
+            sandbox_id = sts.labels.get("carapace.sandbox")
             if sandbox_id:
                 result[sandbox_id] = f"{sts.name}-0"
         return result

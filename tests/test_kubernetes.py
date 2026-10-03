@@ -527,6 +527,75 @@ async def test_list_sandboxes_maps_claimed_warm_by_session_label() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_pool_sandboxes_excludes_session_owned_resources() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+
+    async def _statefulsets():
+        for name, labels in [
+            ("warm", {"carapace.pool": "true", "carapace.sandbox": "warm"}),
+            ("claimed", {"carapace.session": "sess-1", "carapace.sandbox": "claimed"}),
+            (
+                "inconsistent",
+                {"carapace.pool": "true", "carapace.session": "sess-2", "carapace.sandbox": "inconsistent"},
+            ),
+        ]:
+            sts = MagicMock()
+            sts.name = name
+            sts.labels = labels
+            yield sts
+
+    with patch("carapace.sandbox.kubernetes.StatefulSet.list", return_value=_statefulsets()):
+        assert await rt.list_pool_sandboxes() == {"warm": "warm-0"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replicas", [0, 1])
+async def test_sandbox_image_reads_statefulset_template(replicas: int) -> None:
+    rt = _make_runtime()
+    api = object()
+    rt._ensure_api = AsyncMock(return_value=api)
+    sts = MagicMock()
+    sts.raw = {
+        "spec": {
+            "replicas": replicas,
+            "template": {
+                "spec": {
+                    "containers": [
+                        {"name": "sidecar", "image": "sidecar:latest"},
+                        {"name": "sandbox", "image": "sandbox:new"},
+                    ]
+                }
+            },
+        }
+    }
+    with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)) as get:
+        assert await rt.sandbox_image("warm_pool") == "sandbox:new"
+    get.assert_awaited_once_with("warm-pool", namespace="carapace", api=api)
+
+
+@pytest.mark.asyncio
+async def test_sandbox_image_missing_statefulset() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(side_effect=kr8s.NotFoundError)):
+        assert await rt.sandbox_image("missing") is None
+
+
+@pytest.mark.asyncio
+async def test_sandbox_image_propagates_api_errors() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    with (
+        patch(
+            "carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(side_effect=RuntimeError("API unavailable"))
+        ),
+        pytest.raises(RuntimeError, match="API unavailable"),
+    ):
+        await rt.sandbox_image("warm")
+
+
+@pytest.mark.asyncio
 async def test_claim_warm_sandbox_stamps_session_and_clears_pool() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())

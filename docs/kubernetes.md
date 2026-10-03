@@ -97,6 +97,8 @@ When a session is idle (configurable timeout, default 60 min), the StatefulSet i
 
 If `CARAPACE_SANDBOX_WARM_POOL_SIZE` is greater than `0`, the server also keeps that many unattached generic warm sandboxes ready. New sessions can claim one of those prestarted StatefulSets instead of waiting for a full cold start. After a successful claim, carapace immediately refills the pool toward the configured target. The claimed sandbox keeps its original unique `sandbox_id` such as `pool-3f9c…`, which is persisted in the session snapshot and shown in the web UI's sandbox inspector.
 
+Pool maintenance and claiming compare each unclaimed sandbox's StatefulSet image reference with `CARAPACE_SANDBOX_BASE_IMAGE`. When the reference changes, stale pool members and their PVCs are deleted and the pool is refilled with fresh sandbox IDs. Session-owned sandboxes are left unchanged, preserving their workspaces. Image comparison uses the configured reference, not registry digests: publishing a new image under an unchanged mutable tag does not invalidate the pool.
+
 When a session is permanently deleted (or the user runs `/reload`), the entire StatefulSet is deleted. The PVC is automatically cleaned up via the retention policy (`whenDeleted: Delete`).
 
 ## Configuration

@@ -421,6 +421,91 @@ class TestSandboxManagerCredentialCache:
         assert second.sandbox_id != first.sandbox_id
 
     @pytest.mark.anyio
+    @pytest.mark.parametrize("running", [True, False])
+    async def test_ensure_warm_pool_replaces_stale_image(self, tmp_path: Path, db_factory, running: bool):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        # A deleted StatefulSet can remain in inventory while foreground deletion completes.
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-old": "old-pod"})
+        runtime.sandbox_image = AsyncMock(return_value="carapace-sandbox:old")
+        runtime.is_running = AsyncMock(return_value=running)
+        runtime.create_sandbox = AsyncMock(return_value="new-pod")
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+        mgr._session_lifecycle.wait_for_ready = AsyncMock()
+
+        assert await mgr.ensure_warm_pool(1) == 1
+
+        runtime.destroy_sandbox.assert_awaited_once_with("warm-old", "carapace-sandbox-warm-old", "old-pod")
+        runtime.resume_sandbox.assert_not_awaited()
+        config = runtime.create_sandbox.await_args.args[0]
+        assert config.image == "carapace-sandbox:latest"
+        assert config.sandbox_id != "warm-old"
+        assert config.labels["carapace.pool"] == "true"
+        assert "carapace.session" not in config.labels
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("running", [True, False])
+    async def test_ensure_warm_pool_reuses_matching_image(self, tmp_path: Path, db_factory, running: bool):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-1": "warm-pod"})
+        runtime.sandbox_exists = AsyncMock(return_value="warm-pod")
+        runtime.is_running = AsyncMock(return_value=running)
+        mgr = _sandbox_manager(runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, session_factory=db_factory)
+        mgr._session_lifecycle.wait_for_ready = AsyncMock()
+
+        assert await mgr.ensure_warm_pool(1) == 1
+
+        runtime.destroy_sandbox.assert_not_awaited()
+        runtime.create_sandbox.assert_not_awaited()
+        if running:
+            runtime.resume_sandbox.assert_not_awaited()
+        else:
+            runtime.resume_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1")
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("image", ["carapace-sandbox:old", None])
+    async def test_warm_claim_discards_stale_image_before_assignment(
+        self, tmp_path: Path, db_factory, image: str | None
+    ):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-old": "old-pod"})
+        runtime.sandbox_image = AsyncMock(return_value=image)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
+
+        assert await mgr._session_lifecycle.claim_warm_sandbox("sess-1", {}) is None
+
+        runtime.destroy_sandbox.assert_awaited_once_with("warm-old", "carapace-sandbox-warm-old", "old-pod")
+        runtime.claim_warm_sandbox.assert_not_awaited()
+        runtime.resume_sandbox.assert_not_awaited()
+        runtime.exec.assert_not_awaited()
+        assert mgr._sessions == {}
+
+    @pytest.mark.anyio
+    async def test_warm_claim_skips_stale_member_and_claims_matching_image(self, tmp_path: Path, db_factory):
+        runtime = make_runtime_mock()
+        runtime.runtime_kind = "kubernetes"
+        runtime.list_pool_sandboxes = AsyncMock(return_value={"warm-1": "old-pod", "warm-2": "current-pod"})
+        runtime.sandbox_image = AsyncMock(side_effect=["carapace-sandbox:old", "carapace-sandbox:latest"])
+        runtime.claim_warm_sandbox = AsyncMock(return_value=True)
+        mgr = _sandbox_manager(
+            runtime=runtime, data_dir=tmp_path, knowledge_dir=tmp_path, warm_pool_size=1, session_factory=db_factory
+        )
+        mgr._session_lifecycle.log_assignment = AsyncMock()
+        mgr._session_lifecycle.setup_proxy = AsyncMock()
+        mgr._session_lifecycle.clone_knowledge_repo = AsyncMock()
+
+        sc = await mgr._session_lifecycle.claim_warm_sandbox("sess-1", {})
+
+        assert sc is not None
+        assert sc.container_id == "current-pod"
+        runtime.destroy_sandbox.assert_awaited_once_with("warm-1", "carapace-sandbox-warm-1", "old-pod")
+        runtime.claim_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-2", "sess-1")
+
+    @pytest.mark.anyio
     async def test_ensure_warm_pool_shrinks_extra_unattached_sandboxes(self, tmp_path: Path, db_factory):
         runtime = make_runtime_mock()
         runtime.runtime_kind = "kubernetes"
@@ -605,6 +690,8 @@ class TestSandboxManagerCredentialCache:
         assert needs_runtime_setup is False
         assert sc.container_id == "carapace-sandbox-warm-1-0"
         assert sc.sandbox_id == "warm-1"
+        runtime.sandbox_image.assert_not_awaited()
+        runtime.destroy_sandbox.assert_not_awaited()
         runtime.claim_warm_sandbox.assert_not_awaited()
         runtime.create_sandbox.assert_not_awaited()
 

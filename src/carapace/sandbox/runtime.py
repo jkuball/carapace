@@ -141,6 +141,10 @@ class ContainerRuntime(Protocol):
         """Return the container/pod ID if the sandbox resource exists, else None."""
         ...
 
+    async def sandbox_image(self, name: str) -> str | None:
+        """Return the configured sandbox image, including for suspended resources, or None if missing."""
+        ...
+
     async def list_sandboxes(self) -> dict[str, str]:
         """Return ``{session_id: container_or_pod_id}`` for all managed sandboxes."""
         ...

@@ -78,6 +78,23 @@ async def test_exec_keeps_protocol_stdout_separate_from_diagnostics(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_sandbox_image_returns_configured_reference(tmp_path: Path) -> None:
+    runtime = _make_runtime(tmp_path)
+    runtime._client.containers.get.return_value.attrs = {"Config": {"Image": "sandbox:new"}}
+
+    assert await runtime.sandbox_image("sandbox") == "sandbox:new"
+    runtime._client.containers.get.assert_called_once_with("sandbox")
+
+
+@pytest.mark.asyncio
+async def test_sandbox_image_returns_none_when_missing(tmp_path: Path) -> None:
+    runtime = _make_runtime(tmp_path)
+    runtime._client.containers.get.side_effect = NotFound("missing")
+
+    assert await runtime.sandbox_image("missing") is None
+
+
+@pytest.mark.asyncio
 async def test_list_pool_sandboxes_returns_empty_for_docker(tmp_path: Path) -> None:
     runtime = _make_runtime(tmp_path)
 

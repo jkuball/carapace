@@ -271,6 +271,18 @@ class DockerRuntime(ContainerRuntime):
 
         return await asyncio.to_thread(_check)
 
+    async def sandbox_image(self, name: str) -> str | None:
+        """Return the configured image reference rather than a resolved image ID."""
+
+        def _inspect() -> str | None:
+            try:
+                container = self._client.containers.get(name)
+            except NotFound:
+                return None
+            return container.attrs["Config"]["Image"]
+
+        return await asyncio.to_thread(_inspect)
+
     async def list_sandboxes(self) -> dict[str, str]:
         """List all carapace-managed containers, returning ``{session_id: container_id}``."""
 
