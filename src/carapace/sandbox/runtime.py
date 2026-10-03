@@ -141,8 +141,8 @@ class ContainerRuntime(Protocol):
         """Return the container/pod ID if the sandbox resource exists, else None."""
         ...
 
-    async def sandbox_image(self, name: str) -> str | None:
-        """Return the configured sandbox image, including for suspended resources, or None if missing."""
+    async def prepare_warm_sandbox(self, name: str, image: str) -> bool:
+        """Update an unclaimed pool member in place and wait until it is ready on the expected image."""
         ...
 
     async def list_sandboxes(self) -> dict[str, str]:
@@ -153,8 +153,8 @@ class ContainerRuntime(Protocol):
         """Return ``{sandbox_id: container_or_pod_id}`` for unattached warm-pool sandboxes."""
         ...
 
-    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
-        """Mark a warm sandbox as claimed for *session_id* if the runtime supports it."""
+    async def claim_warm_sandbox(self, name: str, session_id: str, image: str) -> bool:
+        """Prepare and claim an unclaimed warm sandbox running the expected image."""
         ...
 
     async def inspect_sandbox(

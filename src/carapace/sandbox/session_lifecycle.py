@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from ..database.engine import SessionFactory
 from ..database.models import SandboxTokenRow
 from ..security.context import ApprovalSource, ApprovalVerdict
-from .runtime import ContainerRuntime, SandboxConfig
+from .runtime import ContainerGoneError, ContainerRuntime, SandboxConfig
 from .state import load_sandbox_snapshot
 
 
@@ -422,19 +422,16 @@ class SandboxSessionLifecycle:
         # recreates, or destroys a pool entry while a claim is mid-flight.
         async with self._warm_claim_lock:
             pool = await self._runtime.list_pool_sandboxes()
-            discarded: set[str] = set()
+            unavailable: set[str] = set()
             for sandbox_id in sorted(pool):
-                if await self._discard_stale_pool_sandbox(sandbox_id, pool[sandbox_id]):
-                    discarded.add(sandbox_id)
-                    continue
-                await self.ensure_warm_sandbox(sandbox_id)
+                sandbox_name = self.sandbox_name_for_id(sandbox_id)
+                if not await self._runtime.prepare_warm_sandbox(sandbox_name, self._base_image):
+                    unavailable.add(sandbox_id)
 
-            # Kubernetes deletion is asynchronous: terminating stale resources
-            # must not count toward the target or delay creation of fresh members.
             pool = {
                 sandbox_id: container_id
                 for sandbox_id, container_id in (await self._runtime.list_pool_sandboxes()).items()
-                if sandbox_id not in discarded
+                if sandbox_id not in unavailable
             }
             while len(pool) > target_size:
                 sandbox_id = sorted(pool)[-1]
@@ -461,15 +458,12 @@ class SandboxSessionLifecycle:
 
                 container_id = pool[sandbox_id]
                 sandbox_name = self.sandbox_name_for_id(sandbox_id)
-                if await self._discard_stale_pool_sandbox(sandbox_id, container_id):
+                # Preparation/claim failures must not enter the post-claim cleanup
+                # path: an image rollout failure is not permission to delete a PVC.
+                claimed = await self._runtime.claim_warm_sandbox(sandbox_name, session_id, self._base_image)
+                if not claimed:
                     continue
                 try:
-                    if not await self._runtime.is_running(container_id):
-                        await self._runtime.resume_sandbox(sandbox_name)
-                        await self.wait_for_ready(container_id, session_id)
-                    claimed = await self._runtime.claim_warm_sandbox(sandbox_name, session_id)
-                    if not claimed:
-                        continue
                     ip = await self._runtime.get_ip(container_id, self._network_name)
                     sc = SessionContainer(
                         container_id=container_id,
@@ -510,32 +504,14 @@ class SandboxSessionLifecycle:
 
         return None
 
-    async def _discard_stale_pool_sandbox(self, sandbox_id: str, container_id: str) -> bool:
-        """Discard an unclaimed pool member whose image no longer matches configuration."""
-        sandbox_name = self.sandbox_name_for_id(sandbox_id)
-        image = await self._runtime.sandbox_image(sandbox_name)
-        if image == self._base_image:
-            return False
-        logger.info(f"Discarding stale warm sandbox {sandbox_name} (image={image}, expected={self._base_image})")
-        await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, container_id)
-        return True
-
     async def ensure_warm_sandbox(self, sandbox_id: str) -> str:
         """Ensure an unattached warm sandbox exists for *sandbox_id*."""
         sandbox_name = self.sandbox_name_for_id(sandbox_id)
         existing_id = await self._runtime.sandbox_exists(sandbox_name)
         if isinstance(existing_id, str) and existing_id:
-            if await self._runtime.is_running(existing_id):
-                return existing_id
-            try:
-                await self._runtime.resume_sandbox(sandbox_name)
-                await self.wait_for_ready(existing_id, sandbox_id)
-                logger.info(f"Resumed warm sandbox {sandbox_name}")
-                return existing_id
-            except Exception:
-                logger.opt(exception=True).debug(f"Resume failed for warm sandbox {sandbox_name}, will recreate")
-                await self.log_container_tail(existing_id, sandbox_id)
-                await self._runtime.destroy_sandbox(sandbox_id, sandbox_name, existing_id)
+            if not await self._runtime.prepare_warm_sandbox(sandbox_name, self._base_image):
+                raise ContainerGoneError(f"Warm sandbox {sandbox_name} is no longer an available pool member")
+            return existing_id
 
         sandbox_config = SandboxConfig(
             name=sandbox_name,

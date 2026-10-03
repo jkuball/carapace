@@ -13,7 +13,7 @@ def make_runtime_mock() -> MagicMock:
     runtime.suspend_sandbox = AsyncMock()
     runtime.destroy_sandbox = AsyncMock()
     runtime.sandbox_exists = AsyncMock(return_value=None)
-    runtime.sandbox_image = AsyncMock(return_value="carapace-sandbox:latest")
+    runtime.prepare_warm_sandbox = AsyncMock(return_value=True)
     runtime.list_sandboxes = AsyncMock(return_value={})
     runtime.list_pool_sandboxes = AsyncMock(return_value={})
     runtime.claim_warm_sandbox = AsyncMock(return_value=False)

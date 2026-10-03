@@ -537,15 +537,91 @@ class KubernetesRuntime(ContainerRuntime):
             return f"{sts_name}-0"
         return None
 
-    async def sandbox_image(self, name: str) -> str | None:
-        """Read the sandbox image from its StatefulSet template, even when scaled down."""
+    @staticmethod
+    def _is_unclaimed_pool_member(sts: StatefulSet) -> bool:
+        metadata = sts.raw["metadata"]
+        labels = metadata.get("labels", {})
+        return (
+            labels.get("carapace.pool") == "true"
+            and not labels.get("carapace.session")
+            and not metadata.get("deletionTimestamp")
+        )
+
+    @staticmethod
+    def _sandbox_image_index(sts: StatefulSet) -> int:
+        containers = sts.raw["spec"]["template"]["spec"]["containers"]
+        return next(index for index, container in enumerate(containers) if container["name"] == "sandbox")
+
+    async def _patch_pool_member(self, sts: StatefulSet, changes: list[dict]) -> None:
+        # Fence against ownership/configuration changes by another server between
+        # reading the resource and updating it. A failed test must leave it untouched.
+        await sts.patch(
+            [
+                {"op": "test", "path": "/metadata/resourceVersion", "value": sts.raw["metadata"]["resourceVersion"]},
+                *changes,
+            ],
+            type="json",
+        )
+
+    async def _warm_pod_ready(self, sts_name: str, image: str) -> bool:
         api = await self._ensure_api()
         try:
-            sts = await StatefulSet.get(_sanitize_pod_name(name), namespace=self._namespace, api=api)
+            pod = await Pod.get(f"{sts_name}-0", namespace=self._namespace, api=api)
         except kr8s.NotFoundError:
-            return None
-        containers = sts.raw["spec"]["template"]["spec"]["containers"]
-        return next((container["image"] for container in containers if container["name"] == "sandbox"), None)
+            return False
+        raw = pod.raw
+        return (
+            not raw["metadata"].get("deletionTimestamp")
+            and raw.get("status", {}).get("phase") == "Running"
+            and any(
+                container["name"] == "sandbox" and container["image"] == image
+                for container in raw["spec"]["containers"]
+            )
+            and any(
+                condition["type"] == "Ready" and condition["status"] == "True"
+                for condition in raw.get("status", {}).get("conditions", [])
+            )
+        )
+
+    async def prepare_warm_sandbox(self, name: str, image: str, *, timeout: int = 120) -> bool:
+        """Roll an unclaimed pool member to *image*, preserving its identity and PVC."""
+        sts_name = _sanitize_pod_name(name)
+        api = await self._ensure_api()
+        try:
+            sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
+        except kr8s.NotFoundError:
+            return False
+        if not self._is_unclaimed_pool_member(sts):
+            return False
+
+        index = self._sandbox_image_index(sts)
+        changes: list[dict] = []
+        if sts.raw["spec"]["template"]["spec"]["containers"][index]["image"] != image:
+            changes.append({"op": "replace", "path": f"/spec/template/spec/containers/{index}/image", "value": image})
+        if sts.raw["spec"].get("replicas", 1) != 1:
+            changes.append({"op": "add", "path": "/spec/replicas", "value": 1})
+        if changes:
+            await self._patch_pool_member(sts, changes)
+            logger.info(f"Updating warm sandbox {sts_name} in place (image={image}, PVC retained)")
+
+        # The old pod may still be Running/Ready after a template update. Do not
+        # hand it out until a non-terminating pod is Ready on the expected image.
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            try:
+                sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
+            except kr8s.NotFoundError:
+                return False
+            if not self._is_unclaimed_pool_member(sts):
+                return False
+            index = self._sandbox_image_index(sts)
+            if sts.raw["spec"]["template"]["spec"]["containers"][index]["image"] != image:
+                return False
+            if await self._warm_pod_ready(sts_name, image):
+                return True
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError(f"Warm sandbox {sts_name} did not become Ready on image {image} within {timeout}s")
+            await asyncio.sleep(1)
 
     async def list_sandboxes(self) -> dict[str, str]:
         """List all carapace-managed StatefulSets, returning ``{session_id: pod_name}``."""
@@ -581,30 +657,32 @@ class KubernetesRuntime(ContainerRuntime):
                 result[sandbox_id] = f"{sts.name}-0"
         return result
 
-    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
-        """Relabel a warm-pool StatefulSet as claimed by *session_id*."""
+    async def claim_warm_sandbox(self, name: str, session_id: str, image: str) -> bool:
+        """Prepare and conditionally claim a pool member, without touching its PVC."""
+        if not await self.prepare_warm_sandbox(name, image):
+            return False
         sts_name = _sanitize_pod_name(name)
         api = await self._ensure_api()
-        sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
-
-        metadata_labels = sts.raw.get("metadata", {}).get("labels", {})
-        if metadata_labels.get("carapace.pool") != "true":
-            # Not an unclaimed pool member (already claimed or not a pool sandbox).
+        try:
+            sts = await StatefulSet.get(sts_name, namespace=self._namespace, api=api)
+        except kr8s.NotFoundError:
+            return False
+        if not self._is_unclaimed_pool_member(sts):
+            return False
+        index = self._sandbox_image_index(sts)
+        if sts.raw["spec"]["template"]["spec"]["containers"][index]["image"] != image:
+            return False
+        if not await self._warm_pod_ready(sts_name, image):
             return False
 
-        # Claim the pool member: drop the pool marker and stamp the owning session.
-        # A merge patch deletes a label only via an explicit null — omitting the key
-        # would leave carapace.pool in place. carapace.session is safe to set because
-        # the selector keys off the immutable carapace.sandbox.
-        await sts.patch(
-            {
-                "metadata": {
-                    "labels": {
-                        "carapace.pool": None,
-                        "carapace.session": session_id,
-                    }
-                }
-            }
+        # The version precondition also prevents two servers from claiming the
+        # same pool member or claiming it after a concurrent image update.
+        await self._patch_pool_member(
+            sts,
+            [
+                {"op": "remove", "path": "/metadata/labels/carapace.pool"},
+                {"op": "add", "path": "/metadata/labels/carapace.session", "value": session_id},
+            ],
         )
         return True
 

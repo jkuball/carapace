@@ -549,41 +549,154 @@ async def test_list_pool_sandboxes_excludes_session_owned_resources() -> None:
         assert await rt.list_pool_sandboxes() == {"warm": "warm-0"}
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("replicas", [0, 1])
-async def test_sandbox_image_reads_statefulset_template(replicas: int) -> None:
-    rt = _make_runtime()
-    api = object()
-    rt._ensure_api = AsyncMock(return_value=api)
-    sts = MagicMock()
+def _warm_statefulset(image: str = "sandbox:new", replicas: int = 1) -> AsyncMock:
+    sts = AsyncMock()
     sts.raw = {
+        "metadata": {
+            "name": "carapace-sandbox-warm-1",
+            "resourceVersion": "10",
+            "labels": {"carapace.pool": "true", "carapace.sandbox": "warm-1"},
+        },
         "spec": {
             "replicas": replicas,
             "template": {
                 "spec": {
                     "containers": [
                         {"name": "sidecar", "image": "sidecar:latest"},
-                        {"name": "sandbox", "image": "sandbox:new"},
+                        {"name": "sandbox", "image": image},
                     ]
                 }
             },
-        }
+            "volumeClaimTemplates": [{"metadata": {"name": "session-data"}}],
+        },
     }
-    with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)) as get:
-        assert await rt.sandbox_image("warm_pool") == "sandbox:new"
-    get.assert_awaited_once_with("warm-pool", namespace="carapace", api=api)
+
+    async def _apply_patch(changes: list[dict], *, type: str) -> None:
+        assert type == "json"
+        assert changes[0] == {"op": "test", "path": "/metadata/resourceVersion", "value": "10"}
+        for change in changes[1:]:
+            if change["path"] == "/spec/template/spec/containers/1/image":
+                sts.raw["spec"]["template"]["spec"]["containers"][1]["image"] = change["value"]
+            elif change["path"] == "/spec/replicas":
+                sts.raw["spec"]["replicas"] = change["value"]
+        sts.raw["metadata"]["resourceVersion"] = "11"
+
+    sts.patch.side_effect = _apply_patch
+    return sts
+
+
+def _warm_pod(image: str = "sandbox:new", *, ready: bool = True, terminating: bool = False) -> MagicMock:
+    pod = MagicMock()
+    pod.raw = {
+        "metadata": {"deletionTimestamp": "now"} if terminating else {},
+        "spec": {"containers": [{"name": "sandbox", "image": image}]},
+        "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "True" if ready else "False"}]},
+    }
+    return pod
 
 
 @pytest.mark.asyncio
-async def test_sandbox_image_missing_statefulset() -> None:
+@pytest.mark.parametrize("replicas", [0, 1])
+@pytest.mark.parametrize("image", ["sandbox:old", "sandbox:new"])
+async def test_prepare_warm_sandbox_preserves_identity_and_pvc(image: str, replicas: int) -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    sts = _warm_statefulset(image, replicas)
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        patch("carapace.sandbox.kubernetes.Pod.get", new=AsyncMock(return_value=_warm_pod())),
+    ):
+        assert await rt.prepare_warm_sandbox("carapace-sandbox-warm-1", "sandbox:new") is True
+
+    assert sts.raw["metadata"]["name"] == "carapace-sandbox-warm-1"
+    assert sts.raw["metadata"]["labels"] == {"carapace.pool": "true", "carapace.sandbox": "warm-1"}
+    assert sts.raw["spec"]["volumeClaimTemplates"] == [{"metadata": {"name": "session-data"}}]
+    assert sts.raw["spec"]["template"]["spec"]["containers"][1]["image"] == "sandbox:new"
+    assert sts.raw["spec"]["replicas"] == 1
+    sts.delete.assert_not_awaited()
+    if image == "sandbox:new" and replicas == 1:
+        sts.patch.assert_not_awaited()
+    else:
+        changes = sts.patch.await_args.args[0]
+        assert {change["path"] for change in changes} <= {
+            "/metadata/resourceVersion",
+            "/spec/template/spec/containers/1/image",
+            "/spec/replicas",
+        }
+
+
+@pytest.mark.asyncio
+async def test_prepare_waits_for_replacement_not_old_ready_pod() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    sts = _warm_statefulset("sandbox:old")
+    pods = [_warm_pod("sandbox:old"), _warm_pod(terminating=True), _warm_pod(ready=False), _warm_pod()]
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        patch("carapace.sandbox.kubernetes.Pod.get", new=AsyncMock(side_effect=pods)) as get_pod,
+        patch("carapace.sandbox.kubernetes.asyncio.sleep", new=AsyncMock()) as sleep,
+    ):
+        assert await rt.prepare_warm_sandbox("carapace-sandbox-warm-1", "sandbox:new") is True
+    assert get_pod.await_count == 4
+    assert sleep.await_count == 3
+    sts.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_prepare_rollout_timeout_does_not_delete_statefulset() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    sts = _warm_statefulset("sandbox:old")
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        patch("carapace.sandbox.kubernetes.Pod.get", new=AsyncMock(return_value=_warm_pod("sandbox:old"))),
+        pytest.raises(TimeoutError, match="did not become Ready"),
+    ):
+        await rt.prepare_warm_sandbox("carapace-sandbox-warm-1", "sandbox:new", timeout=0)
+    sts.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["claimed", "inconsistent", "terminating"])
+async def test_prepare_never_modifies_unavailable_pool_members(state: str) -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    sts = _warm_statefulset("sandbox:old")
+    if state == "terminating":
+        sts.raw["metadata"]["deletionTimestamp"] = "now"
+    else:
+        sts.raw["metadata"]["labels"]["carapace.session"] = "sess-1"
+        if state == "claimed":
+            del sts.raw["metadata"]["labels"]["carapace.pool"]
+    with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)):
+        assert await rt.prepare_warm_sandbox("warm", "sandbox:new") is False
+    sts.patch.assert_not_awaited()
+    sts.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_prepare_stops_if_member_is_claimed_while_waiting() -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    sts = _warm_statefulset("sandbox:old")
+    claimed_sts = _warm_statefulset()
+    claimed_sts.raw["metadata"]["labels"]["carapace.session"] = "sess-1"
+    with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(side_effect=[sts, claimed_sts])):
+        assert await rt.prepare_warm_sandbox("warm", "sandbox:new") is False
+    claimed_sts.patch.assert_not_awaited()
+    claimed_sts.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_prepare_missing_statefulset_returns_false() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
     with patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(side_effect=kr8s.NotFoundError)):
-        assert await rt.sandbox_image("missing") is None
+        assert await rt.prepare_warm_sandbox("missing", "sandbox:new") is False
 
 
 @pytest.mark.asyncio
-async def test_sandbox_image_propagates_api_errors() -> None:
+async def test_prepare_api_failure_propagates() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
     with (
@@ -592,57 +705,67 @@ async def test_sandbox_image_propagates_api_errors() -> None:
         ),
         pytest.raises(RuntimeError, match="API unavailable"),
     ):
-        await rt.sandbox_image("warm")
+        await rt.prepare_warm_sandbox("warm", "sandbox:new")
 
 
 @pytest.mark.asyncio
-async def test_claim_warm_sandbox_stamps_session_and_clears_pool() -> None:
+async def test_prepare_concurrent_change_rejects_versioned_patch_without_deleting() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
-
-    sts = AsyncMock()
-    sts.raw = {
-        "metadata": {"labels": {"carapace.pool": "true", "carapace.sandbox": "warm-1"}},
-        "spec": {"template": {"metadata": {"labels": {"carapace.pool": "true", "carapace.sandbox": "warm-1"}}}},
-    }
-
-    with patch("carapace.sandbox.kubernetes.StatefulSet") as mock_sts_cls:
-        mock_sts_cls.get = AsyncMock(return_value=sts)
-        claimed = await rt.claim_warm_sandbox("carapace-sandbox-warm-1", "sess-2")
-
-    assert claimed is True
-    patch_doc = sts.patch.await_args.args[0]
-    labels = patch_doc["metadata"]["labels"]
-    assert labels["carapace.session"] == "sess-2"
-    # Merge patch deletes a label only via an explicit null, not by omission.
-    assert labels["carapace.pool"] is None
-    # The selector (carapace.sandbox) and the pod template must not be touched.
-    assert "carapace.sandbox" not in labels
-    assert "spec" not in patch_doc
+    sts = _warm_statefulset("sandbox:old")
+    sts.patch.side_effect = kr8s.ServerError("resourceVersion test failed")
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        pytest.raises(kr8s.ServerError, match="resourceVersion"),
+    ):
+        await rt.prepare_warm_sandbox("warm", "sandbox:new")
+    assert sts.patch.await_args.args[0][0] == {"op": "test", "path": "/metadata/resourceVersion", "value": "10"}
+    sts.delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_claim_warm_sandbox_returns_false_when_not_in_pool() -> None:
+async def test_claim_warm_sandbox_prepares_and_conditionally_stamps_session() -> None:
     rt = _make_runtime()
     rt._ensure_api = AsyncMock(return_value=object())
+    rt.prepare_warm_sandbox = AsyncMock(return_value=True)
+    sts = _warm_statefulset()
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        patch("carapace.sandbox.kubernetes.Pod.get", new=AsyncMock(return_value=_warm_pod())),
+    ):
+        assert await rt.claim_warm_sandbox("carapace-sandbox-warm-1", "sess-2", "sandbox:new") is True
+    rt.prepare_warm_sandbox.assert_awaited_once_with("carapace-sandbox-warm-1", "sandbox:new")
+    assert sts.patch.await_args.args[0] == [
+        {"op": "test", "path": "/metadata/resourceVersion", "value": "10"},
+        {"op": "remove", "path": "/metadata/labels/carapace.pool"},
+        {"op": "add", "path": "/metadata/labels/carapace.session", "value": "sess-2"},
+    ]
+    assert sts.patch.await_args.kwargs == {"type": "json"}
 
-    sts = AsyncMock()
-    # Already claimed: pool marker is gone, so it is no longer claimable.
-    sts.raw = {
-        "metadata": {
-            "labels": {
-                "carapace.sandbox": "warm-1",
-                "carapace.session": "sess-1",
-            }
-        },
-    }
 
-    with patch("carapace.sandbox.kubernetes.StatefulSet") as mock_sts_cls:
-        mock_sts_cls.get = AsyncMock(return_value=sts)
-        claimed = await rt.claim_warm_sandbox("carapace-sandbox-warm-1", "sess-2")
-
-    assert claimed is False
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["claimed", "image_changed", "old_pod", "not_ready"])
+async def test_claim_rechecks_ownership_and_pod_image_after_preparation(state: str) -> None:
+    rt = _make_runtime()
+    rt._ensure_api = AsyncMock(return_value=object())
+    rt.prepare_warm_sandbox = AsyncMock(return_value=True)
+    sts = _warm_statefulset("sandbox:old" if state == "image_changed" else "sandbox:new")
+    if state == "claimed":
+        sts.raw["metadata"]["labels"]["carapace.session"] = "sess-1"
+    pod = _warm_pod("sandbox:old" if state == "old_pod" else "sandbox:new", ready=state != "not_ready")
+    with (
+        patch("carapace.sandbox.kubernetes.StatefulSet.get", new=AsyncMock(return_value=sts)),
+        patch("carapace.sandbox.kubernetes.Pod.get", new=AsyncMock(return_value=pod)),
+    ):
+        assert await rt.claim_warm_sandbox("warm", "sess-2", "sandbox:new") is False
     sts.patch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_claim_unavailable_member_returns_false() -> None:
+    rt = _make_runtime()
+    rt.prepare_warm_sandbox = AsyncMock(return_value=False)
+    assert await rt.claim_warm_sandbox("warm", "sess-2", "sandbox:new") is False
 
 
 @pytest.mark.asyncio

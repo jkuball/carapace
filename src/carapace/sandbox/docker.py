@@ -271,17 +271,9 @@ class DockerRuntime(ContainerRuntime):
 
         return await asyncio.to_thread(_check)
 
-    async def sandbox_image(self, name: str) -> str | None:
-        """Return the configured image reference rather than a resolved image ID."""
-
-        def _inspect() -> str | None:
-            try:
-                container = self._client.containers.get(name)
-            except NotFound:
-                return None
-            return container.attrs["Config"]["Image"]
-
-        return await asyncio.to_thread(_inspect)
+    async def prepare_warm_sandbox(self, name: str, image: str) -> bool:
+        """Docker does not participate in warm-pool reconciliation."""
+        return False
 
     async def list_sandboxes(self) -> dict[str, str]:
         """List all carapace-managed containers, returning ``{session_id: container_id}``."""
@@ -299,7 +291,7 @@ class DockerRuntime(ContainerRuntime):
         """Docker does not participate in warm-pool inventory."""
         return {}
 
-    async def claim_warm_sandbox(self, name: str, session_id: str) -> bool:
+    async def claim_warm_sandbox(self, name: str, session_id: str, image: str) -> bool:
         """Docker warm sandboxes cannot be claimed safely yet due immutable labels and bind mounts."""
         return False
 
